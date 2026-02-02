@@ -32,11 +32,14 @@ const DataTable: React.FC<DataTableProps> = ({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
 
+  // Verifica se há transações do tipo específico para mostrar as colunas detalhadas
+  const showDetailedEntryColumns = data.some(
+      t => t.type === 'Entrada de Caixa / Contas a Receber'
+  );
+
   // Garante formatação BRL com separador de milhar e 2 casas decimais
-  const formatCurrency = (val: number | string) => {
-    const num = Number(val);
-    if (isNaN(num)) return 'R$ 0,00';
-    
+  const formatCurrency = (val: number | string | undefined) => {
+    const num = Number(val || 0);
     return new Intl.NumberFormat('pt-BR', { 
       style: 'currency', 
       currency: 'BRL',
@@ -104,7 +107,18 @@ const DataTable: React.FC<DataTableProps> = ({
                     </div>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">Valor a pagar</th>
+                
+                {/* Dynamic Columns */}
+                {showDetailedEntryColumns ? (
+                    <>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Valor Honorários</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Valor Extra</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">Total Cobrança</th>
+                    </>
+                ) : (
+                    <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">Valor a pagar</th>
+                )}
+
                 <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Valor Recebido</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
               </tr>
@@ -112,7 +126,7 @@ const DataTable: React.FC<DataTableProps> = ({
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-20 text-center">
+                  <td colSpan={showDetailedEntryColumns ? 10 : 8} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
                       <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Atualizando dados...</span>
@@ -121,7 +135,7 @@ const DataTable: React.FC<DataTableProps> = ({
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={showDetailedEntryColumns ? 10 : 8} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                     Nenhum registro encontrado.
                   </td>
                 </tr>
@@ -150,16 +164,33 @@ const DataTable: React.FC<DataTableProps> = ({
                         {row.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-900/10">
-                       {row.valuePaid > 0 ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <ArrowDownCircle className="h-3 w-3" />
-                            {formatCurrency(row.valuePaid)}
-                          </div>
-                       ) : (
-                          <span className="text-slate-300 dark:text-slate-600">-</span>
-                       )}
-                    </td>
+
+                    {/* Dynamic Cells */}
+                    {showDetailedEntryColumns ? (
+                        <>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
+                                {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.honorarios) : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
+                                {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.valorExtra) : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10">
+                                {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.totalCobranca) : '-'}
+                            </td>
+                        </>
+                    ) : (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-900/10">
+                            {row.valuePaid > 0 ? (
+                                <div className="flex items-center justify-end gap-1">
+                                    <ArrowDownCircle className="h-3 w-3" />
+                                    {formatCurrency(row.valuePaid)}
+                                </div>
+                            ) : (
+                                <span className="text-slate-300 dark:text-slate-600">-</span>
+                            )}
+                        </td>
+                    )}
+
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400 bg-green-50/30 dark:bg-green-900/10">
                        {row.valueReceived > 0 ? (
                           <div className="flex items-center justify-end gap-1">

@@ -111,6 +111,11 @@ export const BackendService = {
         const rawMovimento = get(map.movement);
         const rawType = get(map.type);
         const rawAccount = get(map.bankAccount);
+        
+        // Extract Detail Values
+        const rawHonorarios = get(map.honorarios);
+        const rawValorExtra = get(map.valorExtra);
+        const rawTotalCobranca = get(map.totalCobranca);
 
         // ID Logic
         let finalId = `trx-${index}`;
@@ -180,6 +185,10 @@ export const BackendService = {
           movement: movement,
           valuePaid: valPaid,
           valueReceived: valReceived,
+          // New Fields
+          honorarios: parseCurrencyRobust(rawHonorarios),
+          valorExtra: parseCurrencyRobust(rawValorExtra),
+          totalCobranca: parseCurrencyRobust(rawTotalCobranca),
         } as Transaction;
       });
       
@@ -296,7 +305,10 @@ function mapHeaders(headers: string[]) {
         paidBy: -1, 
         movement: -1, 
         valuePaid: -1, 
-        valueReceived: -1
+        valueReceived: -1,
+        honorarios: -1,
+        valorExtra: -1,
+        totalCobranca: -1
     };
 
     const normHeaders = headers.map(h => normalizeHeader(h));
@@ -317,7 +329,7 @@ function mapHeaders(headers: string[]) {
     if (map.date === -1) map.date = find(['competencia']);
 
     // 2. VALUES (Critical - Strict Exclusion)
-    const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque'];
+    const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque', 'extra', 'honorarios'];
     
     // Explicit Paid/Received columns
     map.valuePaid = find(['valor pago', 'valor debito', 'debito', 'saida', 'valor saida', 'despesa'], valueExclusions);
@@ -332,21 +344,20 @@ function mapHeaders(headers: string[]) {
         }
     }
 
+    // New Columns for 'Entrada de Caixa / Contas a Receber'
+    map.honorarios = find(['valor honorarios', 'honorarios', 'taxa adm', 'comissao']);
+    map.valorExtra = find(['valor extra', 'acrescimo', 'extra', 'juros']);
+    map.totalCobranca = find(['total cobranca', 'valor total cobranca', 'valor bruto', 'total geral']);
+
     // 3. BANK ACCOUNT
-    // Prioritize "Conta Bancaria", "Nome da Conta". Avoid "Tipo de Conta" if possible.
     map.bankAccount = find(['conta bancaria', 'nome da conta', 'conta corrente', 'instituicao', 'banco', 'agencia']);
     if (map.bankAccount === -1) {
-        // Fallback to "Conta" but try to avoid "Conta Contabil" or "Tipo de Conta" if they are clearly categories
-        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria']); 
+        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber']); 
     }
 
     // 4. TYPE / CATEGORY
     map.type = find(['classificacao', 'categoria', 'subcategoria', 'plano de contas', 'natureza']);
     if (map.type === -1) {
-        // If we didn't find a strict Category, "Tipo" might be it.
-        // But "Tipo" could also be "Tipo de Conta" (Checking/Savings).
-        // If we already have a Bank Account mapped, "Tipo de Conta" might actually be the Bank Account type, 
-        // but often in simple sheets "Tipo" is the Category.
         map.type = find(['tipo'], ['movimento']); 
     }
 
@@ -363,7 +374,7 @@ function mapHeaders(headers: string[]) {
     // 8. PAID BY
     map.paidBy = find(['pago por', 'responsavel', 'centro de custo']);
 
-    // 9. ID (Low priority, avoid overwriting useful columns)
+    // 9. ID
     map.id = find(['id transacao', 'id_transacao', 'codigo transacao']);
     if (map.id === -1) map.id = find(['id', 'cod', 'codigo'], ['barra', 'produto', 'cliente']);
 

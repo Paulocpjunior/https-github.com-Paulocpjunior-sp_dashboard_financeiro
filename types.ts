@@ -21,6 +21,10 @@ export interface Transaction {
   movement: 'Entrada' | 'Saída';
   valuePaid: number;
   valueReceived: number;
+  // Campos específicos para 'Entrada de Caixa / Contas a Receber'
+  honorarios?: number;
+  valorExtra?: number;
+  totalCobranca?: number;
 }
 
 export interface FilterState {
