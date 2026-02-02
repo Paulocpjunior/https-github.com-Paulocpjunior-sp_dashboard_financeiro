@@ -26,7 +26,6 @@ export const BackendService = {
     let cleanedId = input.trim();
     let gid = DEFAULT_GID;
 
-    // 1. Tenta extrair o GID da URL
     const gidMatch = input.match(/[?&]gid=([0-9]+)/) || input.match(/#gid=([0-9]+)/);
     if (gidMatch && gidMatch[1]) {
       gid = gidMatch[1];
@@ -36,7 +35,6 @@ export const BackendService = {
        }
     }
 
-    // 2. Tenta extrair o ID da URL
     if (cleanedId.includes('/d/')) {
         const match = cleanedId.match(/\/d\/([a-zA-Z0-9-_]+)/);
         if (match && match[1]) {
@@ -69,7 +67,6 @@ export const BackendService = {
       
       let csvText = await response.text();
 
-      // REMOVE BOM
       if (csvText.charCodeAt(0) === 0xFEFF) {
         csvText = csvText.slice(1);
       }
@@ -91,7 +88,6 @@ export const BackendService = {
       const map = mapHeaders(headerRow);
       console.log('Mapeamento final:', map);
 
-      // Verificação mínima: Se não achou data nem valores, provavelmente a aba está errada ou vazia
       if (map.date === -1 && map.valuePaid === -1 && map.valueReceived === -1) {
           throw new Error('Colunas obrigatórias não encontradas. Verifique se a aba correta (GID) foi carregada.');
       }
@@ -111,11 +107,15 @@ export const BackendService = {
         const rawStatus = get(map.status);
         const rawMovimento = get(map.movement);
 
-        // Se rawId for vazio ou se map.id for -1, usamos o gerador trx-INDEX
-        // Isso previne que colunas erradas (como timestamp na col 0) sejam usadas como ID
-        const finalId = (map.id !== -1 && rawId && rawId.trim().length > 0 && rawId.trim().length < 20) 
-                        ? rawId.trim() 
-                        : `trx-${index}`;
+        // ID Logic: Use mapped column if valid, otherwise generate virtual ID
+        // Prevent using timestamp-like strings as ID if specific ID column wasn't found (fallback safety)
+        let finalId = `trx-${index}`;
+        if (map.id !== -1 && rawId && rawId.trim().length > 0) {
+            // Simple heuristic: IDs usually aren't super long sentences or timestamps (unless uuid)
+            // If it looks like a timestamp (contains :) and we are not sure it's an ID, skip it.
+            // But if header was explicitly "ID", we trust it.
+            finalId = rawId.trim();
+        }
 
         return {
           id: finalId,
@@ -178,47 +178,58 @@ function mapHeaders(headers: string[]) {
         client: -1, paidBy: -1, movement: -1, valuePaid: -1, valueReceived: -1
     };
 
+    // Helper to check for multiple keywords
+    const matches = (norm: string, keywords: string[]) => keywords.some(k => norm.includes(k));
+    const exact = (norm: string, keywords: string[]) => keywords.some(k => norm === k);
+
     headers.forEach((h, i) => {
         const norm = normalizeHeader(h);
         
-        // ID: Deve ser explícito. Não aceitamos 'timestamp' ou vazio como ID.
-        if (norm === 'id' || norm === 'cod' || norm === 'codigo' || norm === 'identifier' || (norm.includes('transacao') && norm.includes('id'))) {
+        // 1. ID - Expanded keywords
+        if (exact(norm, ['id', 'cod', 'codigo', 'n', 'no', 'num', 'numero', 'identificador', 'documento', 'doc', 'controle'])) {
             map.id = i;
+        } else if (matches(norm, ['id', 'cod', 'num']) && !matches(norm, ['cliente', 'conta', 'banco', 'nome', 'pedido'])) {
+             // Only partial match if it doesn't look like "Nome do Cliente" or "Conta Banco"
+             if (map.id === -1) map.id = i;
         }
-        
-        // DATE: Prioridade para 'data', 'vencimento'. Evita 'carimbo' ou 'timestamp' se possível,
-        // mas se for a única opção, será pega se contiver 'data'.
-        // Adicionada lógica para evitar 'carimbo' se já tivermos achado uma data melhor ou se o nome for explicitamente carimbo.
-        else if (norm.includes('data') || norm === 'dt' || norm === 'date' || norm.includes('vencimento')) {
-            // Se for explicitamente carimbo/timestamp, só pegamos se não tivermos nada ainda
-            if (norm.includes('carimbo') || norm.includes('timestamp')) {
+
+        // 2. DATE - Logic to prefer "Vencimento" over "Pagamento" over "Carimbo"
+        else if (matches(norm, ['data', 'dt', 'date', 'vencimento', 'competencia', 'periodo'])) {
+            // If we found a "Carimbo" before, overwrite it.
+            // If we found "Data", but this is "Vencimento", overwrite it.
+            const isVenc = matches(norm, ['vencimento', 'venc', 'competencia']);
+            const currentIsVenc = map.date !== -1 && matches(normalizeHeader(headers[map.date]), ['vencimento', 'venc', 'competencia']);
+            
+            // Negative check: ignore timestamp/carimbo unless it's the only option
+            const isTimestamp = matches(norm, ['carimbo', 'timestamp', 'hora', 'registro']);
+
+            if (isTimestamp) {
+                // Only use timestamp if we have nothing else
                 if (map.date === -1) map.date = i;
             } else {
-                // É uma data "boa" (ex: Data Vencimento), sobrescreve qualquer anterior (como carimbo)
-                map.date = i;
+                // It's a real date column
+                if (isVenc || !currentIsVenc) {
+                    map.date = i;
+                }
             }
         }
         
-        else if (norm.includes('conta') || norm.includes('banco')) map.bankAccount = i;
-        else if (norm.includes('tipo') || norm.includes('categoria')) map.type = i;
-        else if (norm.includes('status') || norm.includes('situacao')) map.status = i;
-        else if (norm.includes('cliente') || norm.includes('descricao') || norm.includes('nome')) map.client = i;
-        else if (norm.includes('pago') && !norm.includes('valor')) map.paidBy = i; 
-        else if (norm.includes('movimento') || norm.includes('entradasaida')) map.movement = i;
-        else if (norm.includes('valorpago') || (norm.includes('valor') && norm.includes('saida'))) map.valuePaid = i;
-        else if (norm.includes('valorrecebido') || (norm.includes('valor') && norm.includes('entrada'))) map.valueReceived = i;
+        else if (matches(norm, ['conta', 'banco', 'instituicao', 'origem'])) map.bankAccount = i;
+        else if (matches(norm, ['tipo', 'categoria', 'classificacao', 'natureza'])) map.type = i;
+        else if (matches(norm, ['status', 'situacao', 'estado'])) map.status = i;
+        else if (matches(norm, ['cliente', 'descricao', 'nome', 'favorecido', 'fornecedor', 'historico'])) map.client = i;
+        else if (matches(norm, ['pago', 'responsavel', 'departamento', 'centro']) && !matches(norm, ['valor'])) map.paidBy = i; 
+        else if (matches(norm, ['movimento', 'entradasaida', 'operacao', 'fluxo'])) map.movement = i;
+        
+        // Values - checking for specific 'pago'/'recebido' or generic 'valor' + 'saida'/'entrada'
+        else if (matches(norm, ['valorpago', 'saida', 'debito', 'despesa']) && matches(norm, ['valor', 'total', 'r'])) map.valuePaid = i;
+        else if (matches(norm, ['valorrecebido', 'entrada', 'credito', 'receita']) && matches(norm, ['valor', 'total', 'r'])) map.valueReceived = i;
     });
 
-    // Fallbacks inteligentes
-    // Se não achou data, tenta a coluna 1 (comum ser data em muitas planilhas financeiras se a 0 for carimbo)
-    if (map.date === -1 && headers.length > 1) map.date = 1;
-    
-    // Fallbacks para valores
+    // Fallbacks
+    if (map.date === -1 && headers.length > 1) map.date = 1; // Assume Col 1 is date if Col 0 is timestamp
     if (map.valuePaid === -1) map.valuePaid = 8;
     if (map.valueReceived === -1) map.valueReceived = 9;
-    
-    // IMPORTANTE: NÃO fazemos fallback de map.id para 0. 
-    // Se map.id for -1, o código de fetch gerará IDs virtuais.
 
     return map;
 }
@@ -276,8 +287,8 @@ function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agenda
 function normalizeMovement(val: string | undefined, vPaid: string, vRec: string): 'Entrada' | 'Saída' {
     if (val) {
         const v = normalizeHeader(val);
-        if (v.includes('saida') || v.includes('debito') || v.includes('pagar')) return 'Saída';
-        if (v.includes('entrada') || v.includes('credito') || v.includes('receber')) return 'Entrada';
+        if (v.includes('saida') || v.includes('debito') || v.includes('pagar') || v.includes('despesa')) return 'Saída';
+        if (v.includes('entrada') || v.includes('credito') || v.includes('receber') || v.includes('receita')) return 'Entrada';
     }
     const p = parseCurrency(vPaid);
     const r = parseCurrency(vRec);
