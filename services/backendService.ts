@@ -47,12 +47,18 @@ export const BackendService = {
 
   login: async (username: string, passwordHashInput: string): Promise<{ success: boolean; user?: User; message?: string }> => {
     const user = MOCK_USERS.find(u => u.username === username);
-    if (!user) return { success: false, message: 'Usuário não encontrado.' };
-    const MASTER_HASH = '1c2a11307611591c9443597405101a052862a931e5f869152b11568285511b8b';
-    if (passwordHashInput === MASTER_HASH && user.active) {
+    
+    if (!user) {
+      return { success: false, message: 'Usuário não encontrado.' };
+    }
+    
+    // Verifica o hash recebido contra o hash armazenado no usuário (definido em constants.ts)
+    // Por padrão, a senha para todos os MOCK_USERS é "admin"
+    if (passwordHashInput === user.passwordHash && user.active) {
       const { passwordHash, ...safeUser } = user;
       return { success: true, user: safeUser as User };
     }
+    
     return { success: false, message: 'Senha incorreta.' };
   },
 
