@@ -33,17 +33,23 @@ const DataTable: React.FC<DataTableProps> = ({
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
 
   // Garante formatação BRL com separador de milhar e 2 casas decimais
-  const formatCurrency = (val: number) => {
+  const formatCurrency = (val: number | string) => {
+    const num = Number(val);
+    if (isNaN(num)) return 'R$ 0,00';
+    
     return new Intl.NumberFormat('pt-BR', { 
       style: 'currency', 
       currency: 'BRL',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    }).format(val);
+    }).format(num);
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('pt-BR');
+    if (!dateStr || dateStr === '1970-01-01') return '-';
+    // Fix timezone issues by treating YYYY-MM-DD as UTC or appending time manually
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
   };
 
   const handleDeleteClick = (id: string) => {
@@ -107,7 +113,7 @@ const DataTable: React.FC<DataTableProps> = ({
                                     className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
                                 />
                                 <datalist id="table-client-options">
-                                    {clientOptions.map((opt, i) => (
+                                    {clientOptions.slice(0, 50).map((opt, i) => ( // Limiting options for performance
                                         <option key={i} value={opt} />
                                     ))}
                                 </datalist>
@@ -246,44 +252,4 @@ const DataTable: React.FC<DataTableProps> = ({
           <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-sm w-full p-6 border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
             <button 
               onClick={cancelDelete}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="flex flex-col items-center text-center">
-              <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
-                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-              </div>
-              
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                Excluir Transação?
-              </h3>
-              
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                Tem certeza que deseja remover este registro? Esta ação não pode ser desfeita e afetará o saldo atual.
-              </p>
-
-              <div className="flex gap-3 w-full">
-                <button
-                  onClick={cancelDelete}
-                  className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all hover:translate-y-[-1px]"
-                >
-                  Sim, Excluir
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
-
-export default DataTable;
+              className="absolute top-4 right-4 text-slate-400 hover:

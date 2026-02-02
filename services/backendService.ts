@@ -67,7 +67,6 @@ export const BackendService = {
       
       let csvText = await response.text();
 
-      // Remove BOM if present
       if (csvText.charCodeAt(0) === 0xFEFF) {
         csvText = csvText.slice(1);
       }
@@ -82,55 +81,107 @@ export const BackendService = {
         return [];
       }
 
-      // --- SMART HEADER DETECTION ---
-      // Instead of assuming row 0, we scan the first 10 rows for the best header candidate.
-      const headerRowIndex = findHeaderRowIndex(rows);
+      // 1. Detect Delimiter
+      const delimiter = detectDelimiter(rows.slice(0, 5));
+      console.log(`Delimitador detectado: "${delimiter}"`);
+
+      // 2. Smart Header Detection
+      const headerRowIndex = findHeaderRowIndex(rows, delimiter);
       console.log(`Cabeçalho detectado na linha: ${headerRowIndex}`);
 
-      const headerRow = parseCSVLineRegex(rows[headerRowIndex]);
-      console.log('Headers Brutos:', headerRow);
+      const headerRow = parseCSVLineRegex(rows[headerRowIndex], delimiter);
       
-      const map = mapHeaders(headerRow);
-      console.log('Mapa de Colunas:', map);
+      // 3. Initial Mapping
+      let map = mapHeaders(headerRow);
+      console.log('Mapa Inicial:', map);
 
-      if (map.date === -1 && map.valuePaid === -1 && map.valueReceived === -1) {
-          console.warn("Mapeamento falhou para colunas críticas.");
+      // 4. CONTENT-BASED VALIDATION & REMAPPING
+      // Extract a sample of data rows (skipping header)
+      const dataRows = rows.slice(headerRowIndex + 1).filter(row => row.trim() !== '');
+      const sampleSize = Math.min(dataRows.length, 10);
+      const sampleData = dataRows.slice(0, sampleSize).map(r => parseCSVLineRegex(r, delimiter));
+
+      if (sampleData.length > 0) {
+          map = validateAndRemap(map, sampleData, headerRow.length);
+          console.log('Mapa Validado:', map);
       }
 
-      // Parse Data Rows (Start from HeaderIndex + 1)
-      const dataRows = rows.slice(headerRowIndex + 1).filter(row => row.trim() !== '');
-
       return dataRows.map((rowString, index) => {
-        const cols = parseCSVLineRegex(rowString);
+        const cols = parseCSVLineRegex(rowString, delimiter);
         const get = (idx: number) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx] : '';
 
         const rawId = get(map.id);
         const rawDate = get(map.date);
+        
         const rawValorPago = get(map.valuePaid);
         const rawValorRecebido = get(map.valueReceived);
+        
         const rawStatus = get(map.status);
         const rawMovimento = get(map.movement);
 
-        // ID Logic
         let finalId = `trx-${index}`;
         if (map.id !== -1 && rawId && rawId.trim().length > 0) {
-            if (!rawId.includes(':') || map.idIsExplicit) {
+            if ((!rawId.includes(delimiter) && rawId.length < 50) || map.idIsExplicit) {
                finalId = rawId.trim();
             }
         }
 
+        // MOVEMENT & VALUES LOGIC
+        let movement = normalizeMovement(rawMovimento, rawValorPago, rawValorRecebido);
+        let valPaid = 0;
+        let valReceived = 0;
+
+        const isSingleColumn = map.valueReceived === -1 || map.valuePaid === map.valueReceived;
+
+        if (isSingleColumn) {
+            const rawVal = rawValorPago || rawValorRecebido;
+            const val = parseCurrencyRobust(rawVal);
+            
+            // Try to use Movement column to decide sign
+            if (movement === 'Entrada') {
+                valReceived = val;
+                valPaid = 0;
+            } else if (movement === 'Saída') {
+                valPaid = val;
+                valReceived = 0;
+            } else {
+                 // No movement column? Guess based on sign
+                 // Typically negative = Paid, positive = Received
+                 if (val < 0) {
+                     valPaid = Math.abs(val);
+                     valReceived = 0;
+                     movement = 'Saída';
+                 } else {
+                     valReceived = val;
+                     valPaid = 0;
+                     movement = 'Entrada';
+                 }
+            }
+        } else {
+            valPaid = parseCurrencyRobust(rawValorPago);
+            valReceived = parseCurrencyRobust(rawValorRecebido);
+            
+            if (map.movement === -1) {
+                if (valPaid > 0 && valReceived === 0) movement = 'Saída';
+                if (valReceived > 0 && valPaid === 0) movement = 'Entrada';
+            }
+        }
+
+        // Final safe conversion for values (handle negative inputs correctly)
+        valPaid = Math.abs(valPaid);
+        valReceived = Math.abs(valReceived);
+
         return {
           id: finalId,
-          // Use safe parsing that defaults to 1970 if invalid, avoiding pollution of "Current Month" view
           date: parseDateSafely(rawDate),
           bankAccount: cleanString(get(map.bankAccount)) || 'Outros',
           type: cleanString(get(map.type)) || 'Outros',
           status: normalizeStatus(rawStatus),
           client: cleanString(get(map.client)) || 'Consumidor',
           paidBy: cleanString(get(map.paidBy)) || 'Financeiro',
-          movement: normalizeMovement(rawMovimento, rawValorPago, rawValorRecebido),
-          valuePaid: parseCurrencyRobust(rawValorPago),
-          valueReceived: parseCurrencyRobust(rawValorRecebido),
+          movement: movement,
+          valuePaid: valPaid,
+          valueReceived: valReceived,
         } as Transaction;
       });
 
@@ -162,22 +213,34 @@ export const BackendService = {
 
 // --- HELPERS ---
 
-function findHeaderRowIndex(rows: string[]): number {
+function detectDelimiter(rows: string[]): string {
+    let commaCount = 0;
+    let semiCount = 0;
+    
+    rows.forEach(row => {
+        commaCount += (row.match(/,/g) || []).length;
+        semiCount += (row.match(/;/g) || []).length;
+    });
+
+    return semiCount > commaCount ? ';' : ',';
+}
+
+function findHeaderRowIndex(rows: string[], delimiter: string): number {
     let bestIndex = 0;
     let maxScore = 0;
-    const limit = Math.min(rows.length, 15); // Scan first 15 rows
+    const limit = Math.min(rows.length, 15);
 
     for (let i = 0; i < limit; i++) {
         const row = rows[i].toLowerCase();
         let score = 0;
-        
-        // Keywords scoring
-        if (row.includes('data') || row.includes('date') || row.includes('vencimento')) score += 3;
-        if (row.includes('valor') || row.includes('amount') || row.includes('total')) score += 3;
-        if (row.includes('conta') || row.includes('banco') || row.includes('bank')) score += 2;
-        if (row.includes('status') || row.includes('situacao')) score += 2;
-        if (row.includes('cliente') || row.includes('descricao')) score += 2;
-        if (row.includes('id') || row.includes('cod')) score += 1;
+        const cells = row.split(delimiter).map(c => c.trim());
+        const hasKeyword = (keys: string[]) => cells.some(c => keys.some(k => c.includes(k)));
+
+        if (hasKeyword(['data', 'date', 'vencimento', 'competencia'])) score += 3;
+        if (hasKeyword(['valor', 'amount', 'total', 'r$'])) score += 3;
+        if (hasKeyword(['conta', 'banco', 'bank', 'origem'])) score += 2;
+        if (hasKeyword(['status', 'situacao', 'estado'])) score += 2;
+        if (hasKeyword(['cliente', 'descricao', 'nome', 'favorecido'])) score += 2;
 
         if (score > maxScore) {
             maxScore = score;
@@ -199,13 +262,19 @@ function normalizeHeader(h: string): string {
             .replace(/[^a-z0-9]/g, '');
 }
 
-function parseCSVLineRegex(text: string): string[] {
-    const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
+function parseCSVLineRegex(text: string, delimiter: string): string[] {
+    const delim = delimiter === '.' ? '\\.' : delimiter;
+    const pattern = `(?:^|${delim})(?:"([^"]*(?:""[^"]*)*)"|([^"${delim}]*))`;
+    const regex = new RegExp(pattern, 'g');
+    
     const results: string[] = [];
     let match;
+    
+    if (!text || text.trim() === '') return [];
+
     while ((match = regex.exec(text)) !== null) {
         let val = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
-        results.push(val || '');
+        results.push(val ? val.trim() : '');
     }
     return results;
 }
@@ -227,69 +296,97 @@ function mapHeaders(headers: string[]) {
         } else if (norm === 'id' || norm === 'cod' || norm === 'codigo') {
             map.id = i; map.idIsExplicit = true;
         }
-
-        else if (matches(norm, ['data', 'dt', 'vencimento', 'competencia'])) {
-            const isTimestamp = matches(norm, ['carimbo', 'timestamp', 'hora']);
-            if (!isTimestamp) {
-                if (map.date === -1) {
-                    map.date = i;
-                } else {
-                    const currentHeader = normalizeHeader(headers[map.date]);
-                    if (matches(norm, ['vencimento']) && !currentHeader.includes('vencimento')) {
-                         map.date = i;
-                    }
-                }
-            } else if (map.date === -1) map.date = i;
-        }
-
-        else if (matches(norm, ['conta', 'banco', 'instituicao'])) map.bankAccount = i;
+        else if (matches(norm, ['data', 'dt', 'vencimento', 'competencia']) && !matches(norm, ['carimbo', 'timestamp'])) map.date = i;
+        else if (matches(norm, ['conta', 'banco', 'instituicao', 'origem'])) map.bankAccount = i;
         else if (matches(norm, ['tipo', 'categoria', 'classificacao'])) map.type = i;
         else if (matches(norm, ['status', 'situacao'])) map.status = i;
         else if (matches(norm, ['cliente', 'descricao', 'nome', 'historico'])) map.client = i;
         else if (matches(norm, ['pago', 'responsavel']) && !matches(norm, ['valor'])) map.paidBy = i; 
-        else if (matches(norm, ['movimento', 'entradasaida'])) map.movement = i;
+        else if (matches(norm, ['movimento', 'entradasaida', 'tipooperacao'])) map.movement = i;
         
         else if (matches(norm, ['valorpago', 'saida', 'debito', 'despesa']) && !matches(norm, ['pago por'])) map.valuePaid = i;
         else if (matches(norm, ['valorrecebido', 'entrada', 'credito', 'receita'])) map.valueReceived = i;
     });
 
-    if (map.date === -1 && headers.length > 1) map.date = 1; 
-    
-    // Value Fallbacks
-    if (map.valuePaid === -1 && map.valueReceived === -1) {
-        const valorCols = headers.map((h, i) => ({h, i})).filter(o => normalizeHeader(o.h).includes('valor'));
-        if (valorCols.length >= 2) {
-             map.valuePaid = valorCols[0].i;
-             map.valueReceived = valorCols[1].i;
-        } else if (valorCols.length === 1) {
-             map.valuePaid = valorCols[0].i;
+    return map;
+}
+
+// *** NEW CORE LOGIC: Inspect Data Content to fix Mapping ***
+function validateAndRemap(map: any, rows: string[][], colCount: number) {
+    const isDate = (val: string) => /\d{1,2}[\/-]\d{1,2}/.test(val) || /\d{4}-\d{2}-\d{2}/.test(val);
+    const isNumber = (val: string) => {
+        const clean = val.replace(/[R$\s]/g, '').trim();
+        return /^-?[\d.,]+$/.test(clean) && /\d/.test(clean);
+    };
+
+    // 1. Fix DATE
+    const datesInMapped = rows.filter(r => map.date !== -1 && isDate(r[map.date])).length;
+    if (datesInMapped < Math.ceil(rows.length / 2)) {
+        // Find better date column
+        let bestCol = -1, maxCount = 0;
+        for (let i = 0; i < colCount; i++) {
+             const count = rows.filter(r => isDate(r[i])).length;
+             if (count > maxCount) { maxCount = count; bestCol = i; }
+        }
+        if (bestCol !== -1 && maxCount > 1) map.date = bestCol;
+    }
+
+    // 2. Fix TYPE (Avoid numbers in Type column)
+    if (map.type !== -1) {
+        const numbersInType = rows.filter(r => isNumber(r[map.type])).length;
+        if (numbersInType > Math.ceil(rows.length / 2)) {
+            // Type column looks like a Number! Unmap it.
+            map.type = -1;
+        }
+    }
+
+    // 3. Fix VALUES
+    // If no value column mapped, or mapped one has text
+    let hasPaid = map.valuePaid !== -1 && rows.filter(r => isNumber(r[map.valuePaid])).length >= 1;
+    let hasRec = map.valueReceived !== -1 && rows.filter(r => isNumber(r[map.valueReceived])).length >= 1;
+
+    if (!hasPaid && !hasRec) {
+        // Find best number column
+        let bestCol = -1, maxCount = 0;
+        for (let i = 0; i < colCount; i++) {
+             // Avoid Date column
+             if (i === map.date) continue;
+             const count = rows.filter(r => isNumber(r[i])).length;
+             if (count > maxCount) { maxCount = count; bestCol = i; }
+        }
+        if (bestCol !== -1) {
+             map.valuePaid = bestCol; // Default to paid, single column logic handles split
+             map.valueReceived = bestCol;
         }
     }
 
     return map;
 }
 
-// ROBUST CURRENCY PARSER (Detects decimal separator automatically)
 function parseCurrencyRobust(val: string | undefined): number {
   if (!val) return 0;
   
   let clean = val.replace(/^["']|["']$/g, '').trim(); 
   clean = clean.replace(/[R$\s]/g, ''); 
   
+  // Handle specific negative formats like (100.00)
+  if (clean.startsWith('(') && clean.endsWith(')')) {
+      clean = '-' + clean.slice(1, -1);
+  }
+
   if (!clean || clean === '-') return 0;
 
   const lastComma = clean.lastIndexOf(',');
   const lastDot = clean.lastIndexOf('.');
 
-  // Logic to determine which is decimal
   if (lastComma > lastDot) {
-      // Comma is likely decimal (BRL style: 1.200,00)
+      // 1.200,00 -> 1200.00
       clean = clean.replace(/\./g, '').replace(',', '.');
   } else if (lastDot > lastComma) {
-      // Dot is likely decimal (US style: 1,200.00)
+      // 1,200.00 -> 1200.00
       clean = clean.replace(/,/g, '');
   } else if (lastComma > -1 && lastDot === -1) {
-       // Only comma exists (e.g. 50,00). Treat as decimal for BRL context.
+       // 50,00 -> 50.00
        clean = clean.replace(',', '.');
   }
 
@@ -311,17 +408,11 @@ function normalizeMovement(val: string | undefined, vPaid: string, vRec: string)
         if (v.includes('saida') || v.includes('debito') || v.includes('pagar') || v.includes('despesa')) return 'Saída';
         if (v.includes('entrada') || v.includes('credito') || v.includes('receber') || v.includes('receita')) return 'Entrada';
     }
-    const p = parseCurrencyRobust(vPaid);
-    const r = parseCurrencyRobust(vRec);
-    
-    if (p > 0 && r === 0) return 'Saída';
-    if (r > 0 && p === 0) return 'Entrada';
     return 'Saída'; 
 }
 
-// SAFE DATE PARSER (Returns '1970-01-01' on failure instead of Today to avoid pollution)
 function parseDateSafely(dateStr: string | undefined): string {
-  if (!dateStr) return '1970-01-01'; // Safe fallback
+  if (!dateStr) return '1970-01-01';
   
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
   if (clean.includes(' ')) clean = clean.split(' ')[0];
