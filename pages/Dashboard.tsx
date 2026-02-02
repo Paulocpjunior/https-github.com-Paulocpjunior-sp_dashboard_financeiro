@@ -6,7 +6,7 @@ import AIAssistant from '../components/AIAssistant';
 import { DataService } from '../services/dataService';
 import { AuthService } from '../services/authService';
 import { FilterState, KPIData, Transaction } from '../types';
-import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, User, X, Check, Calendar } from 'lucide-react';
+import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 const INITIAL_FILTERS: FilterState = {
@@ -30,9 +30,6 @@ const Dashboard: React.FC = () => {
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   
-  // Login Alert State (Local Welcome removed as it moved to Layout)
-  const currentUser = AuthService.getCurrentUser();
-
   // Dynamic Options derived from Data
   const [options, setOptions] = useState({
     bankAccounts: [] as string[],
@@ -130,8 +127,6 @@ const Dashboard: React.FC = () => {
     // Placeholder logic for future backend integration
     console.log(`Solicitação de exclusão para o ID: ${id}`);
     alert(`Funcionalidade de exclusão simulada para o ID: ${id}.\nEm breve será conectada ao banco de dados.`);
-    // Future: await DataService.deleteTransaction(id);
-    // Future: refresh data
   };
 
   const handleWhatsAppShare = () => {
@@ -164,9 +159,6 @@ const Dashboard: React.FC = () => {
   }, [data]);
 
   // Se estiver carregando inicialmente e não tiver erro, use o loader de tela cheia do Layout.
-  // Se já tiver carregado (isLoading false) e depois mudar para true (re-fetch), 
-  // o DataTable cuidará do spinner interno.
-  
   if (isLoading && data.length === 0 && !initError) {
     return (
       <Layout>
@@ -179,17 +171,21 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  // Se houver erro de conexão, exibe alerta mas mantém o Layout (menu)
   if (initError) {
     return (
       <Layout>
         <div className="h-[80vh] flex flex-col items-center justify-center">
-          <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg text-center border border-red-100 dark:border-red-900 max-w-md">
+          <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg text-center border border-red-100 dark:border-red-900 max-w-md animate-in zoom-in-95">
             <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2">Falha na Conexão</h2>
             <p className="text-red-500 dark:text-red-400/80 mb-4">{initError}</p>
-            <p className="text-sm text-slate-500 mb-4">
-              Verifique se a aplicação está publicada corretamente como Web App no Google Apps Script.
+            <p className="text-sm text-slate-500 mb-6">
+              Verifique se a aplicação está publicada corretamente e se o ID da planilha é válido.
             </p>
-            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            <button 
+                onClick={() => window.location.reload()} 
+                className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all font-medium"
+            >
               Tentar Novamente
             </button>
           </div>
@@ -328,7 +324,6 @@ const Dashboard: React.FC = () => {
                   <option value="">Todos</option>
                   <option value="Entrada">Entrada</option>
                   <option value="Saída">Saída</option>
-                  {/* Dynamic options fallback if sheet has different casing */}
                   {options.movements
                     .filter(m => m !== 'Entrada' && m !== 'Saída')
                     .map(o => <option key={o} value={o}>{o}</option>)
