@@ -1,8 +1,21 @@
 import { Transaction, User } from '../types';
 import { MOCK_USERS } from '../constants';
 
-// ID Padrão (Fallback)
-const DEFAULT_SPREADSHEET_ID = '1jwBTCHiQ-YqtPkyQuPaAEzu-uQi62qA2SwVUhHUPt1Y';
+// =========================================================================================
+// CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
+// =========================================================================================
+// O "caminho" para o banco de dados é o ID da sua planilha Google.
+// Para obter o ID:
+// 1. Abra sua planilha no Google Sheets.
+// 2. Olhe a URL: https://docs.google.com/spreadsheets/d/SEU_ID_ESTA_AQUI/edit...
+// 3. Copie o código entre "/d/" e "/edit".
+// 4. Cole abaixo em DEFAULT_SPREADSHEET_ID.
+//
+// IMPORTANTE: A planilha deve estar com acesso: "Qualquer pessoa com o link" -> "Leitor".
+// =========================================================================================
+
+const DEFAULT_SPREADSHEET_ID = '1jwBTCHiQ-YqtPkyQuPaAEzu-uQi62qA2SwVUhHUPt1Y'; // <--- COLE SEU ID AQUI
+
 const STORAGE_KEY_DB_SOURCE = 'cashflow_db_source_id';
 
 export const BackendService = {
@@ -27,7 +40,9 @@ export const BackendService = {
 
   fetchTransactions: async (): Promise<Transaction[]> => {
     const spreadsheetId = BackendService.getSpreadsheetId();
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+    // A URL mágica que transforma a aba em CSV
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`; 
+    // Nota: &gid=0 assume que os dados estão na primeira aba.
 
     console.log(`Conectando à planilha: ${spreadsheetId}...`);
     
