@@ -91,7 +91,7 @@ export const BackendService = {
 
       const headerRow = parseCSVLineRegex(rows[headerRowIndex], delimiter);
       
-      // 3. Strict Mapping Logic (Rewritten)
+      // 3. Strict Mapping Logic
       let map = mapHeaders(headerRow);
       console.log('Mapa de Colunas:', map);
 
@@ -110,6 +110,8 @@ export const BackendService = {
         const rawValorRecebido = get(map.valueReceived);
         const rawStatus = get(map.status);
         const rawMovimento = get(map.movement);
+        
+        // Critical Fields - RAW EXACT COPY
         const rawType = get(map.type);
         const rawAccount = get(map.bankAccount);
         const rawPaidBy = get(map.paidBy);
@@ -189,12 +191,12 @@ export const BackendService = {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
-          // COPIA FIEL: Removemos 'Outros', 'Geral', 'Financeiro'. Se vier vazio, fica vazio.
+          // CÓPIA FIEL: Sem valores padrão (ex: 'Geral', 'Outros'). Se estiver vazio no banco, fica vazio aqui.
           bankAccount: cleanString(rawAccount),
           type: cleanString(rawType),
+          paidBy: cleanString(rawPaidBy),
           status: normalizeStatus(rawStatus),
           client: cleanString(get(map.client)),
-          paidBy: cleanString(rawPaidBy),
           movement: movement,
           valuePaid: valPaid,
           valueReceived: valReceived,
@@ -306,7 +308,7 @@ function parseCSVLineRegex(text: string, delimiter: string): string[] {
 }
 
 // ------------------------------------------------------------------
-// CORE MAPPING LOGIC (STRICT & IMPROVED)
+// CORE MAPPING LOGIC (STRICT - USER REQUESTED)
 // ------------------------------------------------------------------
 function mapHeaders(headers: string[]) {
     const map = {
@@ -338,14 +340,38 @@ function mapHeaders(headers: string[]) {
         });
     };
 
-    // 1. DATES
+    // --- PRIORIDADE ABSOLUTA: TERMOS EXATOS DO USUÁRIO ---
+    // 1. TIPO DE LANÇAMENTO
+    // Procura exatamente "tipo de lancamento", "plano de contas" ou "classificacao"
+    let typeIdx = find(['tipo de lancamento', 'plano de contas', 'classificacao financeira', 'classificacao', 'categoria']);
+    // Fallback apenas se não achar os termos exatos
+    if (typeIdx === -1) typeIdx = find(['tipo'], ['movimento', 'conta', 'bancaria', 'pessoa', 'documento']); 
+    map.type = typeIdx;
+
+    // 2. CONTA
+    // Procura exatamente "conta" (isolado ou conta corrente), evitando "conta contabil" se possível
+    let accIdx = find(['conta corrente', 'conta bancaria', 'nome da conta']);
+    if (accIdx === -1) {
+        // Se a coluna se chamar apenas "Conta"
+        accIdx = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo', 'fluxo']);
+    }
+    if (accIdx === -1) accIdx = find(['banco', 'caixa', 'instituicao']);
+    map.bankAccount = accIdx;
+
+    // 3. PAGO POR
+    // Procura exatamente "pago por"
+    map.paidBy = find(['pago por', 'centro de custo', 'responsavel', 'pagador', 'departamento']);
+
+    // --- DEMAIS CAMPOS ---
+
+    // 4. DATES
     map.dueDate = find(['data vencimento', 'data do vencimento', 'vencimento']);
     map.date = find(['data emissao', 'emissao', 'data', 'dt '], ['vencimento', 'agendamento']);
 
     if (map.date === -1 && map.dueDate !== -1) map.date = map.dueDate;
     if (map.dueDate === -1 && map.date !== -1) map.dueDate = map.date;
 
-    // 2. VALUES
+    // 5. VALUES
     const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque', 'extra', 'honorarios'];
     map.valuePaid = find(['valor pago', 'valor debito', 'debito', 'saida', 'valor saida', 'despesa'], valueExclusions);
     map.valueReceived = find(['valor recebido', 'valor credito', 'credito', 'entrada', 'valor entrada', 'receita'], valueExclusions);
@@ -362,32 +388,6 @@ function mapHeaders(headers: string[]) {
     map.honorarios = find(['valor honorarios', 'honorarios', 'taxa adm', 'comissao']);
     map.valorExtra = find(['valor extra', 'acrescimo', 'extra', 'juros']);
     map.totalCobranca = find(['total cobranca', 'valor total cobranca', 'valor bruto', 'total geral']);
-
-    // 3. BANK ACCOUNT (Conta)
-    // Busca Exata: Tenta "Conta", "Conta Corrente", "Conta Bancaria". 
-    // Removemos exclusões agressivas para garantir que se a coluna se chamar só "Conta", ela seja pega.
-    map.bankAccount = find(['conta corrente', 'nome da conta', 'conta bancaria', 'nome do banco', 'instituicao financeira']);
-    
-    // Se não achar, procura apenas "Conta" ou "Banco" ou "Caixa"
-    if (map.bankAccount === -1) {
-        map.bankAccount = find(['conta', 'banco', 'caixa'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo', 'fluxo']); 
-    }
-
-    // 4. TYPE / CATEGORY (Tipo de Lançamento / Plano de Contas)
-    // Adicionado "tipo de lancamento" explicitamente na busca prioritária.
-    map.type = find(['tipo de lancamento', 'plano de contas', 'classificacao financeira', 'classificacao', 'categoria', 'natureza']);
-    
-    if (map.type === -1) {
-        map.type = find(['subcategoria', 'grupo']);
-    }
-    
-    // Fallback: Apenas usa "Tipo" se não achou os acima
-    if (map.type === -1) {
-        map.type = find(['tipo'], ['movimento', 'conta', 'bancaria', 'pessoa', 'documento']); 
-    }
-
-    // 5. PAID BY (Centro de Custo / Pagador / Pago Por)
-    map.paidBy = find(['pago por', 'centro de custo', 'responsavel', 'pagador', 'departamento', 'area']);
 
     // 6. CLIENT / DESCRIPTION
     map.client = find(['favorecido', 'cliente', 'razao social', 'fornecedor', 'pagador']);
