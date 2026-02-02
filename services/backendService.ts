@@ -85,61 +85,28 @@ export const BackendService = {
       const delimiter = detectDelimiter(rows.slice(0, 20));
       console.log(`Delimitador detectado: "${delimiter}"`);
 
-      // 2. Find Header Row
+      // 2. Find Header Row - procurar linha com cabeçalhos conhecidos
       const headerRowIndex = findHeaderRowIndex(rows, delimiter);
       console.log(`Cabeçalho detectado na linha: ${headerRowIndex}`);
 
       const headerRow = parseCSVLineRegex(rows[headerRowIndex], delimiter);
-      console.log('=== CABEÇALHOS ENCONTRADOS ===');
-      headerRow.forEach((h, i) => console.log(`  [${i}] "${h}"`));
       
-      // 3. MAPEAMENTO FIXO POR ÍNDICE - BASEADO NA ESTRUTURA REAL DA PLANILHA
-      // =====================================================================
-      // A = 0:  #N/A (timestamp)
-      // B = 1:  Data Lançamento
-      // C = 2:  Contas bancárias
-      // D = 3:  Tipo de Lançamento
-      // E = 4:  Pago Por
-      // F = 5:  Movimentação
-      // G = 6:  Data Lançamento 2
-      // H = 7:  Data a Pagar
-      // I = 8:  Evento Recorrente
-      // J = 9:  Doc.Pago
-      // K = 10: Data Baixa / Pagamento
-      // L = 11: Valor Ref./Valor Original
-      // M = 12: Valor Original Recorrente
-      // N = 13: Valor Pago
-      // ...
-      // AA = 26: Nome Empresa / Credor
-      // AB = 27: Valor Honorários
-      // AC = 28: Valor Extras
-      // AD = 29: Cobranças Extras
-      // AE = 30: Total Cobrança
-      // AF = 31: Valor Recebido
-      // =====================================================================
+      // DEBUG: Mostrar todos os cabeçalhos
+      console.log('=== TODOS OS CABEÇALHOS ===');
+      headerRow.forEach((h, i) => {
+        if (h && h.trim()) {
+          console.log(`  Coluna [${i}] = "${h}"`);
+        }
+      });
       
-      const map = {
-        id: 38,           // AN: Submission ID
-        date: 1,          // B: Data Lançamento
-        dueDate: 7,       // H: Data a Pagar
-        bankAccount: 2,   // C: Contas bancárias
-        type: 3,          // D: Tipo de Lançamento
-        paidBy: 4,        // E: Pago Por
-        movement: 5,      // F: Movimentação (pode estar vazia)
-        status: 9,        // J: Doc.Pago
-        client: 26,       // AA: Nome Empresa / Credor
-        valuePaid: 13,    // N: Valor Pago
-        valueReceived: 31,// AF: Valor Recebido
-        honorarios: 27,   // AB: Valor Honorários
-        valorExtra: 28,   // AC: Valor Extras
-        totalCobranca: 30 // AE: Total Cobrança
-      };
-
-      console.log('=== MAPEAMENTO FIXO APLICADO ===');
-      console.log(`  bankAccount [${map.bankAccount}]: "${headerRow[map.bankAccount] || 'N/A'}"`);
-      console.log(`  type [${map.type}]: "${headerRow[map.type] || 'N/A'}"`);
-      console.log(`  paidBy [${map.paidBy}]: "${headerRow[map.paidBy] || 'N/A'}"`);
-      console.log(`  client [${map.client}]: "${headerRow[map.client] || 'N/A'}"`);
+      // 3. MAPEAMENTO INTELIGENTE - Procurar colunas pelo conteúdo exato
+      const map = findColumnsByContent(headerRow, rows, headerRowIndex, delimiter);
+      
+      console.log('=== MAPEAMENTO FINAL ===');
+      console.log(`  type (Tipo de Lançamento) -> Coluna [${map.type}]`);
+      console.log(`  bankAccount (Contas bancárias) -> Coluna [${map.bankAccount}]`);
+      console.log(`  paidBy (Pago Por) -> Coluna [${map.paidBy}]`);
+      console.log(`  client (Nome Empresa) -> Coluna [${map.client}]`);
 
       // 4. Parse Data Rows
       const dataRows = rows.slice(headerRowIndex + 1).filter(row => row.trim() !== '');
@@ -148,16 +115,15 @@ export const BackendService = {
         const cols = parseCSVLineRegex(rowString, delimiter);
         const get = (idx: number) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx] : '';
 
-        // Extract Raw Values usando mapeamento fixo
+        // Extract Raw Values
         const rawId = get(map.id);
         const rawDate = get(map.date);
         const rawDueDate = get(map.dueDate);
         const rawValorPago = get(map.valuePaid);
         const rawValorRecebido = get(map.valueReceived);
         const rawStatus = get(map.status);
-        const rawMovimento = get(map.movement);
         
-        // CAMPOS CRÍTICOS - CÓPIA EXATA DA PLANILHA
+        // CAMPOS CRÍTICOS
         const rawType = get(map.type);
         const rawAccount = get(map.bankAccount);
         const rawPaidBy = get(map.paidBy);
@@ -168,28 +134,33 @@ export const BackendService = {
         const rawValorExtra = get(map.valorExtra);
         const rawTotalCobranca = get(map.totalCobranca);
 
+        // DEBUG primeiro registro
+        if (index === 0) {
+          console.log('=== PRIMEIRO REGISTRO ===');
+          console.log(`  rawType: "${rawType}"`);
+          console.log(`  rawAccount: "${rawAccount}"`);
+          console.log(`  rawPaidBy: "${rawPaidBy}"`);
+        }
+
         // ID Logic
         let finalId = `trx-${index}`;
-        if (rawId && rawId.trim().length > 0 && rawId.length < 50) {
+        if (rawId && rawId.trim().length > 0 && rawId.length < 50 && !rawId.includes('/')) {
             finalId = rawId.trim();
         }
 
-        // MOVEMENT & VALUES LOGIC
-        let movement = normalizeMovement(rawMovimento);
+        // VALUES & MOVEMENT LOGIC
         let valPaid = parseCurrencyRobust(rawValorPago);
         let valReceived = parseCurrencyRobust(rawValorRecebido);
-
-        // Se não tem movimento explícito, inferir dos valores
-        if (!rawMovimento || rawMovimento.trim() === '') {
-            if (valReceived > 0 && valPaid === 0) {
-                movement = 'Entrada';
-            } else if (valPaid > 0 && valReceived === 0) {
-                movement = 'Saída';
-            } else if (valReceived > 0) {
-                movement = 'Entrada';
-            } else {
-                movement = 'Saída';
-            }
+        
+        // Determinar movimento baseado no tipo
+        let movement: 'Entrada' | 'Saída' = 'Entrada';
+        const typeLower = rawType.toLowerCase();
+        if (typeLower.includes('saída') || typeLower.includes('saida') || typeLower.includes('pagar')) {
+          movement = 'Saída';
+        } else if (typeLower.includes('entrada') || typeLower.includes('receber')) {
+          movement = 'Entrada';
+        } else if (valPaid > 0 && valReceived === 0) {
+          movement = 'Saída';
         }
 
         // Ensure values are absolute
@@ -208,7 +179,6 @@ export const BackendService = {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
-          // CÓPIA FIEL - valores exatos da planilha
           bankAccount: cleanString(rawAccount),
           type: cleanString(rawType),
           paidBy: cleanString(rawPaidBy),
@@ -222,15 +192,6 @@ export const BackendService = {
           totalCobranca: parseCurrencyRobust(rawTotalCobranca),
         } as Transaction;
       });
-      
-      // Log sample para debug
-      if (transactions.length > 0) {
-        console.log('=== AMOSTRA DO PRIMEIRO REGISTRO ===');
-        console.log(`  bankAccount: "${transactions[0].bankAccount}"`);
-        console.log(`  type: "${transactions[0].type}"`);
-        console.log(`  paidBy: "${transactions[0].paidBy}"`);
-        console.log(`  client: "${transactions[0].client}"`);
-      }
 
       // Sort by Date Descending
       return transactions.sort((a, b) => {
@@ -281,26 +242,20 @@ function detectDelimiter(rows: string[]): string {
     const commaVariance = getVariance(',');
     const semiVariance = getVariance(';');
 
-    console.log(`Delimiter Check - Comma Variance: ${commaVariance}, Semi Variance: ${semiVariance}`);
-
     if (semiVariance <= commaVariance) return ';';
     return ',';
 }
 
 function findHeaderRowIndex(rows: string[], delimiter: string): number {
-    // Procurar a linha que contém os cabeçalhos conhecidos
     for (let i = 0; i < Math.min(rows.length, 10); i++) {
         const row = rows[i].toLowerCase();
-        // Verificar se contém cabeçalhos específicos da planilha
         if (row.includes('tipo de lan') || 
             row.includes('contas banc') || 
-            row.includes('pago por') ||
-            row.includes('nome empresa')) {
-            console.log(`Header encontrado na linha ${i}: "${rows[i].substring(0, 100)}..."`);
+            row.includes('pago por')) {
             return i;
         }
     }
-    return 0; // Default: primeira linha
+    return 0;
 }
 
 function cleanString(str: string): string {
@@ -323,6 +278,168 @@ function parseCSVLineRegex(text: string, delimiter: string): string[] {
         results.push(val ? val.trim() : '');
     }
     return results;
+}
+
+// ============================================================================
+// FUNÇÃO PRINCIPAL: Encontrar colunas pelo CONTEÚDO dos dados, não só headers
+// ============================================================================
+function findColumnsByContent(headers: string[], rows: string[], headerRowIndex: number, delimiter: string) {
+    const map = {
+        id: -1,
+        date: -1,
+        dueDate: -1,
+        bankAccount: -1,
+        type: -1,
+        paidBy: -1,
+        status: -1,
+        client: -1,
+        valuePaid: -1,
+        valueReceived: -1,
+        honorarios: -1,
+        valorExtra: -1,
+        totalCobranca: -1
+    };
+
+    // Normalizar headers para comparação
+    const normHeaders = headers.map(h => normalizeForSearch(h));
+    
+    // 1. Primeiro, tentar encontrar pelo header
+    for (let i = 0; i < normHeaders.length; i++) {
+        const h = normHeaders[i];
+        
+        // Tipo de Lançamento
+        if (h.includes('tipo de lancamento') || h === 'tipo de lancamento') {
+            map.type = i;
+            console.log(`HEADER MATCH: type -> [${i}] "${headers[i]}"`);
+        }
+        // Contas bancárias
+        if (h.includes('contas bancarias') || h === 'contas bancarias') {
+            map.bankAccount = i;
+            console.log(`HEADER MATCH: bankAccount -> [${i}] "${headers[i]}"`);
+        }
+        // Pago Por
+        if (h === 'pago por' || h.includes('pago por')) {
+            map.paidBy = i;
+            console.log(`HEADER MATCH: paidBy -> [${i}] "${headers[i]}"`);
+        }
+        // Nome Empresa / Credor
+        if (h.includes('nome empresa') || h.includes('credor')) {
+            map.client = i;
+            console.log(`HEADER MATCH: client -> [${i}] "${headers[i]}"`);
+        }
+        // Data Lançamento
+        if ((h.includes('data lancamento') || h === 'data lancamento') && !h.includes('2')) {
+            map.date = i;
+        }
+        // Data a Pagar / Vencimento
+        if (h.includes('data a pagar') || h.includes('vencimento')) {
+            map.dueDate = i;
+        }
+        // Status / Doc.Pago
+        if (h === 'doc pago' || h === 'docpago' || h.includes('doc.pago')) {
+            map.status = i;
+        }
+        // Valor Pago
+        if (h === 'valor pago' && !h.includes('doc')) {
+            map.valuePaid = i;
+        }
+        // Valor Recebido
+        if (h === 'valor recebido') {
+            map.valueReceived = i;
+        }
+        // Valor Honorários
+        if (h.includes('valor honorarios') || h === 'valor honorarios') {
+            map.honorarios = i;
+        }
+        // Valor Extras
+        if (h.includes('valor extras') || h === 'valor extras') {
+            map.valorExtra = i;
+        }
+        // Total Cobrança
+        if (h.includes('total cobranca')) {
+            map.totalCobranca = i;
+        }
+        // Submission ID
+        if (h.includes('submission id')) {
+            map.id = i;
+        }
+    }
+
+    // 2. Se não encontrou pelo header, procurar pelo CONTEÚDO das primeiras linhas
+    if (map.type === -1 || map.bankAccount === -1) {
+        console.log('Headers não encontrados, buscando pelo conteúdo...');
+        
+        // Pegar algumas linhas de dados para análise
+        const sampleRows = rows.slice(headerRowIndex + 1, headerRowIndex + 10);
+        
+        for (let colIdx = 0; colIdx < headers.length; colIdx++) {
+            const sampleValues: string[] = [];
+            
+            for (const row of sampleRows) {
+                const cols = parseCSVLineRegex(row, delimiter);
+                if (cols[colIdx]) {
+                    sampleValues.push(cols[colIdx].trim());
+                }
+            }
+            
+            // Verificar se esta coluna contém "Entrada de Caixa" ou "Saída de Caixa"
+            const hasEntradaSaida = sampleValues.some(v => 
+                v.includes('Entrada de Caixa') || 
+                v.includes('Saída de Caixa') ||
+                v.includes('Contas a Receber') ||
+                v.includes('Contas a Pagar')
+            );
+            
+            if (hasEntradaSaida && map.type === -1) {
+                map.type = colIdx;
+                console.log(`CONTENT MATCH: type -> [${colIdx}] (contém Entrada/Saída de Caixa)`);
+                console.log(`  Valores encontrados: ${sampleValues.slice(0, 3).join(', ')}`);
+            }
+            
+            // Verificar se contém nomes de bancos
+            const hasBankNames = sampleValues.some(v => 
+                v.includes('Itaú') || 
+                v.includes('Itau') ||
+                v.includes('Bradesco') ||
+                v.includes('Santander') ||
+                v.includes('Caixa') ||
+                v.includes('Nubank') ||
+                v.includes('jurídica') ||
+                v.includes('juridica')
+            );
+            
+            if (hasBankNames && map.bankAccount === -1) {
+                map.bankAccount = colIdx;
+                console.log(`CONTENT MATCH: bankAccount -> [${colIdx}] (contém nomes de bancos)`);
+                console.log(`  Valores encontrados: ${sampleValues.slice(0, 3).join(', ')}`);
+            }
+            
+            // Verificar se contém "SP - Retirada" ou similar para Pago Por
+            const hasPagoPor = sampleValues.some(v => 
+                v.includes('SP -') || 
+                v.includes('Retirada') ||
+                v.includes('1-') ||
+                v.includes('2-')
+            );
+            
+            if (hasPagoPor && map.paidBy === -1 && colIdx !== map.type && colIdx !== map.bankAccount) {
+                map.paidBy = colIdx;
+                console.log(`CONTENT MATCH: paidBy -> [${colIdx}]`);
+            }
+        }
+    }
+
+    return map;
+}
+
+function normalizeForSearch(h: string): string {
+    if (!h) return '';
+    return h.toLowerCase()
+            .trim()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9 ]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
 }
 
 function parseCurrencyRobust(val: string | undefined): number {
@@ -357,18 +474,10 @@ function parseCurrencyRobust(val: string | undefined): number {
 function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agendado' {
   if (!val) return 'Pendente';
   const v = val.toLowerCase().trim();
-  if (v === 'sim' || v === 'pago' || v === 'ok' || v === 'liquidado' || v === 'efetivado' || v === 'baixado') return 'Pago';
+  if (v === 'sim' || v === 'pago' || v === 'ok' || v === 'liquidado') return 'Pago';
   if (v === 'não' || v === 'nao' || v === 'pendente' || v === 'aberto') return 'Pendente';
-  if (v.includes('agenda') || v.includes('futuro')) return 'Agendado';
+  if (v.includes('agenda')) return 'Agendado';
   return 'Pendente';
-}
-
-function normalizeMovement(val: string | undefined): 'Entrada' | 'Saída' {
-    if (!val) return 'Entrada'; // Default para entrada baseado nos dados da planilha
-    const v = val.toLowerCase().trim();
-    if (v.includes('saida') || v.includes('saída') || v.includes('debito') || v.includes('pagar') || v.includes('despesa')) return 'Saída';
-    if (v.includes('entrada') || v.includes('credito') || v.includes('receber') || v.includes('receita')) return 'Entrada';
-    return 'Entrada';
 }
 
 function parseDateSafely(dateStr: string | undefined): string {
@@ -377,7 +486,6 @@ function parseDateSafely(dateStr: string | undefined): string {
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
   if (clean.includes(' ')) clean = clean.split(' ')[0];
 
-  // PT-BR Format: DD/MM/YYYY
   const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
   const ptMatch = clean.match(ptBrRegex);
 
@@ -389,7 +497,6 @@ function parseDateSafely(dateStr: string | undefined): string {
       return `${year}-${month}-${day}`;
   }
 
-  // ISO Format: YYYY-MM-DD
   const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
   const isoMatch = clean.match(isoRegex);
   if (isoMatch) {
