@@ -1,0 +1,5 @@
+{
+  "name": "SP-Dashboard Financeiro",
+  "description": "Um sistema profissional de Controle de Fluxo de Caixa substituindo o Looker Studio, com filtragem por IA, autenticação segura e painéis financeiros detalhados.",
+  "requestFramePermissions": []
+}
