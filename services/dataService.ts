@@ -19,7 +19,7 @@ export const DataService = {
     try {
       const data = await BackendService.fetchTransactions();
       
-      // Store data directly. BackendService already ensures YYYY-MM-DD format.
+      // Store data directly. BackendService now ensures sorting (Desc) and format.
       CACHED_TRANSACTIONS = data;
 
       isDataLoaded = true;
@@ -79,8 +79,16 @@ export const DataService = {
       // Global Search
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
-        const rowString = Object.values(item).join(' ').toLowerCase();
-        if (!rowString.includes(searchLower)) matches = false;
+        // Optimize: check common fields first
+        if (
+            !item.client.toLowerCase().includes(searchLower) &&
+            !item.bankAccount.toLowerCase().includes(searchLower) &&
+            !item.type.toLowerCase().includes(searchLower)
+        ) {
+             // Fallback to full string check
+             const rowString = Object.values(item).join(' ').toLowerCase();
+             if (!rowString.includes(searchLower)) matches = false;
+        }
       }
 
       return matches;
@@ -116,20 +124,18 @@ export const DataService = {
   },
 
   exportToCSV: (filters: Partial<FilterState>): void => {
-    // We reuse the getTransactions logic to get the filtered dataset
-    // We pass a huge pageSize to get all filtered rows
     const { result } = DataService.getTransactions(filters, 1, 999999);
     const headers = [
       'ID',
-      'Date',
-      'Bank Account',
-      'Type',
+      'Data',
+      'Conta',
+      'Tipo',
       'Status',
-      'Client',
-      'Paid By',
-      'Movement',
-      'Value Paid',
-      'Value Received',
+      'Cliente',
+      'Pago Por',
+      'Movimento',
+      'Valor Pago',
+      'Valor Recebido',
     ];
 
     const csvContent =
