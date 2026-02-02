@@ -24,15 +24,13 @@ export const BackendService = {
 
   updateSpreadsheetId: (input: string): void => {
     let cleanedId = input.trim();
-    let gid = DEFAULT_GID; // Fallback to default if not found in URL, or keep existing? Better to reset to safe default or 0.
+    let gid = DEFAULT_GID;
 
-    // 1. Tenta extrair o GID da URL (parâmetro gid=...)
+    // 1. Tenta extrair o GID da URL
     const gidMatch = input.match(/[?&]gid=([0-9]+)/) || input.match(/#gid=([0-9]+)/);
     if (gidMatch && gidMatch[1]) {
       gid = gidMatch[1];
     } else {
-       // Se o usuário digitou apenas um ID novo sem URL, assumimos 0 ou mantemos o padrão? 
-       // Por segurança, se não tem URL, resetamos para 0 (primeira aba) a não ser que seja o ID padrão.
        if (cleanedId !== DEFAULT_SPREADSHEET_ID) {
            gid = '0'; 
        }
@@ -59,41 +57,41 @@ export const BackendService = {
     const spreadsheetId = BackendService.getSpreadsheetId();
     const gid = BackendService.getSpreadsheetGid();
     
-    // Constrói a URL usando o GID específico
     const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`; 
-
     console.log(`Conectando à planilha: ${spreadsheetId} (Tab: ${gid})...`);
     
     try {
       const response = await fetch(csvUrl);
       
-      // Verifica se o fetch falhou na rede
       if (!response.ok) {
         throw new Error(`Erro HTTP: ${response.status}. Verifique o ID e o compartilhamento.`);
       }
       
-      const csvText = await response.text();
+      let csvText = await response.text();
 
-      // CRITICAL CHECK: Verify if response is HTML (Login Page)
+      // REMOVE BOM (Byte Order Mark) que quebra a leitura da primeira coluna (ID)
+      if (csvText.charCodeAt(0) === 0xFEFF) {
+        csvText = csvText.slice(1);
+      }
+
       if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.includes('<html')) {
-        throw new Error('A planilha está privada ou o link está incorreto. Altere o compartilhamento para "Qualquer pessoa com o link".');
+        throw new Error('A planilha está privada. Altere o compartilhamento para "Qualquer pessoa com o link".');
       }
 
       const rows = csvText.split(/\r?\n/);
       
       if (rows.length < 2) {
-        return []; // Sem dados
+        return [];
       }
 
       // --- DYNAMIC HEADER MAPPING ---
-      // Instead of hardcoded indices, find columns by name.
       const headerRow = parseCSVLine(rows[0]);
+      console.log('Headers detectados:', headerRow); // Debug
+      
       const map = mapHeaders(headerRow);
+      console.log('Mapeamento de colunas:', map); // Debug
 
       if (map.date === -1 && map.valuePaid === -1 && map.valueReceived === -1) {
-          console.warn("Headers found:", headerRow);
-          // Se não achou headers, pode ser que a aba esteja errada ou vazia.
-          // Mas tentamos prosseguir com fallback ou lançamos erro.
           throw new Error('Colunas obrigatórias não encontradas. Verifique se a aba correta (GID) foi carregada.');
       }
 
@@ -102,11 +100,10 @@ export const BackendService = {
 
       return dataRows.map((rowString, index) => {
         const cols = parseCSVLine(rowString);
-        
-        // Helper to safely get value by mapped index
         const get = (idx: number) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx] : '';
 
-        // Extract raw values using the map
+        // Extract raw values
+        const rawId = get(map.id);
         const rawDate = get(map.date);
         const rawValorPago = get(map.valuePaid);
         const rawValorRecebido = get(map.valueReceived);
@@ -114,7 +111,8 @@ export const BackendService = {
         const rawMovimento = get(map.movement);
 
         return {
-          id: get(map.id) || `trx-${index}`,
+          // Se não achar ID na coluna, gera um, mas prioriza a coluna mapeada
+          id: rawId && rawId.trim() !== '' ? rawId.trim() : `trx-${index}`,
           date: parseDate(rawDate),
           bankAccount: cleanString(get(map.bankAccount)) || 'Outros',
           type: cleanString(get(map.type)) || 'Outros',
@@ -155,15 +153,16 @@ export const BackendService = {
 
 // --- HELPERS ---
 
-// Remove quotes and extra spaces
 function cleanString(str: string): string {
     return str ? str.replace(/^["']|["']$/g, '').trim() : '';
 }
 
 function normalizeHeader(h: string): string {
+    if (!h) return '';
     return h.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-            .replace(/[^a-z0-9]/g, ''); // Remove symbols
+            .trim()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+            .replace(/[^a-z0-9]/g, ''); // Remove símbolos e espaços
 }
 
 // Maps CSV headers to internal field indices
@@ -175,22 +174,27 @@ function mapHeaders(headers: string[]) {
 
     headers.forEach((h, i) => {
         const norm = normalizeHeader(h);
-        if (norm.includes('id') && norm.length < 5) map.id = i;
-        else if (norm.includes('data') || norm === 'dt') map.date = i;
+        
+        // Mapeamento ID mais flexível e robusto
+        if (norm === 'id' || norm === 'cod' || norm === 'codigo' || norm === 'identifier' || norm.includes('transacaoid')) map.id = i;
+        else if (norm.includes('data') || norm === 'dt' || norm === 'date') map.date = i;
         else if (norm.includes('conta') || norm.includes('banco')) map.bankAccount = i;
         else if (norm.includes('tipo') || norm.includes('categoria')) map.type = i;
         else if (norm.includes('status') || norm.includes('situacao')) map.status = i;
         else if (norm.includes('cliente') || norm.includes('descricao') || norm.includes('nome')) map.client = i;
-        else if (norm.includes('pago') && !norm.includes('valor')) map.paidBy = i; // 'PagoPor'
+        else if (norm.includes('pago') && !norm.includes('valor')) map.paidBy = i; 
         else if (norm.includes('movimento') || norm.includes('entradasaida')) map.movement = i;
         else if (norm.includes('valorpago') || (norm.includes('valor') && norm.includes('saida'))) map.valuePaid = i;
         else if (norm.includes('valorrecebido') || (norm.includes('valor') && norm.includes('entrada'))) map.valueReceived = i;
     });
 
-    // Fallback for default column order if mapping failed for critical fields
-    if (map.date === -1) map.date = 1;
+    // Fallbacks baseados na posição comum se não achar pelo nome
+    if (map.date === -1) map.date = 1; 
     if (map.valuePaid === -1) map.valuePaid = 8;
     if (map.valueReceived === -1) map.valueReceived = 9;
+    
+    // Se ID não foi achado, tenta a primeira coluna se ela parecer um ID
+    if (map.id === -1) map.id = 0;
 
     return map;
 }
@@ -224,17 +228,12 @@ function parseCurrency(val: string | undefined): number {
   
   if (clean === '-' || clean === '') return 0;
 
-  // Detect format: 
-  // 1.234,56 (BR) -> last separator is comma
-  // 1,234.56 (US) -> last separator is dot
   const lastComma = clean.lastIndexOf(',');
   const lastDot = clean.lastIndexOf('.');
 
   if (lastComma > lastDot) {
-      // BR Format: remove dots, replace comma with dot
       clean = clean.replace(/\./g, '').replace(',', '.');
   } else if (lastDot > lastComma) {
-      // US Format: remove commas
       clean = clean.replace(/,/g, '');
   }
 
@@ -245,44 +244,46 @@ function parseCurrency(val: string | undefined): number {
 function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agendado' {
   if (!val) return 'Pendente';
   const v = normalizeHeader(val);
-  if (v.includes('pago') || v === 'sim' || v === 'ok' || v === 'liquidado') return 'Pago';
+  if (v.includes('pago') || v === 'sim' || v === 'ok' || v === 'liquidado' || v === 'efetivado') return 'Pago';
   if (v.includes('agenda') || v.includes('futuro')) return 'Agendado';
   return 'Pendente';
 }
 
 function normalizeMovement(val: string | undefined, vPaid: string, vRec: string): 'Entrada' | 'Saída' {
-    // 1. Try explicit column
     if (val) {
         const v = normalizeHeader(val);
         if (v.includes('saida') || v.includes('debito') || v.includes('pagar')) return 'Saída';
         if (v.includes('entrada') || v.includes('credito') || v.includes('receber')) return 'Entrada';
     }
-    // 2. Infer from values
     const p = parseCurrency(vPaid);
     const r = parseCurrency(vRec);
     if (p > 0 && r === 0) return 'Saída';
     if (r > 0 && p === 0) return 'Entrada';
     
-    return 'Saída'; // Default
+    return 'Saída'; 
 }
 
 function parseDate(dateStr: string | undefined): string {
   if (!dateStr) return new Date().toISOString().split('T')[0];
-  const clean = dateStr.replace(/^["']|["']$/g, '').trim();
+  let clean = dateStr.replace(/^["']|["']$/g, '').trim();
   
-  // Handle Excel serial numbers (if any) - unlikely in CSV but possible
-  if (/^\d+$/.test(clean)) {
-      // Simplified check, usually not needed for web CSV export
+  // Remove Time part if exists (e.g., "12/10/2021 14:30:00")
+  if (clean.includes(' ')) {
+      clean = clean.split(' ')[0];
   }
 
-  // DD/MM/YYYY
-  if (clean.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}/)) {
-      const parts = clean.split('/');
-      let y = parts[2];
-      if (y.length === 2) y = '20' + y;
-      const m = parts[1].padStart(2, '0');
-      const d = parts[0].padStart(2, '0');
-      return `${y}-${m}-${d}`;
+  // FORCE MANUAL PARSING FOR DD/MM/YYYY (Common in BR/Sheets)
+  // This prevents JS from confusing 12/10 (Oct 12) with (Dec 10)
+  const brDateRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
+  const match = clean.match(brDateRegex);
+  
+  if (match) {
+      const day = match[1].padStart(2, '0');
+      const month = match[2].padStart(2, '0');
+      let year = match[3];
+      if (year.length === 2) year = '20' + year;
+      
+      return `${year}-${month}-${day}`;
   }
   
   // YYYY-MM-DD
@@ -290,7 +291,7 @@ function parseDate(dateStr: string | undefined): string {
       return clean.substring(0, 10);
   }
 
-  // Fallback try parse
+  // Fallback
   const d = new Date(clean);
   if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
 
