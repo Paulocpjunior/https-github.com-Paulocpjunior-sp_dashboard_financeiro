@@ -188,7 +188,9 @@ export const BackendService = {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
-          bankAccount: cleanString(rawAccount) || 'Outros',
+          // Conta: Deve obedecer com exatidão a conta financeira (ex: Itaú, Caixa)
+          bankAccount: cleanString(rawAccount) || 'Conta Principal',
+          // Tipo: Deve ser exatamente o "Plano de Contas" (ex: Entrada de Caixa / Contas a Receber)
           type: cleanString(rawType) || 'Geral',
           status: normalizeStatus(rawStatus),
           client: cleanString(get(map.client)) || 'Consumidor',
@@ -264,6 +266,7 @@ function findHeaderRowIndex(rows: string[], delimiter: string): number {
         if (hasKeyword(['valor', 'total', 'saldo', 'liquido'])) score += 4;
         if (hasKeyword(['conta', 'banco', 'origem'])) score += 2;
         if (hasKeyword(['descricao', 'historico', 'cliente'])) score += 2;
+        if (hasKeyword(['plano', 'classificacao'])) score += 2;
 
         if (score > maxScore) {
             maxScore = score;
@@ -364,14 +367,19 @@ function mapHeaders(headers: string[]) {
     map.valorExtra = find(['valor extra', 'acrescimo', 'extra', 'juros']);
     map.totalCobranca = find(['total cobranca', 'valor total cobranca', 'valor bruto', 'total geral']);
 
-    // 3. BANK ACCOUNT
-    map.bankAccount = find(['conta bancaria', 'nome da conta', 'conta corrente', 'instituicao', 'banco', 'agencia']);
+    // 3. BANK ACCOUNT (Conta)
+    // Prioridade absoluta para termos bancários explícitos para evitar pegar "Conta Contábil" ou "Conta de Resultado"
+    map.bankAccount = find(['conta corrente', 'conta bancaria', 'nome da conta', 'banco', 'instituicao', 'caixa'], ['contabil', 'plano', 'categoria']);
+    
     if (map.bankAccount === -1) {
-        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber']); 
+        // Fallback cauteloso
+        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado']); 
     }
 
-    // 4. TYPE / CATEGORY
-    map.type = find(['classificacao', 'categoria', 'subcategoria', 'plano de contas', 'natureza']);
+    // 4. TYPE / CATEGORY (Plano de Contas)
+    // Prioriza "Plano de Contas" ou "Classificação" para pegar "Entrada de Caixa / Contas a Receber"
+    map.type = find(['plano de contas', 'classificacao', 'natureza', 'grupo', 'categoria']);
+    
     if (map.type === -1) {
         map.type = find(['tipo'], ['movimento']); 
     }
