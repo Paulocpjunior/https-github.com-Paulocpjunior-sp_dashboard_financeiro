@@ -77,24 +77,6 @@ const DataTable: React.FC<DataTableProps> = ({
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
-                {/* ID Column with Filter */}
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[120px]">
-                   <div className="flex flex-col gap-2">
-                        <span>ID</span>
-                        {onIdFilterChange && (
-                            <div className="relative">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                                <input 
-                                    type="text" 
-                                    value={idFilterValue || ''}
-                                    onChange={(e) => onIdFilterChange(e.target.value)}
-                                    placeholder="Buscar ID"
-                                    className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
-                                />
-                            </div>
-                        )}
-                    </div>
-                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
@@ -122,7 +104,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     </div>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">Valor Pago</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">Valor a pagar</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Valor Recebido</th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
               </tr>
@@ -130,7 +112,7 @@ const DataTable: React.FC<DataTableProps> = ({
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-20 text-center">
+                  <td colSpan={8} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
                       <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Atualizando dados...</span>
@@ -139,16 +121,13 @@ const DataTable: React.FC<DataTableProps> = ({
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                     Nenhum registro encontrado.
                   </td>
                 </tr>
               ) : (
                 data.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400 font-mono">
-                      {row.id}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                       {formatDate(row.date)}
                     </td>
