@@ -6,7 +6,7 @@ import AIAssistant from '../components/AIAssistant';
 import { DataService } from '../services/dataService';
 import { AuthService } from '../services/authService';
 import { FilterState, KPIData, Transaction } from '../types';
-import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, User, X, Check } from 'lucide-react';
+import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, User, X, Check, Calendar } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 const INITIAL_FILTERS: FilterState = {
@@ -29,8 +29,7 @@ const Dashboard: React.FC = () => {
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   
-  // Login Alert State
-  const [showWelcomeAlert, setShowWelcomeAlert] = useState(true);
+  // Login Alert State (Local Welcome removed as it moved to Layout)
   const currentUser = AuthService.getCurrentUser();
 
   // Dynamic Options derived from Data
@@ -75,10 +74,6 @@ const Dashboard: React.FC = () => {
       }
     };
     load();
-    
-    // Auto-dismiss welcome alert after 4 seconds
-    const timer = setTimeout(() => setShowWelcomeAlert(false), 4000);
-    return () => clearTimeout(timer);
   }, []);
 
   // Handle Filter Changes
@@ -104,6 +99,26 @@ const Dashboard: React.FC = () => {
   const handleAIUpdate = (newFilters: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
     setPage(1);
+  };
+
+  const setDateRange = (type: 'thisMonth' | 'lastMonth') => {
+      const now = new Date();
+      let start, end;
+
+      if (type === 'thisMonth') {
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+          end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      } else {
+          start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          end = new Date(now.getFullYear(), now.getMonth(), 0);
+      }
+
+      setFilters(prev => ({
+          ...prev,
+          startDate: start.toISOString().split('T')[0],
+          endDate: end.toISOString().split('T')[0]
+      }));
+      setPage(1);
   };
 
   const handlePrint = () => {
@@ -180,27 +195,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <Layout>
-       {/* Welcome Alert Toast */}
-       {showWelcomeAlert && currentUser && (
-        <div className="fixed top-20 right-5 z-50 animate-in slide-in-from-right fade-in duration-500 print:hidden">
-           <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border-l-4 border-emerald-500 shadow-xl rounded-r-lg p-4 flex items-center gap-4 max-w-sm">
-              <div className="bg-emerald-100 dark:bg-emerald-900/50 p-2 rounded-full shrink-0">
-                 <User className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div className="flex-1">
-                 <h4 className="font-bold text-slate-800 dark:text-white text-sm">Bem-vindo(a), {currentUser.name}!</h4>
-                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Sessão iniciada com sucesso.</p>
-              </div>
-              <button 
-                onClick={() => setShowWelcomeAlert(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              >
-                 <X className="h-4 w-4" />
-              </button>
-           </div>
-        </div>
-      )}
-
       <div className="space-y-6">
         
         {/* Header & Actions */}
@@ -286,23 +280,35 @@ const Dashboard: React.FC = () => {
 
               {/* DATE RANGE */}
               <div className="space-y-1 lg:col-span-2">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Período de Análise (Data Início - Fim)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    className="w-full form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                    value={filters.startDate}
-                    onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                    title="Data Inicial"
-                  />
-                  <div className="flex items-center text-slate-400">-</div>
-                  <input
-                    type="date"
-                    className="w-full form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                    value={filters.endDate}
-                    onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                    title="Data Final"
-                  />
+                <div className="flex justify-between items-end mb-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Período de Análise</label>
+                    <div className="flex gap-1">
+                        <button onClick={() => setDateRange('thisMonth')} className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors">Este Mês</button>
+                        <button onClick={() => setDateRange('lastMonth')} className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">Mês Anterior</button>
+                    </div>
+                </div>
+                <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                            type="date"
+                            className="w-full form-input pl-8 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                            value={filters.startDate}
+                            onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                            title="Data Inicial"
+                        />
+                    </div>
+                    <span className="text-slate-400 text-sm">-</span>
+                    <div className="relative flex-1">
+                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                            type="date"
+                            className="w-full form-input pl-8 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                            value={filters.endDate}
+                            onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                            title="Data Final"
+                        />
+                    </div>
                 </div>
               </div>
 
@@ -450,6 +456,9 @@ const Dashboard: React.FC = () => {
                 totalPages={totalPages}
                 onPageChange={setPage}
                 onDelete={handleDeleteTransaction}
+                clientFilterValue={filters.client}
+                onClientFilterChange={(val) => handleFilterChange('client', val)}
+                clientOptions={options.clients}
               />
            </div>
         </div>

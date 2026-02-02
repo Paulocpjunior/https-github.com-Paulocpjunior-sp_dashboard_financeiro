@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle } from 'lucide-react';
 import { AuthService } from '../services/authService';
 import { DataService } from '../services/dataService';
 import { KPIData } from '../types';
@@ -13,6 +13,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [globalKpi, setGlobalKpi] = useState<KPIData | null>(null);
+  const [showSessionAlert, setShowSessionAlert] = useState(true);
+  
   const navigate = useNavigate();
   const location = useLocation();
   const user = AuthService.getCurrentUser();
@@ -37,11 +39,34 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     
     // Poll for updates every 2 seconds to keep header in sync with Dashboard changes
     const interval = setInterval(updateHeaderKpi, 2000);
-    return () => clearInterval(interval);
+    
+    // Auto-dismiss session alert
+    const timer = setTimeout(() => setShowSessionAlert(false), 5000);
+
+    return () => {
+        clearInterval(interval);
+        clearTimeout(timer);
+    };
   }, []);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
+
+  const handleGlobalWhatsAppShare = () => {
+    if (!globalKpi) return;
+    const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    
+    const message = `🏢 *Resumo Global - SP Contábil*%0A` +
+      `--------------------------------%0A` +
+      `🗓 Data: ${new Date().toLocaleDateString('pt-BR')}%0A` +
+      `✅ Total Entradas: ${formatBRL(globalKpi.totalReceived)}%0A` +
+      `🔻 Total Saídas: ${formatBRL(globalKpi.totalPaid)}%0A` +
+      `💰 *Saldo Acumulado: ${formatBRL(globalKpi.balance)}*%0A` +
+      `--------------------------------%0A` +
+      `Enviado via Painel Administrativo`;
+    
+    window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
   const navItems = [
@@ -52,6 +77,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300">
+      
+      {/* Session Active Toast */}
+      {showSessionAlert && user && (
+        <div className="fixed top-5 right-5 z-[60] animate-in slide-in-from-right fade-in duration-500 print:hidden">
+           <div className="bg-emerald-600 text-white shadow-xl rounded-lg p-4 flex items-center gap-3 max-w-sm">
+              <CheckCircle className="h-5 w-5 text-white/90" />
+              <div className="flex-1">
+                 <h4 className="font-bold text-sm">Sessão Ativa</h4>
+                 <p className="text-xs text-white/80">Bem-vindo de volta, {user.name}.</p>
+              </div>
+              <button 
+                onClick={() => setShowSessionAlert(false)}
+                className="text-white/60 hover:text-white p-1 transition-colors"
+              >
+                 <X className="h-4 w-4" />
+              </button>
+           </div>
+        </div>
+      )}
+
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
@@ -163,37 +208,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             
             {/* Global Financial Header Summary */}
             {globalKpi && (
-              <div className="mb-8 grid grid-cols-1 sm:grid-cols-3 gap-0 sm:gap-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-slideUp print:border-slate-300 transition-colors">
-                 <div className="flex items-center gap-4 p-4 border-b sm:border-b-0 border-slate-100 dark:border-slate-800">
-                    <div className="p-2.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg shrink-0 print:bg-transparent">
-                       <TrendingUp className="h-5 w-5" />
-                    </div>
-                    <div>
-                       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Entradas Globais</p>
-                       <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatCurrency(globalKpi.totalReceived)}</p>
-                    </div>
+              <div className="mb-8 grid grid-cols-1 sm:grid-cols-4 gap-0 sm:gap-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-slideUp print:border-slate-300 transition-colors relative">
+                 <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-3">
+                     <div className="flex items-center gap-4 p-4 border-b sm:border-b-0 border-slate-100 dark:border-slate-800">
+                        <div className="p-2.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg shrink-0 print:bg-transparent">
+                           <TrendingUp className="h-5 w-5" />
+                        </div>
+                        <div>
+                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Entradas Globais</p>
+                           <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatCurrency(globalKpi.totalReceived)}</p>
+                        </div>
+                     </div>
+
+                     <div className="flex items-center gap-4 p-4 border-b sm:border-b-0 sm:border-l border-slate-100 dark:border-slate-800">
+                        <div className="p-2.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg shrink-0 print:bg-transparent">
+                           <TrendingDown className="h-5 w-5" />
+                        </div>
+                        <div>
+                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saídas Globais</p>
+                           <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatCurrency(globalKpi.totalPaid)}</p>
+                        </div>
+                     </div>
+
+                     <div className="flex items-center gap-4 p-4 sm:border-l border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 print:bg-transparent">
+                        <div className={`p-2.5 rounded-lg shrink-0 print:bg-transparent ${globalKpi.balance >= 0 ? 'bg-royal-100 dark:bg-blue-900/20 text-royal-700 dark:text-blue-400' : 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
+                           <DollarSign className="h-5 w-5" />
+                        </div>
+                        <div>
+                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saldo Acumulado</p>
+                           <p className={`text-lg font-bold ${globalKpi.balance >= 0 ? 'text-royal-700 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {formatCurrency(globalKpi.balance)}
+                           </p>
+                        </div>
+                     </div>
                  </div>
 
-                 <div className="flex items-center gap-4 p-4 border-b sm:border-b-0 sm:border-l border-slate-100 dark:border-slate-800">
-                    <div className="p-2.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg shrink-0 print:bg-transparent">
-                       <TrendingDown className="h-5 w-5" />
-                    </div>
-                    <div>
-                       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saídas Globais</p>
-                       <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatCurrency(globalKpi.totalPaid)}</p>
-                    </div>
-                 </div>
-
-                 <div className="flex items-center gap-4 p-4 sm:border-l border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 print:bg-transparent">
-                    <div className={`p-2.5 rounded-lg shrink-0 print:bg-transparent ${globalKpi.balance >= 0 ? 'bg-royal-100 dark:bg-blue-900/20 text-royal-700 dark:text-blue-400' : 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
-                       <DollarSign className="h-5 w-5" />
-                    </div>
-                    <div>
-                       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saldo Acumulado</p>
-                       <p className={`text-lg font-bold ${globalKpi.balance >= 0 ? 'text-royal-700 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {formatCurrency(globalKpi.balance)}
-                       </p>
-                    </div>
+                 {/* WhatsApp Quick Share for Global Stats */}
+                 <div className="flex items-center justify-center p-4 border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 print:hidden">
+                    <button 
+                        onClick={handleGlobalWhatsAppShare}
+                        className="flex flex-col items-center justify-center gap-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors w-full h-full"
+                        title="Compartilhar Resumo Global via WhatsApp"
+                    >
+                        <MessageCircle className="h-6 w-6" />
+                        <span className="text-xs font-semibold">Compartilhar</span>
+                    </button>
                  </div>
               </div>
             )}

@@ -7,7 +7,7 @@ export const ReportService = {
   generatePDF: (
     transactions: Transaction[], 
     kpi: KPIData, 
-    filters: { startDate: string; endDate: string; types: string[] },
+    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string },
     currentUser: User | null
   ) => {
     // Cast to any to resolve issues with plugins and internal API types
@@ -39,13 +39,23 @@ export const ReportService = {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
+    // Dates
     const dateRange = filters.startDate && filters.endDate 
       ? `${new Date(filters.startDate).toLocaleDateString('pt-BR')} até ${new Date(filters.endDate).toLocaleDateString('pt-BR')}`
       : 'Todo o período';
-    
     doc.text(`Período: ${dateRange}`, 14, yPos);
-    
     yPos += 5;
+
+    // Specific Filters
+    if (filters.status || filters.bankAccount) {
+        let specifics = [];
+        if (filters.status) specifics.push(`Status: ${filters.status}`);
+        if (filters.bankAccount) specifics.push(`Conta: ${filters.bankAccount}`);
+        doc.text(specifics.join(' | '), 14, yPos);
+        yPos += 5;
+    }
+
+    // Types
     const typeText = filters.types.length > 0 ? filters.types.join(', ') : 'Todos os tipos';
     // Handle long text wrapping for types
     const splitTypes = doc.splitTextToSize(`Tipos: ${typeText}`, pageWidth - 28);
@@ -83,6 +93,7 @@ export const ReportService = {
     // --- Transactions Table ---
     const tableData = transactions.map(t => [
       new Date(t.date).toLocaleDateString('pt-BR'),
+      t.bankAccount,
       t.type,
       t.client,
       t.status,
@@ -93,19 +104,22 @@ export const ReportService = {
 
     doc.autoTable({
       startY: yPos,
-      head: [['Data', 'Tipo', 'Cliente/Descrição', 'Status', 'Valor']],
+      head: [['Data', 'Conta', 'Tipo', 'Cliente/Descrição', 'Status', 'Valor']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [71, 85, 105] }, // Slate 600
-      styles: { fontSize: 9, cellPadding: 3 },
+      styles: { fontSize: 8, cellPadding: 2 },
       columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 35 },
-        4: { halign: 'right', fontStyle: 'bold' }
+        0: { cellWidth: 20 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 30 },
+        // 3 (Client) is auto
+        4: { cellWidth: 20 },
+        5: { halign: 'right', fontStyle: 'bold', cellWidth: 30 }
       },
       didParseCell: (data: any) => {
         // Colorize Value column based on content
-        if (data.section === 'body' && data.column.index === 4) {
+        if (data.section === 'body' && data.column.index === 5) {
           const text = data.cell.raw as string;
           if (text.includes('+')) {
             data.cell.styles.textColor = [22, 163, 74];

@@ -3,9 +3,9 @@ import Layout from '../components/Layout';
 import { DataService } from '../services/dataService';
 import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
-import { TRANSACTION_TYPES } from '../constants';
+import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity } from 'lucide-react';
 
 const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -16,6 +16,8 @@ const Reports: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<string>(''); // Empty = All
+  const [selectedBank, setSelectedBank] = useState<string>(''); // Empty = All
   
   // Preview Data
   const [filteredData, setFilteredData] = useState<Transaction[]>([]);
@@ -53,6 +55,12 @@ const Reports: React.FC = () => {
     if (selectedTypes.length > 0) {
       result = result.filter(t => selectedTypes.includes(t.type));
     }
+    if (selectedStatus) {
+      result = result.filter(t => t.status === selectedStatus);
+    }
+    if (selectedBank) {
+      result = result.filter(t => t.bankAccount === selectedBank);
+    }
 
     setFilteredData(result);
 
@@ -67,7 +75,7 @@ const Reports: React.FC = () => {
     );
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
@@ -85,7 +93,7 @@ const Reports: React.FC = () => {
       ReportService.generatePDF(
         filteredData, 
         kpi, 
-        { startDate, endDate, types: selectedTypes },
+        { startDate, endDate, types: selectedTypes, status: selectedStatus, bankAccount: selectedBank },
         AuthService.getCurrentUser()
       );
       setGenerating(false);
@@ -112,32 +120,71 @@ const Reports: React.FC = () => {
           {/* LEFT: Configuration Panel */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* Date Range Card */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
-                <Calendar className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-                Período de Análise
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Data Início</label>
-                  <input 
-                    type="date" 
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
+            {/* Date Range & Specific Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 {/* Date Range Card */}
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+                    <Calendar className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                    Período de Análise
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Data Início</label>
+                      <input 
+                        type="date" 
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Data Fim</label>
+                      <input 
+                        type="date" 
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Data Fim</label>
-                  <input 
-                    type="date" 
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
+
+                {/* Status & Bank Filter */}
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+                        <Filter className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                        Filtros Específicos
+                    </h3>
+                    <div className="space-y-4">
+                        <div>
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                <Activity className="h-4 w-4" /> Status
+                             </label>
+                             <select
+                                className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                                value={selectedStatus}
+                                onChange={(e) => setSelectedStatus(e.target.value)}
+                             >
+                                <option value="">Todos</option>
+                                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                             </select>
+                        </div>
+                        <div>
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                <Landmark className="h-4 w-4" /> Conta Bancária
+                             </label>
+                             <select
+                                className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                                value={selectedBank}
+                                onChange={(e) => setSelectedBank(e.target.value)}
+                             >
+                                <option value="">Todas</option>
+                                {BANK_ACCOUNTS.map(b => <option key={b} value={b}>{b}</option>)}
+                             </select>
+                        </div>
+                    </div>
                 </div>
-              </div>
             </div>
 
             {/* Transaction Types Card */}

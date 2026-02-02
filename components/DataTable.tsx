@@ -1,16 +1,28 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, Trash2, AlertTriangle, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, Trash2, AlertTriangle, X, Search } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
   page: number;
   totalPages: number;
   onPageChange: (newPage: number) => void;
-  onDelete?: (id: string) => void; // Optional prop for future implementation
+  onDelete?: (id: string) => void;
+  clientFilterValue?: string;
+  onClientFilterChange?: (value: string) => void;
+  clientOptions?: string[]; // For autocomplete
 }
 
-const DataTable: React.FC<DataTableProps> = ({ data, page, totalPages, onPageChange, onDelete }) => {
+const DataTable: React.FC<DataTableProps> = ({ 
+    data, 
+    page, 
+    totalPages, 
+    onPageChange, 
+    onDelete,
+    clientFilterValue,
+    onClientFilterChange,
+    clientOptions = []
+}) => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
 
@@ -56,7 +68,29 @@ const DataTable: React.FC<DataTableProps> = ({ data, page, totalPages, onPageCha
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cliente/Descrição</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
+                    <div className="flex flex-col gap-2">
+                        <span>Cliente / Descrição</span>
+                        {onClientFilterChange && (
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    list="table-client-options"
+                                    value={clientFilterValue || ''}
+                                    onChange={(e) => onClientFilterChange(e.target.value)}
+                                    placeholder="Filtrar..."
+                                    className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
+                                />
+                                <datalist id="table-client-options">
+                                    {clientOptions.map((opt, i) => (
+                                        <option key={i} value={opt} />
+                                    ))}
+                                </datalist>
+                            </div>
+                        )}
+                    </div>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">Valor Pago</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Valor Recebido</th>

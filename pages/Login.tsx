@@ -14,6 +14,7 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
   
   // Forgot Password State
   const [forgotUsername, setForgotUsername] = useState('');
@@ -32,13 +33,17 @@ const Login: React.FC = () => {
       const result = await AuthService.login(username, password);
       
       if (result.success) {
-        navigate('/');
+        setLoginSuccess(true);
+        // Delay redirect slightly to show success state
+        setTimeout(() => {
+          navigate('/');
+        }, 1000);
       } else {
         setError(result.message);
+        setIsLoading(false);
       }
     } catch (err) {
       setError('Ocorreu um erro ao tentar fazer login.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -104,6 +109,14 @@ const Login: React.FC = () => {
                 <span>{error}</span>
               </div>
             )}
+            
+            {/* Success Alert */}
+             {loginSuccess && (
+              <div className="mb-5 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center gap-3 text-green-600 dark:text-green-400 text-sm animate-in fade-in slide-in-from-top-2">
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
+                <span>Login realizado com sucesso! Redirecionando...</span>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleLoginSubmit}>
@@ -120,6 +133,7 @@ const Login: React.FC = () => {
                     className="w-full py-3.5 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                     placeholder="Digite seu usuário"
                     required
+                    disabled={isLoading || loginSuccess}
                   />
                 </div>
               </div>
@@ -137,11 +151,13 @@ const Login: React.FC = () => {
                     className="w-full py-3.5 pl-[45px] pr-10 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                     placeholder="Digite sua senha"
                     required
+                    disabled={isLoading || loginSuccess}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-[15px] top-1/2 -translate-y-1/2 text-slate-400 hover:text-royal-600 transition-colors p-1"
+                    disabled={isLoading || loginSuccess}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -153,6 +169,7 @@ const Login: React.FC = () => {
                   type="button" 
                   onClick={() => setView('forgot')}
                   className="text-xs font-medium text-royal-600 hover:text-royal-800 dark:text-royal-400 dark:hover:text-royal-300 transition-colors"
+                  disabled={isLoading || loginSuccess}
                 >
                   Esqueci minha senha
                 </button>
@@ -160,13 +177,13 @@ const Login: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || loginSuccess}
                 className="w-full py-3.5 bg-royal-700 hover:bg-royal-800 text-white rounded-[10px] text-base font-semibold shadow-lg shadow-royal-700/30 hover:-translate-y-0.5 disabled:opacity-70 disabled:transform-none disabled:shadow-none transition-all flex items-center justify-center gap-2"
               >
-                {isLoading ? (
+                {isLoading || loginSuccess ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Entrando...</span>
+                    <span>{loginSuccess ? 'Entrando...' : 'Verificando...'}</span>
                   </>
                 ) : (
                   <span>Acessar Sistema</span>
@@ -180,7 +197,7 @@ const Login: React.FC = () => {
                 Ambiente criptografado e seguro
               </p>
               <p className="text-[10px] text-slate-300 dark:text-slate-600 font-mono opacity-80">
-                Versão 2.0 Release 001
+                Versão 2.1 Release 002
               </p>
             </div>
           </div>
