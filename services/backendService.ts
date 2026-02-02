@@ -287,7 +287,8 @@ function normalizeHeader(h: string): string {
     return h.toLowerCase()
             .trim()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-            .replace(/[^a-z0-9 ]/g, ''); // Keep spaces for multi-word matching
+            .replace(/[^a-z0-9 ]/g, '') // Keep spaces for multi-word matching
+            .replace(/\s+/g, ' '); // Collapse multiple spaces
 }
 
 function parseCSVLineRegex(text: string, delimiter: string): string[] {
@@ -341,26 +342,30 @@ function mapHeaders(headers: string[]) {
     };
 
     // --- PRIORIDADE ABSOLUTA: TERMOS EXATOS DO USUÁRIO ---
+    
     // 1. TIPO DE LANÇAMENTO
-    // Procura exatamente "tipo de lancamento", "plano de contas" ou "classificacao"
-    let typeIdx = find(['tipo de lancamento', 'plano de contas', 'classificacao financeira', 'classificacao', 'categoria']);
-    // Fallback apenas se não achar os termos exatos
-    if (typeIdx === -1) typeIdx = find(['tipo'], ['movimento', 'conta', 'bancaria', 'pessoa', 'documento']); 
+    // Procura "tipo de lancamento" (com espaços colapsados)
+    let typeIdx = find(['tipo de lancamento', 'tipo lancamento', 'tipo do lancamento']);
+    // Fallback: "plano de contas", "classificacao"
+    if (typeIdx === -1) typeIdx = find(['plano de contas', 'classificacao financeira', 'classificacao', 'categoria']);
+    // Fallback: Apenas "tipo", mas excluindo "movimento"
+    if (typeIdx === -1) typeIdx = find(['tipo'], ['movimento', 'pessoa', 'documento']); 
     map.type = typeIdx;
 
     // 2. CONTA
-    // Procura exatamente "conta" (isolado ou conta corrente), evitando "conta contabil" se possível
-    let accIdx = find(['conta corrente', 'conta bancaria', 'nome da conta']);
+    // Procura "conta", "conta corrente", "banco"
+    // Removemos exclusões agressivas. Se tem "conta", pega. 
+    // Excluímos 'contabil' para não pegar 'Conta Contábil' se houver uma 'Conta' melhor.
+    let accIdx = find(['conta corrente', 'conta bancaria', 'nome da conta', 'banco', 'caixa']);
     if (accIdx === -1) {
-        // Se a coluna se chamar apenas "Conta"
         accIdx = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo', 'fluxo']);
     }
-    if (accIdx === -1) accIdx = find(['banco', 'caixa', 'instituicao']);
+    if (accIdx === -1) accIdx = find(['instituicao']);
     map.bankAccount = accIdx;
 
     // 3. PAGO POR
-    // Procura exatamente "pago por"
-    map.paidBy = find(['pago por', 'centro de custo', 'responsavel', 'pagador', 'departamento']);
+    // Procura "pago por"
+    map.paidBy = find(['pago por', 'pagopor', 'pago_por', 'centro de custo', 'responsavel', 'pagador', 'departamento']);
 
     // --- DEMAIS CAMPOS ---
 
