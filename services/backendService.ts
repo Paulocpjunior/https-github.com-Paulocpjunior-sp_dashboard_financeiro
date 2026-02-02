@@ -112,6 +112,7 @@ export const BackendService = {
         const rawMovimento = get(map.movement);
         const rawType = get(map.type);
         const rawAccount = get(map.bankAccount);
+        const rawPaidBy = get(map.paidBy);
         
         // Extract Detail Values
         const rawHonorarios = get(map.honorarios);
@@ -188,13 +189,11 @@ export const BackendService = {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
-          // Conta: Deve obedecer com exatidão a conta financeira (ex: Itaú, Caixa)
-          bankAccount: cleanString(rawAccount) || 'Conta Principal',
-          // Tipo: Deve ser exatamente o "Plano de Contas" (ex: Entrada de Caixa / Contas a Receber)
+          bankAccount: cleanString(rawAccount) || 'Outros',
           type: cleanString(rawType) || 'Geral',
           status: normalizeStatus(rawStatus),
           client: cleanString(get(map.client)) || 'Consumidor',
-          paidBy: cleanString(get(map.paidBy)) || 'Financeiro',
+          paidBy: cleanString(rawPaidBy) || 'Financeiro',
           movement: movement,
           valuePaid: valPaid,
           valueReceived: valReceived,
@@ -306,7 +305,7 @@ function parseCSVLineRegex(text: string, delimiter: string): string[] {
 }
 
 // ------------------------------------------------------------------
-// CORE MAPPING LOGIC (REWRITTEN)
+// CORE MAPPING LOGIC (STRICT & IMPROVED)
 // ------------------------------------------------------------------
 function mapHeaders(headers: string[]) {
     const map = {
@@ -328,7 +327,7 @@ function mapHeaders(headers: string[]) {
 
     const normHeaders = headers.map(h => normalizeHeader(h));
 
-    // Helper to find index
+    // Helper to find index with exclusion
     const find = (keywords: string[], exclude: string[] = []) => {
         return normHeaders.findIndex((h, i) => {
              // Exact match has priority, then inclusion
@@ -338,22 +337,18 @@ function mapHeaders(headers: string[]) {
         });
     };
 
-    // 1. DATES (Separating Vencimento from Emissão)
+    // 1. DATES
     map.dueDate = find(['data vencimento', 'data do vencimento', 'vencimento']);
     map.date = find(['data emissao', 'emissao', 'data', 'dt '], ['vencimento', 'agendamento']);
 
-    // Fallback logic if one is missing but other exists
     if (map.date === -1 && map.dueDate !== -1) map.date = map.dueDate;
     if (map.dueDate === -1 && map.date !== -1) map.dueDate = map.date;
 
-    // 2. VALUES (Critical - Strict Exclusion)
+    // 2. VALUES
     const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque', 'extra', 'honorarios'];
-    
-    // Explicit Paid/Received columns
     map.valuePaid = find(['valor pago', 'valor debito', 'debito', 'saida', 'valor saida', 'despesa'], valueExclusions);
     map.valueReceived = find(['valor recebido', 'valor credito', 'credito', 'entrada', 'valor entrada', 'receita'], valueExclusions);
 
-    // Generic Value (Single column)
     if (map.valuePaid === -1 && map.valueReceived === -1) {
         const valIdx = find(['valor liquido', 'valor total', 'valor', 'saldo', 'total', 'amount'], valueExclusions);
         if (valIdx !== -1) {
@@ -368,34 +363,44 @@ function mapHeaders(headers: string[]) {
     map.totalCobranca = find(['total cobranca', 'valor total cobranca', 'valor bruto', 'total geral']);
 
     // 3. BANK ACCOUNT (Conta)
-    // Prioridade absoluta para termos bancários explícitos para evitar pegar "Conta Contábil" ou "Conta de Resultado"
-    map.bankAccount = find(['conta corrente', 'conta bancaria', 'nome da conta', 'banco', 'instituicao', 'caixa'], ['contabil', 'plano', 'categoria']);
+    // BUSCA ESTRITA: Evita "Conta Contábil" ou "Conta Plano". Procura termos bancários específicos.
+    map.bankAccount = find(['conta corrente', 'nome da conta', 'conta bancaria', 'nome do banco', 'instituicao financeira']);
     
+    // Se não achar, procura apenas "Banco" ou "Caixa" (evitando Fluxo de Caixa)
     if (map.bankAccount === -1) {
-        // Fallback cauteloso
-        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado']); 
+        map.bankAccount = find(['banco', 'caixa'], ['fluxo', 'movimento', 'entrada', 'saida']);
+    }
+    
+    // Fallback GENÉRICO mas excluindo termos contábeis
+    if (map.bankAccount === -1) {
+        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo']); 
     }
 
     // 4. TYPE / CATEGORY (Plano de Contas)
-    // Prioriza "Plano de Contas" ou "Classificação" para pegar "Entrada de Caixa / Contas a Receber"
-    map.type = find(['plano de contas', 'classificacao', 'natureza', 'grupo', 'categoria']);
+    // PRIORIDADE: Plano de Contas, Classificação, Categoria.
+    map.type = find(['plano de contas', 'classificacao financeira', 'classificacao', 'categoria', 'natureza']);
     
     if (map.type === -1) {
-        map.type = find(['tipo'], ['movimento']); 
+        map.type = find(['subcategoria', 'grupo']);
+    }
+    
+    // Fallback: Apenas usa "Tipo" se não for "Tipo de Movimento" (que seria Entrada/Saida) nem "Tipo de Conta"
+    if (map.type === -1) {
+        map.type = find(['tipo'], ['movimento', 'conta', 'bancaria', 'pessoa', 'documento']); 
     }
 
-    // 5. CLIENT / DESCRIPTION
+    // 5. PAID BY (Centro de Custo / Pagador)
+    map.paidBy = find(['centro de custo', 'pago por', 'responsavel', 'pagador', 'departamento', 'area']);
+
+    // 6. CLIENT / DESCRIPTION
     map.client = find(['favorecido', 'cliente', 'razao social', 'fornecedor', 'pagador']);
     if (map.client === -1) map.client = find(['descricao', 'historico', 'nome', 'detalhe']);
 
-    // 6. STATUS
+    // 7. STATUS
     map.status = find(['status', 'situacao', 'estado']);
 
-    // 7. MOVEMENT (Entrada/Saida indicator)
+    // 8. MOVEMENT
     map.movement = find(['movimento', 'tipo movimento', 'operacao', 'entrada/saida', 'd/c']);
-
-    // 8. PAID BY
-    map.paidBy = find(['pago por', 'responsavel', 'centro de custo']);
 
     // 9. ID
     map.id = find(['id transacao', 'id_transacao', 'codigo transacao']);
