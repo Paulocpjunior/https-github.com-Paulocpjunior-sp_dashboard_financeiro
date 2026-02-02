@@ -124,7 +124,6 @@ const Dashboard: React.FC = () => {
   };
   
   const handleDeleteTransaction = (id: string) => {
-    // Placeholder logic for future backend integration
     console.log(`Solicitação de exclusão para o ID: ${id}`);
     alert(`Funcionalidade de exclusão simulada para o ID: ${id}.\nEm breve será conectada ao banco de dados.`);
   };
@@ -158,7 +157,6 @@ const Dashboard: React.FC = () => {
     return Object.values(grouped).slice(0, 10).reverse();
   }, [data]);
 
-  // Se estiver carregando inicialmente e não tiver erro, use o loader de tela cheia do Layout.
   if (isLoading && data.length === 0 && !initError) {
     return (
       <Layout>
@@ -171,7 +169,6 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // Se houver erro de conexão, exibe alerta mas mantém o Layout (menu)
   if (initError) {
     return (
       <Layout>
@@ -264,7 +261,7 @@ const Dashboard: React.FC = () => {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               
-               {/* SEARCH GERAL (Top Priority) */}
+               {/* SEARCH GERAL */}
                <div className="space-y-1 lg:col-span-4 mb-2">
                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Busca Geral</label>
                  <div className="relative">
@@ -395,7 +392,7 @@ const Dashboard: React.FC = () => {
                   onChange={(e) => handleFilterChange('client', e.target.value)}
                 />
                 <datalist id="clients-list">
-                  {options.clients.map(o => <option key={o} value={o} />)}
+                  {options.clients.slice(0, 100).map((o, i) => <option key={i} value={o} />)}
                 </datalist>
               </div>
 

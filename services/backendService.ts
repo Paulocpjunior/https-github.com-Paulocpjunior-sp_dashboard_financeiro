@@ -81,7 +81,7 @@ export const BackendService = {
         return [];
       }
 
-      // 1. Detect Delimiter (Verify more rows for accuracy)
+      // 1. Detect Delimiter
       const delimiter = detectDelimiter(rows.slice(0, 15));
       console.log(`Delimitador detectado: "${delimiter}"`);
 
@@ -91,7 +91,7 @@ export const BackendService = {
 
       const headerRow = parseCSVLineRegex(rows[headerRowIndex], delimiter);
       
-      // 3. Strict Mapping Logic (Fixes "ID mapped as Value" bug)
+      // 3. Strict Mapping Logic (Rewritten)
       let map = mapHeaders(headerRow);
       console.log('Mapa de Colunas:', map);
 
@@ -102,18 +102,22 @@ export const BackendService = {
         const cols = parseCSVLineRegex(rowString, delimiter);
         const get = (idx: number) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx] : '';
 
+        // Extract Raw Values
         const rawId = get(map.id);
         const rawDate = get(map.date);
         const rawValorPago = get(map.valuePaid);
         const rawValorRecebido = get(map.valueReceived);
         const rawStatus = get(map.status);
         const rawMovimento = get(map.movement);
+        const rawType = get(map.type);
+        const rawAccount = get(map.bankAccount);
 
         // ID Logic
         let finalId = `trx-${index}`;
         if (map.id !== -1 && rawId && rawId.trim().length > 0) {
-            // Only use explicit ID if it's not a huge text blob or looks like a date
-            if (rawId.length < 50 && !rawId.includes('/')) finalId = rawId.trim();
+            if (rawId.length < 50 && !rawId.includes('/') && !rawId.toLowerCase().includes('total')) {
+                finalId = rawId.trim();
+            }
         }
 
         // MOVEMENT & VALUES LOGIC
@@ -121,13 +125,14 @@ export const BackendService = {
         let valPaid = 0;
         let valReceived = 0;
 
+        // Determine if we are in single column mode for values
         const isSingleColumn = map.valueReceived === -1 || map.valuePaid === map.valueReceived;
 
         if (isSingleColumn) {
-            const rawVal = rawValorPago || rawValorRecebido;
+            const rawVal = rawValorPago || rawValorRecebido; // Use whichever was found
             const val = parseCurrencyRobust(rawVal);
             
-            // Priority: Explicit Movement -> Sign Logic
+            // Priority: Explicit Movement Column -> Inference from Sign
             if (movement === 'Entrada') {
                 valReceived = val;
                 valPaid = 0;
@@ -135,7 +140,7 @@ export const BackendService = {
                 valPaid = val;
                 valReceived = 0;
             } else {
-                 // Fallback: Negative = Paid, Positive = Received
+                 // Fallback inference
                  if (val < 0) {
                      valPaid = Math.abs(val);
                      valReceived = 0;
@@ -147,13 +152,16 @@ export const BackendService = {
                  }
             }
         } else {
+            // Two columns mode
             valPaid = parseCurrencyRobust(rawValorPago);
             valReceived = parseCurrencyRobust(rawValorRecebido);
             
-            // Only infer movement if not explicitly present
+            // If explicit movement column exists, trust it. Otherwise infer.
             if (map.movement === -1) {
                 if (valPaid > 0 && valReceived === 0) movement = 'Saída';
                 if (valReceived > 0 && valPaid === 0) movement = 'Entrada';
+                // If both are 0 or both have values, default to Saída or check generic logic
+                if (valPaid === 0 && valReceived === 0) movement = 'Saída'; 
             }
         }
 
@@ -164,8 +172,8 @@ export const BackendService = {
         return {
           id: finalId,
           date: parseDateSafely(rawDate),
-          bankAccount: cleanString(get(map.bankAccount)) || 'Outros',
-          type: cleanString(get(map.type)) || 'Geral',
+          bankAccount: cleanString(rawAccount) || 'Outros',
+          type: cleanString(rawType) || 'Geral',
           status: normalizeStatus(rawStatus),
           client: cleanString(get(map.client)) || 'Consumidor',
           paidBy: cleanString(get(map.paidBy)) || 'Financeiro',
@@ -217,14 +225,13 @@ function detectDelimiter(rows: string[]): string {
         commaCount += (row.match(/,/g) || []).length;
         semiCount += (row.match(/;/g) || []).length;
     });
-    // Strong preference for semicolon in BR/PT files
     return semiCount >= commaCount ? ';' : ',';
 }
 
 function findHeaderRowIndex(rows: string[], delimiter: string): number {
     let bestIndex = 0;
     let maxScore = 0;
-    const limit = Math.min(rows.length, 10);
+    const limit = Math.min(rows.length, 12);
 
     for (let i = 0; i < limit; i++) {
         const row = rows[i].toLowerCase();
@@ -232,12 +239,11 @@ function findHeaderRowIndex(rows: string[], delimiter: string): number {
         const cells = row.split(delimiter).map(c => c.trim());
         const hasKeyword = (keys: string[]) => cells.some(c => keys.some(k => c.includes(k)));
 
-        // Weighted Scoring - prioritizing Value and Date
-        if (hasKeyword(['data', 'date', 'vencimento', 'competencia', 'dt'])) score += 3;
-        if (hasKeyword(['valor', 'amount', 'total', 'r$', 'saldo', 'liquido'])) score += 4;
-        if (hasKeyword(['conta', 'banco', 'bank', 'origem'])) score += 2;
-        if (hasKeyword(['status', 'situacao', 'estado'])) score += 2;
-        if (hasKeyword(['cliente', 'descricao', 'nome', 'favorecido', 'historico'])) score += 2;
+        // Scoring rules
+        if (hasKeyword(['data', 'date', 'vencimento', 'dt'])) score += 3;
+        if (hasKeyword(['valor', 'total', 'saldo', 'liquido'])) score += 4;
+        if (hasKeyword(['conta', 'banco', 'origem'])) score += 2;
+        if (hasKeyword(['descricao', 'historico', 'cliente'])) score += 2;
 
         if (score > maxScore) {
             maxScore = score;
@@ -256,7 +262,7 @@ function normalizeHeader(h: string): string {
     return h.toLowerCase()
             .trim()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-            .replace(/[^a-z0-9]/g, '');
+            .replace(/[^a-z0-9 ]/g, ''); // Keep spaces for multi-word matching
 }
 
 function parseCSVLineRegex(text: string, delimiter: string): string[] {
@@ -276,67 +282,90 @@ function parseCSVLineRegex(text: string, delimiter: string): string[] {
     return results;
 }
 
+// ------------------------------------------------------------------
+// CORE MAPPING LOGIC (REWRITTEN)
+// ------------------------------------------------------------------
 function mapHeaders(headers: string[]) {
     const map = {
-        id: -1, idIsExplicit: false, date: -1, bankAccount: -1, 
-        type: -1, status: -1, client: -1, paidBy: -1, movement: -1, 
-        valuePaid: -1, valueReceived: -1
+        id: -1, 
+        date: -1, 
+        bankAccount: -1, 
+        type: -1, 
+        status: -1, 
+        client: -1, 
+        paidBy: -1, 
+        movement: -1, 
+        valuePaid: -1, 
+        valueReceived: -1
     };
 
-    const matches = (norm: string, keywords: string[]) => keywords.some(k => norm.includes(k));
-    // Important: Exclude ID/Doc/Num from being detected as Values
-    const isExcluded = (norm: string, exclusions: string[]) => exclusions.some(k => norm.includes(k));
+    const normHeaders = headers.map(h => normalizeHeader(h));
 
-    headers.forEach((h, i) => {
-        const norm = normalizeHeader(h);
-        
-        // --- ID ---
-        if (matches(norm, ['idtransacao', 'codigotransacao', 'identifier'])) {
-            map.id = i; map.idIsExplicit = true;
-        } else if (norm === 'id' || norm === 'cod' || norm === 'codigo' || norm === 'doc' || norm === 'nr') {
-            map.id = i; map.idIsExplicit = true;
+    // Helper to find index
+    const find = (keywords: string[], exclude: string[] = []) => {
+        return normHeaders.findIndex((h, i) => {
+             // Exact match has priority, then inclusion
+             const isMatch = keywords.some(k => h === k || h.includes(k));
+             const isExcluded = exclude.some(e => h.includes(e));
+             return isMatch && !isExcluded;
+        });
+    };
+
+    // 1. DATE (High Priority)
+    map.date = find(['data vencimento', 'data do vencimento', 'vencimento']); 
+    if (map.date === -1) map.date = find(['data', 'dt '], ['agendamento', 'criacao']);
+    if (map.date === -1) map.date = find(['competencia']);
+
+    // 2. VALUES (Critical - Strict Exclusion)
+    const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque'];
+    
+    // Explicit Paid/Received columns
+    map.valuePaid = find(['valor pago', 'valor debito', 'debito', 'saida', 'valor saida', 'despesa'], valueExclusions);
+    map.valueReceived = find(['valor recebido', 'valor credito', 'credito', 'entrada', 'valor entrada', 'receita'], valueExclusions);
+
+    // Generic Value (Single column)
+    if (map.valuePaid === -1 && map.valueReceived === -1) {
+        const valIdx = find(['valor liquido', 'valor total', 'valor', 'saldo', 'total', 'amount'], valueExclusions);
+        if (valIdx !== -1) {
+            map.valuePaid = valIdx;
+            map.valueReceived = valIdx;
         }
-
-        // --- DATE ---
-        else if (matches(norm, ['data', 'dt', 'vencimento', 'competencia']) && !matches(norm, ['carimbo', 'timestamp'])) {
-             if (map.date === -1) map.date = i;
-             else {
-                 // Prefer columns with 'vencimento' if multiple date columns exist
-                 const current = normalizeHeader(headers[map.date]);
-                 if (!current.includes('vencimento') && norm.includes('vencimento')) map.date = i;
-             }
-        }
-
-        // --- VALUES (Fix: Prevent mapping 'Doc' or 'Parcela' as Value) ---
-        else if (
-            (matches(norm, ['valor', 'amount', 'total', 'r$', 'saldo', 'liquido'])) && 
-            !isExcluded(norm, ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota'])
-        ) {
-            if (matches(norm, ['pago', 'saida', 'debito', 'despesa'])) map.valuePaid = i;
-            else if (matches(norm, ['recebido', 'entrada', 'credito', 'receita'])) map.valueReceived = i;
-            else {
-                // Generic Value column
-                if (map.valuePaid === -1) {
-                    map.valuePaid = i;
-                    map.valueReceived = i; 
-                }
-            }
-        }
-
-        // --- OTHERS ---
-        else if (matches(norm, ['conta', 'banco', 'instituicao', 'origem'])) map.bankAccount = i;
-        else if (matches(norm, ['tipo', 'categoria', 'classificacao'])) map.type = i;
-        else if (matches(norm, ['status', 'situacao'])) map.status = i;
-        else if (matches(norm, ['cliente', 'descricao', 'nome', 'historico', 'favorecido', 'razao'])) map.client = i;
-        else if (matches(norm, ['pago por', 'responsavel', 'centro'])) map.paidBy = i; 
-        else if (matches(norm, ['movimento', 'entradasaida', 'tipooperacao'])) map.movement = i;
-    });
-
-    // Fallback: If no date column found, look for *any* column containing 'data'
-    if (map.date === -1) {
-        const idx = headers.findIndex(h => normalizeHeader(h).includes('data'));
-        if (idx !== -1) map.date = idx;
     }
+
+    // 3. BANK ACCOUNT
+    // Prioritize "Conta Bancaria", "Nome da Conta". Avoid "Tipo de Conta" if possible.
+    map.bankAccount = find(['conta bancaria', 'nome da conta', 'conta corrente', 'instituicao', 'banco', 'agencia']);
+    if (map.bankAccount === -1) {
+        // Fallback to "Conta" but try to avoid "Conta Contabil" or "Tipo de Conta" if they are clearly categories
+        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria']); 
+    }
+
+    // 4. TYPE / CATEGORY
+    map.type = find(['classificacao', 'categoria', 'subcategoria', 'plano de contas', 'natureza']);
+    if (map.type === -1) {
+        // If we didn't find a strict Category, "Tipo" might be it.
+        // But "Tipo" could also be "Tipo de Conta" (Checking/Savings).
+        // If we already have a Bank Account mapped, "Tipo de Conta" might actually be the Bank Account type, 
+        // but often in simple sheets "Tipo" is the Category.
+        map.type = find(['tipo'], ['movimento']); 
+    }
+
+    // 5. CLIENT / DESCRIPTION
+    map.client = find(['favorecido', 'cliente', 'razao social', 'fornecedor', 'pagador']);
+    if (map.client === -1) map.client = find(['descricao', 'historico', 'nome', 'detalhe']);
+
+    // 6. STATUS
+    map.status = find(['status', 'situacao', 'estado']);
+
+    // 7. MOVEMENT (Entrada/Saida indicator)
+    map.movement = find(['movimento', 'tipo movimento', 'operacao', 'entrada/saida', 'd/c']);
+
+    // 8. PAID BY
+    map.paidBy = find(['pago por', 'responsavel', 'centro de custo']);
+
+    // 9. ID (Low priority, avoid overwriting useful columns)
+    map.id = find(['id transacao', 'id_transacao', 'codigo transacao']);
+    if (map.id === -1) map.id = find(['id', 'cod', 'codigo'], ['barra', 'produto', 'cliente']);
 
     return map;
 }
@@ -354,22 +383,25 @@ function parseCurrencyRobust(val: string | undefined): number {
   
   if (!clean || clean === '-') return 0;
 
-  // Decide between 1.000,00 (BRL) and 1,000.00 (US)
+  // Logic to determine format:
+  // 1.000,00 (BRL) -> Dots are thousands, Comma is decimal
+  // 1,000.00 (US)  -> Commas are thousands, Dot is decimal
+  
   const lastComma = clean.lastIndexOf(',');
   const lastDot = clean.lastIndexOf('.');
 
   if (lastComma > lastDot) {
-      // It's likely BRL: 1.250,50
+      // BRL Style (comma is last separator)
       clean = clean.replace(/\./g, '').replace(',', '.');
   } else if (lastDot > lastComma) {
-      // It's likely US: 1,250.50
+      // US Style (dot is last separator)
       clean = clean.replace(/,/g, '');
   } else if (lastComma > -1 && lastDot === -1) {
-       // Only comma: 50,00 -> 50.00
+       // Only comma (e.g. 50,00) -> Treat as decimal separator
        clean = clean.replace(',', '.');
   }
   
-  // Clean anything else (keep digits, dot, minus)
+  // Final cleanup of non-numeric chars (except dot and minus)
   clean = clean.replace(/[^0-9.-]/g, '');
 
   const num = parseFloat(clean);
@@ -400,7 +432,7 @@ function parseDateSafely(dateStr: string | undefined): string {
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
   if (clean.includes(' ')) clean = clean.split(' ')[0];
 
-  // DD/MM/YYYY or DD-MM-YYYY
+  // PT-BR Format: DD/MM/YYYY
   const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
   const ptMatch = clean.match(ptBrRegex);
 
@@ -412,17 +444,11 @@ function parseDateSafely(dateStr: string | undefined): string {
       return `${year}-${month}-${day}`;
   }
 
-  // YYYY-MM-DD
+  // ISO Format: YYYY-MM-DD
   const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
   const isoMatch = clean.match(isoRegex);
   if (isoMatch) {
-      const year = parseInt(isoMatch[1]);
-      const month = parseInt(isoMatch[2]);
-      const day = parseInt(isoMatch[3]);
-      // Basic validation
-      if (year > 1900 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-          return clean.substring(0, 10);
-      }
+      return clean.substring(0, 10);
   }
 
   return '1970-01-01';
