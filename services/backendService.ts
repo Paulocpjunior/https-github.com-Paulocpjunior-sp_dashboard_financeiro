@@ -82,26 +82,26 @@ export const BackendService = {
         return [];
       }
 
-      // --- ROBUST CSV PARSING ---
-      // 1. Extract Headers
-      const headerRow = parseCSVLineRegex(rows[0]);
+      // --- SMART HEADER DETECTION ---
+      // Instead of assuming row 0, we scan the first 10 rows for the best header candidate.
+      const headerRowIndex = findHeaderRowIndex(rows);
+      console.log(`Cabeçalho detectado na linha: ${headerRowIndex}`);
+
+      const headerRow = parseCSVLineRegex(rows[headerRowIndex]);
       console.log('Headers Brutos:', headerRow);
       
-      // 2. Map Headers
       const map = mapHeaders(headerRow);
       console.log('Mapa de Colunas:', map);
 
       if (map.date === -1 && map.valuePaid === -1 && map.valueReceived === -1) {
-          console.warn("Mapeamento falhou para colunas críticas. Tentando fallback posicional.");
+          console.warn("Mapeamento falhou para colunas críticas.");
       }
 
-      // 3. Parse Data Rows
-      const dataRows = rows.slice(1).filter(row => row.trim() !== '');
+      // Parse Data Rows (Start from HeaderIndex + 1)
+      const dataRows = rows.slice(headerRowIndex + 1).filter(row => row.trim() !== '');
 
       return dataRows.map((rowString, index) => {
         const cols = parseCSVLineRegex(rowString);
-        
-        // Helper to safely get value at index
         const get = (idx: number) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx] : '';
 
         const rawId = get(map.id);
@@ -114,7 +114,6 @@ export const BackendService = {
         // ID Logic
         let finalId = `trx-${index}`;
         if (map.id !== -1 && rawId && rawId.trim().length > 0) {
-            // Avoid using timestamps as IDs if header mapping was fuzzy
             if (!rawId.includes(':') || map.idIsExplicit) {
                finalId = rawId.trim();
             }
@@ -122,15 +121,16 @@ export const BackendService = {
 
         return {
           id: finalId,
-          date: parseDateStrictPTBR(rawDate),
+          // Use safe parsing that defaults to 1970 if invalid, avoiding pollution of "Current Month" view
+          date: parseDateSafely(rawDate),
           bankAccount: cleanString(get(map.bankAccount)) || 'Outros',
           type: cleanString(get(map.type)) || 'Outros',
           status: normalizeStatus(rawStatus),
           client: cleanString(get(map.client)) || 'Consumidor',
           paidBy: cleanString(get(map.paidBy)) || 'Financeiro',
           movement: normalizeMovement(rawMovimento, rawValorPago, rawValorRecebido),
-          valuePaid: parseCurrencyBRL(rawValorPago),
-          valueReceived: parseCurrencyBRL(rawValorRecebido),
+          valuePaid: parseCurrencyRobust(rawValorPago),
+          valueReceived: parseCurrencyRobust(rawValorRecebido),
         } as Transaction;
       });
 
@@ -162,6 +162,31 @@ export const BackendService = {
 
 // --- HELPERS ---
 
+function findHeaderRowIndex(rows: string[]): number {
+    let bestIndex = 0;
+    let maxScore = 0;
+    const limit = Math.min(rows.length, 15); // Scan first 15 rows
+
+    for (let i = 0; i < limit; i++) {
+        const row = rows[i].toLowerCase();
+        let score = 0;
+        
+        // Keywords scoring
+        if (row.includes('data') || row.includes('date') || row.includes('vencimento')) score += 3;
+        if (row.includes('valor') || row.includes('amount') || row.includes('total')) score += 3;
+        if (row.includes('conta') || row.includes('banco') || row.includes('bank')) score += 2;
+        if (row.includes('status') || row.includes('situacao')) score += 2;
+        if (row.includes('cliente') || row.includes('descricao')) score += 2;
+        if (row.includes('id') || row.includes('cod')) score += 1;
+
+        if (score > maxScore) {
+            maxScore = score;
+            bestIndex = i;
+        }
+    }
+    return bestIndex;
+}
+
 function cleanString(str: string): string {
     return str ? str.replace(/^["']|["']$/g, '').trim() : '';
 }
@@ -174,39 +199,22 @@ function normalizeHeader(h: string): string {
             .replace(/[^a-z0-9]/g, '');
 }
 
-// Robust CSV Line Parser using Regex to handle quotes properly
 function parseCSVLineRegex(text: string): string[] {
-    // Matches: "quoted value" OR value_without_quotes
     const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
     const results: string[] = [];
     let match;
-    
-    // JS Regex is stateful when using /g, we loop through matches
     while ((match = regex.exec(text)) !== null) {
-        // match[1] is quoted content (unescape double quotes), match[2] is unquoted
         let val = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
         results.push(val || '');
     }
-    
-    // Remove the last empty match that regex exec might produce at end of string if it ends with comma
-    // However, the above loop works well for standard CSV.
-    // If the string is empty, we return empty array, but here we likely have content.
     return results;
 }
 
 function mapHeaders(headers: string[]) {
     const map = {
-        id: -1, 
-        idIsExplicit: false,
-        date: -1, 
-        bankAccount: -1, 
-        type: -1, 
-        status: -1, 
-        client: -1, 
-        paidBy: -1, 
-        movement: -1, 
-        valuePaid: -1, 
-        valueReceived: -1
+        id: -1, idIsExplicit: false, date: -1, bankAccount: -1, 
+        type: -1, status: -1, client: -1, paidBy: -1, movement: -1, 
+        valuePaid: -1, valueReceived: -1
     };
 
     const matches = (norm: string, keywords: string[]) => keywords.some(k => norm.includes(k));
@@ -214,39 +222,26 @@ function mapHeaders(headers: string[]) {
     headers.forEach((h, i) => {
         const norm = normalizeHeader(h);
         
-        // 1. ID
         if (matches(norm, ['idtransacao', 'codigotransacao', 'identifier'])) {
-            map.id = i;
-            map.idIsExplicit = true;
+            map.id = i; map.idIsExplicit = true;
         } else if (norm === 'id' || norm === 'cod' || norm === 'codigo') {
-            map.id = i;
-            map.idIsExplicit = true;
+            map.id = i; map.idIsExplicit = true;
         }
 
-        // 2. DATE (Priority logic)
-        // Avoid "carimbo" or "timestamp" unless it's the only thing we have.
-        // Prefer "Vencimento", "Data", "Competencia"
-        if (matches(norm, ['data', 'dt', 'vencimento', 'competencia'])) {
+        else if (matches(norm, ['data', 'dt', 'vencimento', 'competencia'])) {
             const isTimestamp = matches(norm, ['carimbo', 'timestamp', 'hora']);
-            
             if (!isTimestamp) {
-                // Good date
                 if (map.date === -1) {
                     map.date = i;
                 } else {
-                    // If we already have a date, prefer "Vencimento" over generic "Data"
                     const currentHeader = normalizeHeader(headers[map.date]);
                     if (matches(norm, ['vencimento']) && !currentHeader.includes('vencimento')) {
                          map.date = i;
                     }
                 }
-            } else {
-                 // It is timestamp. Only take if we have nothing else.
-                 if (map.date === -1) map.date = i;
-            }
+            } else if (map.date === -1) map.date = i;
         }
 
-        // 3. Other fields
         else if (matches(norm, ['conta', 'banco', 'instituicao'])) map.bankAccount = i;
         else if (matches(norm, ['tipo', 'categoria', 'classificacao'])) map.type = i;
         else if (matches(norm, ['status', 'situacao'])) map.status = i;
@@ -254,65 +249,48 @@ function mapHeaders(headers: string[]) {
         else if (matches(norm, ['pago', 'responsavel']) && !matches(norm, ['valor'])) map.paidBy = i; 
         else if (matches(norm, ['movimento', 'entradasaida'])) map.movement = i;
         
-        // 4. Values (Strict check for Pago vs Recebido)
-        else if (matches(norm, ['valorpago', 'saida', 'debito', 'despesa'])) map.valuePaid = i;
+        else if (matches(norm, ['valorpago', 'saida', 'debito', 'despesa']) && !matches(norm, ['pago por'])) map.valuePaid = i;
         else if (matches(norm, ['valorrecebido', 'entrada', 'credito', 'receita'])) map.valueReceived = i;
     });
 
-    // Fallbacks
-    if (map.date === -1 && headers.length > 1) {
-        // Common pattern: Col 0 = Timestamp, Col 1 = Data
-        map.date = 1; 
-    }
+    if (map.date === -1 && headers.length > 1) map.date = 1; 
     
-    // Value Fallbacks (common positions in financial sheets)
+    // Value Fallbacks
     if (map.valuePaid === -1 && map.valueReceived === -1) {
-        // Try to find generic "Valor" columns
         const valorCols = headers.map((h, i) => ({h, i})).filter(o => normalizeHeader(o.h).includes('valor'));
         if (valorCols.length >= 2) {
-             // Assume first is Out, second is In, or vice versa? 
-             // Usually Debit Left, Credit Right.
              map.valuePaid = valorCols[0].i;
              map.valueReceived = valorCols[1].i;
         } else if (valorCols.length === 1) {
-             // Single value column? We might rely on "Movement" column to determine sign
-             map.valuePaid = valorCols[0].i; // Store in paid, will distribute later based on movement
+             map.valuePaid = valorCols[0].i;
         }
     }
 
     return map;
 }
 
-// STRICT BRL CURRENCY PARSER
-// Handles: "R$ 1.200,50", "1.200,50", "1000", "1,50"
-function parseCurrencyBRL(val: string | undefined): number {
+// ROBUST CURRENCY PARSER (Detects decimal separator automatically)
+function parseCurrencyRobust(val: string | undefined): number {
   if (!val) return 0;
   
-  // Remove spaces, currency symbols
-  let clean = val.replace(/^["']|["']$/g, '').trim(); // Remove surrounding quotes
-  clean = clean.replace(/[R$\s]/g, ''); // Remove R$ and spaces
+  let clean = val.replace(/^["']|["']$/g, '').trim(); 
+  clean = clean.replace(/[R$\s]/g, ''); 
   
   if (!clean || clean === '-') return 0;
 
-  // Check format
-  const hasComma = clean.includes(',');
-  const hasDot = clean.includes('.');
+  const lastComma = clean.lastIndexOf(',');
+  const lastDot = clean.lastIndexOf('.');
 
-  // BRL Format: 1.250,00 (Dot is thousands, Comma is decimal)
-  if (hasComma) {
-      if (hasDot) {
-          // Remove all dots (thousands)
-          clean = clean.replace(/\./g, '');
-      }
-      // Replace comma with dot for JS parseFloat
-      clean = clean.replace(',', '.');
-  } 
-  // Edge Case: 1200.50 (US format in BRL context?)
-  // If only dot exists, checking split length usually tells if it's thousands separator or decimal
-  else if (hasDot) {
-      const parts = clean.split('.');
-      // If last part is exactly 2 digits, treat as decimal? No, ambiguous.
-      // Usually spreadsheets export raw numbers like 1200.5 so parseFloat works fine.
+  // Logic to determine which is decimal
+  if (lastComma > lastDot) {
+      // Comma is likely decimal (BRL style: 1.200,00)
+      clean = clean.replace(/\./g, '').replace(',', '.');
+  } else if (lastDot > lastComma) {
+      // Dot is likely decimal (US style: 1,200.00)
+      clean = clean.replace(/,/g, '');
+  } else if (lastComma > -1 && lastDot === -1) {
+       // Only comma exists (e.g. 50,00). Treat as decimal for BRL context.
+       clean = clean.replace(',', '.');
   }
 
   const num = parseFloat(clean);
@@ -333,29 +311,22 @@ function normalizeMovement(val: string | undefined, vPaid: string, vRec: string)
         if (v.includes('saida') || v.includes('debito') || v.includes('pagar') || v.includes('despesa')) return 'Saída';
         if (v.includes('entrada') || v.includes('credito') || v.includes('receber') || v.includes('receita')) return 'Entrada';
     }
-    const p = parseCurrencyBRL(vPaid);
-    const r = parseCurrencyBRL(vRec);
+    const p = parseCurrencyRobust(vPaid);
+    const r = parseCurrencyRobust(vRec);
     
-    // If we only mapped one value column (e.g. into valuePaid), use logical deduction
     if (p > 0 && r === 0) return 'Saída';
     if (r > 0 && p === 0) return 'Entrada';
-    
     return 'Saída'; 
 }
 
-// STRICT DATE PARSER FOR PT-BR (DD/MM/YYYY)
-function parseDateStrictPTBR(dateStr: string | undefined): string {
-  if (!dateStr) return new Date().toISOString().split('T')[0];
+// SAFE DATE PARSER (Returns '1970-01-01' on failure instead of Today to avoid pollution)
+function parseDateSafely(dateStr: string | undefined): string {
+  if (!dateStr) return '1970-01-01'; // Safe fallback
   
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
-  
-  // 1. Remove Time part if exists (e.g., "17/09/2021 11:17:22")
-  if (clean.includes(' ')) {
-      clean = clean.split(' ')[0];
-  }
+  if (clean.includes(' ')) clean = clean.split(' ')[0];
 
-  // 2. Handle DD/MM/YYYY (Standard BR)
-  // Regex looks for 1 or 2 digits, separator, 1 or 2 digits, separator, 2 or 4 digits
+  // DD/MM/YYYY
   const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
   const ptMatch = clean.match(ptBrRegex);
 
@@ -363,22 +334,16 @@ function parseDateStrictPTBR(dateStr: string | undefined): string {
       const day = ptMatch[1].padStart(2, '0');
       const month = ptMatch[2].padStart(2, '0');
       let year = ptMatch[3];
-      
-      if (year.length === 2) year = '20' + year; // Assume 20xx
-
-      // Return YYYY-MM-DD for correct string sorting/filtering in JS
+      if (year.length === 2) year = '20' + year;
       return `${year}-${month}-${day}`;
   }
 
-  // 3. Handle YYYY-MM-DD (ISO - sometimes Sheets exports this way)
+  // YYYY-MM-DD
   const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
   const isoMatch = clean.match(isoRegex);
   if (isoMatch) {
       return clean.substring(0, 10);
   }
 
-  // Fallback: If regex fails, let JS Date try, but this is risky with locales.
-  // We prefer returning the current date or original string to signal issue, 
-  // but to avoid breaking app, we default to today.
-  return new Date().toISOString().split('T')[0];
+  return '1970-01-01';
 }
