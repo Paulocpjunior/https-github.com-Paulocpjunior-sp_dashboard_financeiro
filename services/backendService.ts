@@ -4,9 +4,11 @@ import { MOCK_USERS } from '../constants';
 // =========================================================================================
 // CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
 // =========================================================================================
-const DEFAULT_SPREADSHEET_ID = '1jwBTCHiQ-YqtPkyQuPaAEzu-uQi62qA2SwVUhHUPt1Y'; 
+const DEFAULT_SPREADSHEET_ID = '17mHd8eqKoj7Cl6E2MCkr0PczFj-lKv_vmFRCY5hypwg'; 
+const DEFAULT_GID = '1276925607';
 
 const STORAGE_KEY_DB_SOURCE = 'cashflow_db_source_id';
+const STORAGE_KEY_DB_GID = 'cashflow_db_gid';
 
 export const BackendService = {
   
@@ -16,43 +18,65 @@ export const BackendService = {
     return localStorage.getItem(STORAGE_KEY_DB_SOURCE) || DEFAULT_SPREADSHEET_ID;
   },
 
-  updateSpreadsheetId: (newId: string): void => {
-    // Basic extraction if user pastes full URL
-    let cleanedId = newId.trim();
+  getSpreadsheetGid: (): string => {
+    return localStorage.getItem(STORAGE_KEY_DB_GID) || DEFAULT_GID;
+  },
+
+  updateSpreadsheetId: (input: string): void => {
+    let cleanedId = input.trim();
+    let gid = DEFAULT_GID; // Fallback to default if not found in URL, or keep existing? Better to reset to safe default or 0.
+
+    // 1. Tenta extrair o GID da URL (parâmetro gid=...)
+    const gidMatch = input.match(/[?&]gid=([0-9]+)/) || input.match(/#gid=([0-9]+)/);
+    if (gidMatch && gidMatch[1]) {
+      gid = gidMatch[1];
+    } else {
+       // Se o usuário digitou apenas um ID novo sem URL, assumimos 0 ou mantemos o padrão? 
+       // Por segurança, se não tem URL, resetamos para 0 (primeira aba) a não ser que seja o ID padrão.
+       if (cleanedId !== DEFAULT_SPREADSHEET_ID) {
+           gid = '0'; 
+       }
+    }
+
+    // 2. Tenta extrair o ID da URL
     if (cleanedId.includes('/d/')) {
         const match = cleanedId.match(/\/d\/([a-zA-Z0-9-_]+)/);
         if (match && match[1]) {
             cleanedId = match[1];
         }
     }
+
     localStorage.setItem(STORAGE_KEY_DB_SOURCE, cleanedId);
+    localStorage.setItem(STORAGE_KEY_DB_GID, gid);
   },
 
   resetSpreadsheetId: (): void => {
     localStorage.removeItem(STORAGE_KEY_DB_SOURCE);
+    localStorage.removeItem(STORAGE_KEY_DB_GID);
   },
 
   fetchTransactions: async (): Promise<Transaction[]> => {
     const spreadsheetId = BackendService.getSpreadsheetId();
-    // Use gid=0 default, but this can be fragile if the user moves the tab.
-    // In a robust app, we might ask for GID too, but let's assume first tab for now.
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`; 
+    const gid = BackendService.getSpreadsheetGid();
+    
+    // Constrói a URL usando o GID específico
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`; 
 
-    console.log(`Conectando à planilha: ${spreadsheetId}...`);
+    console.log(`Conectando à planilha: ${spreadsheetId} (Tab: ${gid})...`);
     
     try {
       const response = await fetch(csvUrl);
       
       // Verifica se o fetch falhou na rede
       if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}. Verifique o ID.`);
+        throw new Error(`Erro HTTP: ${response.status}. Verifique o ID e o compartilhamento.`);
       }
       
       const csvText = await response.text();
 
       // CRITICAL CHECK: Verify if response is HTML (Login Page)
       if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.includes('<html')) {
-        throw new Error('A planilha está privada. Altere o compartilhamento para "Qualquer pessoa com o link" -> "Leitor".');
+        throw new Error('A planilha está privada ou o link está incorreto. Altere o compartilhamento para "Qualquer pessoa com o link".');
       }
 
       const rows = csvText.split(/\r?\n/);
@@ -68,7 +92,9 @@ export const BackendService = {
 
       if (map.date === -1 && map.valuePaid === -1 && map.valueReceived === -1) {
           console.warn("Headers found:", headerRow);
-          throw new Error('Colunas obrigatórias (Data, Valor) não encontradas. Verifique o cabeçalho da planilha.');
+          // Se não achou headers, pode ser que a aba esteja errada ou vazia.
+          // Mas tentamos prosseguir com fallback ou lançamos erro.
+          throw new Error('Colunas obrigatórias não encontradas. Verifique se a aba correta (GID) foi carregada.');
       }
 
       // Parse Data

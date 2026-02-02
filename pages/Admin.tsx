@@ -41,8 +41,11 @@ const Admin: React.FC = () => {
     setDbMessage(null);
     
     try {
-        // 1. Salva no LocalStorage
+        // 1. Salva no LocalStorage (Extraindo ID e GID se for URL completa)
         BackendService.updateSpreadsheetId(spreadsheetId);
+        
+        // 1.1 Atualiza o campo de input visualmente para o ID limpo
+        setSpreadsheetId(BackendService.getSpreadsheetId());
         
         // 2. Força uma recarga dos dados para testar se o ID é válido e acessível
         await DataService.refreshCache();
@@ -107,14 +110,14 @@ const Admin: React.FC = () => {
 
             <div className="flex flex-col gap-4">
                 <div>
-                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Spreadsheet ID</label>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Spreadsheet ID / Link Completo</label>
                     <div className="flex flex-col sm:flex-row gap-2">
                         <input 
                             type="text" 
                             value={spreadsheetId}
                             onChange={(e) => setSpreadsheetId(e.target.value)}
                             className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 font-mono"
-                            placeholder="Ex: 1jwBTCHiQ-YqtPkyQuPaAEzu-uQi62qA2SwVUhHUPt1Y"
+                            placeholder="Cole o link completo ou o ID da planilha..."
                         />
                         <button 
                             onClick={handleSaveDatabaseId}
