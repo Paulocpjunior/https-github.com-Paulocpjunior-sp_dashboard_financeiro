@@ -81,8 +81,8 @@ export const BackendService = {
         return [];
       }
 
-      // 1. Detect Delimiter
-      const delimiter = detectDelimiter(rows.slice(0, 15));
+      // 1. Detect Delimiter (Enhanced for Brazilian Format)
+      const delimiter = detectDelimiter(rows.slice(0, 20));
       console.log(`Delimitador detectado: "${delimiter}"`);
 
       // 2. Smart Header Detection
@@ -111,7 +111,7 @@ export const BackendService = {
         const rawStatus = get(map.status);
         const rawMovimento = get(map.movement);
         
-        // Critical Fields - RAW EXACT COPY
+        // Critical Fields - RAW EXACT COPY AS REQUESTED
         const rawType = get(map.type);
         const rawAccount = get(map.bankAccount);
         const rawPaidBy = get(map.paidBy);
@@ -191,7 +191,9 @@ export const BackendService = {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
-          // CÓPIA FIEL: Sem valores padrão (ex: 'Geral', 'Outros'). Se estiver vazio no banco, fica vazio aqui.
+          // CÓPIA FIEL: Sem valores padrão (ex: 'Geral', 'Outros'). 
+          // Se estiver vazio no banco, fica vazio aqui.
+          // cleanString apenas remove aspas extras e espaços nas pontas.
           bankAccount: cleanString(rawAccount),
           type: cleanString(rawType),
           paidBy: cleanString(rawPaidBy),
@@ -242,14 +244,30 @@ export const BackendService = {
 // --- HELPERS ---
 
 function detectDelimiter(rows: string[]): string {
-    let commaCount = 0;
-    let semiCount = 0;
+    const validRows = rows.filter(r => r.trim().length > 0);
+    if (validRows.length === 0) return ';';
+
+    // Heuristic: Check variance of column counts.
+    // The correct delimiter usually yields a constant number of columns for all rows.
+    const getVariance = (delim: string) => {
+        const counts = validRows.map(r => r.split(delim).length);
+        const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
+        if (avg < 2) return 9999; // Penalty for single column (delimiter not found)
+        
+        const variance = counts.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / counts.length;
+        return variance;
+    };
+
+    const commaVariance = getVariance(',');
+    const semiVariance = getVariance(';');
+
+    console.log(`Delimiter Check - Comma Variance: ${commaVariance}, Semi Variance: ${semiVariance}`);
+
+    // If semicolon has lower or equal variance, prefer it (standard for BR/PT sheets)
+    // Also, if comma variance is high (likely due to decimal commas), avoid it.
+    if (semiVariance <= commaVariance) return ';';
     
-    rows.forEach(row => {
-        commaCount += (row.match(/,/g) || []).length;
-        semiCount += (row.match(/;/g) || []).length;
-    });
-    return semiCount >= commaCount ? ';' : ',';
+    return ',';
 }
 
 function findHeaderRowIndex(rows: string[], delimiter: string): number {
@@ -264,6 +282,9 @@ function findHeaderRowIndex(rows: string[], delimiter: string): number {
         const hasKeyword = (keys: string[]) => cells.some(c => keys.some(k => c.includes(k)));
 
         // Scoring rules
+        // Boost score for 'Tipo de Lançamento' specifically
+        if (hasKeyword(['tipo de lancamento', 'tipo lancamento'])) score += 10;
+        
         if (hasKeyword(['data', 'date', 'vencimento', 'dt'])) score += 3;
         if (hasKeyword(['valor', 'total', 'saldo', 'liquido'])) score += 4;
         if (hasKeyword(['conta', 'banco', 'origem'])) score += 2;
@@ -354,8 +375,6 @@ function mapHeaders(headers: string[]) {
 
     // 2. CONTA
     // Procura "conta", "conta corrente", "banco"
-    // Removemos exclusões agressivas. Se tem "conta", pega. 
-    // Excluímos 'contabil' para não pegar 'Conta Contábil' se houver uma 'Conta' melhor.
     let accIdx = find(['conta corrente', 'conta bancaria', 'nome da conta', 'banco', 'caixa']);
     if (accIdx === -1) {
         accIdx = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo', 'fluxo']);
