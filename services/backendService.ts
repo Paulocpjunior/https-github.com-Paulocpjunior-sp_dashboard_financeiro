@@ -1,44 +1,59 @@
 import { Transaction, User } from '../types';
 import { MOCK_USERS } from '../constants';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxGsGt2Rf3FpbEC30hU3ml_b9VuMAOpurfFeghgJJmfsm47XJQseS7gV4L3a1Qe14vHkw/exec';
+// ID da nova planilha fornecida
+const SPREADSHEET_ID = '1jwBTCHiQ-YqtPkyQuPaAEzu-uQi62qA2SwVUhHUPt1Y';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv`;
 
 export const BackendService = {
   
   isProduction: (): boolean => true,
 
   fetchTransactions: async (): Promise<Transaction[]> => {
-    console.log('Conectando ao Google Sheets...');
+    console.log(`Conectando à planilha: ${SPREADSHEET_ID}...`);
     
-    const response = await fetch(API_URL + '?action=dados&limite=10000');
-    const result = await response.json();
-    
-    console.log('Dados recebidos:', result.total);
-    
-    if (!result.success) throw new Error('Erro ao carregar');
-    
-    return result.dados.map((row: any, i: number) => {
-      const valorPago = parseFloat(String(row['Valor Pago'] || 0).toString().replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
-      const valorRecebido = parseFloat(String(row['Valor Recebido'] || 0).toString().replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+    try {
+      const response = await fetch(CSV_URL);
       
-      let dateStr = '';
-      if (row['Data Lançamento']) {
-        try { dateStr = new Date(row['Data Lançamento']).toISOString().split('T')[0]; } catch(e) {}
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}. Verifique se a planilha está pública (Compartilhar -> Qualquer pessoa com o link).`);
       }
       
-      return {
-        id: 'trx-' + (i + 1),
-        date: dateStr,
-        bankAccount: row['Contas bancárias'] || '',
-        type: row['Tipo de Lançamento'] || '',
-        status: String(row['Doc.Pago'] || '').toUpperCase() === 'SIM' ? 'Pago' : 'Pendente',
-        client: row['Nome Empresa / Credor'] || '',
-        paidBy: row['Pago Por'] || '',
-        movement: valorPago > 0 ? 'Saída' : 'Entrada',
-        valuePaid: valorPago,
-        valueReceived: valorRecebido,
-      } as Transaction;
-    });
+      const csvText = await response.text();
+      const rows = csvText.split('\n');
+      
+      // Remove o cabeçalho
+      const dataRows = rows.slice(1).filter(row => row.trim() !== '');
+
+      return dataRows.map((rowString, index) => {
+        // Parse CSV line handling quotes properly
+        const columns = parseCSVLine(rowString);
+        
+        // Mapeamento baseado na ordem padrão das colunas da planilha:
+        // 0: ID, 1: Data, 2: Conta, 3: Tipo, 4: Status, 5: Cliente, 6: PagoPor, 7: Movimento, 8: V.Pago, 9: V.Recebido
+        
+        const rawDate = columns[1];
+        const rawValorPago = columns[8];
+        const rawValorRecebido = columns[9];
+
+        return {
+          id: columns[0] || `trx-${index}`,
+          date: parseDate(rawDate),
+          bankAccount: columns[2]?.replace(/['"]/g, '').trim() || 'Outros',
+          type: columns[3]?.replace(/['"]/g, '').trim() || 'Outros',
+          status: normalizeStatus(columns[4]),
+          client: columns[5]?.replace(/['"]/g, '').trim() || 'Consumidor',
+          paidBy: columns[6]?.replace(/['"]/g, '').trim() || 'Financeiro',
+          movement: columns[7]?.replace(/['"]/g, '').trim() === 'Saída' ? 'Saída' : 'Entrada',
+          valuePaid: parseCurrency(rawValorPago),
+          valueReceived: parseCurrency(rawValorRecebido),
+        } as Transaction;
+      });
+
+    } catch (error) {
+      console.error('Erro ao buscar dados da planilha:', error);
+      throw new Error('Falha ao conectar com a Planilha Google. Verifique o compartilhamento.');
+    }
   },
 
   fetchUsers: async (): Promise<User[]> => {
@@ -63,6 +78,101 @@ export const BackendService = {
   },
 
   requestPasswordReset: async (username: string): Promise<{ success: boolean; message: string }> => {
-    return { success: true, message: 'Solicitação enviada.' };
+    return { success: true, message: 'Solicitação enviada (Simulado).' };
   }
 };
+
+// --- Helpers ---
+
+// Parser robusto para CSV que lida com aspas e vírgulas dentro de campos
+function parseCSVLine(text: string): string[] {
+  const result: string[] = [];
+  let curVal = '';
+  let inQuote = false;
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    
+    if (inQuote) {
+      if (char === '"') {
+        if (i + 1 < text.length && text[i + 1] === '"') {
+          curVal += '"'; // Double quote inside quote
+          i++;
+        } else {
+          inQuote = false;
+        }
+      } else {
+        curVal += char;
+      }
+    } else {
+      if (char === '"') {
+        inQuote = true;
+      } else if (char === ',') {
+        result.push(curVal);
+        curVal = '';
+      } else if (char === '\r') {
+        // ignore CR
+      } else {
+        curVal += char;
+      }
+    }
+  }
+  result.push(curVal);
+  return result;
+}
+
+// Converte string de moeda (R$ 1.200,50 ou 1200.50) para number
+function parseCurrency(val: string | undefined): number {
+  if (!val) return 0;
+  // Remove R$, espaços e aspas
+  let clean = val.replace(/["'R$\s]/g, '');
+  
+  // Se tiver vírgula como separador decimal (formato BR: 1.000,00)
+  if (clean.includes(',') && !clean.includes('.')) {
+     clean = clean.replace(',', '.');
+  } else if (clean.includes(',') && clean.includes('.')) {
+     // Formato misto (1.000,00), remove ponto de milhar e troca vírgula por ponto
+     clean = clean.replace(/\./g, '').replace(',', '.');
+  }
+  
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+}
+
+// Normaliza status para os tipos esperados
+function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agendado' {
+  if (!val) return 'Pendente';
+  const v = val.trim().toLowerCase().replace(/['"]/g, '');
+  if (v === 'sim' || v === 'pago' || v === 'ok') return 'Pago';
+  if (v === 'agendado' || v === 'futuro') return 'Agendado';
+  return 'Pendente';
+}
+
+// Converte formatos de data (DD/MM/YYYY ou ISO) para YYYY-MM-DD
+function parseDate(dateStr: string | undefined): string {
+  if (!dateStr) return new Date().toISOString().split('T')[0];
+  
+  const clean = dateStr.replace(/['"]/g, '').trim();
+  
+  // Formato DD/MM/YYYY
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+      // Se ano for 2 digitos, assume 20xx
+      let year = parts[2];
+      if (year.length === 2) year = '20' + year;
+      // YYYY-MM-DD
+      return `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  
+  // Tenta parse direto (ISO)
+  try {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+  } catch(e) {}
+
+  return new Date().toISOString().split('T')[0];
+}

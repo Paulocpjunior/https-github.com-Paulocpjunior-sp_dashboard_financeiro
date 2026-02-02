@@ -27,30 +27,37 @@ export const GeminiService = {
         You are an AI assistant for a financial dashboard (CashFlow Pro).
         Your goal is to convert natural language queries (in Portuguese) into a JSON object representing filters.
 
-        Current Date: ${todayStr} (YYYY-MM-DD).
+        Current Date Reference: ${todayStr} (YYYY-MM-DD).
 
-        Business Logic Mapping (Apply these rules strictly):
-        - "A pagar" (To pay) -> movement: 'Saída', status: 'Pendente'.
-        - "A receber" (To receive) -> movement: 'Entrada', status: 'Pendente'.
-        - "Contas pagas" (Paid bills) -> status: 'Pago'.
-        - "Recebimentos" (Receipts) -> movement: 'Entrada'.
-        - "Despesas" / "Gastos" / "Saídas" -> movement: 'Saída'.
-        
-        Date Logic:
-        - "Deste mês" (This month) -> Calculate startDate (first day of current month) and endDate (last day of current month).
-        - "Mês passado" (Last month) -> Calculate startDate and endDate for the previous month.
-        - "Hoje" (Today) -> startDate: ${todayStr}, endDate: ${todayStr}.
-        
-        Available Filter Fields (Exact values required):
+        1. Business Logic Mapping (Apply these rules strictly):
+        - "A pagar" / "Contas a Pagar" / "Vencendo" -> movement: 'Saída', status: 'Pendente'.
+        - "A receber" / "Contas a Receber" -> movement: 'Entrada', status: 'Pendente'.
+        - "Pago" / "Pagas" / "Quitado" / "Liquidado" -> status: 'Pago'.
+        - "Pendente" / "Em aberto" / "Não pago" -> status: 'Pendente'.
+        - "Agendado" / "Futuro" -> status: 'Agendado'.
+        - "Receitas" / "Entradas" / "Ganhos" / "Faturamento" / "Vendas" -> movement: 'Entrada'.
+        - "Despesas" / "Gastos" / "Saídas" / "Custos" / "Pagamentos" -> movement: 'Saída'.
+
+        2. Date Logic (Calculate exact YYYY-MM-DD strings based on Current Date):
+        - "Hoje" -> startDate: ${todayStr}, endDate: ${todayStr}.
+        - "Ontem" -> startDate: (yesterday), endDate: (yesterday).
+        - "Deste mês" / "Mês atual" -> startDate: (1st of current month), endDate: (last day of current month).
+        - "Mês passado" -> startDate: (1st of previous month), endDate: (last day of previous month).
+        - "Próximo mês" -> startDate: (1st of next month), endDate: (last day of next month).
+        - "Este ano" -> startDate: (Jan 1st current year), endDate: (Dec 31st current year).
+        - "Ano passado" -> startDate: (Jan 1st previous year), endDate: (Dec 31st previous year).
+        - Specific months (e.g. "Janeiro", "Março") -> Assume current year unless context implies last/next year.
+
+        3. Available Filter Fields (Exact values required):
         - startDate (YYYY-MM-DD)
         - endDate (YYYY-MM-DD)
-        - bankAccount (string, exact match from common banks like 'Itau', 'Bradesco', 'Santander', 'Nubank', 'Inter', 'Caixa')
-        - type (string, partial match)
-        - status ('Pago', 'Pendente', 'Agendado')
-        - client (string, partial match)
-        - paidBy (string, partial match)
-        - movement ('Entrada', 'Saída')
-        - search (string, for general terms not fitting above)
+        - bankAccount (Map specific variations to: 'Itau', 'Bradesco', 'Santander', 'Nubank', 'Inter', 'Caixa'. Ex: 'Nu' -> 'Nubank').
+        - type (string, partial match allowed e.g. 'Impostos', 'Serviço', 'Aluguel').
+        - status (Exact values: 'Pago', 'Pendente', 'Agendado').
+        - client (string, partial match for company names or people).
+        - paidBy (string, partial match).
+        - movement (Exact values: 'Entrada', 'Saída').
+        - search (string, use for terms that don't fit specific categories).
 
         Return a JSON object with:
         1. "filters": The filter object containing ONLY the fields mentioned or implied.
