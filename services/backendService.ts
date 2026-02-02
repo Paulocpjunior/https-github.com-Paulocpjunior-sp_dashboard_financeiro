@@ -189,11 +189,12 @@ export const BackendService = {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
-          bankAccount: cleanString(rawAccount) || 'Outros',
-          type: cleanString(rawType) || 'Geral',
+          // COPIA FIEL: Removemos 'Outros', 'Geral', 'Financeiro'. Se vier vazio, fica vazio.
+          bankAccount: cleanString(rawAccount),
+          type: cleanString(rawType),
           status: normalizeStatus(rawStatus),
-          client: cleanString(get(map.client)) || 'Consumidor',
-          paidBy: cleanString(rawPaidBy) || 'Financeiro',
+          client: cleanString(get(map.client)),
+          paidBy: cleanString(rawPaidBy),
           movement: movement,
           valuePaid: valPaid,
           valueReceived: valReceived,
@@ -265,7 +266,7 @@ function findHeaderRowIndex(rows: string[], delimiter: string): number {
         if (hasKeyword(['valor', 'total', 'saldo', 'liquido'])) score += 4;
         if (hasKeyword(['conta', 'banco', 'origem'])) score += 2;
         if (hasKeyword(['descricao', 'historico', 'cliente'])) score += 2;
-        if (hasKeyword(['plano', 'classificacao'])) score += 2;
+        if (hasKeyword(['plano', 'classificacao', 'tipo'])) score += 2;
 
         if (score > maxScore) {
             maxScore = score;
@@ -363,34 +364,30 @@ function mapHeaders(headers: string[]) {
     map.totalCobranca = find(['total cobranca', 'valor total cobranca', 'valor bruto', 'total geral']);
 
     // 3. BANK ACCOUNT (Conta)
-    // BUSCA ESTRITA: Evita "Conta Contábil" ou "Conta Plano". Procura termos bancários específicos.
+    // Busca Exata: Tenta "Conta", "Conta Corrente", "Conta Bancaria". 
+    // Removemos exclusões agressivas para garantir que se a coluna se chamar só "Conta", ela seja pega.
     map.bankAccount = find(['conta corrente', 'nome da conta', 'conta bancaria', 'nome do banco', 'instituicao financeira']);
     
-    // Se não achar, procura apenas "Banco" ou "Caixa" (evitando Fluxo de Caixa)
+    // Se não achar, procura apenas "Conta" ou "Banco" ou "Caixa"
     if (map.bankAccount === -1) {
-        map.bankAccount = find(['banco', 'caixa'], ['fluxo', 'movimento', 'entrada', 'saida']);
-    }
-    
-    // Fallback GENÉRICO mas excluindo termos contábeis
-    if (map.bankAccount === -1) {
-        map.bankAccount = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo']); 
+        map.bankAccount = find(['conta', 'banco', 'caixa'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo', 'fluxo']); 
     }
 
-    // 4. TYPE / CATEGORY (Plano de Contas)
-    // PRIORIDADE: Plano de Contas, Classificação, Categoria.
-    map.type = find(['plano de contas', 'classificacao financeira', 'classificacao', 'categoria', 'natureza']);
+    // 4. TYPE / CATEGORY (Tipo de Lançamento / Plano de Contas)
+    // Adicionado "tipo de lancamento" explicitamente na busca prioritária.
+    map.type = find(['tipo de lancamento', 'plano de contas', 'classificacao financeira', 'classificacao', 'categoria', 'natureza']);
     
     if (map.type === -1) {
         map.type = find(['subcategoria', 'grupo']);
     }
     
-    // Fallback: Apenas usa "Tipo" se não for "Tipo de Movimento" (que seria Entrada/Saida) nem "Tipo de Conta"
+    // Fallback: Apenas usa "Tipo" se não achou os acima
     if (map.type === -1) {
         map.type = find(['tipo'], ['movimento', 'conta', 'bancaria', 'pessoa', 'documento']); 
     }
 
-    // 5. PAID BY (Centro de Custo / Pagador)
-    map.paidBy = find(['centro de custo', 'pago por', 'responsavel', 'pagador', 'departamento', 'area']);
+    // 5. PAID BY (Centro de Custo / Pagador / Pago Por)
+    map.paidBy = find(['pago por', 'centro de custo', 'responsavel', 'pagador', 'departamento', 'area']);
 
     // 6. CLIENT / DESCRIPTION
     map.client = find(['favorecido', 'cliente', 'razao social', 'fornecedor', 'pagador']);
