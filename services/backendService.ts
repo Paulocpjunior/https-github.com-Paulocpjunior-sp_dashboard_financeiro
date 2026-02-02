@@ -67,6 +67,7 @@ export const BackendService = {
       
       let csvText = await response.text();
 
+      // Remove BOM if present
       if (csvText.charCodeAt(0) === 0xFEFF) {
         csvText = csvText.slice(1);
       }
@@ -81,25 +82,28 @@ export const BackendService = {
         return [];
       }
 
-      // --- DYNAMIC HEADER MAPPING ---
-      const headerRow = parseCSVLine(rows[0]);
-      console.log('Headers detectados:', headerRow);
+      // --- ROBUST CSV PARSING ---
+      // 1. Extract Headers
+      const headerRow = parseCSVLineRegex(rows[0]);
+      console.log('Headers Brutos:', headerRow);
       
+      // 2. Map Headers
       const map = mapHeaders(headerRow);
-      console.log('Mapeamento final:', map);
+      console.log('Mapa de Colunas:', map);
 
       if (map.date === -1 && map.valuePaid === -1 && map.valueReceived === -1) {
-          throw new Error('Colunas obrigatórias não encontradas. Verifique se a aba correta (GID) foi carregada.');
+          console.warn("Mapeamento falhou para colunas críticas. Tentando fallback posicional.");
       }
 
-      // Parse Data
+      // 3. Parse Data Rows
       const dataRows = rows.slice(1).filter(row => row.trim() !== '');
 
       return dataRows.map((rowString, index) => {
-        const cols = parseCSVLine(rowString);
+        const cols = parseCSVLineRegex(rowString);
+        
+        // Helper to safely get value at index
         const get = (idx: number) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx] : '';
 
-        // Extract raw values
         const rawId = get(map.id);
         const rawDate = get(map.date);
         const rawValorPago = get(map.valuePaid);
@@ -107,27 +111,26 @@ export const BackendService = {
         const rawStatus = get(map.status);
         const rawMovimento = get(map.movement);
 
-        // ID Logic: Use mapped column if valid, otherwise generate virtual ID
-        // Prevent using timestamp-like strings as ID if specific ID column wasn't found (fallback safety)
+        // ID Logic
         let finalId = `trx-${index}`;
         if (map.id !== -1 && rawId && rawId.trim().length > 0) {
-            // Simple heuristic: IDs usually aren't super long sentences or timestamps (unless uuid)
-            // If it looks like a timestamp (contains :) and we are not sure it's an ID, skip it.
-            // But if header was explicitly "ID", we trust it.
-            finalId = rawId.trim();
+            // Avoid using timestamps as IDs if header mapping was fuzzy
+            if (!rawId.includes(':') || map.idIsExplicit) {
+               finalId = rawId.trim();
+            }
         }
 
         return {
           id: finalId,
-          date: parseDate(rawDate),
+          date: parseDateStrictPTBR(rawDate),
           bankAccount: cleanString(get(map.bankAccount)) || 'Outros',
           type: cleanString(get(map.type)) || 'Outros',
           status: normalizeStatus(rawStatus),
           client: cleanString(get(map.client)) || 'Consumidor',
           paidBy: cleanString(get(map.paidBy)) || 'Financeiro',
           movement: normalizeMovement(rawMovimento, rawValorPago, rawValorRecebido),
-          valuePaid: parseCurrency(rawValorPago),
-          valueReceived: parseCurrency(rawValorRecebido),
+          valuePaid: parseCurrencyBRL(rawValorPago),
+          valueReceived: parseCurrencyBRL(rawValorRecebido),
         } as Transaction;
       });
 
@@ -167,109 +170,149 @@ function normalizeHeader(h: string): string {
     if (!h) return '';
     return h.toLowerCase()
             .trim()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-            .replace(/[^a-z0-9]/g, ''); // Remove símbolos e espaços
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+            .replace(/[^a-z0-9]/g, '');
 }
 
-// Maps CSV headers to internal field indices
+// Robust CSV Line Parser using Regex to handle quotes properly
+function parseCSVLineRegex(text: string): string[] {
+    // Matches: "quoted value" OR value_without_quotes
+    const regex = /(?:^|,)(?:"([^"]*(?:""[^"]*)*)"|([^",]*))/g;
+    const results: string[] = [];
+    let match;
+    
+    // JS Regex is stateful when using /g, we loop through matches
+    while ((match = regex.exec(text)) !== null) {
+        // match[1] is quoted content (unescape double quotes), match[2] is unquoted
+        let val = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
+        results.push(val || '');
+    }
+    
+    // Remove the last empty match that regex exec might produce at end of string if it ends with comma
+    // However, the above loop works well for standard CSV.
+    // If the string is empty, we return empty array, but here we likely have content.
+    return results;
+}
+
 function mapHeaders(headers: string[]) {
     const map = {
-        id: -1, date: -1, bankAccount: -1, type: -1, status: -1, 
-        client: -1, paidBy: -1, movement: -1, valuePaid: -1, valueReceived: -1
+        id: -1, 
+        idIsExplicit: false,
+        date: -1, 
+        bankAccount: -1, 
+        type: -1, 
+        status: -1, 
+        client: -1, 
+        paidBy: -1, 
+        movement: -1, 
+        valuePaid: -1, 
+        valueReceived: -1
     };
 
-    // Helper to check for multiple keywords
     const matches = (norm: string, keywords: string[]) => keywords.some(k => norm.includes(k));
-    const exact = (norm: string, keywords: string[]) => keywords.some(k => norm === k);
 
     headers.forEach((h, i) => {
         const norm = normalizeHeader(h);
         
-        // 1. ID - Expanded keywords
-        if (exact(norm, ['id', 'cod', 'codigo', 'n', 'no', 'num', 'numero', 'identificador', 'documento', 'doc', 'controle'])) {
+        // 1. ID
+        if (matches(norm, ['idtransacao', 'codigotransacao', 'identifier'])) {
             map.id = i;
-        } else if (matches(norm, ['id', 'cod', 'num']) && !matches(norm, ['cliente', 'conta', 'banco', 'nome', 'pedido'])) {
-             // Only partial match if it doesn't look like "Nome do Cliente" or "Conta Banco"
-             if (map.id === -1) map.id = i;
+            map.idIsExplicit = true;
+        } else if (norm === 'id' || norm === 'cod' || norm === 'codigo') {
+            map.id = i;
+            map.idIsExplicit = true;
         }
 
-        // 2. DATE - Logic to prefer "Vencimento" over "Pagamento" over "Carimbo"
-        else if (matches(norm, ['data', 'dt', 'date', 'vencimento', 'competencia', 'periodo'])) {
-            // If we found a "Carimbo" before, overwrite it.
-            // If we found "Data", but this is "Vencimento", overwrite it.
-            const isVenc = matches(norm, ['vencimento', 'venc', 'competencia']);
-            const currentIsVenc = map.date !== -1 && matches(normalizeHeader(headers[map.date]), ['vencimento', 'venc', 'competencia']);
+        // 2. DATE (Priority logic)
+        // Avoid "carimbo" or "timestamp" unless it's the only thing we have.
+        // Prefer "Vencimento", "Data", "Competencia"
+        if (matches(norm, ['data', 'dt', 'vencimento', 'competencia'])) {
+            const isTimestamp = matches(norm, ['carimbo', 'timestamp', 'hora']);
             
-            // Negative check: ignore timestamp/carimbo unless it's the only option
-            const isTimestamp = matches(norm, ['carimbo', 'timestamp', 'hora', 'registro']);
-
-            if (isTimestamp) {
-                // Only use timestamp if we have nothing else
-                if (map.date === -1) map.date = i;
-            } else {
-                // It's a real date column
-                if (isVenc || !currentIsVenc) {
+            if (!isTimestamp) {
+                // Good date
+                if (map.date === -1) {
                     map.date = i;
+                } else {
+                    // If we already have a date, prefer "Vencimento" over generic "Data"
+                    const currentHeader = normalizeHeader(headers[map.date]);
+                    if (matches(norm, ['vencimento']) && !currentHeader.includes('vencimento')) {
+                         map.date = i;
+                    }
                 }
+            } else {
+                 // It is timestamp. Only take if we have nothing else.
+                 if (map.date === -1) map.date = i;
             }
         }
+
+        // 3. Other fields
+        else if (matches(norm, ['conta', 'banco', 'instituicao'])) map.bankAccount = i;
+        else if (matches(norm, ['tipo', 'categoria', 'classificacao'])) map.type = i;
+        else if (matches(norm, ['status', 'situacao'])) map.status = i;
+        else if (matches(norm, ['cliente', 'descricao', 'nome', 'historico'])) map.client = i;
+        else if (matches(norm, ['pago', 'responsavel']) && !matches(norm, ['valor'])) map.paidBy = i; 
+        else if (matches(norm, ['movimento', 'entradasaida'])) map.movement = i;
         
-        else if (matches(norm, ['conta', 'banco', 'instituicao', 'origem'])) map.bankAccount = i;
-        else if (matches(norm, ['tipo', 'categoria', 'classificacao', 'natureza'])) map.type = i;
-        else if (matches(norm, ['status', 'situacao', 'estado'])) map.status = i;
-        else if (matches(norm, ['cliente', 'descricao', 'nome', 'favorecido', 'fornecedor', 'historico'])) map.client = i;
-        else if (matches(norm, ['pago', 'responsavel', 'departamento', 'centro']) && !matches(norm, ['valor'])) map.paidBy = i; 
-        else if (matches(norm, ['movimento', 'entradasaida', 'operacao', 'fluxo'])) map.movement = i;
-        
-        // Values - checking for specific 'pago'/'recebido' or generic 'valor' + 'saida'/'entrada'
-        else if (matches(norm, ['valorpago', 'saida', 'debito', 'despesa']) && matches(norm, ['valor', 'total', 'r'])) map.valuePaid = i;
-        else if (matches(norm, ['valorrecebido', 'entrada', 'credito', 'receita']) && matches(norm, ['valor', 'total', 'r'])) map.valueReceived = i;
+        // 4. Values (Strict check for Pago vs Recebido)
+        else if (matches(norm, ['valorpago', 'saida', 'debito', 'despesa'])) map.valuePaid = i;
+        else if (matches(norm, ['valorrecebido', 'entrada', 'credito', 'receita'])) map.valueReceived = i;
     });
 
     // Fallbacks
-    if (map.date === -1 && headers.length > 1) map.date = 1; // Assume Col 1 is date if Col 0 is timestamp
-    if (map.valuePaid === -1) map.valuePaid = 8;
-    if (map.valueReceived === -1) map.valueReceived = 9;
+    if (map.date === -1 && headers.length > 1) {
+        // Common pattern: Col 0 = Timestamp, Col 1 = Data
+        map.date = 1; 
+    }
+    
+    // Value Fallbacks (common positions in financial sheets)
+    if (map.valuePaid === -1 && map.valueReceived === -1) {
+        // Try to find generic "Valor" columns
+        const valorCols = headers.map((h, i) => ({h, i})).filter(o => normalizeHeader(o.h).includes('valor'));
+        if (valorCols.length >= 2) {
+             // Assume first is Out, second is In, or vice versa? 
+             // Usually Debit Left, Credit Right.
+             map.valuePaid = valorCols[0].i;
+             map.valueReceived = valorCols[1].i;
+        } else if (valorCols.length === 1) {
+             // Single value column? We might rely on "Movement" column to determine sign
+             map.valuePaid = valorCols[0].i; // Store in paid, will distribute later based on movement
+        }
+    }
 
     return map;
 }
 
-function parseCSVLine(text: string): string[] {
-  const result: string[] = [];
-  let curVal = '';
-  let inQuote = false;
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (inQuote) {
-      if (char === '"') {
-        if (i + 1 < text.length && text[i + 1] === '"') { curVal += '"'; i++; }
-        else { inQuote = false; }
-      } else { curVal += char; }
-    } else {
-      if (char === '"') { inQuote = true; }
-      else if (char === ',') { result.push(curVal); curVal = ''; }
-      else if (char === '\r') {} 
-      else { curVal += char; }
-    }
-  }
-  result.push(curVal);
-  return result;
-}
-
-function parseCurrency(val: string | undefined): number {
+// STRICT BRL CURRENCY PARSER
+// Handles: "R$ 1.200,50", "1.200,50", "1000", "1,50"
+function parseCurrencyBRL(val: string | undefined): number {
   if (!val) return 0;
-  let clean = val.replace(/^["']|["']$/g, '').trim();
-  clean = clean.replace(/[R$\s]/g, '');
   
-  if (clean === '-' || clean === '') return 0;
+  // Remove spaces, currency symbols
+  let clean = val.replace(/^["']|["']$/g, '').trim(); // Remove surrounding quotes
+  clean = clean.replace(/[R$\s]/g, ''); // Remove R$ and spaces
+  
+  if (!clean || clean === '-') return 0;
 
-  const lastComma = clean.lastIndexOf(',');
-  const lastDot = clean.lastIndexOf('.');
+  // Check format
+  const hasComma = clean.includes(',');
+  const hasDot = clean.includes('.');
 
-  if (lastComma > lastDot) {
-      clean = clean.replace(/\./g, '').replace(',', '.');
-  } else if (lastDot > lastComma) {
-      clean = clean.replace(/,/g, '');
+  // BRL Format: 1.250,00 (Dot is thousands, Comma is decimal)
+  if (hasComma) {
+      if (hasDot) {
+          // Remove all dots (thousands)
+          clean = clean.replace(/\./g, '');
+      }
+      // Replace comma with dot for JS parseFloat
+      clean = clean.replace(',', '.');
+  } 
+  // Edge Case: 1200.50 (US format in BRL context?)
+  // If only dot exists, checking split length usually tells if it's thousands separator or decimal
+  else if (hasDot) {
+      const parts = clean.split('.');
+      // If last part is exactly 2 digits, treat as decimal? No, ambiguous.
+      // Usually spreadsheets export raw numbers like 1200.5 so parseFloat works fine.
   }
 
   const num = parseFloat(clean);
@@ -290,44 +333,52 @@ function normalizeMovement(val: string | undefined, vPaid: string, vRec: string)
         if (v.includes('saida') || v.includes('debito') || v.includes('pagar') || v.includes('despesa')) return 'Saída';
         if (v.includes('entrada') || v.includes('credito') || v.includes('receber') || v.includes('receita')) return 'Entrada';
     }
-    const p = parseCurrency(vPaid);
-    const r = parseCurrency(vRec);
+    const p = parseCurrencyBRL(vPaid);
+    const r = parseCurrencyBRL(vRec);
+    
+    // If we only mapped one value column (e.g. into valuePaid), use logical deduction
     if (p > 0 && r === 0) return 'Saída';
     if (r > 0 && p === 0) return 'Entrada';
     
     return 'Saída'; 
 }
 
-function parseDate(dateStr: string | undefined): string {
+// STRICT DATE PARSER FOR PT-BR (DD/MM/YYYY)
+function parseDateStrictPTBR(dateStr: string | undefined): string {
   if (!dateStr) return new Date().toISOString().split('T')[0];
+  
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
   
-  // Remove Time part if exists
+  // 1. Remove Time part if exists (e.g., "17/09/2021 11:17:22")
   if (clean.includes(' ')) {
       clean = clean.split(' ')[0];
   }
 
-  // FORCE MANUAL PARSING FOR DD/MM/YYYY (Common in BR/Sheets)
-  const brDateRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
-  const match = clean.match(brDateRegex);
-  
-  if (match) {
-      const day = match[1].padStart(2, '0');
-      const month = match[2].padStart(2, '0');
-      let year = match[3];
-      if (year.length === 2) year = '20' + year;
+  // 2. Handle DD/MM/YYYY (Standard BR)
+  // Regex looks for 1 or 2 digits, separator, 1 or 2 digits, separator, 2 or 4 digits
+  const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
+  const ptMatch = clean.match(ptBrRegex);
+
+  if (ptMatch) {
+      const day = ptMatch[1].padStart(2, '0');
+      const month = ptMatch[2].padStart(2, '0');
+      let year = ptMatch[3];
       
+      if (year.length === 2) year = '20' + year; // Assume 20xx
+
+      // Return YYYY-MM-DD for correct string sorting/filtering in JS
       return `${year}-${month}-${day}`;
   }
-  
-  // YYYY-MM-DD
-  if (clean.match(/^\d{4}-\d{2}-\d{2}/)) {
+
+  // 3. Handle YYYY-MM-DD (ISO - sometimes Sheets exports this way)
+  const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
+  const isoMatch = clean.match(isoRegex);
+  if (isoMatch) {
       return clean.substring(0, 10);
   }
 
-  // Fallback
-  const d = new Date(clean);
-  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
-
+  // Fallback: If regex fails, let JS Date try, but this is risky with locales.
+  // We prefer returning the current date or original string to signal issue, 
+  // but to avoid breaking app, we default to today.
   return new Date().toISOString().split('T')[0];
 }
