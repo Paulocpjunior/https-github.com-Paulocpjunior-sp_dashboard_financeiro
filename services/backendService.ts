@@ -90,8 +90,9 @@ export const BackendService = {
       console.log(`Cabeçalho detectado na linha: ${headerRowIndex}`);
 
       const headerRow = parseCSVLineRegex(rows[headerRowIndex], delimiter);
+      console.log('Cabeçalhos encontrados:', headerRow);
       
-      // 3. Strict Mapping Logic
+      // 3. Strict Mapping Logic - BASEADO NOS CABEÇALHOS EXATOS DA PLANILHA
       let map = mapHeaders(headerRow);
       console.log('Mapa de Colunas:', map);
 
@@ -281,9 +282,13 @@ function findHeaderRowIndex(rows: string[], delimiter: string): number {
         const cells = row.split(delimiter).map(c => c.trim());
         const hasKeyword = (keys: string[]) => cells.some(c => keys.some(k => c.includes(k)));
 
-        // Scoring rules
-        // Boost score for 'Tipo de Lançamento' specifically
-        if (hasKeyword(['tipo de lancamento', 'tipo lancamento'])) score += 10;
+        // Scoring rules - BASEADO NOS CABEÇALHOS EXATOS DA PLANILHA
+        // Boost score para cabeçalhos específicos da planilha do cliente
+        if (hasKeyword(['tipo de lançamento', 'tipo de lancamento'])) score += 15;
+        if (hasKeyword(['contas bancárias', 'contas bancarias'])) score += 15;
+        if (hasKeyword(['pago por'])) score += 10;
+        if (hasKeyword(['movimentação', 'movimentacao'])) score += 10;
+        if (hasKeyword(['nome empresa', 'credor'])) score += 10;
         
         if (hasKeyword(['data', 'date', 'vencimento', 'dt'])) score += 3;
         if (hasKeyword(['valor', 'total', 'saldo', 'liquido'])) score += 4;
@@ -330,7 +335,18 @@ function parseCSVLineRegex(text: string, delimiter: string): string[] {
 }
 
 // ------------------------------------------------------------------
-// CORE MAPPING LOGIC (STRICT - USER REQUESTED)
+// CORE MAPPING LOGIC - CABEÇALHOS EXATOS DA PLANILHA DO CLIENTE
+// ------------------------------------------------------------------
+// Cabeçalhos da planilha (verificados):
+// Coluna C: "Contas bancárias"
+// Coluna D: "Tipo de Lançamento"
+// Coluna E: "Pago Por"
+// Coluna F: "Movimentação"
+// Coluna AA: "Nome Empresa / Credor"
+// Coluna AB: "Valor Honorários"
+// Coluna AC: "Valor Extras"
+// Coluna AE: "Total Cobrança"
+// Coluna AF: "Valor Recebido"
 // ------------------------------------------------------------------
 function mapHeaders(headers: string[]) {
     const map = {
@@ -351,6 +367,7 @@ function mapHeaders(headers: string[]) {
     };
 
     const normHeaders = headers.map(h => normalizeHeader(h));
+    console.log('Headers normalizados:', normHeaders);
 
     // Helper to find index with exclusion
     const find = (keywords: string[], exclude: string[] = []) => {
@@ -362,43 +379,66 @@ function mapHeaders(headers: string[]) {
         });
     };
 
-    // --- PRIORIDADE ABSOLUTA: TERMOS EXATOS DO USUÁRIO ---
+    // --- MAPEAMENTO BASEADO NOS CABEÇALHOS EXATOS DA PLANILHA ---
     
-    // 1. TIPO DE LANÇAMENTO
-    // Procura "tipo de lancamento" (com espaços colapsados)
-    let typeIdx = find(['tipo de lancamento', 'tipo lancamento', 'tipo do lancamento']);
+    // 1. TIPO DE LANÇAMENTO (Coluna D)
+    // Cabeçalho exato: "Tipo de Lançamento"
+    let typeIdx = find(['tipo de lancamento']);
+    if (typeIdx === -1) typeIdx = find(['tipo lancamento', 'tipo do lancamento']);
     // Fallback: "plano de contas", "classificacao"
     if (typeIdx === -1) typeIdx = find(['plano de contas', 'classificacao financeira', 'classificacao', 'categoria']);
     // Fallback: Apenas "tipo", mas excluindo "movimento"
     if (typeIdx === -1) typeIdx = find(['tipo'], ['movimento', 'pessoa', 'documento']); 
     map.type = typeIdx;
+    console.log(`Mapeamento type -> índice ${typeIdx}, header: "${headers[typeIdx] || 'N/A'}"`);
 
-    // 2. CONTA
-    // Procura "conta", "conta corrente", "banco"
-    let accIdx = find(['conta corrente', 'conta bancaria', 'nome da conta', 'banco', 'caixa']);
+    // 2. CONTAS BANCÁRIAS (Coluna C)
+    // Cabeçalho exato: "Contas bancárias"
+    let accIdx = find(['contas bancarias']);
+    if (accIdx === -1) accIdx = find(['conta corrente', 'conta bancaria', 'nome da conta', 'banco', 'caixa']);
     if (accIdx === -1) {
         accIdx = find(['conta'], ['contabil', 'plano', 'categoria', 'pagar', 'receber', 'resultado', 'centro', 'custo', 'movimento', 'tipo', 'fluxo']);
     }
     if (accIdx === -1) accIdx = find(['instituicao']);
     map.bankAccount = accIdx;
+    console.log(`Mapeamento bankAccount -> índice ${accIdx}, header: "${headers[accIdx] || 'N/A'}"`);
 
-    // 3. PAGO POR
-    // Procura "pago por"
-    map.paidBy = find(['pago por', 'pagopor', 'pago_por', 'centro de custo', 'responsavel', 'pagador', 'departamento']);
+    // 3. PAGO POR (Coluna E)
+    // Cabeçalho exato: "Pago Por"
+    map.paidBy = find(['pago por']);
+    if (map.paidBy === -1) map.paidBy = find(['pagopor', 'pago_por', 'centro de custo', 'responsavel', 'pagador', 'departamento']);
+    console.log(`Mapeamento paidBy -> índice ${map.paidBy}, header: "${headers[map.paidBy] || 'N/A'}"`);
 
     // --- DEMAIS CAMPOS ---
 
     // 4. DATES
-    map.dueDate = find(['data vencimento', 'data do vencimento', 'vencimento']);
-    map.date = find(['data emissao', 'emissao', 'data', 'dt '], ['vencimento', 'agendamento']);
+    // Coluna B: "Data Lançamento"
+    // Coluna H: "Data a Pagar" (vencimento)
+    map.date = find(['data lancamento'], ['vencimento', 'receber', 'pagar', '2']);
+    if (map.date === -1) map.date = find(['data emissao', 'emissao', 'data'], ['vencimento', 'agendamento', 'pagar', 'receber']);
+    
+    map.dueDate = find(['data a pagar', 'data vencimento', 'vencimento']);
+    if (map.dueDate === -1) map.dueDate = find(['data do vencimento']);
 
     if (map.date === -1 && map.dueDate !== -1) map.date = map.dueDate;
     if (map.dueDate === -1 && map.date !== -1) map.dueDate = map.date;
 
-    // 5. VALUES
-    const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque', 'extra', 'honorarios'];
-    map.valuePaid = find(['valor pago', 'valor debito', 'debito', 'saida', 'valor saida', 'despesa'], valueExclusions);
-    map.valueReceived = find(['valor recebido', 'valor credito', 'credito', 'entrada', 'valor entrada', 'receita'], valueExclusions);
+    // 5. MOVIMENTAÇÃO (Coluna F)
+    // Cabeçalho exato: "Movimentação"
+    map.movement = find(['movimentacao']);
+    if (map.movement === -1) map.movement = find(['movimento', 'tipo movimento', 'operacao', 'entrada/saida', 'd/c']);
+    console.log(`Mapeamento movement -> índice ${map.movement}, header: "${headers[map.movement] || 'N/A'}"`);
+
+    // 6. VALUES
+    // Coluna N: "Valor Pago"
+    // Coluna AF: "Valor Recebido"
+    const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque', 'extra', 'honorarios', 'original', 'ref'];
+    
+    map.valuePaid = find(['valor pago'], valueExclusions);
+    if (map.valuePaid === -1) map.valuePaid = find(['valor debito', 'debito', 'saida', 'valor saida', 'despesa'], valueExclusions);
+    
+    map.valueReceived = find(['valor recebido'], valueExclusions);
+    if (map.valueReceived === -1) map.valueReceived = find(['valor credito', 'credito', 'entrada', 'valor entrada', 'receita'], valueExclusions);
 
     if (map.valuePaid === -1 && map.valueReceived === -1) {
         const valIdx = find(['valor liquido', 'valor total', 'valor', 'saldo', 'total', 'amount'], valueExclusions);
@@ -407,24 +447,36 @@ function mapHeaders(headers: string[]) {
             map.valueReceived = valIdx;
         }
     }
+    console.log(`Mapeamento valuePaid -> índice ${map.valuePaid}, valueReceived -> índice ${map.valueReceived}`);
 
-    // New Columns for 'Entrada de Caixa / Contas a Receber'
-    map.honorarios = find(['valor honorarios', 'honorarios', 'taxa adm', 'comissao']);
-    map.valorExtra = find(['valor extra', 'acrescimo', 'extra', 'juros']);
-    map.totalCobranca = find(['total cobranca', 'valor total cobranca', 'valor bruto', 'total geral']);
+    // 7. New Columns for 'Entrada de Caixa / Contas a Receber'
+    // Coluna AB: "Valor Honorários"
+    // Coluna AC: "Valor Extras"
+    // Coluna AE: "Total Cobrança"
+    map.honorarios = find(['valor honorarios', 'honorarios']);
+    if (map.honorarios === -1) map.honorarios = find(['taxa adm', 'comissao']);
+    
+    map.valorExtra = find(['valor extras', 'valor extra']);
+    if (map.valorExtra === -1) map.valorExtra = find(['acrescimo', 'extras', 'juros']);
+    
+    map.totalCobranca = find(['total cobranca', 'valor total cobranca']);
+    if (map.totalCobranca === -1) map.totalCobranca = find(['valor bruto', 'total geral']);
 
-    // 6. CLIENT / DESCRIPTION
-    map.client = find(['favorecido', 'cliente', 'razao social', 'fornecedor', 'pagador']);
+    // 8. CLIENT / DESCRIPTION
+    // Coluna AA: "Nome Empresa / Credor"
+    map.client = find(['nome empresa', 'credor']);
+    if (map.client === -1) map.client = find(['favorecido', 'cliente', 'razao social', 'fornecedor', 'pagador']);
     if (map.client === -1) map.client = find(['descricao', 'historico', 'nome', 'detalhe']);
+    console.log(`Mapeamento client -> índice ${map.client}, header: "${headers[map.client] || 'N/A'}"`);
 
-    // 7. STATUS
+    // 9. STATUS
+    // Coluna J: "Doc.Pago" pode indicar status
     map.status = find(['status', 'situacao', 'estado']);
+    if (map.status === -1) map.status = find(['doc pago', 'docpago']);
 
-    // 8. MOVEMENT
-    map.movement = find(['movimento', 'tipo movimento', 'operacao', 'entrada/saida', 'd/c']);
-
-    // 9. ID
-    map.id = find(['id transacao', 'id_transacao', 'codigo transacao']);
+    // 10. ID
+    // Coluna AN: "Submission ID"
+    map.id = find(['submission id', 'id transacao', 'id_transacao', 'codigo transacao']);
     if (map.id === -1) map.id = find(['id', 'cod', 'codigo'], ['barra', 'produto', 'cliente']);
 
     return map;

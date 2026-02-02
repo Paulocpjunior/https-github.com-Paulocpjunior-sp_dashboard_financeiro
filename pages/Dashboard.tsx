@@ -245,13 +245,13 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Filters Panel - Matches Google Sheet Columns */}
+        {/* Filters Panel - LABELS IDÊNTICOS À PLANILHA GOOGLE SHEETS */}
         {isFilterMenuOpen && (
           <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm animate-in slide-in-from-top-2 print:hidden transition-colors">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                 <Filter className="h-4 w-4 text-blue-500" />
-                Filtros (Baseados na Planilha)
+                Filtros (Idênticos ao Banco de Dados)
               </h3>
               <button onClick={clearFilters} className="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
                 <XCircle className="h-4 w-4" />
@@ -310,27 +310,22 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* MOVIMENTO */}
+              {/* MOVIMENTAÇÃO - Label idêntico à planilha */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Movimento</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Movimentação</label>
                 <select
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.movement}
                   onChange={(e) => handleFilterChange('movement', e.target.value)}
                 >
                   <option value="">Todos</option>
-                  <option value="Entrada">Entrada</option>
-                  <option value="Saída">Saída</option>
-                  {options.movements
-                    .filter(m => m !== 'Entrada' && m !== 'Saída')
-                    .map(o => <option key={o} value={o}>{o}</option>)
-                  }
+                  {options.movements.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
-              {/* CONTA */}
+              {/* CONTAS BANCÁRIAS - Label idêntico à planilha */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Conta</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Contas Bancárias</label>
                 <select
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.bankAccount}
@@ -341,7 +336,7 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-               {/* TIPO DE LANÇAMENTO */}
+               {/* TIPO DE LANÇAMENTO - Label idêntico à planilha */}
                <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Lançamento</label>
                 <select
@@ -349,7 +344,7 @@ const Dashboard: React.FC = () => {
                   value={filters.type}
                   onChange={(e) => handleFilterChange('type', e.target.value)}
                 >
-                  <option value="">Todos Tipos</option>
+                  <option value="">Todos os Tipos</option>
                   {options.types.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
@@ -362,12 +357,12 @@ const Dashboard: React.FC = () => {
                   value={filters.status}
                   onChange={(e) => handleFilterChange('status', e.target.value)}
                 >
-                  <option value="">Todos Status</option>
+                  <option value="">Todos os Status</option>
                   {options.statuses.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
-              {/* PAGO POR */}
+              {/* PAGO POR - Label idêntico à planilha */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Pago Por</label>
                 <select
@@ -380,9 +375,9 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-               {/* CLIENTE / DESCRIÇÃO (Digitação Habilitada) */}
+               {/* NOME EMPRESA / CREDOR - Label idêntico à planilha */}
                <div className="space-y-1 lg:col-span-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Cliente / Descrição</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Nome Empresa / Credor</label>
                 <input
                   list="clients-list"
                   type="text"
