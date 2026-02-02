@@ -12,7 +12,8 @@ export interface User {
 
 export interface Transaction {
   id: string;
-  date: string; // YYYY-MM-DD
+  date: string; // Data de Emissão/Lançamento (YYYY-MM-DD)
+  dueDate: string; // Data de Vencimento (YYYY-MM-DD)
   bankAccount: string;
   type: string;
   status: 'Pago' | 'Pendente' | 'Agendado';

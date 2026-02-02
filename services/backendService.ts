@@ -105,6 +105,7 @@ export const BackendService = {
         // Extract Raw Values
         const rawId = get(map.id);
         const rawDate = get(map.date);
+        const rawDueDate = get(map.dueDate);
         const rawValorPago = get(map.valuePaid);
         const rawValorRecebido = get(map.valueReceived);
         const rawStatus = get(map.status);
@@ -174,9 +175,19 @@ export const BackendService = {
         valPaid = Math.abs(valPaid);
         valReceived = Math.abs(valReceived);
 
+        // Date Logic - Fallbacks
+        const finalDate = parseDateSafely(rawDate);
+        let finalDueDate = parseDateSafely(rawDueDate);
+        
+        // If due date is missing/invalid but we have a transaction date, use transaction date as due date
+        if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') {
+            finalDueDate = finalDate;
+        }
+
         return {
           id: finalId,
-          date: parseDateSafely(rawDate),
+          date: finalDate,
+          dueDate: finalDueDate,
           bankAccount: cleanString(rawAccount) || 'Outros',
           type: cleanString(rawType) || 'Geral',
           status: normalizeStatus(rawStatus),
@@ -298,6 +309,7 @@ function mapHeaders(headers: string[]) {
     const map = {
         id: -1, 
         date: -1, 
+        dueDate: -1,
         bankAccount: -1, 
         type: -1, 
         status: -1, 
@@ -323,10 +335,13 @@ function mapHeaders(headers: string[]) {
         });
     };
 
-    // 1. DATE (High Priority)
-    map.date = find(['data vencimento', 'data do vencimento', 'vencimento']); 
-    if (map.date === -1) map.date = find(['data', 'dt '], ['agendamento', 'criacao']);
-    if (map.date === -1) map.date = find(['competencia']);
+    // 1. DATES (Separating Vencimento from Emissão)
+    map.dueDate = find(['data vencimento', 'data do vencimento', 'vencimento']);
+    map.date = find(['data emissao', 'emissao', 'data', 'dt '], ['vencimento', 'agendamento']);
+
+    // Fallback logic if one is missing but other exists
+    if (map.date === -1 && map.dueDate !== -1) map.date = map.dueDate;
+    if (map.dueDate === -1 && map.date !== -1) map.dueDate = map.date;
 
     // 2. VALUES (Critical - Strict Exclusion)
     const valueExclusions = ['doc', 'num', 'nr', 'nosso', 'parcela', 'id', 'cod', 'nota', 'cheque', 'extra', 'honorarios'];

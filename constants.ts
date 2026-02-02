@@ -33,11 +33,16 @@ const generateTransactions = (count: number): Transaction[] => {
     const date = new Date(now);
     date.setDate(date.getDate() - Math.floor(Math.random() * 90)); // Last 90 days
 
+    // Generate mock due date (same day or future)
+    const dueDate = new Date(date);
+    dueDate.setDate(date.getDate() + Math.floor(Math.random() * 10));
+
     const value = Math.floor(Math.random() * 5000) + 100;
 
     transactions.push({
       id: `trx-${i + 1}`,
       date: date.toISOString().split('T')[0],
+      dueDate: dueDate.toISOString().split('T')[0],
       bankAccount: BANK_ACCOUNTS[Math.floor(Math.random() * BANK_ACCOUNTS.length)],
       type: TRANSACTION_TYPES[Math.floor(Math.random() * TRANSACTION_TYPES.length)],
       status: STATUSES[Math.floor(Math.random() * STATUSES.length)] as any,
