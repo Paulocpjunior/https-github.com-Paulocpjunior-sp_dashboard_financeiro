@@ -109,6 +109,14 @@ const Dashboard: React.FC = () => {
   const handlePrint = () => {
     window.print();
   };
+  
+  const handleDeleteTransaction = (id: string) => {
+    // Placeholder logic for future backend integration
+    console.log(`Solicitação de exclusão para o ID: ${id}`);
+    alert(`Funcionalidade de exclusão simulada para o ID: ${id}.\nEm breve será conectada ao banco de dados.`);
+    // Future: await DataService.deleteTransaction(id);
+    // Future: refresh data
+  };
 
   const handleWhatsAppShare = () => {
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -441,6 +449,7 @@ const Dashboard: React.FC = () => {
                 page={page}
                 totalPages={totalPages}
                 onPageChange={setPage}
+                onDelete={handleDeleteTransaction}
               />
            </div>
         </div>
