@@ -69,7 +69,7 @@ export const BackendService = {
       
       let csvText = await response.text();
 
-      // REMOVE BOM (Byte Order Mark) que quebra a leitura da primeira coluna (ID)
+      // REMOVE BOM
       if (csvText.charCodeAt(0) === 0xFEFF) {
         csvText = csvText.slice(1);
       }
@@ -86,11 +86,12 @@ export const BackendService = {
 
       // --- DYNAMIC HEADER MAPPING ---
       const headerRow = parseCSVLine(rows[0]);
-      console.log('Headers detectados:', headerRow); // Debug
+      console.log('Headers detectados:', headerRow);
       
       const map = mapHeaders(headerRow);
-      console.log('Mapeamento de colunas:', map); // Debug
+      console.log('Mapeamento final:', map);
 
+      // Verificação mínima: Se não achou data nem valores, provavelmente a aba está errada ou vazia
       if (map.date === -1 && map.valuePaid === -1 && map.valueReceived === -1) {
           throw new Error('Colunas obrigatórias não encontradas. Verifique se a aba correta (GID) foi carregada.');
       }
@@ -110,9 +111,14 @@ export const BackendService = {
         const rawStatus = get(map.status);
         const rawMovimento = get(map.movement);
 
+        // Se rawId for vazio ou se map.id for -1, usamos o gerador trx-INDEX
+        // Isso previne que colunas erradas (como timestamp na col 0) sejam usadas como ID
+        const finalId = (map.id !== -1 && rawId && rawId.trim().length > 0 && rawId.trim().length < 20) 
+                        ? rawId.trim() 
+                        : `trx-${index}`;
+
         return {
-          // Se não achar ID na coluna, gera um, mas prioriza a coluna mapeada
-          id: rawId && rawId.trim() !== '' ? rawId.trim() : `trx-${index}`,
+          id: finalId,
           date: parseDate(rawDate),
           bankAccount: cleanString(get(map.bankAccount)) || 'Outros',
           type: cleanString(get(map.type)) || 'Outros',
@@ -175,9 +181,24 @@ function mapHeaders(headers: string[]) {
     headers.forEach((h, i) => {
         const norm = normalizeHeader(h);
         
-        // Mapeamento ID mais flexível e robusto
-        if (norm === 'id' || norm === 'cod' || norm === 'codigo' || norm === 'identifier' || norm.includes('transacaoid')) map.id = i;
-        else if (norm.includes('data') || norm === 'dt' || norm === 'date') map.date = i;
+        // ID: Deve ser explícito. Não aceitamos 'timestamp' ou vazio como ID.
+        if (norm === 'id' || norm === 'cod' || norm === 'codigo' || norm === 'identifier' || (norm.includes('transacao') && norm.includes('id'))) {
+            map.id = i;
+        }
+        
+        // DATE: Prioridade para 'data', 'vencimento'. Evita 'carimbo' ou 'timestamp' se possível,
+        // mas se for a única opção, será pega se contiver 'data'.
+        // Adicionada lógica para evitar 'carimbo' se já tivermos achado uma data melhor ou se o nome for explicitamente carimbo.
+        else if (norm.includes('data') || norm === 'dt' || norm === 'date' || norm.includes('vencimento')) {
+            // Se for explicitamente carimbo/timestamp, só pegamos se não tivermos nada ainda
+            if (norm.includes('carimbo') || norm.includes('timestamp')) {
+                if (map.date === -1) map.date = i;
+            } else {
+                // É uma data "boa" (ex: Data Vencimento), sobrescreve qualquer anterior (como carimbo)
+                map.date = i;
+            }
+        }
+        
         else if (norm.includes('conta') || norm.includes('banco')) map.bankAccount = i;
         else if (norm.includes('tipo') || norm.includes('categoria')) map.type = i;
         else if (norm.includes('status') || norm.includes('situacao')) map.status = i;
@@ -188,13 +209,16 @@ function mapHeaders(headers: string[]) {
         else if (norm.includes('valorrecebido') || (norm.includes('valor') && norm.includes('entrada'))) map.valueReceived = i;
     });
 
-    // Fallbacks baseados na posição comum se não achar pelo nome
-    if (map.date === -1) map.date = 1; 
+    // Fallbacks inteligentes
+    // Se não achou data, tenta a coluna 1 (comum ser data em muitas planilhas financeiras se a 0 for carimbo)
+    if (map.date === -1 && headers.length > 1) map.date = 1;
+    
+    // Fallbacks para valores
     if (map.valuePaid === -1) map.valuePaid = 8;
     if (map.valueReceived === -1) map.valueReceived = 9;
     
-    // Se ID não foi achado, tenta a primeira coluna se ela parecer um ID
-    if (map.id === -1) map.id = 0;
+    // IMPORTANTE: NÃO fazemos fallback de map.id para 0. 
+    // Se map.id for -1, o código de fetch gerará IDs virtuais.
 
     return map;
 }
@@ -267,13 +291,12 @@ function parseDate(dateStr: string | undefined): string {
   if (!dateStr) return new Date().toISOString().split('T')[0];
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
   
-  // Remove Time part if exists (e.g., "12/10/2021 14:30:00")
+  // Remove Time part if exists
   if (clean.includes(' ')) {
       clean = clean.split(' ')[0];
   }
 
   // FORCE MANUAL PARSING FOR DD/MM/YYYY (Common in BR/Sheets)
-  // This prevents JS from confusing 12/10 (Oct 12) with (Dec 10)
   const brDateRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
   const match = clean.match(brDateRegex);
   

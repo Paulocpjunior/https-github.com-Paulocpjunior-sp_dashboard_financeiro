@@ -19,25 +19,8 @@ export const DataService = {
     try {
       const data = await BackendService.fetchTransactions();
       
-      // Robust mapping to ensure dates don't crash the app
-      CACHED_TRANSACTIONS = data.map(t => {
-        let cleanDate = new Date().toISOString().split('T')[0]; // Default to today if fail
-        try {
-            if (t.date) {
-                const d = new Date(t.date);
-                if (!isNaN(d.getTime())) {
-                    cleanDate = d.toISOString().split('T')[0];
-                }
-            }
-        } catch (e) {
-            console.warn('Date parsing error for transaction:', t.id);
-        }
-
-        return {
-            ...t,
-            date: cleanDate
-        };
-      });
+      // Store data directly. BackendService already ensures YYYY-MM-DD format.
+      CACHED_TRANSACTIONS = data;
 
       isDataLoaded = true;
     } catch (error) {
@@ -77,6 +60,7 @@ export const DataService = {
       // ID Filter
       if (filters.id && !item.id.toLowerCase().includes(filters.id.toLowerCase())) matches = false;
 
+      // String comparison is safe because format is strict YYYY-MM-DD
       if (filters.startDate && item.date < filters.startDate) matches = false;
       if (filters.endDate && item.date > filters.endDate) matches = false;
       
