@@ -1,44 +1,133 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { User, Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw } from 'lucide-react';
 import { BackendService } from '../services/backendService';
+import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Database Config State
+  const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [isSavingDb, setIsSavingDb] = useState(false);
+  const [dbMessage, setDbMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   useEffect(() => {
-    const loadUsers = async () => {
+    const loadData = async () => {
       try {
-        const data = await BackendService.fetchUsers();
-        setUsers(data);
+        const userData = await BackendService.fetchUsers();
+        setUsers(userData);
+        
+        // Load current Spreadsheet ID
+        setSpreadsheetId(BackendService.getSpreadsheetId());
       } catch (error) {
-        console.error("Failed to load users", error);
+        console.error("Failed to load data", error);
       } finally {
         setLoading(false);
       }
     };
-    loadUsers();
+    loadData();
   }, []);
+
+  const handleSaveDatabaseId = async () => {
+    setIsSavingDb(true);
+    setDbMessage(null);
+    try {
+        BackendService.updateSpreadsheetId(spreadsheetId);
+        
+        // Force refresh of data cache to test connection
+        await DataService.refreshCache();
+        
+        setDbMessage({ type: 'success', text: 'Banco de dados atualizado e conexão verificada com sucesso!' });
+    } catch (error: any) {
+        setDbMessage({ type: 'error', text: 'ID salvo, mas falha ao conectar: ' + error.message });
+    } finally {
+        setIsSavingDb(false);
+    }
+  };
+
+  const handleRestoreDefault = () => {
+      BackendService.resetSpreadsheetId();
+      setSpreadsheetId(BackendService.getSpreadsheetId());
+      setDbMessage({ type: 'success', text: 'Configuração restaurada para o padrão.' });
+  };
 
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Customized Header with Royal Blue background */}
+        {/* Customized Header */}
         <div className="bg-royal-800 dark:bg-slate-800 p-6 rounded-xl shadow-md border border-royal-700 dark:border-slate-700">
           <div className="flex items-center gap-3">
              <div className="p-2 bg-white/10 rounded-lg">
                 <Shield className="h-6 w-6 text-white" />
              </div>
              <div>
-                <h1 className="text-2xl font-bold text-white">Gerenciamento de Usuários</h1>
-                <p className="text-royal-100/80 dark:text-slate-400 text-sm mt-1">Administre o acesso e permissões do sistema SP Contábil.</p>
+                <h1 className="text-2xl font-bold text-white">Administração do Sistema</h1>
+                <p className="text-royal-100/80 dark:text-slate-400 text-sm mt-1">Gerencie usuários e conexões de dados.</p>
              </div>
           </div>
         </div>
 
+        {/* Database Configuration Card */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 animate-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2 mb-4">
+                <Database className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <h2 className="text-lg font-bold text-slate-800 dark:text-white">Fonte de Dados (Google Sheets)</h2>
+            </div>
+            
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                Configure o ID da planilha pública do Google Sheets que alimenta o sistema. 
+                Certifique-se de que a planilha está compartilhada como "Qualquer pessoa com o link".
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <div className="flex-1 w-full">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Spreadsheet ID</label>
+                    <input 
+                        type="text" 
+                        value={spreadsheetId}
+                        onChange={(e) => setSpreadsheetId(e.target.value)}
+                        className="w-full form-input rounded-lg border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Ex: 1jwBTCHiQ-YqtPkyQuPaAEzu..."
+                    />
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto mt-5">
+                    <button 
+                        onClick={handleSaveDatabaseId}
+                        disabled={isSavingDb}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm font-medium"
+                    >
+                        {isSavingDb ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        Salvar e Conectar
+                    </button>
+                    <button 
+                        onClick={handleRestoreDefault}
+                        title="Restaurar Padrão"
+                        className="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+                    >
+                        <RotateCcw className="h-4 w-4" />
+                    </button>
+                </div>
+            </div>
+
+            {dbMessage && (
+                <div className={`mt-4 p-3 rounded-lg text-sm flex items-center gap-2 ${
+                    dbMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+                }`}>
+                    {dbMessage.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                    {dbMessage.text}
+                </div>
+            )}
+        </div>
+
+        {/* User Management Table */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+             <h3 className="font-bold text-slate-800 dark:text-white">Usuários do Sistema</h3>
+          </div>
+          
           {loading ? (
              <div className="p-10 flex justify-center">
                 <Loader2 className="h-8 w-8 text-royal-600 animate-spin" />
@@ -106,12 +195,6 @@ const Admin: React.FC = () => {
               </tbody>
             </table>
           )}
-        </div>
-        
-        <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-900/30 rounded-lg p-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                <strong>Nota:</strong> Certifique-se de que os dados estão vindo do Google Sheets. O BackendService fará a conexão automaticamente se o ambiente for "Google Apps Script".
-            </p>
         </div>
       </div>
     </Layout>

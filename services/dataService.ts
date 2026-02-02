@@ -74,6 +74,9 @@ export const DataService = {
     let filtered = CACHED_TRANSACTIONS.filter((item) => {
       let matches = true;
 
+      // ID Filter
+      if (filters.id && !item.id.toLowerCase().includes(filters.id.toLowerCase())) matches = false;
+
       if (filters.startDate && item.date < filters.startDate) matches = false;
       if (filters.endDate && item.date > filters.endDate) matches = false;
       

@@ -15,6 +15,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [welcomeName, setWelcomeName] = useState('');
   
   // Forgot Password State
   const [forgotUsername, setForgotUsername] = useState('');
@@ -33,11 +34,14 @@ const Login: React.FC = () => {
       const result = await AuthService.login(username, password);
       
       if (result.success) {
+        if (result.user) {
+            setWelcomeName(result.user.name);
+        }
         setLoginSuccess(true);
-        // Delay redirect slightly to show success state
+        // Aumentado o tempo para 2 segundos para o usuário ler o toast
         setTimeout(() => {
           navigate('/');
-        }, 1000);
+        }, 2000);
       } else {
         setError(result.message);
         setIsLoading(false);
@@ -76,12 +80,27 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-5 font-sans transition-colors duration-500
-      bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-royal-900 via-royal-950 to-slate-950 dark:from-slate-900 dark:to-slate-950">
+      bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-royal-900 via-royal-950 to-slate-950 dark:from-slate-900 dark:to-slate-950 relative">
       
       {/* Theme Toggle Positioned Absolute */}
       <div className="absolute top-5 right-5">
         <ThemeToggle />
       </div>
+
+      {/* Toast de Boas-vindas Personalizado */}
+      {loginSuccess && (
+        <div className="fixed top-6 right-6 z-50 animate-in slide-in-from-right fade-in duration-500">
+            <div className="bg-emerald-600 dark:bg-emerald-700 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 border border-emerald-500/50 backdrop-blur-sm">
+              <div className="bg-white/20 p-2 rounded-full shrink-0">
+                <CheckCircle2 className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg leading-tight">Sucesso!</h4>
+                <p className="text-emerald-50 text-sm font-medium">Bem-vindo de volta, {welcomeName}!</p>
+              </div>
+            </div>
+        </div>
+      )}
 
       <div className="w-full max-w-[420px] 
         bg-white/95 dark:bg-slate-900/90 
@@ -107,14 +126,6 @@ const Login: React.FC = () => {
               <div className="mb-5 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-center gap-3 text-red-600 dark:text-red-400 text-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="h-5 w-5 shrink-0" />
                 <span>{error}</span>
-              </div>
-            )}
-            
-            {/* Success Alert */}
-             {loginSuccess && (
-              <div className="mb-5 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center gap-3 text-green-600 dark:text-green-400 text-sm animate-in fade-in slide-in-from-top-2">
-                <CheckCircle2 className="h-5 w-5 shrink-0" />
-                <span>Login realizado com sucesso! Redirecionando...</span>
               </div>
             )}
 
@@ -183,7 +194,7 @@ const Login: React.FC = () => {
                 {isLoading || loginSuccess ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>{loginSuccess ? 'Entrando...' : 'Verificando...'}</span>
+                    <span>Acessando...</span>
                   </>
                 ) : (
                   <span>Acessar Sistema</span>

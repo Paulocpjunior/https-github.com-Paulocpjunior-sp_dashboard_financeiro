@@ -24,6 +24,7 @@ export interface Transaction {
 }
 
 export interface FilterState {
+  id: string;
   startDate: string;
   endDate: string;
   bankAccount: string;

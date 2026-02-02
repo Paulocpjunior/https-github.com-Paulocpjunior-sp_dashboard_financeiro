@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, Trash2, AlertTriangle, X, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, Trash2, AlertTriangle, X, Search, Loader2 } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -11,6 +11,9 @@ interface DataTableProps {
   clientFilterValue?: string;
   onClientFilterChange?: (value: string) => void;
   clientOptions?: string[]; // For autocomplete
+  idFilterValue?: string;
+  onIdFilterChange?: (value: string) => void;
+  isLoading?: boolean;
 }
 
 const DataTable: React.FC<DataTableProps> = ({ 
@@ -21,7 +24,10 @@ const DataTable: React.FC<DataTableProps> = ({
     onDelete,
     clientFilterValue,
     onClientFilterChange,
-    clientOptions = []
+    clientOptions = [],
+    idFilterValue,
+    onIdFilterChange,
+    isLoading = false
 }) => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
@@ -61,10 +67,28 @@ const DataTable: React.FC<DataTableProps> = ({
   return (
     <>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[400px]">
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
+                {/* ID Column with Filter */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[120px]">
+                   <div className="flex flex-col gap-2">
+                        <span>ID</span>
+                        {onIdFilterChange && (
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    value={idFilterValue || ''}
+                                    onChange={(e) => onIdFilterChange(e.target.value)}
+                                    placeholder="Buscar ID"
+                                    className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
@@ -98,15 +122,27 @@ const DataTable: React.FC<DataTableProps> = ({
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-              {data.length === 0 ? (
+              {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={9} className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+                      <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Atualizando dados...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : data.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                     Nenhum registro encontrado.
                   </td>
                 </tr>
               ) : (
                 data.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400 font-mono">
+                      {row.id}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                       {formatDate(row.date)}
                     </td>
@@ -177,7 +213,7 @@ const DataTable: React.FC<DataTableProps> = ({
               <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                 <button
                   onClick={() => onPageChange(page - 1)}
-                  disabled={page <= 1}
+                  disabled={page <= 1 || isLoading}
                   className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="sr-only">Anterior</span>
@@ -185,7 +221,7 @@ const DataTable: React.FC<DataTableProps> = ({
                 </button>
                 <button
                   onClick={() => onPageChange(page + 1)}
-                  disabled={page >= totalPages}
+                  disabled={page >= totalPages || isLoading}
                   className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="sr-only">Próxima</span>

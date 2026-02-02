@@ -1,22 +1,41 @@
 import { Transaction, User } from '../types';
 import { MOCK_USERS } from '../constants';
 
-// ID da nova planilha fornecida
-const SPREADSHEET_ID = '1jwBTCHiQ-YqtPkyQuPaAEzu-uQi62qA2SwVUhHUPt1Y';
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv`;
+// ID Padrão (Fallback)
+const DEFAULT_SPREADSHEET_ID = '1jwBTCHiQ-YqtPkyQuPaAEzu-uQi62qA2SwVUhHUPt1Y';
+const STORAGE_KEY_DB_SOURCE = 'cashflow_db_source_id';
 
 export const BackendService = {
   
   isProduction: (): boolean => true,
 
+  // Novo método para obter o ID atual (do storage ou padrão)
+  getSpreadsheetId: (): string => {
+    return localStorage.getItem(STORAGE_KEY_DB_SOURCE) || DEFAULT_SPREADSHEET_ID;
+  },
+
+  // Novo método para o Admin atualizar o ID
+  updateSpreadsheetId: (newId: string): void => {
+    if (!newId.trim()) return;
+    localStorage.setItem(STORAGE_KEY_DB_SOURCE, newId.trim());
+  },
+
+  // Novo método para restaurar o padrão
+  resetSpreadsheetId: (): void => {
+    localStorage.removeItem(STORAGE_KEY_DB_SOURCE);
+  },
+
   fetchTransactions: async (): Promise<Transaction[]> => {
-    console.log(`Conectando à planilha: ${SPREADSHEET_ID}...`);
+    const spreadsheetId = BackendService.getSpreadsheetId();
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+
+    console.log(`Conectando à planilha: ${spreadsheetId}...`);
     
     try {
-      const response = await fetch(CSV_URL);
+      const response = await fetch(csvUrl);
       
       if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}. Verifique se a planilha está pública (Compartilhar -> Qualquer pessoa com o link).`);
+        throw new Error(`Erro HTTP: ${response.status}. Verifique se o ID está correto e se a planilha está pública.`);
       }
       
       const csvText = await response.text();
@@ -52,7 +71,7 @@ export const BackendService = {
 
     } catch (error) {
       console.error('Erro ao buscar dados da planilha:', error);
-      throw new Error('Falha ao conectar com a Planilha Google. Verifique o compartilhamento.');
+      throw new Error('Falha ao conectar com a Planilha Google. Verifique o ID e o compartilhamento.');
     }
   },
 

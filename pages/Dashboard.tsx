@@ -10,6 +10,7 @@ import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCir
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 const INITIAL_FILTERS: FilterState = {
+  id: '',
   startDate: '',
   endDate: '',
   bankAccount: '',
@@ -162,7 +163,11 @@ const Dashboard: React.FC = () => {
     return Object.values(grouped).slice(0, 10).reverse();
   }, [data]);
 
-  if (isLoading) {
+  // Se estiver carregando inicialmente e não tiver erro, use o loader de tela cheia do Layout.
+  // Se já tiver carregado (isLoading false) e depois mudar para true (re-fetch), 
+  // o DataTable cuidará do spinner interno.
+  
+  if (isLoading && data.length === 0 && !initError) {
     return (
       <Layout>
         <div className="h-[80vh] flex flex-col items-center justify-center">
@@ -459,6 +464,9 @@ const Dashboard: React.FC = () => {
                 clientFilterValue={filters.client}
                 onClientFilterChange={(val) => handleFilterChange('client', val)}
                 clientOptions={options.clients}
+                idFilterValue={filters.id}
+                onIdFilterChange={(val) => handleFilterChange('id', val)}
+                isLoading={isLoading}
               />
            </div>
         </div>
