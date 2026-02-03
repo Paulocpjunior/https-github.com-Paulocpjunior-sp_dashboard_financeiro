@@ -1,54 +1,114 @@
 import { User } from '../types';
-import { BackendService } from './backendService';
 
-const STORAGE_KEY = 'cashflow_session';
+// URL do Apps Script
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYbEYkx0hGgXGx1B6_2yFJ1qbnA8KH2prmV_0cohnMn_5wcyrA3fImFnxN1jhyIImYyg/exec';
 
-/**
- * Helper function to generate SHA-256 hash
- * Performs hashing on the client side to avoid sending plain text passwords
- */
-async function sha256(message: string): Promise<string> {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+const AUTH_STORAGE_KEY = 'sp_contabil_auth';
+
+interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
 }
 
-export const AuthService = {
-  login: async (username: string, password: string): Promise<{ success: boolean; message: string; user?: User }> => {
-    try {
-      // Trim password to avoid accidental whitespace issues
-      const cleanPassword = password.trim();
-      
-      // Hash password before sending to backend service
-      const passwordHash = await sha256(cleanPassword);
-      console.log(`AuthService: Password hashed. Prefix: ${passwordHash.substring(0, 6)}...`);
-      
-      const result = await BackendService.login(username, passwordHash);
-      
-      if (result.success && result.user) {
-        const sessionUser = { ...result.user, lastAccess: new Date().toISOString() };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
-        return { success: true, message: 'Login realizado com sucesso', user: sessionUser };
-      }
+// Função para fazer login via Apps Script
+const loginViaAPI = async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
+  try {
+    // Tentar com fetch normal
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'login',
+        username: username.toLowerCase().trim(),
+        password: password,
+      }),
+      redirect: 'follow',
+    });
 
-      return { success: false, message: result.message || 'Credenciais inválidas.' };
-    } catch (error) {
-      console.error("AuthService Login Error:", error);
-      return { success: false, message: 'Erro de conexão ou criptografia.' };
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.log('Erro no fetch, tentando alternativa...');
+    
+    // Se der erro de CORS, tentar via GET com parâmetros
+    try {
+      const params = new URLSearchParams({
+        action: 'login',
+        username: username.toLowerCase().trim(),
+        password: password,
+      });
+      
+      const response = await fetch(`${APPS_SCRIPT_URL}?${params.toString()}`);
+      const result = await response.json();
+      return result;
+    } catch (fallbackError) {
+      console.error('Erro no login:', fallbackError);
+      return { success: false, message: 'Erro de conexão. Tente novamente.' };
+    }
+  }
+};
+
+export const AuthService = {
+  // Login
+  login: async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
+    console.log('[AuthService] Tentando login:', username);
+    
+    // Tentar login via API (planilha)
+    const apiResult = await loginViaAPI(username, password);
+    
+    if (apiResult.success && apiResult.user) {
+      // Salvar no localStorage
+      const authState: AuthState = {
+        user: apiResult.user,
+        isAuthenticated: true,
+      };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+      
+      console.log('[AuthService] Login bem sucedido:', apiResult.user.name);
+      return { success: true, user: apiResult.user };
+    }
+    
+    return { success: false, message: apiResult.message || 'Credenciais inválidas.' };
+  },
+
+  // Logout
+  logout: (): void => {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    console.log('[AuthService] Logout realizado');
+  },
+
+  // Verificar se está autenticado
+  isAuthenticated: (): boolean => {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!stored) return false;
+    
+    try {
+      const authState: AuthState = JSON.parse(stored);
+      return authState.isAuthenticated && authState.user !== null;
+    } catch {
+      return false;
     }
   },
 
-  logout: () => {
-    localStorage.removeItem(STORAGE_KEY);
-  },
-
-  isAuthenticated: (): boolean => {
-    return !!localStorage.getItem(STORAGE_KEY);
-  },
-
+  // Obter usuário atual
   getCurrentUser: (): User | null => {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : null;
-  }
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!stored) return null;
+    
+    try {
+      const authState: AuthState = JSON.parse(stored);
+      return authState.user;
+    } catch {
+      return null;
+    }
+  },
+
+  // Atualizar dados do usuário no localStorage
+  updateCurrentUser: (user: User): void => {
+    const authState: AuthState = {
+      user: user,
+      isAuthenticated: true,
+    };
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+  },
 };
