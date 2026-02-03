@@ -158,19 +158,23 @@ const Admin: React.FC = () => {
 
     setIsCreatingUser(true);
 
+    const payload = {
+      action: 'register',
+      name: newUserForm.name,
+      email: newUserForm.email,
+      phone: newUserForm.phone,
+      username: newUserForm.username.toLowerCase().replace(/\s/g, ''),
+      password: newUserForm.password,
+      role: newUserForm.role,
+    };
+
     try {
+      // Tentar com fetch normal primeiro
       const response = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'register',
-          name: newUserForm.name,
-          email: newUserForm.email,
-          phone: newUserForm.phone,
-          username: newUserForm.username.toLowerCase().replace(/\s/g, ''),
-          password: newUserForm.password,
-          role: newUserForm.role,
-        }),
+        body: JSON.stringify(payload),
+        redirect: 'follow',
       });
 
       const result = await response.json();
@@ -189,14 +193,42 @@ const Admin: React.FC = () => {
             role: 'operacional'
           });
           setCreateUserMessage(null);
-          // Recarregar lista de pendentes
           loadPendingUsers();
         }, 2000);
       } else {
         setCreateUserMessage({ type: 'error', text: result.message });
       }
     } catch (error: any) {
-      setCreateUserMessage({ type: 'error', text: error.message || 'Erro ao criar usuário.' });
+      console.log('Tentando modo no-cors...');
+      
+      // Fallback: usar no-cors (não retorna resposta, mas envia os dados)
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        // Assumir sucesso e mostrar mensagem
+        setCreateUserMessage({ type: 'success', text: 'Cadastro enviado! Aguarde a aprovação.' });
+        setTimeout(() => {
+          setShowNewUserModal(false);
+          setNewUserForm({
+            name: '',
+            email: '',
+            phone: '',
+            username: '',
+            password: '',
+            confirmPassword: '',
+            role: 'operacional'
+          });
+          setCreateUserMessage(null);
+          loadPendingUsers();
+        }, 2000);
+      } catch (noCorsError) {
+        setCreateUserMessage({ type: 'error', text: 'Erro de conexão. Tente novamente.' });
+      }
     } finally {
       setIsCreatingUser(false);
     }
