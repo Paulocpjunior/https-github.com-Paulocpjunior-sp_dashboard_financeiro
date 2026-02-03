@@ -157,19 +157,49 @@ const Dashboard: React.FC = () => {
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
-  // Prepare chart data
+  // Prepare chart data - DINÂMICO baseado no tipo de filtro
   const chartData = useMemo(() => {
-    const grouped: Record<string, { date: string; Entradas: number; Saidas: number }> = {};
-    
-    data.forEach(t => {
-      const d = new Date(t.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      if (!grouped[d]) grouped[d] = { date: d, Entradas: 0, Saidas: 0 };
-      if (t.movement === 'Entrada') grouped[d].Entradas += t.valueReceived;
-      else grouped[d].Saidas += t.valuePaid;
-    });
+    if (isContasAPagar) {
+      // MODO CONTAS A PAGAR: Agrupa por data de VENCIMENTO, separando Pago vs Pendente
+      const grouped: Record<string, { date: string; Pago: number; Pendente: number }> = {};
+      
+      data.forEach(t => {
+        // Usa data de vencimento para contas a pagar
+        const dateToUse = t.dueDate || t.date;
+        const d = new Date(dateToUse).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        
+        if (!grouped[d]) grouped[d] = { date: d, Pago: 0, Pendente: 0 };
+        
+        if (t.status === 'Pago') {
+          grouped[d].Pago += t.valuePaid;
+        } else {
+          grouped[d].Pendente += t.valuePaid;
+        }
+      });
 
-    return Object.values(grouped).slice(0, 10).reverse();
-  }, [data]);
+      // Ordena por data e retorna os últimos 10
+      return Object.values(grouped)
+        .sort((a, b) => {
+          const [dayA, monthA] = a.date.split('/').map(Number);
+          const [dayB, monthB] = b.date.split('/').map(Number);
+          if (monthA !== monthB) return monthA - monthB;
+          return dayA - dayB;
+        })
+        .slice(-10);
+    } else {
+      // MODO PADRÃO: Entradas vs Saídas por data de lançamento
+      const grouped: Record<string, { date: string; Entradas: number; Saidas: number }> = {};
+      
+      data.forEach(t => {
+        const d = new Date(t.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        if (!grouped[d]) grouped[d] = { date: d, Entradas: 0, Saidas: 0 };
+        if (t.movement === 'Entrada') grouped[d].Entradas += t.valueReceived;
+        else grouped[d].Saidas += t.valuePaid;
+      });
+
+      return Object.values(grouped).slice(0, 10).reverse();
+    }
+  }, [data, isContasAPagar]);
 
   if (isLoading && data.length === 0 && !initError) {
     return (
@@ -460,9 +490,11 @@ const Dashboard: React.FC = () => {
 
         {/* Charts & Data */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-           {/* Chart */}
+           {/* Chart - DINÂMICO baseado no tipo de filtro */}
            <div className="lg:col-span-3 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm print:shadow-none print:border-none transition-colors">
-             <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Movimentação Recente</h3>
+             <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">
+               {isContasAPagar ? 'Contas a Pagar por Vencimento' : 'Movimentação Recente'}
+             </h3>
              <div className="h-64 w-full">
                <ResponsiveContainer width="100%" height="100%">
                  <BarChart data={chartData} margin={{top: 5, right: 30, left: 20, bottom: 5}}>
@@ -474,8 +506,19 @@ const Dashboard: React.FC = () => {
                       formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
                     />
                     <Legend wrapperStyle={{ color: '#94a3b8' }} />
-                    <Bar dataKey="Entradas" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Saidas" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                    {isContasAPagar ? (
+                      <>
+                        {/* MODO CONTAS A PAGAR: Pago (verde) vs Pendente (amarelo/laranja) */}
+                        <Bar dataKey="Pago" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Pendente" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      </>
+                    ) : (
+                      <>
+                        {/* MODO PADRÃO: Entradas vs Saídas */}
+                        <Bar dataKey="Entradas" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Saidas" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                      </>
+                    )}
                  </BarChart>
                </ResponsiveContainer>
              </div>
