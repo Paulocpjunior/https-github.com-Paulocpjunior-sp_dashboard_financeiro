@@ -238,30 +238,46 @@ const Admin: React.FC = () => {
   const handleApproveUser = async (user: PendingUser) => {
     if (!confirm(`Aprovar o usuário "${user.name}"?`)) return;
 
+    const payload = {
+      action: 'approve',
+      username: user.username,
+      email: user.email,
+      name: user.name,
+    };
+
     try {
       const response = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'approve',
-          username: user.username,
-          email: user.email,
-          name: user.name,
-        }),
+        body: JSON.stringify(payload),
+        redirect: 'follow',
       });
 
       const result = await response.json();
       
       if (result.success) {
         alert('Usuário aprovado com sucesso!');
-        // Recarregar listas
         loadPendingUsers();
         loadAllUsers();
       } else {
         alert('Erro: ' + result.message);
       }
     } catch (error) {
-      alert('Erro ao aprovar usuário.');
+      // Fallback com no-cors
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        alert('Usuário aprovado com sucesso!');
+        loadPendingUsers();
+        loadAllUsers();
+      } catch (noCorsError) {
+        alert('Erro ao aprovar usuário. Tente novamente.');
+      }
     }
   };
 
@@ -270,17 +286,20 @@ const Admin: React.FC = () => {
     const reason = prompt(`Motivo da rejeição para "${user.name}" (opcional):`);
     if (reason === null) return;
 
+    const payload = {
+      action: 'reject',
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      reason: reason,
+    };
+
     try {
       const response = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'reject',
-          username: user.username,
-          email: user.email,
-          name: user.name,
-          reason: reason,
-        }),
+        body: JSON.stringify(payload),
+        redirect: 'follow',
       });
 
       const result = await response.json();
@@ -292,7 +311,20 @@ const Admin: React.FC = () => {
         alert('Erro: ' + result.message);
       }
     } catch (error) {
-      alert('Erro ao rejeitar usuário.');
+      // Fallback com no-cors
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        
+        alert('Usuário rejeitado.');
+        loadPendingUsers();
+      } catch (noCorsError) {
+        alert('Erro ao rejeitar usuário. Tente novamente.');
+      }
     }
   };
 
