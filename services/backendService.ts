@@ -7,12 +7,13 @@ import { MOCK_USERS } from '../constants';
 const DEFAULT_SPREADSHEET_ID = '17mHd8eqKoj7Cl6E2MCkr0PczFj-lKv_vmFRCY5hypwg'; 
 const DEFAULT_GID = '1276925607';
 
-// URL do Google Apps Script para registro de usuários (CONFIGURE AQUI)
-// Você precisa criar um Web App no Google Apps Script que receba os dados
-const REGISTER_WEBHOOK_URL = 'https://script.google.com/macros/s/SEU_SCRIPT_ID/exec';
-
 const STORAGE_KEY_DB_SOURCE = 'cashflow_db_source_id';
 const STORAGE_KEY_DB_GID = 'cashflow_db_gid';
+
+// =========================================================================================
+// URL DO GOOGLE APPS SCRIPT
+// =========================================================================================
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1hCtCHpomiGpyLujr0SNdfL4AYXg0rUG_N0-s8e4B5hwOxjKa7rGsR1D2/exec';
 
 // Interface para dados de registro
 interface RegisterUserData {
@@ -22,6 +23,53 @@ interface RegisterUserData {
   username: string;
   password: string;
 }
+
+// =========================================================================================
+// FUNÇÃO PARA CHAMAR O GOOGLE APPS SCRIPT
+// =========================================================================================
+const callAppsScript = async (data: any): Promise<{ success: boolean; message: string; [key: string]: any }> => {
+
+  try {
+    console.log('[BackendService] Enviando para Apps Script:', data.action);
+    
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+      redirect: 'follow',
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('[BackendService] Resposta do Apps Script:', result);
+      return result;
+    } else {
+      console.error('[BackendService] Erro na resposta:', response.status);
+      return { success: false, message: 'Erro ao comunicar com o servidor.' };
+    }
+  } catch (error: any) {
+    console.error('[BackendService] Erro ao chamar Apps Script:', error);
+    
+    // Tenta com mode: no-cors como fallback
+    try {
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      
+      console.log('[BackendService] Requisição enviada (no-cors)');
+      return { success: true, message: 'Cadastro enviado! Verifique seu e-mail.' };
+    } catch (noCorsError) {
+      return { success: false, message: 'Erro de conexão com o servidor.' };
+    }
+  }
+};
 
 export const BackendService = {
   
@@ -65,7 +113,7 @@ export const BackendService = {
   },
 
   // =========================================================================================
-  // REGISTRO DE NOVO USUÁRIO
+  // REGISTRO DE NOVO USUÁRIO - ENVIA DIRETO PARA GOOGLE APPS SCRIPT
   // =========================================================================================
   registerUser: async (data: RegisterUserData): Promise<{ success: boolean; message: string }> => {
     console.log('[BackendService] Iniciando registro de usuário:', data.username);
@@ -80,82 +128,32 @@ export const BackendService = {
         return { success: false, message: 'A senha deve ter no mínimo 6 caracteres.' };
       }
 
-      // Verificar se usuário já existe nos MOCK_USERS
+      // Validar formato de e-mail
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.email)) {
+        return { success: false, message: 'E-mail inválido.' };
+      }
+
+      // Verificar se usuário já existe nos MOCK_USERS (usuários ativos)
       const existingUser = MOCK_USERS.find(u => 
-        u.username.toLowerCase() === data.username.toLowerCase() ||
-        u.email?.toLowerCase() === data.email.toLowerCase()
+        u.username.toLowerCase() === data.username.toLowerCase()
       );
 
       if (existingUser) {
-        return { success: false, message: 'Usuário ou e-mail já cadastrado no sistema.' };
+        return { success: false, message: 'Este nome de usuário já está em uso.' };
       }
 
-      // ===================================================================================
-      // OPÇÃO 1: Enviar para Google Apps Script (Webhook)
-      // Descomente este bloco se você tiver um Web App configurado
-      // ===================================================================================
-      /*
-      const response = await fetch(REGISTER_WEBHOOK_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Necessário para Google Apps Script
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'register',
-          timestamp: new Date().toISOString(),
-          name: data.name,
-          email: data.email,
-          phone: data.phone || '',
-          username: data.username,
-          password: data.password, // Em produção, use hash!
-          status: 'pendente',
-        }),
-      });
-
-      // Com no-cors, não conseguimos ler a resposta, assumimos sucesso
-      console.log('[BackendService] Dados enviados para webhook');
-      */
-
-      // ===================================================================================
-      // OPÇÃO 2: Salvar no LocalStorage (Temporário - para desenvolvimento)
-      // ===================================================================================
-      const pendingUsers = JSON.parse(localStorage.getItem('pending_users') || '[]');
-      
-      // Verificar se já existe cadastro pendente
-      const existingPending = pendingUsers.find((u: any) => 
-        u.username.toLowerCase() === data.username.toLowerCase() ||
-        u.email.toLowerCase() === data.email.toLowerCase()
-      );
-
-      if (existingPending) {
-        return { success: false, message: 'Já existe uma solicitação de cadastro pendente para este usuário ou e-mail.' };
-      }
-
-      // Adicionar novo cadastro pendente
-      pendingUsers.push({
-        id: `pending-${Date.now()}`,
-        timestamp: new Date().toISOString(),
+      // Chamar Google Apps Script para registrar e enviar e-mail
+      const scriptResult = await callAppsScript({
+        action: 'register',
         name: data.name,
         email: data.email,
         phone: data.phone || '',
         username: data.username,
-        password: data.password, // Em produção, use hash!
-        status: 'pendente',
+        password: data.password,
       });
 
-      localStorage.setItem('pending_users', JSON.stringify(pendingUsers));
-      console.log('[BackendService] Cadastro salvo localmente:', pendingUsers.length, 'pendentes');
-
-      // ===================================================================================
-      // OPÇÃO 3: Enviar por Email usando EmailJS ou similar
-      // Adicione sua integração aqui se preferir
-      // ===================================================================================
-
-      return { 
-        success: true, 
-        message: 'Cadastro realizado com sucesso! Aguarde a aprovação do administrador para acessar o sistema.' 
-      };
+      return scriptResult;
 
     } catch (error: any) {
       console.error('[BackendService] Erro no registro:', error);
@@ -167,50 +165,72 @@ export const BackendService = {
   },
 
   // =========================================================================================
-  // BUSCAR USUÁRIOS PENDENTES (Para tela de admin)
+  // APROVAR USUÁRIO - CHAMA APPS SCRIPT
   // =========================================================================================
-  getPendingUsers: (): any[] => {
-    return JSON.parse(localStorage.getItem('pending_users') || '[]');
+  approvePendingUser: async (email: string, name: string, username: string): Promise<{ success: boolean; message: string }> => {
+    const result = await callAppsScript({
+      action: 'approve',
+      email,
+      name,
+      username,
+    });
+
+    return result;
   },
 
   // =========================================================================================
-  // APROVAR USUÁRIO PENDENTE (Para tela de admin)
+  // REJEITAR USUÁRIO - CHAMA APPS SCRIPT
   // =========================================================================================
-  approvePendingUser: (pendingId: string): { success: boolean; message: string } => {
-    const pendingUsers = JSON.parse(localStorage.getItem('pending_users') || '[]');
-    const index = pendingUsers.findIndex((u: any) => u.id === pendingId);
-    
-    if (index === -1) {
-      return { success: false, message: 'Usuário pendente não encontrado.' };
-    }
+  rejectPendingUser: async (email: string, name: string, username: string, reason?: string): Promise<{ success: boolean; message: string }> => {
+    const result = await callAppsScript({
+      action: 'reject',
+      email,
+      name,
+      username,
+      reason: reason || '',
+    });
 
-    // Remover da lista de pendentes
-    const [approvedUser] = pendingUsers.splice(index, 1);
-    localStorage.setItem('pending_users', JSON.stringify(pendingUsers));
-
-    // Em produção, aqui você adicionaria o usuário ao banco de dados real
-    console.log('[BackendService] Usuário aprovado:', approvedUser);
-
-    return { success: true, message: `Usuário ${approvedUser.username} aprovado com sucesso!` };
+    return result;
   },
 
   // =========================================================================================
-  // REJEITAR USUÁRIO PENDENTE (Para tela de admin)
+  // REENVIAR E-MAIL DE CONFIRMAÇÃO
   // =========================================================================================
-  rejectPendingUser: (pendingId: string): { success: boolean; message: string } => {
-    const pendingUsers = JSON.parse(localStorage.getItem('pending_users') || '[]');
-    const index = pendingUsers.findIndex((u: any) => u.id === pendingId);
+  resendConfirmationEmail: async (email: string, name: string, username: string): Promise<{ success: boolean; message: string }> => {
+    const result = await callAppsScript({
+      action: 'resend',
+      email,
+      name,
+      username,
+    });
+
+    return result;
+  },
+
+  // =========================================================================================
+  // SOLICITAR RESET DE SENHA
+  // =========================================================================================
+  requestPasswordReset: async (username: string): Promise<{ success: boolean; message: string }> => {
+    // Buscar usuário
+    const user = MOCK_USERS.find(u => u.username.toLowerCase() === username.toLowerCase());
     
-    if (index === -1) {
-      return { success: false, message: 'Usuário pendente não encontrado.' };
+    if (!user) {
+      return { success: false, message: 'Usuário não encontrado.' };
     }
 
-    const [rejectedUser] = pendingUsers.splice(index, 1);
-    localStorage.setItem('pending_users', JSON.stringify(pendingUsers));
+    // Chamar Apps Script para enviar e-mail com nova senha
+    const result = await callAppsScript({
+      action: 'reset_password',
+      email: user.email || '',
+      name: user.name,
+      username: user.username,
+    });
 
-    console.log('[BackendService] Usuário rejeitado:', rejectedUser);
-
-    return { success: true, message: `Cadastro de ${rejectedUser.username} foi rejeitado.` };
+    if (result.success) {
+      return { success: true, message: 'Nova senha enviada para o e-mail cadastrado.' };
+    }
+    
+    return { success: false, message: 'Erro ao processar solicitação.' };
   },
 
   fetchTransactions: async (): Promise<Transaction[]> => {
@@ -229,7 +249,6 @@ export const BackendService = {
       
       let csvText = await response.text();
 
-      // Remove BOM
       if (csvText.charCodeAt(0) === 0xFEFF) {
         csvText = csvText.slice(1);
       }
@@ -238,12 +257,6 @@ export const BackendService = {
         throw new Error('A planilha está privada. Altere o compartilhamento para "Qualquer pessoa com o link".');
       }
 
-      // ========================================================================
-      // PARSER CSV COMPLETO - Lida com:
-      // 1. Vírgulas dentro de aspas
-      // 2. Quebras de linha dentro de aspas
-      // 3. Aspas escapadas ("")
-      // ========================================================================
       const allRows = parseCSVComplete(csvText);
       
       if (allRows.length < 2) {
@@ -252,29 +265,25 @@ export const BackendService = {
 
       console.log(`[BackendService] Total de registros parseados: ${allRows.length}`);
 
-      // ========================================================================
-      // MAPEAMENTO FIXO - ÍNDICES CONFIRMADOS DO CSV (02/02/2026)
-      // ========================================================================
       const COL = {
-        timestamp: 0,        // A: #N/A
-        dataLancamento: 1,   // B: Data Lançamento
-        contasBancarias: 2,  // C: Contas bancárias
-        tipoLancamento: 3,   // D: Tipo de Lançamento
-        pagoPor: 4,          // E: Pago Por
-        movimentacao: 5,     // F: Movimentação
-        dataAPagar: 7,       // H: Data a Pagar
-        docPago: 9,          // J: Doc.Pago
-        dataBaixa: 10,       // K: Data Baixa / Pagamento
-        valorPago: 13,       // N: Valor Pago
-        nomeEmpresa: 26,     // AA: Nome Empresa / Credor
-        valorHonorarios: 27, // AB: Valor Honorários
-        valorExtras: 28,     // AC: Valor Extras
-        totalCobranca: 30,   // AE: Total Cobrança
-        valorRecebido: 31,   // AF: Valor Recebido
-        submissionId: 39,    // AN: Submission ID
+        timestamp: 0,
+        dataLancamento: 1,
+        contasBancarias: 2,
+        tipoLancamento: 3,
+        pagoPor: 4,
+        movimentacao: 5,
+        dataAPagar: 7,
+        docPago: 9,
+        dataBaixa: 10,
+        valorPago: 13,
+        nomeEmpresa: 26,
+        valorHonorarios: 27,
+        valorExtras: 28,
+        totalCobranca: 30,
+        valorRecebido: 31,
+        submissionId: 39,
       };
 
-      // Encontrar linha de cabeçalho
       let headerRowIndex = 0;
       for (let i = 0; i < Math.min(allRows.length, 5); i++) {
         const row = allRows[i];
@@ -287,24 +296,9 @@ export const BackendService = {
         }
       }
 
-      console.log(`[BackendService] Linha de cabeçalho: ${headerRowIndex}`);
-
-      // Parse data rows (skip header)
       const dataRows = allRows.slice(headerRowIndex + 1);
 
-      // DEBUG: Mostrar primeira linha parseada
-      if (dataRows.length > 0) {
-        const first = dataRows[0];
-        console.log('[BackendService] === DEBUG PRIMEIRA LINHA ===');
-        console.log(`  Total de colunas: ${first.length}`);
-        console.log(`  Col[2] (Contas bancárias): "${first[2]}"`);
-        console.log(`  Col[3] (Tipo Lançamento): "${first[3]}"`);
-        console.log(`  Col[4] (Pago Por): "${first[4]}"`);
-        console.log(`  Col[26] (Nome Empresa): "${first[26]}"`);
-      }
-
       const transactions = dataRows.map((cols, index) => {
-        // Função helper para pegar valor de coluna com segurança
         const get = (idx: number): string => {
           if (idx >= 0 && idx < cols.length) {
             return cols[idx] || '';
@@ -312,7 +306,6 @@ export const BackendService = {
           return '';
         };
 
-        // Extrair valores usando índices FIXOS
         const rawDate = get(COL.dataLancamento);
         const rawDueDate = get(COL.dataAPagar);
         const rawBankAccount = get(COL.contasBancarias);
@@ -328,17 +321,14 @@ export const BackendService = {
         const rawValorExtra = get(COL.valorExtras);
         const rawTotalCobranca = get(COL.totalCobranca);
 
-        // ID
         let finalId = `trx-${index}`;
         if (rawId && rawId.trim().length > 0 && rawId.length < 50 && !rawId.includes('/')) {
           finalId = rawId.trim();
         }
 
-        // Parse valores
         const valPaid = Math.abs(parseCurrency(rawValorPago));
         const valReceived = Math.abs(parseCurrency(rawValorRecebido));
 
-        // Determinar movimento baseado no Tipo de Lançamento
         let movement: 'Entrada' | 'Saída' = 'Entrada';
         const tipoLower = rawType.toLowerCase();
         if (tipoLower.includes('saída') || tipoLower.includes('saida') || tipoLower.includes('pagar')) {
@@ -354,7 +344,6 @@ export const BackendService = {
           movement = 'Saída';
         }
 
-        // Parse dates
         const finalDate = parseDate(rawDate);
         let finalDueDate = parseDate(rawDueDate);
         if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') {
@@ -370,8 +359,6 @@ export const BackendService = {
           paidBy: cleanString(rawPaidBy),
           status: normalizeStatus(rawStatus),
           client: cleanString(rawClient),
-          // CORRIGIDO: movement recebe o valor RAW da coluna F (Movimentação)
-          // O valor "Entrada/Saída" é determinado pelo Tipo de Lançamento
           movement: cleanString(rawMovement),
           valuePaid: valPaid,
           valueReceived: valReceived,
@@ -381,17 +368,6 @@ export const BackendService = {
         } as Transaction;
       });
 
-      // Log dos valores únicos para debug
-      const uniqueTypes = [...new Set(transactions.map(t => t.type).filter(t => t))];
-      const uniqueAccounts = [...new Set(transactions.map(t => t.bankAccount).filter(t => t))];
-      const uniquePaidBy = [...new Set(transactions.map(t => t.paidBy).filter(t => t))];
-      
-      console.log('[BackendService] === VALORES ÚNICOS EXTRAÍDOS ===');
-      console.log(`  Tipos de Lançamento (${uniqueTypes.length}):`, uniqueTypes.slice(0, 5));
-      console.log(`  Contas Bancárias (${uniqueAccounts.length}):`, uniqueAccounts.slice(0, 3));
-      console.log(`  Pago Por (${uniquePaidBy.length}):`, uniquePaidBy.slice(0, 5));
-
-      // Sort by date descending
       return transactions.sort((a, b) => {
         if (a.date === b.date) return 0;
         return a.date > b.date ? -1 : 1;
@@ -417,14 +393,10 @@ export const BackendService = {
     }
     return { success: false, message: 'Senha incorreta.' };
   },
-
-  requestPasswordReset: async (username: string): Promise<{ success: boolean; message: string }> => {
-    return { success: true, message: 'Solicitação enviada (Simulado).' };
-  }
 };
 
 // =============================================================================
-// PARSER CSV COMPLETO - Lida com quebras de linha dentro de campos
+// PARSER CSV COMPLETO
 // =============================================================================
 
 function parseCSVComplete(csvText: string): string[][] {
@@ -440,51 +412,37 @@ function parseCSVComplete(csvText: string): string[][] {
     if (char === '"') {
       if (inQuotes) {
         if (nextChar === '"') {
-          // Escaped quote "" -> add single quote
           currentField += '"';
-          i++; // Skip next quote
+          i++;
         } else {
-          // End of quoted field
           inQuotes = false;
         }
       } else {
-        // Start of quoted field
         inQuotes = true;
       }
     } else if (char === ',' && !inQuotes) {
-      // Field separator
       currentRow.push(currentField.trim());
       currentField = '';
     } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
-      // End of row (only if not inside quotes)
-      if (char === '\r') i++; // Skip \n after \r
-      
+      if (char === '\r') i++;
       currentRow.push(currentField.trim());
-      
-      // Only add non-empty rows
       if (currentRow.some(f => f.length > 0)) {
         rows.push(currentRow);
       }
-      
       currentRow = [];
       currentField = '';
     } else if (char === '\r' && !inQuotes) {
-      // Handle standalone \r as line ending
       currentRow.push(currentField.trim());
-      
       if (currentRow.some(f => f.length > 0)) {
         rows.push(currentRow);
       }
-      
       currentRow = [];
       currentField = '';
     } else {
-      // Regular character (including \n inside quotes)
       currentField += char;
     }
   }
   
-  // Don't forget last field and row
   if (currentField.length > 0 || currentRow.length > 0) {
     currentRow.push(currentField.trim());
     if (currentRow.some(f => f.length > 0)) {
@@ -497,40 +455,32 @@ function parseCSVComplete(csvText: string): string[][] {
 
 function cleanString(str: string): string {
   if (!str) return '';
-  // Remove quotes, trim, and normalize line breaks within fields
   return str.replace(/^["']|["']$/g, '').replace(/[\r\n]+/g, ' ').trim();
 }
 
 function parseCurrency(val: string | undefined): number {
   if (!val) return 0;
   
-  // Remove quotes, R$, spaces
   let clean = val.replace(/^["']|["']$/g, '').trim();
   clean = clean.replace(/[R$\s]/g, '');
 
-  // Handle parentheses for negative numbers
   if (clean.startsWith('(') && clean.endsWith(')')) {
     clean = '-' + clean.slice(1, -1);
   }
   
   if (!clean || clean === '-') return 0;
 
-  // Detect Brazilian format (1.234,56) vs American (1,234.56)
   const lastComma = clean.lastIndexOf(',');
   const lastDot = clean.lastIndexOf('.');
 
   if (lastComma > lastDot) {
-    // Brazilian format: 1.234,56 -> 1234.56
     clean = clean.replace(/\./g, '').replace(',', '.');
   } else if (lastDot > lastComma) {
-    // American format: 1,234.56 -> 1234.56
     clean = clean.replace(/,/g, '');
   } else if (lastComma > -1 && lastDot === -1) {
-    // Only comma: 123,45 -> 123.45
     clean = clean.replace(',', '.');
   }
   
-  // Remove any remaining non-numeric chars except . and -
   clean = clean.replace(/[^0-9.-]/g, '');
 
   const num = parseFloat(clean);
@@ -551,12 +501,10 @@ function parseDate(dateStr: string | undefined): string {
   
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
   
-  // If datetime, get only date part
   if (clean.includes(' ')) {
     clean = clean.split(' ')[0];
   }
 
-  // Brazilian format: DD/MM/YYYY or DD-MM-YYYY
   const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
   const ptMatch = clean.match(ptBrRegex);
 
@@ -568,7 +516,6 @@ function parseDate(dateStr: string | undefined): string {
     return `${year}-${month}-${day}`;
   }
 
-  // ISO format: YYYY-MM-DD
   const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
   const isoMatch = clean.match(isoRegex);
   if (isoMatch) {

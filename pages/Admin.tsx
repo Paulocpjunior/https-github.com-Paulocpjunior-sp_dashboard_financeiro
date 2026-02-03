@@ -1,18 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle } from 'lucide-react';
+import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff } from 'lucide-react';
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 
+interface PendingUser {
+  id: string;
+  timestamp: string;
+  name: string;
+  email: string;
+  phone: string;
+  username: string;
+  status: string;
+}
+
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Database Config State
   const [spreadsheetId, setSpreadsheetId] = useState('');
   const [isSavingDb, setIsSavingDb] = useState(false);
   const [dbMessage, setDbMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+  // Modal de Novo Usuário
+  const [showNewUserModal, setShowNewUserModal] = useState(false);
+  const [newUserForm, setNewUserForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+    role: 'operacional'
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [createUserMessage, setCreateUserMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -22,6 +48,10 @@ const Admin: React.FC = () => {
         
         // Load current Spreadsheet ID
         setSpreadsheetId(BackendService.getSpreadsheetId());
+
+        // Carregar usuários pendentes do localStorage (temporário)
+        const pending = JSON.parse(localStorage.getItem('pending_users') || '[]');
+        setPendingUsers(pending);
       } catch (error) {
         console.error("Failed to load data", error);
       } finally {
@@ -41,15 +71,9 @@ const Admin: React.FC = () => {
     setDbMessage(null);
     
     try {
-        // 1. Salva no LocalStorage (Extraindo ID e GID se for URL completa)
         BackendService.updateSpreadsheetId(spreadsheetId);
-        
-        // 1.1 Atualiza o campo de input visualmente para o ID limpo
         setSpreadsheetId(BackendService.getSpreadsheetId());
-        
-        // 2. Força uma recarga dos dados para testar se o ID é válido e acessível
         await DataService.refreshCache();
-        
         setDbMessage({ type: 'success', text: 'Conexão estabelecida e salva com sucesso!' });
     } catch (error: any) {
         setDbMessage({ type: 'error', text: 'ID salvo, mas a conexão falhou: ' + (error.message || 'Verifique as permissões da planilha.') });
@@ -63,26 +87,198 @@ const Admin: React.FC = () => {
           BackendService.resetSpreadsheetId();
           setSpreadsheetId(BackendService.getSpreadsheetId());
           setDbMessage({ type: 'success', text: 'Configuração restaurada para o padrão.' });
-          // Recarrega dados do padrão
           DataService.refreshCache().catch(() => {});
       }
+  };
+
+  // Criar novo usuário
+  const handleCreateUser = async () => {
+    setCreateUserMessage(null);
+
+    // Validações
+    if (!newUserForm.name || !newUserForm.email || !newUserForm.username || !newUserForm.password) {
+      setCreateUserMessage({ type: 'error', text: 'Preencha todos os campos obrigatórios.' });
+      return;
+    }
+
+    if (newUserForm.password !== newUserForm.confirmPassword) {
+      setCreateUserMessage({ type: 'error', text: 'As senhas não coincidem.' });
+      return;
+    }
+
+    if (newUserForm.password.length < 6) {
+      setCreateUserMessage({ type: 'error', text: 'A senha deve ter no mínimo 6 caracteres.' });
+      return;
+    }
+
+    setIsCreatingUser(true);
+
+    try {
+      const result = await BackendService.registerUser({
+        name: newUserForm.name,
+        email: newUserForm.email,
+        phone: newUserForm.phone,
+        username: newUserForm.username.toLowerCase().replace(/\s/g, ''),
+        password: newUserForm.password,
+      });
+
+      if (result.success) {
+        setCreateUserMessage({ type: 'success', text: result.message });
+        // Limpar formulário após sucesso
+        setTimeout(() => {
+          setShowNewUserModal(false);
+          setNewUserForm({
+            name: '',
+            email: '',
+            phone: '',
+            username: '',
+            password: '',
+            confirmPassword: '',
+            role: 'operacional'
+          });
+          setCreateUserMessage(null);
+          // Recarregar pendentes
+          const pending = JSON.parse(localStorage.getItem('pending_users') || '[]');
+          setPendingUsers(pending);
+        }, 2000);
+      } else {
+        setCreateUserMessage({ type: 'error', text: result.message });
+      }
+    } catch (error: any) {
+      setCreateUserMessage({ type: 'error', text: error.message || 'Erro ao criar usuário.' });
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  // Aprovar usuário pendente
+  const handleApproveUser = async (user: PendingUser) => {
+    if (!confirm(`Aprovar o usuário "${user.name}"?`)) return;
+
+    try {
+      const result = await BackendService.approvePendingUser(user.email, user.name, user.username);
+      
+      if (result.success) {
+        // Remover da lista local
+        const updated = pendingUsers.filter(u => u.id !== user.id);
+        setPendingUsers(updated);
+        localStorage.setItem('pending_users', JSON.stringify(updated));
+        alert('Usuário aprovado! E-mail de notificação enviado.');
+      } else {
+        alert('Erro: ' + result.message);
+      }
+    } catch (error) {
+      alert('Erro ao aprovar usuário.');
+    }
+  };
+
+  // Rejeitar usuário pendente
+  const handleRejectUser = async (user: PendingUser) => {
+    const reason = prompt(`Motivo da rejeição para "${user.name}" (opcional):`);
+    if (reason === null) return; // Cancelou
+
+    try {
+      const result = await BackendService.rejectPendingUser(user.email, user.name, user.username, reason);
+      
+      if (result.success) {
+        // Remover da lista local
+        const updated = pendingUsers.filter(u => u.id !== user.id);
+        setPendingUsers(updated);
+        localStorage.setItem('pending_users', JSON.stringify(updated));
+        alert('Usuário rejeitado.');
+      } else {
+        alert('Erro: ' + result.message);
+      }
+    } catch (error) {
+      alert('Erro ao rejeitar usuário.');
+    }
   };
 
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Customized Header */}
+        {/* Header */}
         <div className="bg-royal-800 dark:bg-slate-800 p-6 rounded-xl shadow-md border border-royal-700 dark:border-slate-700">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-white/10 rounded-lg">
-                <Shield className="h-6 w-6 text-white" />
-             </div>
-             <div>
-                <h1 className="text-2xl font-bold text-white">Administração do Sistema</h1>
-                <p className="text-royal-100/80 dark:text-slate-400 text-sm mt-1">Gerencie usuários e conexões de dados.</p>
-             </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+               <div className="p-2 bg-white/10 rounded-lg">
+                  <Shield className="h-6 w-6 text-white" />
+               </div>
+               <div>
+                  <h1 className="text-2xl font-bold text-white">Administração do Sistema</h1>
+                  <p className="text-royal-100/80 dark:text-slate-400 text-sm mt-1">Gerencie usuários e conexões de dados.</p>
+               </div>
+            </div>
+            <button
+              onClick={() => setShowNewUserModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>Novo Usuário</span>
+            </button>
           </div>
         </div>
+
+        {/* Usuários Pendentes */}
+        {pendingUsers.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800 overflow-hidden animate-in slide-in-from-top-2">
+            <div className="px-6 py-4 border-b border-amber-200 dark:border-amber-800 flex justify-between items-center bg-amber-100/50 dark:bg-amber-900/30">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <h3 className="font-bold text-amber-800 dark:text-amber-200">Cadastros Pendentes de Aprovação</h3>
+              </div>
+              <span className="text-xs px-2 py-1 bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 rounded-full font-medium">
+                {pendingUsers.length} pendente{pendingUsers.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            
+            <div className="divide-y divide-amber-200 dark:divide-amber-800">
+              {pendingUsers.map((user) => (
+                <div key={user.id} className="px-6 py-4 flex items-center justify-between hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-full bg-amber-200 dark:bg-amber-800 flex items-center justify-center text-amber-700 dark:text-amber-300">
+                      <User className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-800 dark:text-white">{user.name}</p>
+                      <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <Mail className="h-3 w-3" />
+                          {user.email}
+                        </span>
+                        {user.phone && (
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {user.phone}
+                          </span>
+                        )}
+                        <span className="text-xs bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">
+                          @{user.username}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleApproveUser(user)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Aprovar
+                    </button>
+                    <button
+                      onClick={() => handleRejectUser(user)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Rejeitar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Database Configuration Card */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 animate-in slide-in-from-bottom-2">
@@ -235,6 +431,190 @@ const Admin: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Modal Novo Usuário */}
+      {showNewUserModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md animate-in zoom-in-95">
+            {/* Header do Modal */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <UserPlus className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <h2 className="text-lg font-bold text-slate-800 dark:text-white">Novo Usuário</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowNewUserModal(false);
+                  setCreateUserMessage(null);
+                }}
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* Corpo do Modal */}
+            <div className="p-6 space-y-4">
+              {/* Nome */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Nome Completo *
+                </label>
+                <input
+                  type="text"
+                  value={newUserForm.name}
+                  onChange={(e) => setNewUserForm({...newUserForm, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Nome do usuário"
+                />
+              </div>
+
+              {/* E-mail e Telefone */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    E-mail *
+                  </label>
+                  <input
+                    type="email"
+                    value={newUserForm.email}
+                    onChange={(e) => setNewUserForm({...newUserForm, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="email@empresa.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Telefone
+                  </label>
+                  <input
+                    type="tel"
+                    value={newUserForm.phone}
+                    onChange={(e) => setNewUserForm({...newUserForm, phone: e.target.value})}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+              </div>
+
+              {/* Usuário */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Usuário de Acesso *
+                </label>
+                <input
+                  type="text"
+                  value={newUserForm.username}
+                  onChange={(e) => setNewUserForm({...newUserForm, username: e.target.value.toLowerCase().replace(/\s/g, '')})}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="nome.sobrenome"
+                />
+                <p className="text-xs text-slate-500 mt-1">Sem espaços, letras minúsculas</p>
+              </div>
+
+              {/* Perfil */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Perfil
+                </label>
+                <select
+                  value={newUserForm.role}
+                  onChange={(e) => setNewUserForm({...newUserForm, role: e.target.value})}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="operacional">Operacional</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+
+              {/* Senhas */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Senha *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newUserForm.password}
+                      onChange={(e) => setNewUserForm({...newUserForm, password: e.target.value})}
+                      className="w-full px-3 py-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Confirmar *
+                  </label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={newUserForm.confirmPassword}
+                    onChange={(e) => setNewUserForm({...newUserForm, confirmPassword: e.target.value})}
+                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      newUserForm.confirmPassword && newUserForm.password !== newUserForm.confirmPassword
+                        ? 'border-red-500'
+                        : 'border-slate-300 dark:border-slate-600'
+                    }`}
+                    placeholder="••••••"
+                  />
+                </div>
+              </div>
+
+              {/* Mensagem de erro/sucesso */}
+              {createUserMessage && (
+                <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
+                  createUserMessage.type === 'success' 
+                    ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border border-green-200 dark:border-green-800' 
+                    : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 border border-red-200 dark:border-red-800'
+                }`}>
+                  {createUserMessage.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                  {createUserMessage.text}
+                </div>
+              )}
+            </div>
+
+            {/* Footer do Modal */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowNewUserModal(false);
+                  setCreateUserMessage(null);
+                }}
+                className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateUser}
+                disabled={isCreatingUser}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isCreatingUser ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4" />
+                    Criar Usuário
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
