@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthService } from '../services/authService';
 import { BackendService } from '../services/backendService';
-import { Building2, User, Lock, Eye, EyeOff, ShieldCheck, Loader2, AlertCircle, ArrowLeft, Mail, CheckCircle2 } from 'lucide-react';
+import { Building2, User, Lock, Eye, EyeOff, ShieldCheck, Loader2, AlertCircle, ArrowLeft, Mail, CheckCircle2, UserPlus, Phone, BadgeCheck } from 'lucide-react';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 const Login: React.FC = () => {
-  const [view, setView] = useState<'login' | 'forgot'>('login');
+  const [view, setView] = useState<'login' | 'forgot' | 'register'>('login');
   
   // Login State
   const [username, setUsername] = useState('');
@@ -21,6 +21,19 @@ const Login: React.FC = () => {
   const [forgotUsername, setForgotUsername] = useState('');
   const [forgotStatus, setForgotStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [forgotMessage, setForgotMessage] = useState('');
+
+  // Register State
+  const [registerData, setRegisterData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    username: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [registerStatus, setRegisterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [registerMessage, setRegisterMessage] = useState('');
 
   const navigate = useNavigate();
 
@@ -38,7 +51,6 @@ const Login: React.FC = () => {
             setWelcomeName(result.user.name);
         }
         setLoginSuccess(true);
-        // Aumentado o tempo para 2 segundos para o usuário ler o toast
         setTimeout(() => {
           navigate('/');
         }, 2000);
@@ -78,6 +90,69 @@ const Login: React.FC = () => {
     }
   };
 
+  // --- REGISTER LOGIC ---
+  const handleRegisterInput = (field: keyof typeof registerData, value: string) => {
+    setRegisterData(prev => ({ ...prev, [field]: value }));
+    if (registerStatus === 'error') {
+      setRegisterStatus('idle');
+      setRegisterMessage('');
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegisterStatus('loading');
+    setRegisterMessage('');
+
+    // Validações
+    if (registerData.password !== registerData.confirmPassword) {
+      setRegisterStatus('error');
+      setRegisterMessage('As senhas não coincidem.');
+      return;
+    }
+
+    if (registerData.password.length < 6) {
+      setRegisterStatus('error');
+      setRegisterMessage('A senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+
+    try {
+      // Chama o backend para registrar o usuário
+      const result = await BackendService.registerUser({
+        name: registerData.name,
+        email: registerData.email,
+        phone: registerData.phone,
+        username: registerData.username,
+        password: registerData.password,
+      });
+
+      if (result.success) {
+        setRegisterStatus('success');
+        setRegisterMessage(result.message || 'Cadastro realizado com sucesso! Aguarde a aprovação do administrador.');
+      } else {
+        setRegisterStatus('error');
+        setRegisterMessage(result.message || 'Erro ao realizar cadastro.');
+      }
+    } catch (e) {
+      setRegisterStatus('error');
+      setRegisterMessage('Erro ao processar cadastro. Tente novamente.');
+    }
+  };
+
+  const resetRegisterForm = () => {
+    setRegisterData({
+      name: '',
+      email: '',
+      phone: '',
+      username: '',
+      password: '',
+      confirmPassword: '',
+    });
+    setRegisterStatus('idle');
+    setRegisterMessage('');
+  };
+
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-5 font-sans transition-colors duration-500
       bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-royal-900 via-royal-950 to-slate-950 dark:from-slate-900 dark:to-slate-950 relative">
@@ -102,11 +177,11 @@ const Login: React.FC = () => {
         </div>
       )}
 
-      <div className="w-full max-w-[420px] 
+      <div className={`w-full ${view === 'register' ? 'max-w-[480px]' : 'max-w-[420px]'}
         bg-white/95 dark:bg-slate-900/90 
         backdrop-blur-sm rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,0.25)] dark:shadow-[0_25px_50px_rgba(0,0,0,0.5)] 
         border border-white/20 dark:border-slate-700
-        p-10 animate-slideUp overflow-hidden relative transition-colors duration-300">
+        p-10 animate-slideUp overflow-hidden relative transition-all duration-300`}>
         
         {/* VIEW: LOGIN */}
         {view === 'login' && (
@@ -202,7 +277,25 @@ const Login: React.FC = () => {
               </button>
             </form>
 
-            <div className="mt-8 text-center">
+            {/* Link para Cadastro */}
+            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-3">
+                Primeiro acesso?
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  resetRegisterForm();
+                  setView('register');
+                }}
+                className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-[10px] text-sm font-semibold transition-all flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700"
+              >
+                <UserPlus className="h-4 w-4" />
+                <span>Criar Conta</span>
+              </button>
+            </div>
+
+            <div className="mt-6 text-center">
               <p className="text-xs text-slate-400 flex items-center justify-center gap-1.5 mb-1">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Ambiente criptografado e seguro
@@ -295,6 +388,210 @@ const Login: React.FC = () => {
                   </button>
                </form>
              )}
+          </div>
+        )}
+
+        {/* VIEW: REGISTER / PRIMEIRO ACESSO */}
+        {view === 'register' && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <button 
+              onClick={() => {
+                setView('login');
+                resetRegisterForm();
+              }}
+              className="flex items-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 text-sm font-medium mb-6 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Voltar ao Login
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <UserPlus className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white">Primeiro Acesso</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
+                Preencha seus dados para criar uma conta
+              </p>
+            </div>
+
+            {registerStatus === 'success' ? (
+              <div className="text-center bg-green-50 dark:bg-green-900/20 p-6 rounded-xl border border-green-100 dark:border-green-900 animate-in zoom-in-95 duration-200">
+                <div className="mx-auto w-12 h-12 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center mb-3">
+                  <BadgeCheck className="h-6 w-6 text-green-600 dark:text-green-200" />
+                </div>
+                <h3 className="text-green-800 dark:text-green-300 font-semibold mb-2">Cadastro Enviado!</h3>
+                <p className="text-green-700 dark:text-green-400 text-sm">{registerMessage}</p>
+                <button 
+                  onClick={() => {
+                    setView('login');
+                    resetRegisterForm();
+                  }}
+                  className="mt-4 inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                >
+                  Ir para Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleRegisterSubmit}>
+                {/* Nome Completo */}
+                <div className="mb-4">
+                  <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">Nome Completo *</label>
+                  <div className="relative group">
+                    <div className="absolute left-[15px] top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-royal-600 transition-colors">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={registerData.name}
+                      onChange={(e) => handleRegisterInput('name', e.target.value)}
+                      className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                      placeholder="Seu nome completo"
+                      required
+                      disabled={registerStatus === 'loading'}
+                    />
+                  </div>
+                </div>
+
+                {/* Email e Telefone */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">E-mail *</label>
+                    <div className="relative group">
+                      <div className="absolute left-[15px] top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-royal-600 transition-colors">
+                        <Mail className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="email"
+                        value={registerData.email}
+                        onChange={(e) => handleRegisterInput('email', e.target.value)}
+                        className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                        placeholder="seu@email.com"
+                        required
+                        disabled={registerStatus === 'loading'}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">Telefone</label>
+                    <div className="relative group">
+                      <div className="absolute left-[15px] top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-royal-600 transition-colors">
+                        <Phone className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="tel"
+                        value={registerData.phone}
+                        onChange={(e) => handleRegisterInput('phone', e.target.value)}
+                        className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                        placeholder="(11) 99999-9999"
+                        disabled={registerStatus === 'loading'}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Usuário */}
+                <div className="mb-4">
+                  <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">Usuário de Acesso *</label>
+                  <div className="relative group">
+                    <div className="absolute left-[15px] top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-royal-600 transition-colors">
+                      <BadgeCheck className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="text"
+                      value={registerData.username}
+                      onChange={(e) => handleRegisterInput('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
+                      className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                      placeholder="Crie um nome de usuário"
+                      required
+                      disabled={registerStatus === 'loading'}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">Sem espaços, letras minúsculas</p>
+                </div>
+
+                {/* Senha e Confirmação */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">Senha *</label>
+                    <div className="relative group">
+                      <div className="absolute left-[15px] top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-royal-600 transition-colors">
+                        <Lock className="h-4 w-4" />
+                      </div>
+                      <input
+                        type={showRegisterPassword ? "text" : "password"}
+                        value={registerData.password}
+                        onChange={(e) => handleRegisterInput('password', e.target.value)}
+                        className="w-full py-3 pl-[45px] pr-10 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                        placeholder="Mínimo 6 caracteres"
+                        required
+                        minLength={6}
+                        disabled={registerStatus === 'loading'}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                        className="absolute right-[15px] top-1/2 -translate-y-1/2 text-slate-400 hover:text-royal-600 transition-colors p-1"
+                      >
+                        {showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">Confirmar Senha *</label>
+                    <div className="relative group">
+                      <div className="absolute left-[15px] top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-royal-600 transition-colors">
+                        <Lock className="h-4 w-4" />
+                      </div>
+                      <input
+                        type={showRegisterPassword ? "text" : "password"}
+                        value={registerData.confirmPassword}
+                        onChange={(e) => handleRegisterInput('confirmPassword', e.target.value)}
+                        className={`w-full py-3 pl-[45px] pr-3.5 border-2 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:ring-4 placeholder:text-slate-400
+                          ${registerData.confirmPassword && registerData.password !== registerData.confirmPassword 
+                            ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10 bg-red-50 dark:bg-red-900/10' 
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-royal-600 focus:ring-royal-600/10'
+                          }`}
+                        placeholder="Repita a senha"
+                        required
+                        disabled={registerStatus === 'loading'}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Error Message */}
+                {registerStatus === 'error' && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-600 dark:text-red-400 text-sm">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{registerMessage}</span>
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={registerStatus === 'loading'}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[10px] text-base font-semibold shadow-lg shadow-emerald-600/30 hover:-translate-y-0.5 disabled:opacity-70 disabled:transform-none disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                >
+                  {registerStatus === 'loading' ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Cadastrando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-5 w-5" />
+                      <span>Criar Conta</span>
+                    </>
+                  )}
+                </button>
+
+                <p className="text-xs text-slate-400 text-center mt-4">
+                  Ao criar uma conta, você concorda com os termos de uso do sistema.
+                </p>
+              </form>
+            )}
           </div>
         )}
 

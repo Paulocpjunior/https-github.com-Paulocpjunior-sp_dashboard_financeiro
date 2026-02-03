@@ -7,8 +7,21 @@ import { MOCK_USERS } from '../constants';
 const DEFAULT_SPREADSHEET_ID = '17mHd8eqKoj7Cl6E2MCkr0PczFj-lKv_vmFRCY5hypwg'; 
 const DEFAULT_GID = '1276925607';
 
+// URL do Google Apps Script para registro de usuários (CONFIGURE AQUI)
+// Você precisa criar um Web App no Google Apps Script que receba os dados
+const REGISTER_WEBHOOK_URL = 'https://script.google.com/macros/s/SEU_SCRIPT_ID/exec';
+
 const STORAGE_KEY_DB_SOURCE = 'cashflow_db_source_id';
 const STORAGE_KEY_DB_GID = 'cashflow_db_gid';
+
+// Interface para dados de registro
+interface RegisterUserData {
+  name: string;
+  email: string;
+  phone?: string;
+  username: string;
+  password: string;
+}
 
 export const BackendService = {
   
@@ -49,6 +62,155 @@ export const BackendService = {
   resetSpreadsheetId: (): void => {
     localStorage.removeItem(STORAGE_KEY_DB_SOURCE);
     localStorage.removeItem(STORAGE_KEY_DB_GID);
+  },
+
+  // =========================================================================================
+  // REGISTRO DE NOVO USUÁRIO
+  // =========================================================================================
+  registerUser: async (data: RegisterUserData): Promise<{ success: boolean; message: string }> => {
+    console.log('[BackendService] Iniciando registro de usuário:', data.username);
+
+    try {
+      // Validações básicas
+      if (!data.name || !data.email || !data.username || !data.password) {
+        return { success: false, message: 'Todos os campos obrigatórios devem ser preenchidos.' };
+      }
+
+      if (data.password.length < 6) {
+        return { success: false, message: 'A senha deve ter no mínimo 6 caracteres.' };
+      }
+
+      // Verificar se usuário já existe nos MOCK_USERS
+      const existingUser = MOCK_USERS.find(u => 
+        u.username.toLowerCase() === data.username.toLowerCase() ||
+        u.email?.toLowerCase() === data.email.toLowerCase()
+      );
+
+      if (existingUser) {
+        return { success: false, message: 'Usuário ou e-mail já cadastrado no sistema.' };
+      }
+
+      // ===================================================================================
+      // OPÇÃO 1: Enviar para Google Apps Script (Webhook)
+      // Descomente este bloco se você tiver um Web App configurado
+      // ===================================================================================
+      /*
+      const response = await fetch(REGISTER_WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors', // Necessário para Google Apps Script
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'register',
+          timestamp: new Date().toISOString(),
+          name: data.name,
+          email: data.email,
+          phone: data.phone || '',
+          username: data.username,
+          password: data.password, // Em produção, use hash!
+          status: 'pendente',
+        }),
+      });
+
+      // Com no-cors, não conseguimos ler a resposta, assumimos sucesso
+      console.log('[BackendService] Dados enviados para webhook');
+      */
+
+      // ===================================================================================
+      // OPÇÃO 2: Salvar no LocalStorage (Temporário - para desenvolvimento)
+      // ===================================================================================
+      const pendingUsers = JSON.parse(localStorage.getItem('pending_users') || '[]');
+      
+      // Verificar se já existe cadastro pendente
+      const existingPending = pendingUsers.find((u: any) => 
+        u.username.toLowerCase() === data.username.toLowerCase() ||
+        u.email.toLowerCase() === data.email.toLowerCase()
+      );
+
+      if (existingPending) {
+        return { success: false, message: 'Já existe uma solicitação de cadastro pendente para este usuário ou e-mail.' };
+      }
+
+      // Adicionar novo cadastro pendente
+      pendingUsers.push({
+        id: `pending-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        name: data.name,
+        email: data.email,
+        phone: data.phone || '',
+        username: data.username,
+        password: data.password, // Em produção, use hash!
+        status: 'pendente',
+      });
+
+      localStorage.setItem('pending_users', JSON.stringify(pendingUsers));
+      console.log('[BackendService] Cadastro salvo localmente:', pendingUsers.length, 'pendentes');
+
+      // ===================================================================================
+      // OPÇÃO 3: Enviar por Email usando EmailJS ou similar
+      // Adicione sua integração aqui se preferir
+      // ===================================================================================
+
+      return { 
+        success: true, 
+        message: 'Cadastro realizado com sucesso! Aguarde a aprovação do administrador para acessar o sistema.' 
+      };
+
+    } catch (error: any) {
+      console.error('[BackendService] Erro no registro:', error);
+      return { 
+        success: false, 
+        message: error.message || 'Erro ao processar cadastro. Tente novamente.' 
+      };
+    }
+  },
+
+  // =========================================================================================
+  // BUSCAR USUÁRIOS PENDENTES (Para tela de admin)
+  // =========================================================================================
+  getPendingUsers: (): any[] => {
+    return JSON.parse(localStorage.getItem('pending_users') || '[]');
+  },
+
+  // =========================================================================================
+  // APROVAR USUÁRIO PENDENTE (Para tela de admin)
+  // =========================================================================================
+  approvePendingUser: (pendingId: string): { success: boolean; message: string } => {
+    const pendingUsers = JSON.parse(localStorage.getItem('pending_users') || '[]');
+    const index = pendingUsers.findIndex((u: any) => u.id === pendingId);
+    
+    if (index === -1) {
+      return { success: false, message: 'Usuário pendente não encontrado.' };
+    }
+
+    // Remover da lista de pendentes
+    const [approvedUser] = pendingUsers.splice(index, 1);
+    localStorage.setItem('pending_users', JSON.stringify(pendingUsers));
+
+    // Em produção, aqui você adicionaria o usuário ao banco de dados real
+    console.log('[BackendService] Usuário aprovado:', approvedUser);
+
+    return { success: true, message: `Usuário ${approvedUser.username} aprovado com sucesso!` };
+  },
+
+  // =========================================================================================
+  // REJEITAR USUÁRIO PENDENTE (Para tela de admin)
+  // =========================================================================================
+  rejectPendingUser: (pendingId: string): { success: boolean; message: string } => {
+    const pendingUsers = JSON.parse(localStorage.getItem('pending_users') || '[]');
+    const index = pendingUsers.findIndex((u: any) => u.id === pendingId);
+    
+    if (index === -1) {
+      return { success: false, message: 'Usuário pendente não encontrado.' };
+    }
+
+    const [rejectedUser] = pendingUsers.splice(index, 1);
+    localStorage.setItem('pending_users', JSON.stringify(pendingUsers));
+
+    console.log('[BackendService] Usuário rejeitado:', rejectedUser);
+
+    return { success: true, message: `Cadastro de ${rejectedUser.username} foi rejeitado.` };
   },
 
   fetchTransactions: async (): Promise<Transaction[]> => {
