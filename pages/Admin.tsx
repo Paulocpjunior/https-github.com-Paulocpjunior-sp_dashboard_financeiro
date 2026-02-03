@@ -1,24 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff } from 'lucide-react';
+import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 
 interface PendingUser {
   id: string;
+  rowIndex: number;
   timestamp: string;
   name: string;
   email: string;
   phone: string;
   username: string;
   status: string;
+  role: string;
 }
+
+// URL do Apps Script
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1hCtCHpomiGpyLujr0SNdfL4AYXg0rUG_N0-s8e4B5hwOxjKa7rGsR1D2/exec';
 
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPending, setLoadingPending] = useState(false);
   
   // Database Config State
   const [spreadsheetId, setSpreadsheetId] = useState('');
@@ -40,18 +46,57 @@ const Admin: React.FC = () => {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserMessage, setCreateUserMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
+  // Carregar usuários pendentes do Apps Script
+  const loadPendingUsers = async () => {
+    setLoadingPending(true);
+    try {
+      const response = await fetch(APPS_SCRIPT_URL + '?action=pendentes');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.usuarios) {
+          setPendingUsers(data.usuarios);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar pendentes:', error);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
+  // Carregar todos os usuários do Apps Script
+  const loadAllUsers = async () => {
+    try {
+      const response = await fetch(APPS_SCRIPT_URL + '?action=usuarios');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.usuarios) {
+          // Filtrar apenas usuários aprovados/ativos
+          const activeUsers = data.usuarios.filter((u: any) => 
+            u.status === 'Aprovado' || u.active === true
+          );
+          setUsers(activeUsers);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+      // Fallback para MOCK_USERS
+      const userData = await BackendService.fetchUsers();
+      setUsers(userData);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        const userData = await BackendService.fetchUsers();
-        setUsers(userData);
+        // Carregar usuários ativos
+        await loadAllUsers();
+        
+        // Carregar usuários pendentes
+        await loadPendingUsers();
         
         // Load current Spreadsheet ID
         setSpreadsheetId(BackendService.getSpreadsheetId());
-
-        // Carregar usuários pendentes do localStorage (temporário)
-        const pending = JSON.parse(localStorage.getItem('pending_users') || '[]');
-        setPendingUsers(pending);
       } catch (error) {
         console.error("Failed to load data", error);
       } finally {
@@ -114,17 +159,24 @@ const Admin: React.FC = () => {
     setIsCreatingUser(true);
 
     try {
-      const result = await BackendService.registerUser({
-        name: newUserForm.name,
-        email: newUserForm.email,
-        phone: newUserForm.phone,
-        username: newUserForm.username.toLowerCase().replace(/\s/g, ''),
-        password: newUserForm.password,
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register',
+          name: newUserForm.name,
+          email: newUserForm.email,
+          phone: newUserForm.phone,
+          username: newUserForm.username.toLowerCase().replace(/\s/g, ''),
+          password: newUserForm.password,
+          role: newUserForm.role,
+        }),
       });
+
+      const result = await response.json();
 
       if (result.success) {
         setCreateUserMessage({ type: 'success', text: result.message });
-        // Limpar formulário após sucesso
         setTimeout(() => {
           setShowNewUserModal(false);
           setNewUserForm({
@@ -137,9 +189,8 @@ const Admin: React.FC = () => {
             role: 'operacional'
           });
           setCreateUserMessage(null);
-          // Recarregar pendentes
-          const pending = JSON.parse(localStorage.getItem('pending_users') || '[]');
-          setPendingUsers(pending);
+          // Recarregar lista de pendentes
+          loadPendingUsers();
         }, 2000);
       } else {
         setCreateUserMessage({ type: 'error', text: result.message });
@@ -156,14 +207,24 @@ const Admin: React.FC = () => {
     if (!confirm(`Aprovar o usuário "${user.name}"?`)) return;
 
     try {
-      const result = await BackendService.approvePendingUser(user.email, user.name, user.username);
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve',
+          username: user.username,
+          email: user.email,
+          name: user.name,
+        }),
+      });
+
+      const result = await response.json();
       
       if (result.success) {
-        // Remover da lista local
-        const updated = pendingUsers.filter(u => u.id !== user.id);
-        setPendingUsers(updated);
-        localStorage.setItem('pending_users', JSON.stringify(updated));
-        alert('Usuário aprovado! E-mail de notificação enviado.');
+        alert('Usuário aprovado com sucesso!');
+        // Recarregar listas
+        loadPendingUsers();
+        loadAllUsers();
       } else {
         alert('Erro: ' + result.message);
       }
@@ -175,17 +236,26 @@ const Admin: React.FC = () => {
   // Rejeitar usuário pendente
   const handleRejectUser = async (user: PendingUser) => {
     const reason = prompt(`Motivo da rejeição para "${user.name}" (opcional):`);
-    if (reason === null) return; // Cancelou
+    if (reason === null) return;
 
     try {
-      const result = await BackendService.rejectPendingUser(user.email, user.name, user.username, reason);
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          username: user.username,
+          email: user.email,
+          name: user.name,
+          reason: reason,
+        }),
+      });
+
+      const result = await response.json();
       
       if (result.success) {
-        // Remover da lista local
-        const updated = pendingUsers.filter(u => u.id !== user.id);
-        setPendingUsers(updated);
-        localStorage.setItem('pending_users', JSON.stringify(updated));
         alert('Usuário rejeitado.');
+        loadPendingUsers();
       } else {
         alert('Erro: ' + result.message);
       }
@@ -220,18 +290,37 @@ const Admin: React.FC = () => {
         </div>
 
         {/* Usuários Pendentes */}
-        {pendingUsers.length > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800 overflow-hidden animate-in slide-in-from-top-2">
-            <div className="px-6 py-4 border-b border-amber-200 dark:border-amber-800 flex justify-between items-center bg-amber-100/50 dark:bg-amber-900/30">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                <h3 className="font-bold text-amber-800 dark:text-amber-200">Cadastros Pendentes de Aprovação</h3>
-              </div>
-              <span className="text-xs px-2 py-1 bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 rounded-full font-medium">
-                {pendingUsers.length} pendente{pendingUsers.length > 1 ? 's' : ''}
-              </span>
+        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800 overflow-hidden animate-in slide-in-from-top-2">
+          <div className="px-6 py-4 border-b border-amber-200 dark:border-amber-800 flex justify-between items-center bg-amber-100/50 dark:bg-amber-900/30">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <h3 className="font-bold text-amber-800 dark:text-amber-200">Cadastros Pendentes de Aprovação</h3>
             </div>
-            
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-1 bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 rounded-full font-medium">
+                {pendingUsers.length} pendente{pendingUsers.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={loadPendingUsers}
+                disabled={loadingPending}
+                className="p-1.5 hover:bg-amber-200 dark:hover:bg-amber-800 rounded-lg transition-colors"
+                title="Atualizar lista"
+              >
+                <RefreshCw className={`h-4 w-4 text-amber-600 dark:text-amber-400 ${loadingPending ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+          
+          {loadingPending ? (
+            <div className="p-8 flex justify-center">
+              <Loader2 className="h-6 w-6 text-amber-600 animate-spin" />
+            </div>
+          ) : pendingUsers.length === 0 ? (
+            <div className="p-8 text-center text-amber-600 dark:text-amber-400">
+              <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>Nenhum cadastro pendente</p>
+            </div>
+          ) : (
             <div className="divide-y divide-amber-200 dark:divide-amber-800">
               {pendingUsers.map((user) => (
                 <div key={user.id} className="px-6 py-4 flex items-center justify-between hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors">
@@ -242,10 +331,12 @@ const Admin: React.FC = () => {
                     <div>
                       <p className="font-medium text-slate-800 dark:text-white">{user.name}</p>
                       <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <Mail className="h-3 w-3" />
-                          {user.email}
-                        </span>
+                        {user.email && (
+                          <span className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            {user.email}
+                          </span>
+                        )}
                         {user.phone && (
                           <span className="flex items-center gap-1">
                             <Phone className="h-3 w-3" />
@@ -254,6 +345,9 @@ const Admin: React.FC = () => {
                         )}
                         <span className="text-xs bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">
                           @{user.username}
+                        </span>
+                        <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                          {user.role}
                         </span>
                       </div>
                     </div>
@@ -277,8 +371,8 @@ const Admin: React.FC = () => {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Database Configuration Card */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 animate-in slide-in-from-bottom-2">
@@ -357,7 +451,16 @@ const Admin: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
              <h3 className="font-bold text-slate-800 dark:text-white">Usuários do Sistema</h3>
-             <span className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded">Total: {users.length}</span>
+             <div className="flex items-center gap-2">
+               <span className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded">Total: {users.length}</span>
+               <button
+                 onClick={loadAllUsers}
+                 className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                 title="Atualizar lista"
+               >
+                 <RefreshCw className="h-4 w-4 text-slate-400" />
+               </button>
+             </div>
           </div>
           
           {loading ? (
