@@ -18,7 +18,7 @@ interface PendingUser {
 }
 
 // URL do Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1hCtCHpomiGpyLujr0SNdfL4AYXg0rUG_N0-s8e4B5hwOxjKa7rGsR1D2/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYbEYkx0hGgXGx1B6_2yFJ1qbnA8KH2prmV_0cohnMn_5wcyrA3fImFnxN1jhyIImYyg/exec';
 
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
