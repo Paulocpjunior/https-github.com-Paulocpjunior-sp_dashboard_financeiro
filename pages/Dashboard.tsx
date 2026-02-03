@@ -6,7 +6,7 @@ import AIAssistant from '../components/AIAssistant';
 import { DataService } from '../services/dataService';
 import { AuthService } from '../services/authService';
 import { FilterState, KPIData, Transaction } from '../types';
-import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar } from 'lucide-react';
+import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 const INITIAL_FILTERS: FilterState = {
@@ -20,6 +20,14 @@ const INITIAL_FILTERS: FilterState = {
   paidBy: '',
   movement: '',
   search: '',
+};
+
+// Função para normalizar texto (remove acentos)
+const normalizeText = (text: string) => {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 };
 
 const Dashboard: React.FC = () => {
@@ -43,6 +51,12 @@ const Dashboard: React.FC = () => {
   // Loading States
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState('');
+
+  // Detecta se está no modo "Contas a Pagar"
+  const normalizedType = normalizeText(filters.type || '');
+  const isContasAPagar = normalizedType.includes('saida') || 
+                        normalizedType.includes('pagar') ||
+                        normalizedType.includes('contas a pagar');
 
   // Initial Data Load
   useEffect(() => {
@@ -395,26 +409,53 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* KPI Cards */}
+        {/* KPI Cards - LABELS DINÂMICOS BASEADOS NO TIPO */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <KpiCard
-            title="Total Entradas"
-            value={kpi.totalReceived}
-            icon={ArrowUp}
-            color="green"
-          />
-          <KpiCard
-            title="Total Saídas"
-            value={kpi.totalPaid}
-            icon={ArrowDown}
-            color="red"
-          />
-          <KpiCard
-            title="Saldo Líquido"
-            value={kpi.balance}
-            icon={DollarSign}
-            color={kpi.balance >= 0 ? 'blue' : 'red'}
-          />
+          {isContasAPagar ? (
+            <>
+              {/* MODO CONTAS A PAGAR */}
+              <KpiCard
+                title="Total Geral"
+                value={kpi.totalReceived}
+                icon={DollarSign}
+                color="blue"
+              />
+              <KpiCard
+                title="Total Pago"
+                value={kpi.totalPaid}
+                icon={CheckCircle}
+                color="green"
+              />
+              <KpiCard
+                title="Saldo a Pagar"
+                value={kpi.balance}
+                icon={Clock}
+                color={kpi.balance > 0 ? 'red' : 'green'}
+              />
+            </>
+          ) : (
+            <>
+              {/* MODO PADRÃO */}
+              <KpiCard
+                title="Total Entradas"
+                value={kpi.totalReceived}
+                icon={ArrowUp}
+                color="green"
+              />
+              <KpiCard
+                title="Total Saídas"
+                value={kpi.totalPaid}
+                icon={ArrowDown}
+                color="red"
+              />
+              <KpiCard
+                title="Saldo Líquido"
+                value={kpi.balance}
+                icon={DollarSign}
+                color={kpi.balance >= 0 ? 'blue' : 'red'}
+              />
+            </>
+          )}
         </div>
 
         {/* Charts & Data */}
@@ -454,6 +495,7 @@ const Dashboard: React.FC = () => {
                 idFilterValue={filters.id}
                 onIdFilterChange={(val) => handleFilterChange('id', val)}
                 isLoading={isLoading}
+                selectedType={filters.type}
               />
            </div>
         </div>

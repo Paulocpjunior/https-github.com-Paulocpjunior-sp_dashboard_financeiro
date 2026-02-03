@@ -56,7 +56,7 @@ export const BackendService = {
     const gid = BackendService.getSpreadsheetGid();
     
     const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`; 
-    console.log(`Conectando à planilha: ${spreadsheetId} (Tab: ${gid})...`);
+    console.log(`[BackendService] Conectando à planilha: ${spreadsheetId} (Tab: ${gid})...`);
     
     try {
       const response = await fetch(csvUrl);
@@ -67,6 +67,7 @@ export const BackendService = {
       
       let csvText = await response.text();
 
+      // Remove BOM
       if (csvText.charCodeAt(0) === 0xFEFF) {
         csvText = csvText.slice(1);
       }
@@ -75,132 +76,167 @@ export const BackendService = {
         throw new Error('A planilha está privada. Altere o compartilhamento para "Qualquer pessoa com o link".');
       }
 
-      const rows = csvText.split(/\r?\n/);
+      // ========================================================================
+      // PARSER CSV COMPLETO - Lida com:
+      // 1. Vírgulas dentro de aspas
+      // 2. Quebras de linha dentro de aspas
+      // 3. Aspas escapadas ("")
+      // ========================================================================
+      const allRows = parseCSVComplete(csvText);
       
-      if (rows.length < 2) {
+      if (allRows.length < 2) {
         return [];
       }
 
-      // 1. Detect Delimiter
-      const delimiter = detectDelimiter(rows.slice(0, 20));
-      console.log(`Delimitador detectado: "${delimiter}"`);
+      console.log(`[BackendService] Total de registros parseados: ${allRows.length}`);
 
-      // 2. Find Header Row - procurar linha com cabeçalhos conhecidos
-      const headerRowIndex = findHeaderRowIndex(rows, delimiter);
-      console.log(`Cabeçalho detectado na linha: ${headerRowIndex}`);
+      // ========================================================================
+      // MAPEAMENTO FIXO - ÍNDICES CONFIRMADOS DO CSV (02/02/2026)
+      // ========================================================================
+      const COL = {
+        timestamp: 0,        // A: #N/A
+        dataLancamento: 1,   // B: Data Lançamento
+        contasBancarias: 2,  // C: Contas bancárias
+        tipoLancamento: 3,   // D: Tipo de Lançamento
+        pagoPor: 4,          // E: Pago Por
+        movimentacao: 5,     // F: Movimentação
+        dataAPagar: 7,       // H: Data a Pagar
+        docPago: 9,          // J: Doc.Pago
+        dataBaixa: 10,       // K: Data Baixa / Pagamento
+        valorPago: 13,       // N: Valor Pago
+        nomeEmpresa: 26,     // AA: Nome Empresa / Credor
+        valorHonorarios: 27, // AB: Valor Honorários
+        valorExtras: 28,     // AC: Valor Extras
+        totalCobranca: 30,   // AE: Total Cobrança
+        valorRecebido: 31,   // AF: Valor Recebido
+        submissionId: 39,    // AN: Submission ID
+      };
 
-      const headerRow = parseCSVLineRegex(rows[headerRowIndex], delimiter);
-      
-      // DEBUG: Mostrar todos os cabeçalhos
-      console.log('=== TODOS OS CABEÇALHOS ===');
-      headerRow.forEach((h, i) => {
-        if (h && h.trim()) {
-          console.log(`  Coluna [${i}] = "${h}"`);
+      // Encontrar linha de cabeçalho
+      let headerRowIndex = 0;
+      for (let i = 0; i < Math.min(allRows.length, 5); i++) {
+        const row = allRows[i];
+        if (row.length > 3) {
+          const combined = row.slice(0, 5).join(' ').toLowerCase();
+          if (combined.includes('tipo de lan') || combined.includes('contas banc')) {
+            headerRowIndex = i;
+            break;
+          }
         }
-      });
-      
-      // 3. MAPEAMENTO INTELIGENTE - Procurar colunas pelo conteúdo exato
-      const map = findColumnsByContent(headerRow, rows, headerRowIndex, delimiter);
-      
-      console.log('=== MAPEAMENTO FINAL ===');
-      console.log(`  type (Tipo de Lançamento) -> Coluna [${map.type}]`);
-      console.log(`  bankAccount (Contas bancárias) -> Coluna [${map.bankAccount}]`);
-      console.log(`  paidBy (Pago Por) -> Coluna [${map.paidBy}]`);
-      console.log(`  client (Nome Empresa) -> Coluna [${map.client}]`);
+      }
 
-      // 4. Parse Data Rows
-      const dataRows = rows.slice(headerRowIndex + 1).filter(row => row.trim() !== '');
+      console.log(`[BackendService] Linha de cabeçalho: ${headerRowIndex}`);
 
-      const transactions = dataRows.map((rowString, index) => {
-        const cols = parseCSVLineRegex(rowString, delimiter);
-        const get = (idx: number) => (idx !== -1 && cols[idx] !== undefined) ? cols[idx] : '';
+      // Parse data rows (skip header)
+      const dataRows = allRows.slice(headerRowIndex + 1);
 
-        // Extract Raw Values
-        const rawId = get(map.id);
-        const rawDate = get(map.date);
-        const rawDueDate = get(map.dueDate);
-        const rawValorPago = get(map.valuePaid);
-        const rawValorRecebido = get(map.valueReceived);
-        const rawStatus = get(map.status);
-        
-        // CAMPOS CRÍTICOS
-        const rawType = get(map.type);
-        const rawAccount = get(map.bankAccount);
-        const rawPaidBy = get(map.paidBy);
-        const rawClient = get(map.client);
-        
-        // Campos de detalhe
-        const rawHonorarios = get(map.honorarios);
-        const rawValorExtra = get(map.valorExtra);
-        const rawTotalCobranca = get(map.totalCobranca);
+      // DEBUG: Mostrar primeira linha parseada
+      if (dataRows.length > 0) {
+        const first = dataRows[0];
+        console.log('[BackendService] === DEBUG PRIMEIRA LINHA ===');
+        console.log(`  Total de colunas: ${first.length}`);
+        console.log(`  Col[2] (Contas bancárias): "${first[2]}"`);
+        console.log(`  Col[3] (Tipo Lançamento): "${first[3]}"`);
+        console.log(`  Col[4] (Pago Por): "${first[4]}"`);
+        console.log(`  Col[26] (Nome Empresa): "${first[26]}"`);
+      }
 
-        // DEBUG primeiro registro
-        if (index === 0) {
-          console.log('=== PRIMEIRO REGISTRO ===');
-          console.log(`  rawType: "${rawType}"`);
-          console.log(`  rawAccount: "${rawAccount}"`);
-          console.log(`  rawPaidBy: "${rawPaidBy}"`);
-        }
+      const transactions = dataRows.map((cols, index) => {
+        // Função helper para pegar valor de coluna com segurança
+        const get = (idx: number): string => {
+          if (idx >= 0 && idx < cols.length) {
+            return cols[idx] || '';
+          }
+          return '';
+        };
 
-        // ID Logic
+        // Extrair valores usando índices FIXOS
+        const rawDate = get(COL.dataLancamento);
+        const rawDueDate = get(COL.dataAPagar);
+        const rawBankAccount = get(COL.contasBancarias);
+        const rawType = get(COL.tipoLancamento);
+        const rawPaidBy = get(COL.pagoPor);
+        const rawMovement = get(COL.movimentacao);
+        const rawStatus = get(COL.docPago);
+        const rawClient = get(COL.nomeEmpresa);
+        const rawValorPago = get(COL.valorPago);
+        const rawValorRecebido = get(COL.valorRecebido);
+        const rawId = get(COL.submissionId);
+        const rawHonorarios = get(COL.valorHonorarios);
+        const rawValorExtra = get(COL.valorExtras);
+        const rawTotalCobranca = get(COL.totalCobranca);
+
+        // ID
         let finalId = `trx-${index}`;
         if (rawId && rawId.trim().length > 0 && rawId.length < 50 && !rawId.includes('/')) {
-            finalId = rawId.trim();
+          finalId = rawId.trim();
         }
 
-        // VALUES & MOVEMENT LOGIC
-        let valPaid = parseCurrencyRobust(rawValorPago);
-        let valReceived = parseCurrencyRobust(rawValorRecebido);
-        
-        // Determinar movimento baseado no tipo
+        // Parse valores
+        const valPaid = Math.abs(parseCurrency(rawValorPago));
+        const valReceived = Math.abs(parseCurrency(rawValorRecebido));
+
+        // Determinar movimento baseado no Tipo de Lançamento
         let movement: 'Entrada' | 'Saída' = 'Entrada';
-        const typeLower = rawType.toLowerCase();
-        if (typeLower.includes('saída') || typeLower.includes('saida') || typeLower.includes('pagar')) {
+        const tipoLower = rawType.toLowerCase();
+        if (tipoLower.includes('saída') || tipoLower.includes('saida') || tipoLower.includes('pagar')) {
           movement = 'Saída';
-        } else if (typeLower.includes('entrada') || typeLower.includes('receber')) {
+        } else if (tipoLower.includes('entrada') || tipoLower.includes('receber')) {
           movement = 'Entrada';
+        } else if (rawMovement) {
+          const mov = rawMovement.toLowerCase();
+          if (mov.includes('saída') || mov.includes('saida')) {
+            movement = 'Saída';
+          }
         } else if (valPaid > 0 && valReceived === 0) {
           movement = 'Saída';
         }
 
-        // Ensure values are absolute
-        valPaid = Math.abs(valPaid);
-        valReceived = Math.abs(valReceived);
-
-        // Date Logic
-        const finalDate = parseDateSafely(rawDate);
-        let finalDueDate = parseDateSafely(rawDueDate);
-        
+        // Parse dates
+        const finalDate = parseDate(rawDate);
+        let finalDueDate = parseDate(rawDueDate);
         if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') {
-            finalDueDate = finalDate;
+          finalDueDate = finalDate;
         }
 
         return {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
-          bankAccount: cleanString(rawAccount),
+          bankAccount: cleanString(rawBankAccount),
           type: cleanString(rawType),
           paidBy: cleanString(rawPaidBy),
           status: normalizeStatus(rawStatus),
           client: cleanString(rawClient),
-          movement: movement,
+          // CORRIGIDO: movement recebe o valor RAW da coluna F (Movimentação)
+          // O valor "Entrada/Saída" é determinado pelo Tipo de Lançamento
+          movement: cleanString(rawMovement),
           valuePaid: valPaid,
           valueReceived: valReceived,
-          honorarios: parseCurrencyRobust(rawHonorarios),
-          valorExtra: parseCurrencyRobust(rawValorExtra),
-          totalCobranca: parseCurrencyRobust(rawTotalCobranca),
+          honorarios: parseCurrency(rawHonorarios),
+          valorExtra: parseCurrency(rawValorExtra),
+          totalCobranca: parseCurrency(rawTotalCobranca),
         } as Transaction;
       });
 
-      // Sort by Date Descending
+      // Log dos valores únicos para debug
+      const uniqueTypes = [...new Set(transactions.map(t => t.type).filter(t => t))];
+      const uniqueAccounts = [...new Set(transactions.map(t => t.bankAccount).filter(t => t))];
+      const uniquePaidBy = [...new Set(transactions.map(t => t.paidBy).filter(t => t))];
+      
+      console.log('[BackendService] === VALORES ÚNICOS EXTRAÍDOS ===');
+      console.log(`  Tipos de Lançamento (${uniqueTypes.length}):`, uniqueTypes.slice(0, 5));
+      console.log(`  Contas Bancárias (${uniqueAccounts.length}):`, uniqueAccounts.slice(0, 3));
+      console.log(`  Pago Por (${uniquePaidBy.length}):`, uniquePaidBy.slice(0, 5));
+
+      // Sort by date descending
       return transactions.sort((a, b) => {
-          if (a.date === b.date) return 0;
-          return a.date > b.date ? -1 : 1;
+        if (a.date === b.date) return 0;
+        return a.date > b.date ? -1 : 1;
       });
 
     } catch (error: any) {
-      console.error('Erro ao buscar dados:', error);
+      console.error('[BackendService] Erro ao buscar dados:', error);
       throw new Error(error.message || 'Falha na conexão com a planilha.');
     }
   },
@@ -225,246 +261,114 @@ export const BackendService = {
   }
 };
 
-// --- HELPERS ---
+// =============================================================================
+// PARSER CSV COMPLETO - Lida com quebras de linha dentro de campos
+// =============================================================================
 
-function detectDelimiter(rows: string[]): string {
-    const validRows = rows.filter(r => r.trim().length > 0);
-    if (validRows.length === 0) return ',';
-
-    const getVariance = (delim: string) => {
-        const counts = validRows.map(r => r.split(delim).length);
-        const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
-        if (avg < 2) return 9999;
-        const variance = counts.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / counts.length;
-        return variance;
-    };
-
-    const commaVariance = getVariance(',');
-    const semiVariance = getVariance(';');
-
-    if (semiVariance <= commaVariance) return ';';
-    return ',';
-}
-
-function findHeaderRowIndex(rows: string[], delimiter: string): number {
-    for (let i = 0; i < Math.min(rows.length, 10); i++) {
-        const row = rows[i].toLowerCase();
-        if (row.includes('tipo de lan') || 
-            row.includes('contas banc') || 
-            row.includes('pago por')) {
-            return i;
+function parseCSVComplete(csvText: string): string[][] {
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentField = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+    
+    if (char === '"') {
+      if (inQuotes) {
+        if (nextChar === '"') {
+          // Escaped quote "" -> add single quote
+          currentField += '"';
+          i++; // Skip next quote
+        } else {
+          // End of quoted field
+          inQuotes = false;
         }
+      } else {
+        // Start of quoted field
+        inQuotes = true;
+      }
+    } else if (char === ',' && !inQuotes) {
+      // Field separator
+      currentRow.push(currentField.trim());
+      currentField = '';
+    } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
+      // End of row (only if not inside quotes)
+      if (char === '\r') i++; // Skip \n after \r
+      
+      currentRow.push(currentField.trim());
+      
+      // Only add non-empty rows
+      if (currentRow.some(f => f.length > 0)) {
+        rows.push(currentRow);
+      }
+      
+      currentRow = [];
+      currentField = '';
+    } else if (char === '\r' && !inQuotes) {
+      // Handle standalone \r as line ending
+      currentRow.push(currentField.trim());
+      
+      if (currentRow.some(f => f.length > 0)) {
+        rows.push(currentRow);
+      }
+      
+      currentRow = [];
+      currentField = '';
+    } else {
+      // Regular character (including \n inside quotes)
+      currentField += char;
     }
-    return 0;
+  }
+  
+  // Don't forget last field and row
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField.trim());
+    if (currentRow.some(f => f.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+  
+  return rows;
 }
 
 function cleanString(str: string): string {
-    if (!str) return '';
-    return str.replace(/^["']|["']$/g, '').trim();
+  if (!str) return '';
+  // Remove quotes, trim, and normalize line breaks within fields
+  return str.replace(/^["']|["']$/g, '').replace(/[\r\n]+/g, ' ').trim();
 }
 
-function parseCSVLineRegex(text: string, delimiter: string): string[] {
-    const delim = delimiter === '.' ? '\\.' : delimiter;
-    const pattern = `(?:^|${delim})(?:"([^"]*(?:""[^"]*)*)"|([^"${delim}]*))`;
-    const regex = new RegExp(pattern, 'g');
-    
-    const results: string[] = [];
-    let match;
-    
-    if (!text || text.trim() === '') return [];
-
-    while ((match = regex.exec(text)) !== null) {
-        let val = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
-        results.push(val ? val.trim() : '');
-    }
-    return results;
-}
-
-// ============================================================================
-// FUNÇÃO PRINCIPAL: Encontrar colunas pelo CONTEÚDO dos dados, não só headers
-// ============================================================================
-function findColumnsByContent(headers: string[], rows: string[], headerRowIndex: number, delimiter: string) {
-    const map = {
-        id: -1,
-        date: -1,
-        dueDate: -1,
-        bankAccount: -1,
-        type: -1,
-        paidBy: -1,
-        status: -1,
-        client: -1,
-        valuePaid: -1,
-        valueReceived: -1,
-        honorarios: -1,
-        valorExtra: -1,
-        totalCobranca: -1
-    };
-
-    // Normalizar headers para comparação
-    const normHeaders = headers.map(h => normalizeForSearch(h));
-    
-    // 1. Primeiro, tentar encontrar pelo header
-    for (let i = 0; i < normHeaders.length; i++) {
-        const h = normHeaders[i];
-        
-        // Tipo de Lançamento
-        if (h.includes('tipo de lancamento') || h === 'tipo de lancamento') {
-            map.type = i;
-            console.log(`HEADER MATCH: type -> [${i}] "${headers[i]}"`);
-        }
-        // Contas bancárias
-        if (h.includes('contas bancarias') || h === 'contas bancarias') {
-            map.bankAccount = i;
-            console.log(`HEADER MATCH: bankAccount -> [${i}] "${headers[i]}"`);
-        }
-        // Pago Por
-        if (h === 'pago por' || h.includes('pago por')) {
-            map.paidBy = i;
-            console.log(`HEADER MATCH: paidBy -> [${i}] "${headers[i]}"`);
-        }
-        // Nome Empresa / Credor
-        if (h.includes('nome empresa') || h.includes('credor')) {
-            map.client = i;
-            console.log(`HEADER MATCH: client -> [${i}] "${headers[i]}"`);
-        }
-        // Data Lançamento
-        if ((h.includes('data lancamento') || h === 'data lancamento') && !h.includes('2')) {
-            map.date = i;
-        }
-        // Data a Pagar / Vencimento
-        if (h.includes('data a pagar') || h.includes('vencimento')) {
-            map.dueDate = i;
-        }
-        // Status / Doc.Pago
-        if (h === 'doc pago' || h === 'docpago' || h.includes('doc.pago')) {
-            map.status = i;
-        }
-        // Valor Pago
-        if (h === 'valor pago' && !h.includes('doc')) {
-            map.valuePaid = i;
-        }
-        // Valor Recebido
-        if (h === 'valor recebido') {
-            map.valueReceived = i;
-        }
-        // Valor Honorários
-        if (h.includes('valor honorarios') || h === 'valor honorarios') {
-            map.honorarios = i;
-        }
-        // Valor Extras
-        if (h.includes('valor extras') || h === 'valor extras') {
-            map.valorExtra = i;
-        }
-        // Total Cobrança
-        if (h.includes('total cobranca')) {
-            map.totalCobranca = i;
-        }
-        // Submission ID
-        if (h.includes('submission id')) {
-            map.id = i;
-        }
-    }
-
-    // 2. Se não encontrou pelo header, procurar pelo CONTEÚDO das primeiras linhas
-    if (map.type === -1 || map.bankAccount === -1) {
-        console.log('Headers não encontrados, buscando pelo conteúdo...');
-        
-        // Pegar algumas linhas de dados para análise
-        const sampleRows = rows.slice(headerRowIndex + 1, headerRowIndex + 10);
-        
-        for (let colIdx = 0; colIdx < headers.length; colIdx++) {
-            const sampleValues: string[] = [];
-            
-            for (const row of sampleRows) {
-                const cols = parseCSVLineRegex(row, delimiter);
-                if (cols[colIdx]) {
-                    sampleValues.push(cols[colIdx].trim());
-                }
-            }
-            
-            // Verificar se esta coluna contém "Entrada de Caixa" ou "Saída de Caixa"
-            const hasEntradaSaida = sampleValues.some(v => 
-                v.includes('Entrada de Caixa') || 
-                v.includes('Saída de Caixa') ||
-                v.includes('Contas a Receber') ||
-                v.includes('Contas a Pagar')
-            );
-            
-            if (hasEntradaSaida && map.type === -1) {
-                map.type = colIdx;
-                console.log(`CONTENT MATCH: type -> [${colIdx}] (contém Entrada/Saída de Caixa)`);
-                console.log(`  Valores encontrados: ${sampleValues.slice(0, 3).join(', ')}`);
-            }
-            
-            // Verificar se contém nomes de bancos
-            const hasBankNames = sampleValues.some(v => 
-                v.includes('Itaú') || 
-                v.includes('Itau') ||
-                v.includes('Bradesco') ||
-                v.includes('Santander') ||
-                v.includes('Caixa') ||
-                v.includes('Nubank') ||
-                v.includes('jurídica') ||
-                v.includes('juridica')
-            );
-            
-            if (hasBankNames && map.bankAccount === -1) {
-                map.bankAccount = colIdx;
-                console.log(`CONTENT MATCH: bankAccount -> [${colIdx}] (contém nomes de bancos)`);
-                console.log(`  Valores encontrados: ${sampleValues.slice(0, 3).join(', ')}`);
-            }
-            
-            // Verificar se contém "SP - Retirada" ou similar para Pago Por
-            const hasPagoPor = sampleValues.some(v => 
-                v.includes('SP -') || 
-                v.includes('Retirada') ||
-                v.includes('1-') ||
-                v.includes('2-')
-            );
-            
-            if (hasPagoPor && map.paidBy === -1 && colIdx !== map.type && colIdx !== map.bankAccount) {
-                map.paidBy = colIdx;
-                console.log(`CONTENT MATCH: paidBy -> [${colIdx}]`);
-            }
-        }
-    }
-
-    return map;
-}
-
-function normalizeForSearch(h: string): string {
-    if (!h) return '';
-    return h.toLowerCase()
-            .trim()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9 ]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-}
-
-function parseCurrencyRobust(val: string | undefined): number {
+function parseCurrency(val: string | undefined): number {
   if (!val) return 0;
   
-  let clean = val.replace(/^["']|["']$/g, '').trim(); 
-  clean = clean.replace(/[R$\s]/g, ''); 
+  // Remove quotes, R$, spaces
+  let clean = val.replace(/^["']|["']$/g, '').trim();
+  clean = clean.replace(/[R$\s]/g, '');
 
+  // Handle parentheses for negative numbers
   if (clean.startsWith('(') && clean.endsWith(')')) {
-      clean = '-' + clean.slice(1, -1);
+    clean = '-' + clean.slice(1, -1);
   }
   
   if (!clean || clean === '-') return 0;
 
+  // Detect Brazilian format (1.234,56) vs American (1,234.56)
   const lastComma = clean.lastIndexOf(',');
   const lastDot = clean.lastIndexOf('.');
 
   if (lastComma > lastDot) {
-      clean = clean.replace(/\./g, '').replace(',', '.');
+    // Brazilian format: 1.234,56 -> 1234.56
+    clean = clean.replace(/\./g, '').replace(',', '.');
   } else if (lastDot > lastComma) {
-      clean = clean.replace(/,/g, '');
+    // American format: 1,234.56 -> 1234.56
+    clean = clean.replace(/,/g, '');
   } else if (lastComma > -1 && lastDot === -1) {
-       clean = clean.replace(',', '.');
+    // Only comma: 123,45 -> 123.45
+    clean = clean.replace(',', '.');
   }
   
+  // Remove any remaining non-numeric chars except . and -
   clean = clean.replace(/[^0-9.-]/g, '');
 
   const num = parseFloat(clean);
@@ -480,27 +384,33 @@ function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agenda
   return 'Pendente';
 }
 
-function parseDateSafely(dateStr: string | undefined): string {
+function parseDate(dateStr: string | undefined): string {
   if (!dateStr) return '1970-01-01';
   
   let clean = dateStr.replace(/^["']|["']$/g, '').trim();
-  if (clean.includes(' ')) clean = clean.split(' ')[0];
+  
+  // If datetime, get only date part
+  if (clean.includes(' ')) {
+    clean = clean.split(' ')[0];
+  }
 
+  // Brazilian format: DD/MM/YYYY or DD-MM-YYYY
   const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
   const ptMatch = clean.match(ptBrRegex);
 
   if (ptMatch) {
-      const day = ptMatch[1].padStart(2, '0');
-      const month = ptMatch[2].padStart(2, '0');
-      let year = ptMatch[3];
-      if (year.length === 2) year = '20' + year;
-      return `${year}-${month}-${day}`;
+    const day = ptMatch[1].padStart(2, '0');
+    const month = ptMatch[2].padStart(2, '0');
+    let year = ptMatch[3];
+    if (year.length === 2) year = '20' + year;
+    return `${year}-${month}-${day}`;
   }
 
+  // ISO format: YYYY-MM-DD
   const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
   const isoMatch = clean.match(isoRegex);
   if (isoMatch) {
-      return clean.substring(0, 10);
+    return clean.substring(0, 10);
   }
 
   return '1970-01-01';

@@ -5,6 +5,14 @@ import { BackendService } from './backendService';
 let CACHED_TRANSACTIONS: Transaction[] = [];
 let isDataLoaded = false;
 
+// Função para normalizar texto (remove acentos)
+const normalizeText = (text: string) => {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+};
+
 export const DataService = {
   
   get isDataLoaded() {
@@ -94,17 +102,45 @@ export const DataService = {
       return matches;
     });
 
-    // 2. Calculate KPIs on filtered data
-    const kpi: KPIData = filtered.reduce(
-      (acc, curr) => ({
-        totalPaid: acc.totalPaid + curr.valuePaid,
-        totalReceived: acc.totalReceived + curr.valueReceived,
-        balance: acc.balance + (curr.valueReceived - curr.valuePaid),
-      }),
-      { totalPaid: 0, totalReceived: 0, balance: 0 }
-    );
+    // 2. Detecta se é modo "Contas a Pagar"
+    const normalizedType = normalizeText(filters.type || '');
+    const isContasAPagar = normalizedType.includes('saida') || 
+                          normalizedType.includes('pagar') ||
+                          normalizedType.includes('contas a pagar');
 
-    // 3. Paginate
+    // 3. Calculate KPIs based on filter type
+    let kpi: KPIData;
+
+    if (isContasAPagar) {
+      // LÓGICA ESPECIAL PARA CONTAS A PAGAR:
+      // - Total Geral = soma de todos os valores (valuePaid) no filtro
+      // - Total Pago = soma dos valores onde status = "Pago"
+      // - Total Pendente (Saldo) = Total Geral - Total Pago
+      
+      const totalGeral = filtered.reduce((acc, curr) => acc + curr.valuePaid, 0);
+      const totalPago = filtered
+        .filter(item => item.status === 'Pago')
+        .reduce((acc, curr) => acc + curr.valuePaid, 0);
+      const totalPendente = totalGeral - totalPago;
+
+      kpi = {
+        totalPaid: totalPago,        // "Total Saídas" = Total já pago
+        totalReceived: totalGeral,   // "Total Entradas" = Total Geral (ou pode ser 0)
+        balance: totalPendente,      // "Saldo Líquido" = Total pendente a pagar
+      };
+    } else {
+      // LÓGICA PADRÃO para outros tipos
+      kpi = filtered.reduce(
+        (acc, curr) => ({
+          totalPaid: acc.totalPaid + curr.valuePaid,
+          totalReceived: acc.totalReceived + curr.valueReceived,
+          balance: acc.balance + (curr.valueReceived - curr.valuePaid),
+        }),
+        { totalPaid: 0, totalReceived: 0, balance: 0 }
+      );
+    }
+
+    // 4. Paginate
     const total = filtered.length;
     const totalPages = Math.ceil(total / pageSize);
     const start = (page - 1) * pageSize;

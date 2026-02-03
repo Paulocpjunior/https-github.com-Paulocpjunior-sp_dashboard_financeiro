@@ -10,10 +10,11 @@ interface DataTableProps {
   onDelete?: (id: string) => void;
   clientFilterValue?: string;
   onClientFilterChange?: (value: string) => void;
-  clientOptions?: string[]; // For autocomplete
+  clientOptions?: string[];
   idFilterValue?: string;
   onIdFilterChange?: (value: string) => void;
   isLoading?: boolean;
+  selectedType?: string;
 }
 
 const DataTable: React.FC<DataTableProps> = ({ 
@@ -27,17 +28,36 @@ const DataTable: React.FC<DataTableProps> = ({
     clientOptions = [],
     idFilterValue,
     onIdFilterChange,
-    isLoading = false
+    isLoading = false,
+    selectedType = ''
 }) => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
 
-  // Verifica se há transações do tipo específico para mostrar as colunas detalhadas
-  const showDetailedEntryColumns = data.some(
-      t => t.type === 'Entrada de Caixa / Contas a Receber'
-  );
+  // Normaliza o texto para comparação (remove acentos e converte para minúsculo)
+  const normalizeText = (text: string) => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
+  };
 
-  // Garante formatação BRL com separador de milhar e 2 casas decimais
+  // Detecta o modo de exibição baseado no filtro de tipo selecionado
+  const normalizedType = normalizeText(selectedType);
+  
+  const isSaidaMode = normalizedType.includes('saida') || 
+                      normalizedType.includes('pagar') ||
+                      normalizedType.includes('contas a pagar');
+  
+  const isEntradaMode = normalizedType.includes('entrada') || 
+                        normalizedType.includes('receber') ||
+                        normalizedType.includes('contas a receber');
+
+  // Se nenhum tipo específico selecionado, verifica os dados
+  const showDetailedEntryColumns = isEntradaMode || (!selectedType && data.some(
+      t => normalizeText(t.type || '').includes('entrada')
+  ));
+
   const formatCurrency = (val: number | string | undefined) => {
     const num = Number(val || 0);
     return new Intl.NumberFormat('pt-BR', { 
@@ -50,7 +70,6 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const formatDate = (dateStr: string) => {
     if (!dateStr || dateStr === '1970-01-01') return '-';
-    // Fix timezone issues by treating YYYY-MM-DD as UTC or appending time manually
     const [year, month, day] = dateStr.split('-');
     return `${day}/${month}/${year}`;
   };
@@ -73,6 +92,22 @@ const DataTable: React.FC<DataTableProps> = ({
     setTransactionToDelete(null);
   };
 
+  // Função para obter o valor a exibir na coluna "Cliente/Conta"
+  const getDisplayClient = (row: Transaction) => {
+    const rowType = normalizeText(row.type || '');
+    if (isSaidaMode || rowType.includes('saida') || rowType.includes('pagar')) {
+      return row.movement || row.client || '-';
+    }
+    return row.client || '-';
+  };
+
+  // Calcula o número de colunas para colspan
+  const getColSpan = () => {
+    if (isSaidaMode) return 8;
+    if (showDetailedEntryColumns) return 10;
+    return 8;
+  };
+
   return (
     <>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors">
@@ -80,53 +115,98 @@ const DataTable: React.FC<DataTableProps> = ({
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Vencimento</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
-                    <div className="flex flex-col gap-2">
-                        <span>Cliente</span>
-                        {onClientFilterChange && (
-                            <div className="relative">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                                <input 
-                                    type="text" 
-                                    list="table-client-options"
-                                    value={clientFilterValue || ''}
-                                    onChange={(e) => onClientFilterChange(e.target.value)}
-                                    placeholder="Filtrar..."
-                                    className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
-                                />
-                                <datalist id="table-client-options">
-                                    {clientOptions.slice(0, 50).map((opt, i) => ( // Limiting options for performance
-                                        <option key={i} value={opt} />
-                                    ))}
-                                </datalist>
-                            </div>
-                        )}
-                    </div>
+                {/* COLUNA 1: Data Lançamento */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Data
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                 
-                {/* Dynamic Columns */}
-                {showDetailedEntryColumns ? (
-                    <>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Valor Honorários</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Valor Extra</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">Total Cobrança</th>
-                    </>
+                {/* COLUNA 2: Data Vencimento */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Vencimento
+                </th>
+                
+                {/* COLUNA 3: Tipo */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Tipo
+                </th>
+                
+                {/* COLUNA 4: Cliente/Conta a Pagar - MUDA BASEADO NO TIPO */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
+                  <div className="flex flex-col gap-2">
+                    <span>{isSaidaMode ? 'Conta a Pagar' : 'Cliente'}</span>
+                    {onClientFilterChange && (
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                        <input 
+                          type="text" 
+                          list="table-client-options"
+                          value={clientFilterValue || ''}
+                          onChange={(e) => onClientFilterChange(e.target.value)}
+                          placeholder="Filtrar..."
+                          className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
+                        />
+                        <datalist id="table-client-options">
+                          {clientOptions.slice(0, 50).map((opt, i) => (
+                            <option key={i} value={opt} />
+                          ))}
+                        </datalist>
+                      </div>
+                    )}
+                  </div>
+                </th>
+                
+                {/* COLUNA 5: Status */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Status
+                </th>
+                
+                {/* COLUNAS DINÂMICAS BASEADAS NO TIPO */}
+                {isSaidaMode ? (
+                  <>
+                    {/* Para Saídas: Valor e Valor Pago */}
+                    <th className="px-6 py-3 text-right text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                      Valor
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">
+                      Valor Pago
+                    </th>
+                  </>
+                ) : showDetailedEntryColumns ? (
+                  <>
+                    {/* Para Entradas: Honorários, Extras, Total Cobrança */}
+                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Valor Honorários
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Valor Extra
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                      Total Cobrança
+                    </th>
+                  </>
                 ) : (
-                    <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">Valor a pagar</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">
+                    Valor a Pagar
+                  </th>
                 )}
 
-                <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Valor Recebido</th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
+                {/* Valor Recebido - só mostra se NÃO for modo Saída */}
+                {!isSaidaMode && (
+                  <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                    Valor Recebido
+                  </th>
+                )}
+                
+                {/* Ações */}
+                <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
               {isLoading ? (
                 <tr>
-                  <td colSpan={showDetailedEntryColumns ? 10 : 8} className="px-6 py-20 text-center">
+                  <td colSpan={getColSpan()} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
                       <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Atualizando dados...</span>
@@ -135,83 +215,124 @@ const DataTable: React.FC<DataTableProps> = ({
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={showDetailedEntryColumns ? 10 : 8} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={getColSpan()} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                     Nenhum registro encontrado.
                   </td>
                 </tr>
               ) : (
-                data.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                      {formatDate(row.date)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">
-                      {formatDate(row.dueDate)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
-                        {row.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-900 dark:text-slate-100 font-medium max-w-xs truncate" title={row.client}>
-                      {row.client}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                          row.status === 'Pendente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
-                       `}>
-                        {row.status}
-                      </span>
-                    </td>
+                data.map((row) => {
+                  const rowType = normalizeText(row.type || '');
+                  const isRowSaida = rowType.includes('saida') || rowType.includes('pagar');
+                  
+                  return (
+                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                      {/* Data Lançamento */}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                        {formatDate(row.date)}
+                      </td>
+                      
+                      {/* Vencimento */}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">
+                        {formatDate(row.dueDate)}
+                      </td>
+                      
+                      {/* Tipo */}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          isRowSaida 
+                            ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
+                            : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                        }`}>
+                          {row.type}
+                        </span>
+                      </td>
+                      
+                      {/* Cliente / Conta a Pagar */}
+                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-slate-100 font-medium max-w-xs truncate" title={getDisplayClient(row)}>
+                        {getDisplayClient(row)}
+                      </td>
+                      
+                      {/* Status */}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                          ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                            row.status === 'Pendente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
+                        `}>
+                          {row.status}
+                        </span>
+                      </td>
 
-                    {/* Dynamic Cells */}
-                    {showDetailedEntryColumns ? (
+                      {/* CÉLULAS DINÂMICAS BASEADAS NO TIPO */}
+                      {isSaidaMode ? (
                         <>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
-                                {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.honorarios) : '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
-                                {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.valorExtra) : '-'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10">
-                                {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.totalCobranca) : '-'}
-                            </td>
-                        </>
-                    ) : (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-900/10">
+                          {/* Valor (original) */}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-orange-600 dark:text-orange-400">
+                            {row.valuePaid > 0 ? formatCurrency(row.valuePaid) : '-'}
+                          </td>
+                          {/* Valor Pago */}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-900/10">
                             {row.valuePaid > 0 ? (
-                                <div className="flex items-center justify-end gap-1">
-                                    <ArrowDownCircle className="h-3 w-3" />
-                                    {formatCurrency(row.valuePaid)}
-                                </div>
+                              <div className="flex items-center justify-end gap-1">
+                                <ArrowDownCircle className="h-3 w-3" />
+                                {formatCurrency(row.valuePaid)}
+                              </div>
                             ) : (
-                                <span className="text-slate-300 dark:text-slate-600">-</span>
+                              <span className="text-slate-300 dark:text-slate-600">-</span>
                             )}
+                          </td>
+                        </>
+                      ) : showDetailedEntryColumns ? (
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
+                            {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.honorarios) : '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
+                            {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.valorExtra) : '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10">
+                            {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.totalCobranca) : '-'}
+                          </td>
+                        </>
+                      ) : (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-900/10">
+                          {row.valuePaid > 0 ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <ArrowDownCircle className="h-3 w-3" />
+                              {formatCurrency(row.valuePaid)}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">-</span>
+                          )}
                         </td>
-                    )}
+                      )}
 
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400 bg-green-50/30 dark:bg-green-900/10">
-                       {row.valueReceived > 0 ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <ArrowUpCircle className="h-3 w-3" />
-                            {formatCurrency(row.valueReceived)}
-                          </div>
-                       ) : (
-                          <span className="text-slate-300 dark:text-slate-600">-</span>
-                       )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                      <button 
-                        onClick={() => handleDeleteClick(row.id)}
-                        className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
-                        title="Excluir Registro"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      {/* Valor Recebido - só mostra se NÃO for modo Saída */}
+                      {!isSaidaMode && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400 bg-green-50/30 dark:bg-green-900/10">
+                          {row.valueReceived > 0 ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <ArrowUpCircle className="h-3 w-3" />
+                              {formatCurrency(row.valueReceived)}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">-</span>
+                          )}
+                        </td>
+                      )}
+                      
+                      {/* Ações */}
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                        <button 
+                          onClick={() => handleDeleteClick(row.id)}
+                          className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title="Excluir Registro"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -252,13 +373,11 @@ const DataTable: React.FC<DataTableProps> = ({
       {/* Delete Confirmation Modal */}
       {deleteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 print:hidden">
-          {/* Backdrop */}
           <div 
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
             onClick={cancelDelete}
           ></div>
 
-          {/* Modal Panel */}
           <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-sm w-full p-6 border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
             <button 
               onClick={cancelDelete}
