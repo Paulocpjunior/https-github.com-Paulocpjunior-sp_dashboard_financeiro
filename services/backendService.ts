@@ -189,7 +189,7 @@ export const BackendService = {
         contasBancarias: 2,
         tipoLancamento: 3,
         pagoPor: 4,
-        movimentacao: 5,
+        movimentacao: 5, // COLUNA F
         dataAPagar: 7,
         docPago: 9,
         dataBaixa: 10,
@@ -220,12 +220,12 @@ export const BackendService = {
         const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
 
         const rawType = get(COL.tipoLancamento);
-        const rawMovement = get(COL.movimentacao);
+        const rawMovement = get(COL.movimentacao); // COLUNA F (Texto Original)
         const rawValorPago = get(COL.valorPago);
         const rawValorRecebido = get(COL.valorRecebido);
         const rawTotalCobranca = get(COL.totalCobranca);
 
-        // 1. Determinação da Movimentação (Prioritária)
+        // 1. Determinação da Movimentação (Prioritária para Lógica do Sistema)
         let movement: 'Entrada' | 'Saída' = 'Entrada';
         const tipoLower = rawType.toLowerCase();
         
@@ -246,24 +246,20 @@ export const BackendService = {
         const valCobranca = Math.abs(parseCurrency(rawTotalCobranca));
 
         // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS E PREVISÃO
-        // Se for Saída (Conta a Pagar), garante que 'valPaid' contenha o valor da dívida (previsto) 
-        // mesmo que ainda não tenha sido pago (onde o valor na planilha pode estar vazio ou 0).
         if (movement === 'Saída') {
            if (valPaid === 0) {
-               // Se o valor pago está zerado, tenta pegar do Total Cobrança ou Valor Recebido (erro de coluna)
                if (valCobranca > 0) {
                    valPaid = valCobranca;
                } else if (valReceived > 0) {
                    valPaid = valReceived;
-                   valReceived = 0; // Corrige se estava errado na coluna de entrada
+                   valReceived = 0; 
                }
            }
         }
         
-        // Se for Entrada mas valReceived é 0
         if (movement === 'Entrada' && valReceived === 0) {
             if (valPaid > 0) {
-                valReceived = valPaid; // Assume que usuário colocou na coluna errada
+                valReceived = valPaid; 
                 valPaid = 0;
             } else if (valCobranca > 0) {
                 valReceived = valCobranca;
@@ -286,11 +282,12 @@ export const BackendService = {
           paymentDate: finalPaymentDate !== '1970-01-01' ? finalPaymentDate : undefined,
           bankAccount: cleanString(get(COL.contasBancarias)),
           type: cleanString(rawType),
+          description: cleanString(rawMovement), // Armazena o valor exato da COLUNA F aqui
           paidBy: cleanString(get(COL.pagoPor)),
           status: normalizeStatus(get(COL.docPago)),
           client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
-          valuePaid: valPaid, // Agora contém o Valor da Conta (Previsto) mesmo se pendente
+          valuePaid: valPaid,
           valueReceived: valReceived,
           honorarios: parseCurrency(get(COL.valorHonorarios)),
           valorExtra: parseCurrency(get(COL.valorExtras)),

@@ -67,6 +67,7 @@ const generateTransactions = (count: number): Transaction[] => {
       dueDate: dueDate.toISOString().split('T')[0],
       bankAccount: BANK_ACCOUNTS[Math.floor(Math.random() * BANK_ACCOUNTS.length)],
       type: type,
+      description: `Movimentação referente a ${type}`,
       status: STATUSES[Math.floor(Math.random() * STATUSES.length)] as any,
       client: CLIENTS[Math.floor(Math.random() * CLIENTS.length)],
       paidBy: PAYERS[Math.floor(Math.random() * PAYERS.length)],

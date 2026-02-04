@@ -1,3 +1,4 @@
+
 export type UserRole = 'admin' | 'operacional';
 
 export interface User {
@@ -18,10 +19,11 @@ export interface Transaction {
   paymentDate?: string; // Data de Baixa/Pagamento/Recebimento efetivo (YYYY-MM-DD)
   bankAccount: string;
   type: string;
+  description: string; // Coluna F da Planilha (Movimentação Original)
   status: 'Pago' | 'Pendente' | 'Agendado';
   client: string; // Name/Creditor
   paidBy: string;
-  movement: 'Entrada' | 'Saída';
+  movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
   valuePaid: number;
   valueReceived: number;
   // Campos específicos para 'Entrada de Caixa / Contas a Receber'

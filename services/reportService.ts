@@ -116,20 +116,15 @@ export const ReportService = {
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
       // NOVO LAYOUT SOLICITADO
-      // Data, Venc., Data Baixa, Movimentação (Desc), Status, Valor Orig., Valor Pago, Observação a Pagar (Cliente)
+      // Data, Venc., Data Baixa, Movimentação (Coluna F), Status, Valor Orig., Valor Pago, Observação a Pagar (Cliente)
       const tableBody = safeTransactions.map(t => {
         const dataLanc = formatDate(t.date);
         const dataVenc = formatDate(t.dueDate);
         const dataBaixa = formatDate(t.paymentDate);
         const status = safeStr(t.status);
         
-        // Movimentação = Descrição do que está sendo pago. Usaremos o 'type', mas removendo o texto genérico.
-        let movimentacaoDesc = safeStr(t.type);
-        if (movimentacaoDesc.includes('Saida de Caixa') || movimentacaoDesc.includes('Contas a Pagar') || movimentacaoDesc.includes('Entrada de Caixa')) {
-            // Se for o tipo genérico, tenta usar algo mais específico se houver, ou deixa em branco para não poluir
-            movimentacaoDesc = movimentacaoDesc.replace('Saida de Caixa / Contas a Pagar', '').replace('Entrada de Caixa / Contas a Receber', '').trim();
-            if (!movimentacaoDesc) movimentacaoDesc = 'Geral'; 
-        }
+        // Movimentação = Exatamente o que está na Coluna F (t.description)
+        const movimentacaoDesc = safeStr(t.description);
 
         // Observação a Pagar = Cliente / Favorecido
         const observacao = safeStr(t.client);
@@ -153,7 +148,7 @@ export const ReportService = {
           dataLanc,          // 0: Data
           dataVenc,          // 1: Vencimento
           dataBaixa,         // 2: Data Baixa
-          movimentacaoDesc,  // 3: Movimentação (Descrição/Tipo)
+          movimentacaoDesc,  // 3: Movimentação (COLUNA F da Planilha)
           status,            // 4: Status
           valorOriginalFmt,  // 5: Valor Original (Previsto)
           valorPagoFmt,      // 6: Valor Pago (Efetivado)
@@ -185,7 +180,7 @@ export const ReportService = {
               0: { cellWidth: 16, halign: 'center' }, // Data
               1: { cellWidth: 16, halign: 'center' }, // Venc
               2: { cellWidth: 16, halign: 'center' }, // Baixa
-              3: { cellWidth: 35, halign: 'left' },   // Movimentação (Desc)
+              3: { cellWidth: 35, halign: 'left' },   // Movimentação (Coluna F)
               4: { cellWidth: 18, halign: 'center' }, // Status
               5: { cellWidth: 22, halign: 'right' },  // Valor Orig
               6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }, // Valor Pago
