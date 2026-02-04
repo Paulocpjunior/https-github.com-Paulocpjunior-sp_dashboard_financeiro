@@ -6,6 +6,7 @@ export interface User {
   name: string;
   role: UserRole;
   active: boolean;
+  email?: string;
   lastAccess?: string;
   passwordHash?: string; // Armazena o hash SHA-256 da senha, nunca o texto plano
 }

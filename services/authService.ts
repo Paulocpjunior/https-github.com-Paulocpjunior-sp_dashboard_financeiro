@@ -1,7 +1,7 @@
 import { User } from '../types';
 
 // URL do Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYbEYkx0hGgXGx1B6_2yFJ1qbnA8KH2prmV_0cohnMn_5wcyrA3fImFnxN1jhyIImYyg/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7FBRbU_z7Hs1nHo71_5Lqs4qnN4_863Sc9Zwa78Q91ERKNXgkzMftCs9ivdSpFN1img/exec';
 
 const AUTH_STORAGE_KEY = 'sp_contabil_auth';
 
@@ -10,47 +10,49 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
-// Função para fazer login via Apps Script
-const loginViaAPI = async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
+interface LoginResult {
+  success: boolean;
+  user?: User;
+  message?: string;
+}
+
+// Função para fazer login via Apps Script usando GET (evita CORS)
+const loginViaAPI = async (username: string, password: string): Promise<LoginResult> => {
+  const usernameClean = username.toLowerCase().trim();
+  
   try {
-    // Tentar com fetch normal
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'login',
-        username: username.toLowerCase().trim(),
-        password: password,
-      }),
+    // Usar GET com parâmetros na URL (funciona sem CORS)
+    const params = new URLSearchParams({
+      action: 'loginGet',
+      username: usernameClean,
+      password: password,
+    });
+    
+    const url = `${APPS_SCRIPT_URL}?${params.toString()}`;
+    console.log('[AuthService] Fazendo login via GET...');
+    
+    const response = await fetch(url, {
+      method: 'GET',
       redirect: 'follow',
     });
 
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.log('Erro no fetch, tentando alternativa...');
-    
-    // Se der erro de CORS, tentar via GET com parâmetros
-    try {
-      const params = new URLSearchParams({
-        action: 'login',
-        username: username.toLowerCase().trim(),
-        password: password,
-      });
-      
-      const response = await fetch(`${APPS_SCRIPT_URL}?${params.toString()}`);
-      const result = await response.json();
-      return result;
-    } catch (fallbackError) {
-      console.error('Erro no login:', fallbackError);
-      return { success: false, message: 'Erro de conexão. Tente novamente.' };
+    if (!response.ok) {
+      throw new Error('Erro na resposta do servidor');
     }
+
+    const result = await response.json();
+    console.log('[AuthService] Resposta:', result);
+    return result;
+    
+  } catch (error) {
+    console.error('[AuthService] Erro no login:', error);
+    return { success: false, message: 'Erro de conexão. Tente novamente.' };
   }
 };
 
 export const AuthService = {
   // Login
-  login: async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
+  login: async (username: string, password: string): Promise<LoginResult> => {
     console.log('[AuthService] Tentando login:', username);
     
     // Tentar login via API (planilha)

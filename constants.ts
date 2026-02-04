@@ -12,9 +12,9 @@ export const PASS_HASH_123456 = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3c
 export const DEFAULT_PASS_HASH = PASS_HASH_ADMIN;
 
 export const MOCK_USERS: User[] = [
-  { id: '1', username: 'admin', name: 'Administrador', role: 'admin', active: true, passwordHash: DEFAULT_PASS_HASH },
-  { id: '2', username: 'operador1', name: 'Operador 1', role: 'operacional', active: true, passwordHash: DEFAULT_PASS_HASH },
-  { id: '3', username: 'operador2', name: 'Operador 2', role: 'operacional', active: true, passwordHash: DEFAULT_PASS_HASH },
+  { id: '1', username: 'admin', name: 'Administrador', role: 'admin', active: true, passwordHash: DEFAULT_PASS_HASH, email: 'admin@spcontabil.com.br' },
+  { id: '2', username: 'operador1', name: 'Operador 1', role: 'operacional', active: true, passwordHash: DEFAULT_PASS_HASH, email: 'op1@spcontabil.com.br' },
+  { id: '3', username: 'operador2', name: 'Operador 2', role: 'operacional', active: true, passwordHash: DEFAULT_PASS_HASH, email: 'op2@spcontabil.com.br' },
 ];
 
 export const BANK_ACCOUNTS = ['Itau', 'Bradesco', 'Santander', 'Caixa', 'Nubank', 'Inter'];

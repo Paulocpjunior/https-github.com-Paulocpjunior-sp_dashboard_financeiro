@@ -10,136 +10,186 @@ export const ReportService = {
     filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string },
     currentUser: User | null
   ) => {
-    // Cast to any to resolve issues with plugins and internal API types
-    const doc: any = new jsPDF();
-    const pageWidth = doc.internal.pageSize.width;
-    
-    // --- Header ---
-    doc.setFillColor(37, 99, 235); // Blue 600
-    doc.rect(0, 0, pageWidth, 40, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Relatório Financeiro', 14, 20);
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 28);
-    doc.text(`Solicitado por: ${currentUser?.name || 'Usuário'}`, 14, 34);
-
-    // --- Filter Summary ---
-    let yPos = 50;
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Parâmetros do Relatório:', 14, yPos);
-    
-    yPos += 7;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    
-    // Dates
-    const dateRange = filters.startDate && filters.endDate 
-      ? `${new Date(filters.startDate).toLocaleDateString('pt-BR')} até ${new Date(filters.endDate).toLocaleDateString('pt-BR')}`
-      : 'Todo o período';
-    doc.text(`Período: ${dateRange}`, 14, yPos);
-    yPos += 5;
-
-    // Specific Filters
-    if (filters.status || filters.bankAccount) {
-        let specifics = [];
-        if (filters.status) specifics.push(`Status: ${filters.status}`);
-        if (filters.bankAccount) specifics.push(`Conta: ${filters.bankAccount}`);
-        doc.text(specifics.join(' | '), 14, yPos);
-        yPos += 5;
-    }
-
-    // Types
-    const typeText = filters.types.length > 0 ? filters.types.join(', ') : 'Todos os tipos';
-    // Handle long text wrapping for types
-    const splitTypes = doc.splitTextToSize(`Tipos: ${typeText}`, pageWidth - 28);
-    doc.text(splitTypes, 14, yPos);
-    yPos += (splitTypes.length * 5) + 5;
-
-    // --- Financial Summary Cards (Draw manually) ---
-    const cardWidth = (pageWidth - 28 - 10) / 3; // 3 cards with gap
-    const cardHeight = 25;
-    const cardY = yPos;
-
-    // Helper to draw mini summary card
-    const drawCard = (x: number, title: string, value: number, color: [number, number, number]) => {
-      doc.setDrawColor(220, 220, 220);
-      doc.setFillColor(250, 250, 250);
-      doc.roundedRect(x, cardY, cardWidth, cardHeight, 3, 3, 'FD');
+    try {
+      // Inicializa o documento
+      const doc: any = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
       
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(title, x + 5, cardY + 8);
+      // Cores da Identidade Visual (Royal Blue)
+      const primaryColor = [30, 64, 175]; // Royal Blue 800
+      const secondaryColor = [71, 85, 105]; // Slate 600
       
-      doc.setFontSize(12);
+      // --- 1. CABEÇALHO (Header) ---
+      // Fundo Azul
+      doc.setFillColor(...primaryColor);
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      
+      // Título
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...color);
-      const valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-      doc.text(valStr, x + 5, cardY + 18);
-    };
+      doc.text('Relatório Financeiro', 14, 18);
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('SP Contábil - Gestão de Fluxo de Caixa', 14, 25);
 
-    drawCard(14, 'Total Entradas', kpi.totalReceived, [22, 163, 74]); // Green
-    drawCard(14 + cardWidth + 5, 'Total Saídas', kpi.totalPaid, [220, 38, 38]); // Red
-    drawCard(14 + (cardWidth * 2) + 10, 'Saldo Líquido', kpi.balance, kpi.balance >= 0 ? [37, 99, 235] : [220, 38, 38]); // Blue or Red
+      // --- DADOS DO COLABORADOR E DATA (Solicitado) ---
+      const currentDate = new Date().toLocaleDateString('pt-BR');
+      const currentTime = new Date().toLocaleTimeString('pt-BR');
+      const collaboratorName = currentUser?.name ? currentUser.name.toUpperCase() : 'USUÁRIO DO SISTEMA';
 
-    yPos = cardY + cardHeight + 15;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      
+      // Alinhado à direita no cabeçalho azul
+      doc.text(`EMITIDO POR: ${collaboratorName}`, pageWidth - 14, 18, { align: 'right' });
+      doc.text(`DATA: ${currentDate} às ${currentTime}`, pageWidth - 14, 25, { align: 'right' });
 
-    // --- Transactions Table ---
-    const tableData = transactions.map(t => [
-      new Date(t.date).toLocaleDateString('pt-BR'),
-      t.bankAccount,
-      t.type,
-      t.client,
-      t.status,
-      t.movement === 'Entrada' 
-        ? `+ ${t.valueReceived.toFixed(2).replace('.', ',')}` 
-        : `- ${t.valuePaid.toFixed(2).replace('.', ',')}`
-    ]);
+      // --- 2. RESUMO DOS FILTROS ---
+      let yPos = 50;
+      doc.setTextColor(50, 50, 50);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Parâmetros da Análise:', 14, yPos);
+      
+      yPos += 6;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      
+      const periodStr = filters.startDate && filters.endDate 
+        ? `${new Date(filters.startDate).toLocaleDateString('pt-BR')} até ${new Date(filters.endDate).toLocaleDateString('pt-BR')}`
+        : 'Todo o período disponível';
+      
+      doc.text(`• Período: ${periodStr}`, 14, yPos);
+      yPos += 5;
 
-    doc.autoTable({
-      startY: yPos,
-      head: [['Data', 'Conta', 'Tipo', 'Cliente/Descrição', 'Status', 'Valor']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [71, 85, 105] }, // Slate 600
-      styles: { fontSize: 8, cellPadding: 2 },
-      columnStyles: {
-        0: { cellWidth: 20 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 30 },
-        // 3 (Client) is auto
-        4: { cellWidth: 20 },
-        5: { halign: 'right', fontStyle: 'bold', cellWidth: 30 }
-      },
-      didParseCell: (data: any) => {
-        // Colorize Value column based on content
-        if (data.section === 'body' && data.column.index === 5) {
-          const text = data.cell.raw as string;
-          if (text.includes('+')) {
-            data.cell.styles.textColor = [22, 163, 74];
-          } else {
-            data.cell.styles.textColor = [220, 38, 38];
+      if (filters.bankAccount) {
+        doc.text(`• Conta Bancária: ${filters.bankAccount}`, 14, yPos);
+        yPos += 5;
+      }
+      
+      if (filters.status) {
+        doc.text(`• Status: ${filters.status}`, 14, yPos);
+        yPos += 5;
+      }
+
+      // --- 3. CARDS DE RESUMO (KPIs) ---
+      yPos += 5;
+      const cardWidth = (pageWidth - 28 - 10) / 3;
+      const cardHeight = 20;
+
+      const drawCard = (x: number, label: string, value: number, color: [number, number, number]) => {
+          doc.setDrawColor(200, 200, 200);
+          doc.setFillColor(252, 252, 252);
+          doc.roundedRect(x, yPos, cardWidth, cardHeight, 2, 2, 'FD');
+          
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          doc.text(label, x + 5, yPos + 7);
+          
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(...color);
+          const valFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+          doc.text(valFormatted, x + 5, yPos + 16);
+      };
+
+      drawCard(14, 'Total Entradas', kpi.totalReceived, [22, 163, 74]); // Verde
+      drawCard(14 + cardWidth + 5, 'Total Saídas', kpi.totalPaid, [220, 38, 38]); // Vermelho
+      drawCard(14 + (cardWidth * 2) + 10, 'Saldo Líquido', kpi.balance, kpi.balance >= 0 ? [37, 99, 235] : [220, 38, 38]); // Azul ou Vermelho
+
+      yPos += cardHeight + 15;
+
+      // --- 4. TABELA DE ITENS LANÇADOS ---
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Detalhamento dos Lançamentos', 14, yPos);
+      yPos += 2;
+
+      const tableBody = transactions.map(t => {
+        const dateStr = new Date(t.date).toLocaleDateString('pt-BR');
+        // Define a descrição (Cliente ou quem pagou)
+        const description = t.client || t.paidBy || 'Sem descrição';
+        // Formata valor
+        const isEntrada = t.movement === 'Entrada';
+        const value = isEntrada ? t.valueReceived : t.valuePaid;
+        const sign = isEntrada ? '+ ' : '- ';
+        const formattedValue = sign + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+        return [
+          dateStr,
+          t.type || '-',
+          description,
+          t.bankAccount || '-',
+          t.status || '-',
+          formattedValue
+        ];
+      });
+
+      doc.autoTable({
+        startY: yPos + 3,
+        head: [['Data', 'Tipo', 'Descrição / Cliente', 'Conta', 'Status', 'Valor']],
+        body: tableBody,
+        theme: 'striped',
+        headStyles: { 
+          fillColor: secondaryColor, 
+          textColor: 255, 
+          fontStyle: 'bold',
+          fontSize: 8 
+        },
+        bodyStyles: { 
+          fontSize: 8, 
+          textColor: 50 
+        },
+        alternateRowStyles: { 
+          fillColor: [245, 247, 250] 
+        },
+        columnStyles: {
+          0: { cellWidth: 20 }, // Data
+          1: { cellWidth: 35 }, // Tipo
+          2: { cellWidth: 'auto' }, // Descrição (Expande)
+          3: { cellWidth: 25 }, // Conta
+          4: { cellWidth: 20 }, // Status
+          5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } // Valor
+        },
+        didParseCell: (data: any) => {
+          // Colorir a coluna de valor
+          if (data.section === 'body' && data.column.index === 5) {
+            const rawVal = data.cell.raw as string;
+            if (rawVal.startsWith('+')) {
+              data.cell.styles.textColor = [22, 163, 74]; // Verde
+            } else {
+              data.cell.styles.textColor = [220, 38, 38]; // Vermelho
+            }
           }
         }
+      });
+
+      // --- 5. RODAPÉ ---
+      const pageCount = doc.internal.pages.length - 1;
+      for(let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          
+          // Linha divisória
+          doc.setDrawColor(220, 220, 220);
+          doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
+          
+          doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
+          doc.text(`SP Contábil - Sistema Integrado`, 14, pageHeight - 8);
       }
-    });
 
-    // --- Footer ---
-    const pageCount = doc.internal.pages.length - 1;
-    for(let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 20, doc.internal.pageSize.height - 10);
-        doc.text('CashFlow Pro System', 14, doc.internal.pageSize.height - 10);
+      // Salvar arquivo
+      const fileName = `Relatorio_Financeiro_${new Date().toISOString().slice(0,10)}.pdf`;
+      doc.save(fileName);
+
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Houve um erro ao gerar o PDF. Verifique os dados e tente novamente.");
     }
-
-    doc.save(`relatorio_financeiro_${new Date().toISOString().split('T')[0]}.pdf`);
   }
 };
