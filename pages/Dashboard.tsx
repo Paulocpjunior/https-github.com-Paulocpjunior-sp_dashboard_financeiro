@@ -433,8 +433,8 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-               {/* NOME EMPRESA / CREDOR */}
-               <div className="space-y-1 lg:col-span-1">
+               {/* NOME EMPRESA / CREDOR - Expandido para 3 colunas */}
+               <div className="space-y-1 lg:col-span-3">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Nome Empresa / Credor</label>
                 <input
                   list="clients-list"
