@@ -75,6 +75,16 @@ export const DataService = {
       // Due Date Filter (Vencimento)
       if (filters.dueDateStart && item.dueDate < filters.dueDateStart) matches = false;
       if (filters.dueDateEnd && item.dueDate > filters.dueDateEnd) matches = false;
+
+      // Payment Date Filter (Data Pagamento)
+      // Aplica-se apenas se a transação tem data de pagamento definida
+      if (filters.paymentDateStart && (!item.paymentDate || item.paymentDate < filters.paymentDateStart)) matches = false;
+      if (filters.paymentDateEnd && (!item.paymentDate || item.paymentDate > filters.paymentDateEnd)) matches = false;
+
+      // Receipt Date Filter (Data Recebimento)
+      // Na prática, usa o mesmo campo 'paymentDate' (Data Baixa), mas a UI separa por contexto
+      if (filters.receiptDateStart && (!item.paymentDate || item.paymentDate < filters.receiptDateStart)) matches = false;
+      if (filters.receiptDateEnd && (!item.paymentDate || item.paymentDate > filters.receiptDateEnd)) matches = false;
       
       // Strict filtering for dropdowns
       if (filters.bankAccount && item.bankAccount !== filters.bankAccount) matches = false;
@@ -169,6 +179,7 @@ export const DataService = {
       'ID',
       'Data Lançamento',
       'Data Vencimento',
+      'Data Baixa',
       'Conta',
       'Tipo',
       'Status',
@@ -188,6 +199,7 @@ export const DataService = {
               row.id,
               row.date,
               row.dueDate,
+              row.paymentDate || '',
               row.bankAccount,
               row.type,
               row.status,

@@ -274,7 +274,7 @@ export const BackendService = {
         movimentacao: 5,
         dataAPagar: 7,
         docPago: 9,
-        dataBaixa: 10,
+        dataBaixa: 10, // Data de Pagamento / Recebimento efetivo
         valorPago: 13,
         nomeEmpresa: 26,
         valorHonorarios: 27,
@@ -308,6 +308,7 @@ export const BackendService = {
 
         const rawDate = get(COL.dataLancamento);
         const rawDueDate = get(COL.dataAPagar);
+        const rawPaymentDate = get(COL.dataBaixa); // Data da Baixa
         const rawBankAccount = get(COL.contasBancarias);
         const rawType = get(COL.tipoLancamento);
         const rawPaidBy = get(COL.pagoPor);
@@ -350,10 +351,13 @@ export const BackendService = {
           finalDueDate = finalDate;
         }
 
+        const finalPaymentDate = parseDate(rawPaymentDate);
+
         return {
           id: finalId,
           date: finalDate,
           dueDate: finalDueDate,
+          paymentDate: finalPaymentDate !== '1970-01-01' ? finalPaymentDate : undefined,
           bankAccount: cleanString(rawBankAccount),
           type: cleanString(rawType),
           paidBy: cleanString(rawPaidBy),

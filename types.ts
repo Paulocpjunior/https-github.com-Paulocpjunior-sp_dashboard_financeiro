@@ -15,6 +15,7 @@ export interface Transaction {
   id: string;
   date: string; // Data de Emissão/Lançamento (YYYY-MM-DD)
   dueDate: string; // Data de Vencimento (YYYY-MM-DD)
+  paymentDate?: string; // Data de Baixa/Pagamento/Recebimento efetivo (YYYY-MM-DD)
   bankAccount: string;
   type: string;
   status: 'Pago' | 'Pendente' | 'Agendado';
@@ -35,6 +36,10 @@ export interface FilterState {
   endDate: string;
   dueDateStart?: string; // Filtro Data Vencimento Início
   dueDateEnd?: string;   // Filtro Data Vencimento Fim
+  paymentDateStart?: string; // Filtro Data Pagamento Início
+  paymentDateEnd?: string;   // Filtro Data Pagamento Fim
+  receiptDateStart?: string; // Filtro Data Recebimento Início
+  receiptDateEnd?: string;   // Filtro Data Recebimento Fim
   bankAccount: string;
   type: string;
   status: string;

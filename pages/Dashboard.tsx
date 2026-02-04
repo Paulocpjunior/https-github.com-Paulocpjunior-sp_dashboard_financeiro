@@ -14,6 +14,10 @@ const INITIAL_FILTERS: FilterState = {
   endDate: '',
   dueDateStart: '',
   dueDateEnd: '',
+  paymentDateStart: '',
+  paymentDateEnd: '',
+  receiptDateStart: '',
+  receiptDateEnd: '',
   bankAccount: '',
   type: '',
   status: '',
@@ -53,11 +57,18 @@ const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState('');
 
-  // Detecta se está no modo "Contas a Pagar"
+  // Detecta se está no modo "Contas a Pagar" (Saída) ou "Receber" (Entrada)
   const normalizedType = normalizeText(filters.type || '');
   const isContasAPagar = normalizedType.includes('saida') || 
                         normalizedType.includes('pagar') ||
-                        normalizedType.includes('contas a pagar');
+                        normalizedType.includes('fornecedor') ||
+                        normalizedType.includes('aluguel') ||
+                        filters.movement === 'Saída';
+
+  const isContasAReceber = normalizedType.includes('entrada') || 
+                          normalizedType.includes('receber') ||
+                          normalizedType.includes('servico') ||
+                          filters.movement === 'Entrada';
 
   // Initial Data Load
   useEffect(() => {
@@ -318,7 +329,7 @@ const Dashboard: React.FC = () => {
                  </div>
                </div>
 
-              {/* DATA LANÇAMENTO */}
+              {/* 1. DATA LANÇAMENTO */}
               <div className="space-y-1 lg:col-span-2">
                 <div className="flex justify-between items-end mb-1">
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Data de Lançamento</label>
@@ -346,7 +357,7 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* DATA VENCIMENTO - NOVO */}
+              {/* 2. DATA VENCIMENTO */}
               <div className="space-y-1 lg:col-span-2">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Data de Vencimento</label>
                 <div className="flex gap-2 items-center">
@@ -368,6 +379,82 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* 3. TIPO DE LANÇAMENTO (Movemos para cima para ficar claro que controla a data abaixo) */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Lançamento</label>
+                <select
+                  className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                  value={filters.type}
+                  onChange={(e) => handleFilterChange('type', e.target.value)}
+                >
+                  <option value="">Todos os Tipos</option>
+                  {options.types.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+
+              {/* 4. DATA PAGAMENTO / RECEBIMENTO (CONDICIONAL) */}
+              {/* Se for SAÍDA (Pagar), mostra Pagamento. Se for ENTRADA (Receber), mostra Recebimento. Se indefinido, mostra ambos ou genérico? 
+                  User pediu 4 campos, então mostramos Pagamento e Recebimento condicionalmente ou juntos. */}
+              
+              <div className="space-y-1 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 
+                 {/* Exibe Data Pagamento se for saída ou se nenhum tipo específico selecionado */}
+                 {(!isContasAReceber) && (
+                    <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
+                            Data Pagamento
+                            {isContasAPagar && <span className="text-red-500 text-[10px]">(Saídas)</span>}
+                        </label>
+                        <div className="flex gap-2 items-center">
+                            <input
+                                type="date"
+                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                                value={filters.paymentDateStart || ''}
+                                onChange={(e) => handleFilterChange('paymentDateStart', e.target.value)}
+                                title="Pagamento De"
+                            />
+                            <span className="text-slate-400 text-sm">-</span>
+                            <input
+                                type="date"
+                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                                value={filters.paymentDateEnd || ''}
+                                onChange={(e) => handleFilterChange('paymentDateEnd', e.target.value)}
+                                title="Pagamento Até"
+                            />
+                        </div>
+                    </div>
+                 )}
+
+                 {/* Exibe Data Recebimento se for entrada ou se nenhum tipo específico selecionado */}
+                 {(!isContasAPagar) && (
+                    <div className="space-y-1">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
+                            Data Recebimento
+                            {isContasAReceber && <span className="text-green-500 text-[10px]">(Entradas)</span>}
+                        </label>
+                        <div className="flex gap-2 items-center">
+                            <input
+                                type="date"
+                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                                value={filters.receiptDateStart || ''}
+                                onChange={(e) => handleFilterChange('receiptDateStart', e.target.value)}
+                                title="Recebimento De"
+                            />
+                            <span className="text-slate-400 text-sm">-</span>
+                            <input
+                                type="date"
+                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                                value={filters.receiptDateEnd || ''}
+                                onChange={(e) => handleFilterChange('receiptDateEnd', e.target.value)}
+                                title="Recebimento Até"
+                            />
+                        </div>
+                    </div>
+                 )}
+              </div>
+
+              {/* OUTROS FILTROS (Linha de Baixo) */}
+              
               {/* MOVIMENTAÇÃO */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Movimentação</label>
@@ -381,7 +468,7 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* TIPO DE CONTA (Conta Bancária) - Populado dinamicamente */}
+              {/* TIPO DE CONTA */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Conta (Banco)</label>
                 <select
@@ -391,19 +478,6 @@ const Dashboard: React.FC = () => {
                 >
                   <option value="">Todas as Contas</option>
                   {options.bankAccounts.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-
-               {/* TIPO DE LANÇAMENTO */}
-               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Lançamento</label>
-                <select
-                  className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                  value={filters.type}
-                  onChange={(e) => handleFilterChange('type', e.target.value)}
-                >
-                  <option value="">Todos os Tipos</option>
-                  {options.types.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
 
@@ -420,21 +494,8 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* PAGO POR */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Pago Por</label>
-                <select
-                  className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                  value={filters.paidBy}
-                  onChange={(e) => handleFilterChange('paidBy', e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  {options.paidBys.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-
-               {/* NOME EMPRESA / CREDOR - Expandido para 3 colunas */}
-               <div className="space-y-1 lg:col-span-3">
+               {/* NOME EMPRESA / CREDOR */}
+               <div className="space-y-1 lg:col-span-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Nome Empresa / Credor</label>
                 <input
                   list="clients-list"
