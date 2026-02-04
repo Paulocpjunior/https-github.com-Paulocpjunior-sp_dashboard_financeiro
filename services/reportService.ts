@@ -7,7 +7,7 @@ export const ReportService = {
   generatePDF: (
     transactions: Transaction[], 
     kpi: KPIData, 
-    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string },
+    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string; dateContext?: string },
     currentUser: User | null
   ) => {
     try {
@@ -104,6 +104,7 @@ export const ReportService = {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       
+      const contextLabel = filters.dateContext ? `(${filters.dateContext})` : '';
       const dateRange = filters.startDate && filters.endDate 
         ? `${formatDate(filters.startDate)} até ${formatDate(filters.endDate)}` 
         : 'Todo o período disponível';
@@ -120,10 +121,10 @@ export const ReportService = {
           }
       }
 
-      doc.text(`Período: ${dateRange}`, 14, yPos + 5);
-      doc.text(`Conta: ${bankInfo}`, 80, yPos + 5);
-      doc.text(`Status: ${statusInfo}`, 130, yPos + 5);
-      doc.text(`Tipos: ${typesInfo}`, 180, yPos + 5);
+      doc.text(`Período ${contextLabel}: ${dateRange}`, 14, yPos + 5);
+      doc.text(`Conta: ${bankInfo}`, 100, yPos + 5); // Shifted right slightly
+      doc.text(`Status: ${statusInfo}`, 150, yPos + 5);
+      doc.text(`Tipos: ${typesInfo}`, 190, yPos + 5);
 
       yPos += 10;
 
@@ -136,11 +137,10 @@ export const ReportService = {
       const tableBody = safeTransactions.map(t => {
         const dataPagar = formatDate(t.date);
         const dataVencimento = formatDate(t.dueDate);
-        const dataBaixa = formatDate(t.paymentDate); // DATA BAIXA / PAGAMENTO (NOVO)
+        const dataBaixa = formatDate(t.paymentDate); // DATA BAIXA / PAGAMENTO
         const conta = safeStr(t.bankAccount);
         const tipo = safeStr(t.type);
         const status = safeStr(t.status);
-        // REMOVIDO: const pagoPor = safeStr(t.paidBy || '-'); 
         const favorecido = safeStr(t.client || '-'); 
         
         const valRec = safeNum(t.valueReceived);
@@ -159,10 +159,10 @@ export const ReportService = {
         return [
           dataPagar,        // 0
           dataVencimento,   // 1
-          dataBaixa,        // 2 (NOVO)
+          dataBaixa,        // 2
           conta,            // 3
           tipo,             // 4
-          status,           // 5 (Era 4)
+          status,           // 5
           valorOriginalFmt, // 6
           valorPagoFmt,     // 7
           favorecido        // 8
@@ -171,7 +171,6 @@ export const ReportService = {
 
       autoTable(doc, {
           startY: yPos,
-          // Atualizado cabeçalho
           head: [['Data', 'Venc.', 'Data Baixa', 'Conta', 'Tipo', 'Status', 'Valor Orig.', 'Valor Pago', 'Favorecido']],
           body: tableBody,
           theme: 'striped',
@@ -193,22 +192,22 @@ export const ReportService = {
           columnStyles: {
               0: { cellWidth: 18, halign: 'center' }, // Data
               1: { cellWidth: 18, halign: 'center' }, // Vencimento
-              2: { cellWidth: 18, halign: 'center' }, // Data Baixa (NOVO)
+              2: { cellWidth: 18, halign: 'center' }, // Data Baixa
               3: { cellWidth: 25, halign: 'left' },   // Conta
               4: { cellWidth: 35, halign: 'left' },   // Tipo
-              5: { cellWidth: 18, halign: 'center' }, // Status (Atualizado index)
+              5: { cellWidth: 18, halign: 'center' }, // Status
               6: { cellWidth: 25, halign: 'right' },  // Valor Orig
               7: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },  // Valor Pago
               8: { cellWidth: 'auto' }                // Favorecido
           },
           didParseCell: (data: any) => {
-              // Colorir Status (Agora Index 5)
+              // Colorir Status
               if (data.section === 'body' && data.column.index === 5) {
                   const txt = String(data.cell.raw).toLowerCase();
                   if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74];
                   else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12];
               }
-              // Colorir Valor Pago (Index 7 permanece igual, pois add 1 e removeu 1 antes dele)
+              // Colorir Valor Pago
               if (data.section === 'body' && data.column.index === 7) {
                   const txt = String(data.cell.raw);
                   if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175];

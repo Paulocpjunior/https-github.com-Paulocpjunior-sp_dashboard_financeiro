@@ -5,9 +5,10 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
+type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
 
 const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -15,6 +16,7 @@ const Reports: React.FC = () => {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   
   // Filter States
+  const [dateFilterType, setDateFilterType] = useState<DateFilterType>('date'); // 'date' = Lançamento, 'dueDate' = Vencimento, 'paymentDate' = Baixa
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -28,13 +30,13 @@ const Reports: React.FC = () => {
   const [filteredData, setFilteredData] = useState<Transaction[]>([]);
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
 
-  // Initial Load
+  // Initial Load with Refresh
   useEffect(() => {
     const load = async () => {
       try {
-        if (!DataService.isDataLoaded) {
-             await DataService.loadData();
-        }
+        setLoading(true);
+        // Force refresh cache to ensure data is "fidedigna" (up to date)
+        await DataService.refreshCache();
         const { result } = DataService.getTransactions({}, 1, 99999);
         setAllTransactions(result.data);
       } catch (e) {
@@ -69,39 +71,72 @@ const Reports: React.FC = () => {
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
     if (mode === 'payables') {
+      // Contas a Pagar: Foco em Saídas, Vencimento e Pendentes
       setSelectedTypes(['Saida de Caixa / Contas a Pagar']);
-      setSelectedStatus(''); 
+      setSelectedStatus(''); // Usuário pode querer ver as pagas também, mas geralmente filtra por Vencimento
+      setDateFilterType('dueDate'); // Muda contexto para Vencimento
     } else if (mode === 'receivables') {
+      // Contas a Receber: Foco em Entradas, Vencimento
       setSelectedTypes(['Entrada de Caixa / Contas a Receber']);
       setSelectedStatus('');
+      setDateFilterType('dueDate'); // Muda contexto para Vencimento
     } else {
+      // Geral: Limpa tipos, volta para Data de Lançamento
       setSelectedTypes([]);
       setSelectedStatus('');
+      setDateFilterType('date');
     }
   };
 
-  // Filter Logic
+  // Filter Logic - Core Fidelity Logic
   useEffect(() => {
     let result = allTransactions;
 
-    if (startDate) {
-      result = result.filter(t => t.date >= startDate);
+    // 1. Date Filtering (Crucial for fidelity)
+    if (startDate || endDate) {
+      result = result.filter(t => {
+        // Determine which date field to check based on user selection
+        let checkDate: string | undefined;
+        
+        if (dateFilterType === 'dueDate') checkDate = t.dueDate;
+        else if (dateFilterType === 'paymentDate') checkDate = t.paymentDate;
+        else checkDate = t.date; // default 'date' (Lançamento)
+
+        // If filtering by Payment Date, exclude transactions that have no payment date yet (unpaid)
+        if (dateFilterType === 'paymentDate' && !checkDate) return false;
+        
+        // If the record has no date for the selected type, exclude it or include? 
+        // Safer to exclude if strict filtering.
+        if (!checkDate) return false;
+
+        let matchesStart = true;
+        let matchesEnd = true;
+
+        if (startDate) matchesStart = checkDate >= startDate;
+        if (endDate) matchesEnd = checkDate <= endDate;
+
+        return matchesStart && matchesEnd;
+      });
     }
-    if (endDate) {
-      result = result.filter(t => t.date <= endDate);
-    }
+
+    // 2. Type Filtering
     if (selectedTypes.length > 0) {
       result = result.filter(t => selectedTypes.includes(t.type));
     }
+
+    // 3. Status Filtering
     if (selectedStatus) {
       result = result.filter(t => t.status === selectedStatus);
     }
+
+    // 4. Bank Filtering
     if (selectedBank) {
       result = result.filter(t => t.bankAccount === selectedBank);
     }
 
     setFilteredData(result);
 
+    // Calculate KPIs locally based on filtered result
     const newKpi = result.reduce(
       (acc, curr) => ({
         totalPaid: acc.totalPaid + curr.valuePaid,
@@ -112,13 +147,13 @@ const Reports: React.FC = () => {
     );
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
-    // Switch to custom mode if user manually selects
+    // Switch to custom mode if user manually selects, but keep date context if reasonable
     setReportMode('general'); 
   };
 
@@ -127,11 +162,26 @@ const Reports: React.FC = () => {
 
   const handleGeneratePDF = () => {
     setGenerating(true);
+    
+    // Map internal date type to readable label for the PDF header
+    const dateLabelMap: Record<string, string> = {
+        'date': 'Data de Lançamento',
+        'dueDate': 'Data de Vencimento',
+        'paymentDate': 'Data de Pagamento/Baixa'
+    };
+
     setTimeout(() => {
       ReportService.generatePDF(
         filteredData, 
         kpi, 
-        { startDate, endDate, types: selectedTypes, status: selectedStatus, bankAccount: selectedBank },
+        { 
+            startDate, 
+            endDate, 
+            types: selectedTypes, 
+            status: selectedStatus, 
+            bankAccount: selectedBank,
+            dateContext: dateLabelMap[dateFilterType] // Pass the context text
+        },
         AuthService.getCurrentUser()
       );
       setGenerating(false);
@@ -163,7 +213,7 @@ const Reports: React.FC = () => {
                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
             >
                 <Layers className="h-4 w-4" />
-                Relatório Geral
+                Geral (Lançamento)
             </button>
             <button
                 onClick={() => handleModeChange('payables')}
@@ -173,7 +223,7 @@ const Reports: React.FC = () => {
                     : 'text-slate-500 dark:text-slate-400 hover:bg-red-50/50 dark:hover:bg-red-900/10'}`}
             >
                 <ArrowDownCircle className="h-4 w-4" />
-                Contas a Pagar
+                Contas a Pagar (Vencimento)
             </button>
             <button
                 onClick={() => handleModeChange('receivables')}
@@ -183,7 +233,7 @@ const Reports: React.FC = () => {
                     : 'text-slate-500 dark:text-slate-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'}`}
             >
                 <ArrowUpCircle className="h-4 w-4" />
-                Contas a Receber
+                Contas a Receber (Vencimento)
             </button>
         </div>
 
@@ -192,12 +242,40 @@ const Reports: React.FC = () => {
           {/* LEFT: Configuration Panel */}
           <div className="lg:col-span-2 space-y-6">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
-                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
-                    <Calendar className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-                    Período de Análise
-                  </h3>
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                        <Calendar className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                        Período e Base de Data
+                      </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                     <div className="sm:col-span-3">
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Considerar data de:</label>
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                            <button
+                                onClick={() => setDateFilterType('date')}
+                                className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'date' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                            >
+                                Lançamento
+                            </button>
+                            <button
+                                onClick={() => setDateFilterType('dueDate')}
+                                className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'dueDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                            >
+                                Vencimento
+                            </button>
+                            <button
+                                onClick={() => setDateFilterType('paymentDate')}
+                                className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'paymentDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                            >
+                                Pagamento/Baixa
+                            </button>
+                        </div>
+                     </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Data Início</label>
@@ -218,14 +296,14 @@ const Reports: React.FC = () => {
                       />
                     </div>
                   </div>
-                </div>
+            </div>
 
-                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
                     <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
                         <Filter className="h-5 w-5 text-slate-500 dark:text-slate-400" />
                         Filtros Específicos
                     </h3>
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                                 <Activity className="h-4 w-4" /> Status
@@ -253,13 +331,12 @@ const Reports: React.FC = () => {
                              </select>
                         </div>
                     </div>
-                </div>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <Filter className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                    <Layers className="h-5 w-5 text-slate-500 dark:text-slate-400" />
                     Tipos de Transação
                  </h3>
                  <div className="text-sm space-x-3">
@@ -268,7 +345,7 @@ const Reports: React.FC = () => {
                  </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                 {availableTypes.map((type) => {
                   const isSelected = selectedTypes.includes(type);
                   const isSpecial = type.includes('Entrada de Caixa') || type.includes('Saida de Caixa');
