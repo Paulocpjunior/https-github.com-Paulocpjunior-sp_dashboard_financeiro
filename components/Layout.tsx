@@ -29,9 +29,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const updateHeaderKpi = () => {
       // Check if data is loaded in the service
       if (DataService.isDataLoaded) {
-        // Get KPI without filters to show company global status
-        const { kpi } = DataService.getTransactions({}, 1, 999999);
-        setGlobalKpi(kpi);
+        // Usa a nova função que calcula especificamente (Pendentes para E/S e Realizado para Saldo)
+        const stats = DataService.getGlobalStats();
+        setGlobalKpi(stats);
       }
     };
 
@@ -57,14 +57,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (!globalKpi) return;
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     
-    const message = `🏢 *Resumo Global - SP Contábil*%0A` +
+    const message = `🏢 *Resumo Financeiro Global*%0A` +
       `--------------------------------%0A` +
       `🗓 Data: ${new Date().toLocaleDateString('pt-BR')}%0A` +
-      `✅ Total Entradas: ${formatBRL(globalKpi.totalReceived)}%0A` +
-      `🔻 Total Saídas: ${formatBRL(globalKpi.totalPaid)}%0A` +
-      `💰 *Saldo Acumulado: ${formatBRL(globalKpi.balance)}*%0A` +
+      `📥 A Receber (Aberto): ${formatBRL(globalKpi.totalReceived)}%0A` +
+      `📤 A Pagar (Aberto): ${formatBRL(globalKpi.totalPaid)}%0A` +
+      `💰 *Saldo em Caixa: ${formatBRL(globalKpi.balance)}*%0A` +
       `--------------------------------%0A` +
-      `Enviado via Painel Administrativo`;
+      `SP Contábil - Painel Administrativo`;
     
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };
@@ -217,7 +217,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                            <TrendingUp className="h-5 w-5" />
                         </div>
                         <div>
-                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Entradas Globais</p>
+                           {/* LABEL ATUALIZADO: "A Receber (Aberto)" em vez de apenas Entradas Globais */}
+                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">A Receber (Aberto)</p>
                            <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatCurrency(globalKpi.totalReceived)}</p>
                         </div>
                      </div>
@@ -227,7 +228,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                            <TrendingDown className="h-5 w-5" />
                         </div>
                         <div>
-                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saídas Globais</p>
+                           {/* LABEL ATUALIZADO: "A Pagar (Aberto)" em vez de apenas Saídas Globais */}
+                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">A Pagar (Aberto)</p>
                            <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{formatCurrency(globalKpi.totalPaid)}</p>
                         </div>
                      </div>
@@ -237,7 +239,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                            <DollarSign className="h-5 w-5" />
                         </div>
                         <div>
-                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saldo Acumulado</p>
+                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saldo Real (Caixa)</p>
                            <p className={`text-lg font-bold ${globalKpi.balance >= 0 ? 'text-royal-700 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
                               {formatCurrency(globalKpi.balance)}
                            </p>

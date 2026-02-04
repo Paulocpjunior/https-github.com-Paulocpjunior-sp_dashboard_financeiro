@@ -52,6 +52,52 @@ export const DataService = {
   },
 
   /**
+   * Calcula estatísticas globais específicas para o Header:
+   * - Entradas: Contas a Receber em Aberto (Pendente/Agendado)
+   * - Saídas: Contas a Pagar em Aberto (Pendente/Agendado)
+   * - Saldo: Saldo Realizado (Caixa atual)
+   */
+  getGlobalStats: (): KPIData => {
+    if (!isDataLoaded) return { totalPaid: 0, totalReceived: 0, balance: 0 };
+    
+    let pendingReceivables = 0; // Entradas Globais (Em Aberto)
+    let pendingPayables = 0;    // Saídas Globais (Em Aberto)
+    let actualBalance = 0;      // Saldo Acumulado (Realizado)
+
+    CACHED_TRANSACTIONS.forEach(t => {
+        const statusLower = (t.status || '').toLowerCase();
+        const isPaid = statusLower === 'pago';
+        const isPending = statusLower === 'pendente' || statusLower === 'agendado';
+
+        // 1. Saldo Acumulado (Cash on Hand) -> SOMENTE PAGOS
+        // Este é o dinheiro que realmente existe na conta hoje.
+        if (isPaid) {
+            actualBalance += (t.valueReceived - t.valuePaid);
+        }
+
+        // 2. Filtros Solicitados para Entradas/Saídas Globais (EM ABERTO)
+        if (isPending) {
+            
+            // Entradas Globais: "Contas a Receber" e "Saldo a Receber em aberto"
+            if (t.movement === 'Entrada' || t.valueReceived > 0) {
+                pendingReceivables += t.valueReceived;
+            }
+
+            // Saídas Globais: "Contas a Pagar" e "Pendente/A Pagar"
+            if (t.movement === 'Saída' || t.valuePaid > 0) {
+                pendingPayables += t.valuePaid;
+            }
+        }
+    });
+
+    return {
+        totalReceived: pendingReceivables, // Reflete "A Receber em Aberto"
+        totalPaid: pendingPayables,       // Reflete "A Pagar em Aberto"
+        balance: actualBalance            // Reflete "Saldo em Caixa"
+    };
+  },
+
+  /**
    * Filters the locally cached data.
    * This remains synchronous for high-performance UI filtering.
    */
