@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { Transaction, KPIData, User } from '../types';
 
 export const ReportService = {
@@ -34,8 +34,7 @@ export const ReportService = {
       };
 
       // 2. Initialize Doc
-      // Explicit casting to any to avoid typescript errors with autoTable
-      const doc: any = new jsPDF({ orientation: 'landscape' }); // Landscape para caber melhor as colunas extras
+      const doc = new jsPDF({ orientation: 'landscape' });
       
       const pageWidth = doc.internal.pageSize.width || 297;
       const pageHeight = doc.internal.pageSize.height || 210;
@@ -141,59 +140,55 @@ export const ReportService = {
         ];
       });
 
-      if (doc.autoTable) {
-        doc.autoTable({
-            startY: yPos,
-            // CABEÇALHO EXATO SOLICITADO
-            head: [['Data a Pagar', 'Data Venc.', 'Movimentação', 'Status', 'Valor Original', 'Valor Pago', 'Observação a Pagar']],
-            body: tableBody,
-            theme: 'striped',
-            headStyles: { 
-                fillColor: secondaryColor, 
-                textColor: 255, 
-                fontStyle: 'bold',
-                fontSize: 9,
-                halign: 'center'
-            },
-            bodyStyles: { 
-                fontSize: 8, 
-                textColor: 50,
-                cellPadding: 3
-            },
-            alternateRowStyles: { 
-                fillColor: [245, 247, 250] 
-            },
-            columnStyles: {
-                0: { cellWidth: 25, halign: 'center' }, // Data a Pagar
-                1: { cellWidth: 25, halign: 'center' }, // Data Vencimento
-                2: { cellWidth: 25, halign: 'center' }, // Movimentação
-                3: { cellWidth: 20, halign: 'center' }, // Status
-                4: { cellWidth: 30, halign: 'right' },  // Valor Original
-                5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },  // Valor Pago
-                6: { cellWidth: 'auto' }                // Observação (ocupa o resto)
-            },
-            didParseCell: (data: any) => {
-                // Colorir coluna "Status"
-                if (data.section === 'body' && data.column.index === 3) {
-                    const txt = String(data.cell.raw).toLowerCase();
-                    if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74]; // Verde
-                    else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12]; // Laranja
-                }
-                // Colorir coluna "Valor Pago"
-                if (data.section === 'body' && data.column.index === 5) {
-                    const txt = String(data.cell.raw);
-                    if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175]; // Azul para pago efetivo
-                    else data.cell.styles.textColor = [156, 163, 175]; // Cinza para não pago
-                }
-            }
-        });
-      } else {
-          // Fallback
-          doc.text("Erro ao carregar tabela.", 14, yPos + 10);
-      }
+      // USO CORRETO DO AUTOTABLE COM IMPORT EXPLÍCITO
+      autoTable(doc, {
+          startY: yPos,
+          // CABEÇALHO EXATO SOLICITADO
+          head: [['Data a Pagar', 'Data Venc.', 'Movimentação', 'Status', 'Valor Original', 'Valor Pago', 'Observação a Pagar']],
+          body: tableBody,
+          theme: 'striped',
+          headStyles: { 
+              fillColor: secondaryColor, 
+              textColor: 255, 
+              fontStyle: 'bold',
+              fontSize: 9,
+              halign: 'center'
+          },
+          bodyStyles: { 
+              fontSize: 8, 
+              textColor: 50,
+              cellPadding: 3
+          },
+          alternateRowStyles: { 
+              fillColor: [245, 247, 250] 
+          },
+          columnStyles: {
+              0: { cellWidth: 25, halign: 'center' }, // Data a Pagar
+              1: { cellWidth: 25, halign: 'center' }, // Data Vencimento
+              2: { cellWidth: 25, halign: 'center' }, // Movimentação
+              3: { cellWidth: 20, halign: 'center' }, // Status
+              4: { cellWidth: 30, halign: 'right' },  // Valor Original
+              5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },  // Valor Pago
+              6: { cellWidth: 'auto' }                // Observação (ocupa o resto)
+          },
+          didParseCell: (data: any) => {
+              // Colorir coluna "Status"
+              if (data.section === 'body' && data.column.index === 3) {
+                  const txt = String(data.cell.raw).toLowerCase();
+                  if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74]; // Verde
+                  else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12]; // Laranja
+              }
+              // Colorir coluna "Valor Pago"
+              if (data.section === 'body' && data.column.index === 5) {
+                  const txt = String(data.cell.raw);
+                  if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175]; // Azul para pago efetivo
+                  else data.cell.styles.textColor = [156, 163, 175]; // Cinza para não pago
+              }
+          }
+      });
 
       // --- FOOTER ---
-      const pageCount = doc.internal.pages.length - 1;
+      const pageCount = (doc.internal as any).getNumberOfPages();
       for(let i = 1; i <= pageCount; i++) {
           doc.setPage(i);
           doc.setFontSize(8);
