@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { Transaction, KPIData, User } from '../types';
 
 export const ReportService = {
@@ -22,14 +22,13 @@ export const ReportService = {
       const safeStr = (val: any) => val ? String(val) : '';
 
       // 2. Initialize Doc
-      // Explicit casting to any to avoid typescript errors with autoTable
-      const doc: any = new jsPDF();
+      const doc = new jsPDF();
       
       const pageWidth = doc.internal.pageSize.width || 210;
       const pageHeight = doc.internal.pageSize.height || 297;
       
-      const primaryColor = [30, 64, 175]; // Royal Blue
-      const secondaryColor = [71, 85, 105]; // Slate
+      const primaryColor: [number, number, number] = [30, 64, 175]; // Royal Blue
+      const secondaryColor: [number, number, number] = [71, 85, 105]; // Slate
       
       // --- HEADER ---
       doc.setFillColor(...primaryColor);
@@ -143,6 +142,7 @@ export const ReportService = {
         let value = 0;
         let sign = '';
         
+        // Lógica de exibição de valor na tabela do PDF
         if (movement.toLowerCase().includes('entrada') || (valRec > 0 && valPaid === 0)) {
             value = valRec;
             sign = '+ ';
@@ -163,51 +163,44 @@ export const ReportService = {
         ];
       });
 
-      if (doc.autoTable) {
-        doc.autoTable({
-            startY: yPos + 3,
-            head: [['Data', 'Tipo', 'Descrição / Cliente', 'Conta', 'Status', 'Valor']],
-            body: tableBody,
-            theme: 'striped',
-            headStyles: { 
-            fillColor: secondaryColor, 
-            textColor: 255, 
-            fontStyle: 'bold',
-            fontSize: 8 
-            },
-            bodyStyles: { 
-            fontSize: 8, 
-            textColor: 50 
-            },
-            alternateRowStyles: { 
-            fillColor: [245, 247, 250] 
-            },
-            columnStyles: {
-            0: { cellWidth: 20 }, 
-            1: { cellWidth: 50 }, 
-            2: { cellWidth: 'auto' }, 
-            3: { cellWidth: 25 }, 
-            4: { cellWidth: 20 }, 
-            5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } 
-            },
-            didParseCell: (data: any) => {
-            if (data.section === 'body' && data.column.index === 5) {
-                const rawVal = String(data.cell.raw);
-                if (rawVal.includes('+')) {
-                data.cell.styles.textColor = [22, 163, 74];
-                } else {
-                data.cell.styles.textColor = [220, 38, 38];
-                }
+      // Using the imported autoTable function directly
+      autoTable(doc, {
+        startY: yPos + 3,
+        head: [['Data', 'Tipo', 'Descrição / Cliente', 'Conta', 'Status', 'Valor']],
+        body: tableBody,
+        theme: 'striped',
+        headStyles: { 
+          fillColor: secondaryColor, 
+          textColor: 255, 
+          fontStyle: 'bold',
+          fontSize: 8 
+        },
+        bodyStyles: { 
+          fontSize: 8, 
+          textColor: 50 
+        },
+        alternateRowStyles: { 
+          fillColor: [245, 247, 250] 
+        },
+        columnStyles: {
+          0: { cellWidth: 20 }, 
+          1: { cellWidth: 50 }, 
+          2: { cellWidth: 'auto' }, 
+          3: { cellWidth: 25 }, 
+          4: { cellWidth: 20 }, 
+          5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } 
+        },
+        didParseCell: (data: any) => {
+          if (data.section === 'body' && data.column.index === 5) {
+            const rawVal = String(data.cell.raw);
+            if (rawVal.includes('+')) {
+              data.cell.styles.textColor = [22, 163, 74]; // Green
+            } else {
+              data.cell.styles.textColor = [220, 38, 38]; // Red
             }
-            }
-        });
-      } else {
-          // Fallback simple text if autotable fails to load
-          doc.setFontSize(10);
-          doc.text("Erro: Componente de tabela não carregado. Dados brutos:", 14, yPos + 10);
-          doc.setFontSize(8);
-          doc.text(JSON.stringify(safeTransactions.slice(0, 5), null, 2), 14, yPos + 20);
-      }
+          }
+        }
+      });
 
       // --- FOOTER ---
       const pageCount = doc.internal.pages.length - 1;
