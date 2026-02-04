@@ -24,9 +24,7 @@ export const ReportService = {
       const formatDate = (dateStr: string) => {
          try {
              if (!dateStr || dateStr === '1970-01-01') return '-';
-             // Correção de fuso horário simples
              const date = new Date(dateStr);
-             // Ajuste para exibir a data correta sem voltar 1 dia devido ao UTC
              const userTimezoneOffset = date.getTimezoneOffset() * 60000;
              const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
              return adjustedDate.toLocaleDateString('pt-BR');
@@ -64,23 +62,71 @@ export const ReportService = {
       doc.text(`EMITIDO POR: ${safeStr(collaboratorName)}`, pageWidth - 14, 18, { align: 'right' });
       doc.text(`DATA: ${currentDate} às ${currentTime}`, pageWidth - 14, 25, { align: 'right' });
 
-      // --- FILTERS SUMMARY ---
+      // --- FINANCIAL SUMMARY (KPIs) ---
       let yPos = 50;
       doc.setTextColor(50, 50, 50);
+      
+      // KPI Box Background (Optional visualization aid)
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(226, 232, 240);
+      doc.roundedRect(14, 45, pageWidth - 28, 24, 2, 2, 'FD');
+
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text('Resumo da Análise:', 14, yPos);
+      doc.text('Resumo Financeiro:', 20, 55);
       
-      // KPI Summary Inline
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      const kpiText = `Entradas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalReceived))}  |  Saídas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalPaid))}  |  Saldo: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.balance))}`;
       
-      // Colorir o saldo
-      if (kpi.balance >= 0) doc.setTextColor(22, 163, 74);
-      else doc.setTextColor(220, 38, 38);
+      const kpiXStart = 20;
+      const kpiYLine = 62;
       
-      doc.text(kpiText, pageWidth - 14, yPos, { align: 'right' });
+      // Entradas
+      doc.setTextColor(22, 163, 74); // Green
+      doc.text(`Entradas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalReceived))}`, kpiXStart, kpiYLine);
+      
+      // Saídas
+      doc.setTextColor(220, 38, 38); // Red
+      doc.text(`Saídas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalPaid))}`, kpiXStart + 60, kpiYLine);
+      
+      // Saldo
+      if (kpi.balance >= 0) doc.setTextColor(30, 64, 175); // Blue
+      else doc.setTextColor(220, 38, 38); // Red
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Saldo Líquido: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.balance))}`, kpiXStart + 120, kpiYLine);
+
+      // --- FILTER PARAMETERS CONTEXT ---
+      // This section details exactly what filters generated this report
+      yPos = 76;
+      doc.setTextColor(80, 80, 80);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Parâmetros do Relatório:', 14, yPos);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      
+      const dateRange = filters.startDate && filters.endDate 
+        ? `${formatDate(filters.startDate)} até ${formatDate(filters.endDate)}` 
+        : 'Todo o período disponível';
+      
+      const bankInfo = filters.bankAccount || 'Todas as contas';
+      const statusInfo = filters.status || 'Todos os status';
+      
+      let typesInfo = 'Todos os tipos';
+      if (filters.types && filters.types.length > 0) {
+          if (filters.types.length > 3) {
+              typesInfo = `${filters.types.length} tipos selecionados`;
+          } else {
+              typesInfo = filters.types.join(', ');
+          }
+      }
+
+      // Draw Filters in a row
+      doc.text(`Período: ${dateRange}`, 14, yPos + 5);
+      doc.text(`Conta: ${bankInfo}`, 80, yPos + 5);
+      doc.text(`Status: ${statusInfo}`, 130, yPos + 5);
+      doc.text(`Tipos: ${typesInfo}`, 180, yPos + 5); // Pode cortar se for muito longo, mas ok para resumo
 
       yPos += 10;
 
@@ -88,101 +134,83 @@ export const ReportService = {
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
 
-      // Ensure transactions is an array
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
-      // Mapeamento EXATO conforme solicitado
       const tableBody = safeTransactions.map(t => {
-        
-        // 1. Data a Pagar (Data de Lançamento/Agendamento)
         const dataPagar = formatDate(t.date);
-        
-        // 2. Data Vencimento
         const dataVencimento = formatDate(t.dueDate);
-        
-        // 3. Movimentação
         const movimentacao = safeStr(t.movement);
-        
-        // 4. Status
         const status = safeStr(t.status);
+        const pagoPor = safeStr(t.paidBy || '-');
         
-        // Determinar Valores
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
         const isEntry = movimentacao.toLowerCase().includes('entrada') || (valRec > 0 && valPaid === 0);
         
-        // 5. Valor Original (Valor cheio do título)
-        // Se for entrada, usa valor recebido/honorarios. Se for saída, usa valor pago.
         const valorOriginalRaw = isEntry ? valRec : valPaid;
         const valorOriginalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorOriginalRaw);
 
-        // 6. Valor Pago (Efetivamente liquidado)
-        // Se status for 'Pago', assume o valor original. Se não, é 0.
         let valorPagoRaw = 0;
         if (status.toLowerCase() === 'pago') {
             valorPagoRaw = valorOriginalRaw;
         }
         const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
 
-        // 7. Observação a Pagar (Cliente / Descrição / Pago Por)
         let observacao = safeStr(t.client);
-        if (!observacao) observacao = safeStr(t.paidBy);
-        if (!observacao) observacao = safeStr(t.type);
+        if (!observacao) observacao = safeStr(t.type); 
 
         return [
-          dataPagar,        // "Data a Pagar"
-          dataVencimento,   // "Data Vencimento"
-          movimentacao,     // "Movimentação"
-          status,           // "Status"
-          valorOriginalFmt, // "Valor Original"
-          valorPagoFmt,     // "valor Pago"
-          observacao        // "Observação a Pagar"
+          dataPagar,        // 0
+          dataVencimento,   // 1
+          movimentacao,     // 2
+          status,           // 3
+          pagoPor,          // 4
+          valorOriginalFmt, // 5
+          valorPagoFmt,     // 6
+          observacao        // 7
         ];
       });
 
-      // USO CORRETO DO AUTOTABLE COM IMPORT EXPLÍCITO
       autoTable(doc, {
           startY: yPos,
-          // CABEÇALHO EXATO SOLICITADO
-          head: [['Data a Pagar', 'Data Venc.', 'Movimentação', 'Status', 'Valor Original', 'Valor Pago', 'Observação a Pagar']],
+          head: [['Data', 'Vencimento', 'Movimento', 'Status', 'Pago Por', 'Valor Orig.', 'Valor Pago', 'Favorecido / Obs.']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
               fillColor: secondaryColor, 
               textColor: 255, 
               fontStyle: 'bold',
-              fontSize: 9,
+              fontSize: 8,
               halign: 'center'
           },
           bodyStyles: { 
-              fontSize: 8, 
+              fontSize: 7.5,
               textColor: 50,
-              cellPadding: 3
+              cellPadding: 2
           },
           alternateRowStyles: { 
               fillColor: [245, 247, 250] 
           },
           columnStyles: {
-              0: { cellWidth: 25, halign: 'center' }, // Data a Pagar
-              1: { cellWidth: 25, halign: 'center' }, // Data Vencimento
-              2: { cellWidth: 25, halign: 'center' }, // Movimentação
-              3: { cellWidth: 20, halign: 'center' }, // Status
-              4: { cellWidth: 30, halign: 'right' },  // Valor Original
-              5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },  // Valor Pago
-              6: { cellWidth: 'auto' }                // Observação (ocupa o resto)
+              0: { cellWidth: 22, halign: 'center' }, // Data
+              1: { cellWidth: 22, halign: 'center' }, // Vencimento
+              2: { cellWidth: 22, halign: 'center' }, // Movimento
+              3: { cellWidth: 18, halign: 'center' }, // Status
+              4: { cellWidth: 25, halign: 'left' },   // Pago Por
+              5: { cellWidth: 28, halign: 'right' },  // Valor Orig
+              6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },  // Valor Pago
+              7: { cellWidth: 'auto' }                // Observação
           },
           didParseCell: (data: any) => {
-              // Colorir coluna "Status"
               if (data.section === 'body' && data.column.index === 3) {
                   const txt = String(data.cell.raw).toLowerCase();
-                  if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74]; // Verde
-                  else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12]; // Laranja
+                  if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74];
+                  else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12];
               }
-              // Colorir coluna "Valor Pago"
-              if (data.section === 'body' && data.column.index === 5) {
+              if (data.section === 'body' && data.column.index === 6) {
                   const txt = String(data.cell.raw);
-                  if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175]; // Azul para pago efetivo
-                  else data.cell.styles.textColor = [156, 163, 175]; // Cinza para não pago
+                  if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175];
+                  else data.cell.styles.textColor = [156, 163, 175];
               }
           }
       });
@@ -199,7 +227,7 @@ export const ReportService = {
           doc.text(`SP Contábil - Relatório de Contas a Pagar/Receber`, 14, pageHeight - 8);
       }
 
-      const fileName = `Relatorio_Contas_${new Date().toISOString().slice(0,10)}.pdf`;
+      const fileName = `Relatorio_Financeiro_${new Date().toISOString().slice(0,10)}.pdf`;
       doc.save(fileName);
 
     } catch (error: any) {
