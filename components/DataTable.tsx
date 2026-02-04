@@ -189,11 +189,15 @@ const DataTable: React.FC<DataTableProps> = ({
                 data.map((row) => {
                   const rowType = normalizeText(row.type || '');
                   const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
-                  const isRowEntrada = !isRowSaida; // Fallback simplificado
                   
                   // Determinar valor principal para exibição mista
                   const displayValue = isRowSaida ? row.valuePaid : (row.totalCobranca || row.valueReceived);
-                  const isPaid = row.status === 'Pago';
+                  const isPending = row.status === 'Pendente' || row.status === 'Agendado';
+                  
+                  // Style logic for evidence
+                  const valueClass = isPending 
+                    ? "font-extrabold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 px-2 py-1 rounded" 
+                    : "font-medium";
 
                   return (
                     <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
@@ -217,8 +221,9 @@ const DataTable: React.FC<DataTableProps> = ({
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                           ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                            row.status === 'Pendente' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
+                            isPending ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 ring-2 ring-amber-500/20' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
                         `}>
+                          {isPending && <AlertTriangle className="w-3 h-3 mr-1" />}
                           {row.status}
                         </span>
                       </td>
@@ -227,14 +232,14 @@ const DataTable: React.FC<DataTableProps> = ({
                       
                       {/* MODO MISTO: Coluna Única Colorida */}
                       {isMixedMode && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
                            {isRowSaida ? (
-                             <span className="text-red-600 dark:text-red-400 flex items-center justify-end gap-1">
+                             <span className={`text-red-600 dark:text-red-400 flex items-center justify-end gap-1 ${valueClass}`}>
                                <ArrowDownCircle className="h-3 w-3" />
                                {formatCurrency(displayValue)}
                              </span>
                            ) : (
-                             <span className="text-green-600 dark:text-green-400 flex items-center justify-end gap-1">
+                             <span className={`text-green-600 dark:text-green-400 flex items-center justify-end gap-1 ${valueClass}`}>
                                <ArrowUpCircle className="h-3 w-3" />
                                {formatCurrency(displayValue)}
                              </span>
@@ -244,8 +249,10 @@ const DataTable: React.FC<DataTableProps> = ({
 
                       {/* MODO SAÍDA: Valor Único */}
                       {isExitMode && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-red-600 dark:text-red-400 bg-red-50/20 dark:bg-red-900/10">
-                           {formatCurrency(row.valuePaid)}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                            <span className={`text-red-600 dark:text-red-400 ${valueClass}`}>
+                                {formatCurrency(row.valuePaid)}
+                            </span>
                         </td>
                       )}
 
@@ -258,11 +265,15 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-slate-600 dark:text-slate-400">
                              {formatCurrency(row.valorExtra)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-blue-600 dark:text-blue-400 bg-blue-50/20 dark:bg-blue-900/10">
-                             {formatCurrency(row.totalCobranca)}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                             <span className={`text-blue-600 dark:text-blue-400 ${valueClass}`}>
+                                {formatCurrency(row.totalCobranca)}
+                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-green-600 dark:text-green-400 bg-green-50/20 dark:bg-green-900/10">
-                             {formatCurrency(row.valueReceived)}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                             <span className={`text-green-600 dark:text-green-400 ${valueClass}`}>
+                                {formatCurrency(row.valueReceived)}
+                             </span>
                           </td>
                         </>
                       )}

@@ -6,8 +6,8 @@ export const ReportService = {
   
   generatePDF: (
     transactions: Transaction[], 
-    kpi: KPIData, 
-    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string; dateContext?: string },
+    kpi: any, // Using 'any' to accept DetailedKPI structure
+    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string; dateContext?: string; movement?: string },
     currentUser: User | null
   ) => {
     try {
@@ -68,34 +68,52 @@ export const ReportService = {
       
       doc.setFillColor(248, 250, 252);
       doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(14, 45, pageWidth - 28, 24, 2, 2, 'FD');
+      doc.roundedRect(14, 45, pageWidth - 28, 28, 2, 2, 'FD'); // Increased height
 
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text('Resumo Financeiro:', 20, 55);
       
-      doc.setFontSize(10);
+      doc.setFontSize(9); // Smaller font for detail
       doc.setFont('helvetica', 'normal');
       
       const kpiXStart = 20;
       const kpiYLine = 62;
+      const colGap = 85;
+
+      const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(v));
       
-      // Entradas
+      // 1. Entradas Detail
       doc.setTextColor(22, 163, 74); // Green
-      doc.text(`Entradas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalReceived))}`, kpiXStart, kpiYLine);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`ENTRADAS PREVISTAS: ${fmt(kpi.totalReceived)}`, kpiXStart, kpiYLine);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`- Já Recebido: ${fmt(kpi.settledReceivables)}`, kpiXStart, kpiYLine + 5);
+      doc.text(`- Pendente: ${fmt(kpi.pendingReceivables)}`, kpiXStart, kpiYLine + 9);
       
-      // Saídas
+      // 2. Saídas Detail (Evidenciado)
+      doc.setFontSize(9);
       doc.setTextColor(220, 38, 38); // Red
-      doc.text(`Saídas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalPaid))}`, kpiXStart + 60, kpiYLine);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`SAÍDAS PREVISTAS: ${fmt(kpi.totalPaid)}`, kpiXStart + colGap, kpiYLine);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`- Já Pago: ${fmt(kpi.settledPayables)}`, kpiXStart + colGap, kpiYLine + 5);
+      // Evidencing Pendente
+      doc.setTextColor(234, 88, 12); // Orange/Amber
+      doc.setFont('helvetica', 'bold');
+      doc.text(`- A PAGAR (PENDENTE): ${fmt(kpi.pendingPayables)}`, kpiXStart + colGap, kpiYLine + 9);
       
-      // Saldo
+      // 3. Saldo
+      doc.setFontSize(12);
       if (kpi.balance >= 0) doc.setTextColor(30, 64, 175); // Blue
       else doc.setTextColor(220, 38, 38); // Red
       doc.setFont('helvetica', 'bold');
-      doc.text(`Saldo Líquido: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.balance))}`, kpiXStart + 120, kpiYLine);
+      doc.text(`Saldo Previsto: ${fmt(kpi.balance)}`, kpiXStart + (colGap * 2), kpiYLine + 5);
 
       // --- FILTER PARAMETERS CONTEXT ---
-      yPos = 76;
+      yPos = 80;
       doc.setTextColor(80, 80, 80);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
@@ -111,6 +129,7 @@ export const ReportService = {
       
       const bankInfo = filters.bankAccount || 'Todas as contas';
       const statusInfo = filters.status || 'Todos os status';
+      const movementInfo = filters.movement ? (filters.movement === 'Saída' ? 'SAÍDAS/DESPESAS' : 'ENTRADAS/RECEITAS') : 'Geral (Todas)';
       
       let typesInfo = 'Todos os tipos';
       if (filters.types && filters.types.length > 0) {
@@ -122,9 +141,10 @@ export const ReportService = {
       }
 
       doc.text(`Período ${contextLabel}: ${dateRange}`, 14, yPos + 5);
-      doc.text(`Conta: ${bankInfo}`, 100, yPos + 5); // Shifted right slightly
-      doc.text(`Status: ${statusInfo}`, 150, yPos + 5);
-      doc.text(`Tipos: ${typesInfo}`, 190, yPos + 5);
+      doc.text(`Movimento: ${movementInfo}`, 90, yPos + 5); 
+      doc.text(`Conta: ${bankInfo}`, 130, yPos + 5);
+      doc.text(`Status: ${statusInfo}`, 170, yPos + 5);
+      doc.text(`Tipos: ${typesInfo}`, 210, yPos + 5);
 
       yPos += 10;
 
@@ -205,13 +225,19 @@ export const ReportService = {
               if (data.section === 'body' && data.column.index === 5) {
                   const txt = String(data.cell.raw).toLowerCase();
                   if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74];
-                  else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12];
+                  else if (txt === 'pendente' || txt === 'agendado') {
+                      data.cell.styles.textColor = [234, 88, 12];
+                      data.cell.styles.fontStyle = 'bold';
+                  }
               }
-              // Colorir Valor Pago
-              if (data.section === 'body' && data.column.index === 7) {
-                  const txt = String(data.cell.raw);
-                  if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175];
-                  else data.cell.styles.textColor = [156, 163, 175];
+              // Colorir Valor Orig se Pendente
+              if (data.section === 'body' && data.column.index === 6) {
+                  const statusRow = data.row.raw[5]; // Status col index
+                  const statusTxt = String(statusRow).toLowerCase();
+                  if (statusTxt === 'pendente' || statusTxt === 'agendado') {
+                      data.cell.styles.textColor = [234, 88, 12]; // Orange
+                      data.cell.styles.fontStyle = 'bold';
+                  }
               }
           }
       });

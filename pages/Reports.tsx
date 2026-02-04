@@ -5,10 +5,18 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock, AlertCircle } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock, AlertCircle, ArrowLeftRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
+
+// Interface estendida localmente para detalhar Pendente vs Pago
+interface DetailedKPI extends KPIData {
+    pendingPayables: number;
+    settledPayables: number;
+    pendingReceivables: number;
+    settledReceivables: number;
+}
 
 const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -16,26 +24,34 @@ const Reports: React.FC = () => {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   
   // Filter States
-  const [dateFilterType, setDateFilterType] = useState<DateFilterType>('date'); // 'date' = Lançamento, 'dueDate' = Vencimento, 'paymentDate' = Baixa
+  const [dateFilterType, setDateFilterType] = useState<DateFilterType>('date'); 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<string>(''); // Empty = All
-  const [selectedBank, setSelectedBank] = useState<string>(''); // Empty = All
+  const [selectedStatus, setSelectedStatus] = useState<string>(''); 
+  const [selectedBank, setSelectedBank] = useState<string>(''); 
+  const [selectedMovement, setSelectedMovement] = useState<string>(''); 
   
   // Report Mode
   const [reportMode, setReportMode] = useState<ReportMode>('general');
 
   // Preview Data
   const [filteredData, setFilteredData] = useState<Transaction[]>([]);
-  const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
+  const [kpi, setKpi] = useState<DetailedKPI>({ 
+      totalPaid: 0, 
+      totalReceived: 0, 
+      balance: 0,
+      pendingPayables: 0,
+      settledPayables: 0,
+      pendingReceivables: 0,
+      settledReceivables: 0
+  });
 
   // Initial Load with Refresh
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        // Force refresh cache to ensure data is "fidedigna" (up to date)
         await DataService.refreshCache();
         const { result } = DataService.getTransactions({}, 1, 99999);
         setAllTransactions(result.data);
@@ -67,46 +83,39 @@ const Reports: React.FC = () => {
     return Array.from(combined);
   }, [allTransactions]);
 
-  // Handle Quick Mode Change
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
     if (mode === 'payables') {
-      // Contas a Pagar: Foco em Saídas, Vencimento e Pendentes
-      setSelectedTypes(['Saida de Caixa / Contas a Pagar']);
-      setSelectedStatus(''); // Usuário pode querer ver as pagas também para conferência
-      setDateFilterType('dueDate'); // Muda contexto para Vencimento
+      setSelectedMovement('Saída');
+      setSelectedTypes([]); 
+      setSelectedStatus(''); 
+      setDateFilterType('dueDate'); 
     } else if (mode === 'receivables') {
-      // Contas a Receber: Foco em Entradas, Vencimento
-      setSelectedTypes(['Entrada de Caixa / Contas a Receber']);
+      setSelectedMovement('Entrada');
+      setSelectedTypes([]); 
       setSelectedStatus('');
-      setDateFilterType('dueDate'); // Muda contexto para Vencimento
+      setDateFilterType('dueDate'); 
     } else {
-      // Geral: Limpa tipos, volta para Data de Lançamento
+      setSelectedMovement('');
       setSelectedTypes([]);
       setSelectedStatus('');
       setDateFilterType('date');
     }
   };
 
-  // Filter Logic - Core Fidelity Logic
   useEffect(() => {
     let result = allTransactions;
 
-    // 1. Date Filtering (Crucial for fidelity)
+    // 1. Date Filtering
     if (startDate || endDate) {
       result = result.filter(t => {
-        // Determine which date field to check based on user selection
         let checkDate: string | undefined;
         
         if (dateFilterType === 'dueDate') checkDate = t.dueDate;
         else if (dateFilterType === 'paymentDate') checkDate = t.paymentDate;
-        else checkDate = t.date; // default 'date' (Lançamento)
+        else checkDate = t.date;
 
-        // If filtering by Payment Date, exclude transactions that have no payment date yet (unpaid)
         if (dateFilterType === 'paymentDate' && !checkDate) return false;
-        
-        // If the record has no date for the selected type, exclude it or include? 
-        // Safer to exclude if strict filtering.
         if (!checkDate) return false;
 
         let matchesStart = true;
@@ -119,45 +128,67 @@ const Reports: React.FC = () => {
       });
     }
 
-    // 2. Type Filtering
+    // 2. Movement Filtering
+    if (selectedMovement) {
+      result = result.filter(t => t.movement === selectedMovement);
+    }
+
+    // 3. Type Filtering
     if (selectedTypes.length > 0) {
       result = result.filter(t => selectedTypes.includes(t.type));
     }
 
-    // 3. Status Filtering
+    // 4. Status Filtering
     if (selectedStatus) {
       result = result.filter(t => t.status === selectedStatus);
     }
 
-    // 4. Bank Filtering
+    // 5. Bank Filtering
     if (selectedBank) {
       result = result.filter(t => t.bankAccount === selectedBank);
     }
 
     setFilteredData(result);
 
-    // Calculate KPIs locally based on filtered result
-    // IMPORTANTE: Aqui garantimos que "Pendentes" são somados
+    // Calculate Detailed KPIs
     const newKpi = result.reduce(
-      (acc, curr) => ({
-        // totalPaid acumula o valor de Saída (seja Pago ou Pendente)
-        totalPaid: acc.totalPaid + curr.valuePaid,
-        // totalReceived acumula o valor de Entrada (seja Pago ou Pendente)
-        totalReceived: acc.totalReceived + curr.valueReceived,
-        // Saldo é Entrada - Saída
-        balance: acc.balance + (curr.valueReceived - curr.valuePaid),
-      }),
-      { totalPaid: 0, totalReceived: 0, balance: 0 }
+      (acc, curr) => {
+        const isPaid = curr.status === 'Pago';
+        const isPending = curr.status === 'Pendente' || curr.status === 'Agendado';
+        
+        // Totais Gerais
+        acc.totalPaid += curr.valuePaid;
+        acc.totalReceived += curr.valueReceived;
+        acc.balance += (curr.valueReceived - curr.valuePaid);
+
+        // Detalhamento Saídas (Contas a Pagar)
+        if (curr.movement === 'Saída' || curr.valuePaid > 0) {
+            if (isPaid) acc.settledPayables += curr.valuePaid;
+            if (isPending) acc.pendingPayables += curr.valuePaid;
+        }
+
+        // Detalhamento Entradas (Contas a Receber)
+        if (curr.movement === 'Entrada' || curr.valueReceived > 0) {
+            if (isPaid) acc.settledReceivables += curr.valueReceived;
+            if (isPending) acc.pendingReceivables += curr.valueReceived;
+        }
+
+        return acc;
+      },
+      { 
+          totalPaid: 0, totalReceived: 0, balance: 0,
+          pendingPayables: 0, settledPayables: 0,
+          pendingReceivables: 0, settledReceivables: 0
+      }
     );
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
-    // Switch to custom mode if user manually selects, but keep date context if reasonable
     setReportMode('general'); 
   };
 
@@ -167,7 +198,6 @@ const Reports: React.FC = () => {
   const handleGeneratePDF = () => {
     setGenerating(true);
     
-    // Map internal date type to readable label for the PDF header
     const dateLabelMap: Record<string, string> = {
         'date': 'Data de Lançamento',
         'dueDate': 'Data de Vencimento',
@@ -184,7 +214,8 @@ const Reports: React.FC = () => {
             types: selectedTypes, 
             status: selectedStatus, 
             bankAccount: selectedBank,
-            dateContext: dateLabelMap[dateFilterType] // Pass the context text
+            movement: selectedMovement,
+            dateContext: dateLabelMap[dateFilterType]
         },
         AuthService.getCurrentUser()
       );
@@ -204,7 +235,7 @@ const Reports: React.FC = () => {
             <FileText className="h-7 w-7 text-blue-600 dark:text-blue-400" />
             Relatórios Personalizados
           </h1>
-          <p className="text-slate-500 dark:text-slate-400">Gere relatórios PDF com filtros granulares.</p>
+          <p className="text-slate-500 dark:text-slate-400">Gere relatórios PDF com filtros granulares e totais evidenciados.</p>
         </div>
 
         {/* Quick Report Mode Selector */}
@@ -245,7 +276,7 @@ const Reports: React.FC = () => {
           
           {/* LEFT: Configuration Panel */}
           <div className="lg:col-span-2 space-y-6">
-            
+            {/* Same configuration panel as before */}
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
                   <div className="flex justify-between items-center mb-4">
                       <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -253,51 +284,24 @@ const Reports: React.FC = () => {
                         Período e Base de Data
                       </h3>
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                      <div className="sm:col-span-3">
                         <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Considerar data de:</label>
                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                            <button
-                                onClick={() => setDateFilterType('date')}
-                                className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'date' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
-                            >
-                                Lançamento
-                            </button>
-                            <button
-                                onClick={() => setDateFilterType('dueDate')}
-                                className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'dueDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
-                            >
-                                Vencimento
-                            </button>
-                            <button
-                                onClick={() => setDateFilterType('paymentDate')}
-                                className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'paymentDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
-                            >
-                                Pagamento/Baixa
-                            </button>
+                            <button onClick={() => setDateFilterType('date')} className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'date' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>Lançamento</button>
+                            <button onClick={() => setDateFilterType('dueDate')} className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'dueDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>Vencimento</button>
+                            <button onClick={() => setDateFilterType('paymentDate')} className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'paymentDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>Pagamento/Baixa</button>
                         </div>
                      </div>
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Data Início</label>
-                      <input 
-                        type="date" 
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                      />
+                      <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"/>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Data Fim</label>
-                      <input 
-                        type="date" 
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                      />
+                      <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"/>
                     </div>
                   </div>
             </div>
@@ -309,29 +313,25 @@ const Reports: React.FC = () => {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
-                                <Activity className="h-4 w-4" /> Status
-                             </label>
-                             <select
-                                className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                                value={selectedStatus}
-                                onChange={(e) => setSelectedStatus(e.target.value)}
-                             >
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><Activity className="h-4 w-4" /> Status</label>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
                                 <option value="">Todos (Aberto + Pago)</option>
                                 {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                              </select>
                         </div>
                         <div>
-                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
-                                <Landmark className="h-4 w-4" /> Conta Bancária
-                             </label>
-                             <select
-                                className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                                value={selectedBank}
-                                onChange={(e) => setSelectedBank(e.target.value)}
-                             >
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><Landmark className="h-4 w-4" /> Conta Bancária</label>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)}>
                                 <option value="">Todas</option>
                                 {BANK_ACCOUNTS.map(b => <option key={b} value={b}>{b}</option>)}
+                             </select>
+                        </div>
+                        <div>
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><ArrowLeftRight className="h-4 w-4" /> Movimentação</label>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); }}>
+                                <option value="">Todas</option>
+                                <option value="Entrada">Entradas / Receitas</option>
+                                <option value="Saída">Saídas / Despesas</option>
                              </select>
                         </div>
                     </div>
@@ -339,51 +339,33 @@ const Reports: React.FC = () => {
 
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
               <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <Layers className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-                    Tipos de Transação
-                 </h3>
+                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2"><Layers className="h-5 w-5 text-slate-500 dark:text-slate-400" /> Tipos de Transação</h3>
                  <div className="text-sm space-x-3">
                     <button onClick={selectAllTypes} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium">Todos</button>
                     <button onClick={clearTypes} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">Nenhum</button>
                  </div>
               </div>
-              
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                 {availableTypes.map((type) => {
                   const isSelected = selectedTypes.includes(type);
                   const isSpecial = type.includes('Entrada de Caixa') || type.includes('Saida de Caixa');
-
                   return (
-                    <div 
-                      key={type}
-                      onClick={() => toggleType(type)}
-                      className={`
-                        cursor-pointer flex items-center p-3 rounded-lg border transition-all
-                        ${isSelected 
-                          ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200' 
-                          : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}
-                        ${isSpecial ? 'ring-1 ring-blue-100 dark:ring-blue-800' : ''}
-                      `}
-                    >
-                      {isSelected 
-                        ? <CheckSquare className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 shrink-0" /> 
-                        : <Square className="h-5 w-5 mr-3 text-slate-400 dark:text-slate-500 shrink-0" />
-                      }
+                    <div key={type} onClick={() => toggleType(type)} className={`cursor-pointer flex items-center p-3 rounded-lg border transition-all ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'} ${isSpecial ? 'ring-1 ring-blue-100 dark:ring-blue-800' : ''}`}>
+                      {isSelected ? <CheckSquare className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 shrink-0" /> : <Square className="h-5 w-5 mr-3 text-slate-400 dark:text-slate-500 shrink-0" />}
                       <span className={`text-sm font-medium break-words leading-tight ${isSpecial ? 'font-bold' : ''}`}>{type}</span>
                     </div>
                   );
                 })}
               </div>
             </div>
-
           </div>
 
+          {/* RIGHT: Preview Panel */}
           <div className="lg:col-span-1">
              <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-lg sticky top-6 transition-colors">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
                   <PieChart className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-                  Prévia do Relatório
+                  Prévia e Totais
                 </h3>
 
                 {loading ? (
@@ -397,17 +379,54 @@ const Reports: React.FC = () => {
                        <p className="text-3xl font-bold text-slate-800 dark:text-white">{filteredData.length}</p>
                     </div>
 
-                    <div className="space-y-3">
-                       {/* ENTRADAS / A RECEBER (PREVISTO) */}
-                       <div className="flex justify-between items-center text-sm p-2 bg-green-50/50 dark:bg-green-900/10 rounded">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">Entradas (Previsto)</span>
-                          <span className="font-bold text-green-700 dark:text-green-400">{formatCurrency(kpi.totalReceived)}</span>
+                    <div className="space-y-4">
+                       
+                       {/* ENTRADAS */}
+                       <div className="space-y-1">
+                           <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 px-1">
+                               <span>Entradas Efetivadas</span>
+                               <span>A Receber (Pendente)</span>
+                           </div>
+                           <div className="flex gap-2">
+                               <div className="flex-1 bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-100 dark:border-green-900/30 flex flex-col justify-center">
+                                   <span className="text-[10px] text-green-600 dark:text-green-400/70">Pago</span>
+                                   <span className="font-bold text-green-700 dark:text-green-400 text-sm">{formatCurrency(kpi.settledReceivables)}</span>
+                               </div>
+                               <div className="flex-1 bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded border border-yellow-100 dark:border-yellow-900/30 flex flex-col justify-center">
+                                   <span className="text-[10px] text-yellow-600 dark:text-yellow-400/70">Pendente</span>
+                                   <span className="font-bold text-yellow-700 dark:text-yellow-400 text-sm">{formatCurrency(kpi.pendingReceivables)}</span>
+                               </div>
+                           </div>
+                           <div className="text-right text-xs font-semibold text-green-600 dark:text-green-400 mt-1">
+                               Total Previsto: {formatCurrency(kpi.totalReceived)}
+                           </div>
                        </div>
                        
-                       {/* SAÍDAS / A PAGAR (PREVISTO) */}
-                       <div className="flex justify-between items-center text-sm p-2 bg-red-50/50 dark:bg-red-900/10 rounded">
-                          <span className="text-slate-600 dark:text-slate-400 font-medium">Saídas / A Pagar (Previsto)</span>
-                          <span className="font-bold text-red-700 dark:text-red-400">{formatCurrency(kpi.totalPaid)}</span>
+                       <hr className="border-slate-100 dark:border-slate-800" />
+
+                       {/* SAÍDAS - EVIDENCIADO */}
+                       <div className="space-y-1">
+                           <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 px-1">
+                               <span>Saídas Efetivadas</span>
+                               <span className="font-bold text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                                   <AlertTriangle className="h-3 w-3" />
+                                   A Pagar (Pendente)
+                               </span>
+                           </div>
+                           <div className="flex gap-2">
+                               <div className="flex-1 bg-slate-50 dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 flex flex-col justify-center opacity-70">
+                                   <span className="text-[10px] text-slate-500">Pago</span>
+                                   <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">{formatCurrency(kpi.settledPayables)}</span>
+                               </div>
+                               {/* EVIDÊNCIA MÁXIMA PARA O PENDENTE */}
+                               <div className="flex-1 bg-red-50 dark:bg-red-900/30 p-2 rounded border border-red-200 dark:border-red-800 flex flex-col justify-center shadow-inner">
+                                   <span className="text-[10px] text-red-600 dark:text-red-400/70 font-bold uppercase">A Pagar</span>
+                                   <span className="font-extrabold text-red-700 dark:text-red-400 text-sm">{formatCurrency(kpi.pendingPayables)}</span>
+                               </div>
+                           </div>
+                           <div className="text-right text-xs font-semibold text-red-600 dark:text-red-400 mt-1">
+                               Total Previsto (Saídas): {formatCurrency(kpi.totalPaid)}
+                           </div>
                        </div>
 
                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
@@ -416,11 +435,6 @@ const Reports: React.FC = () => {
                              {formatCurrency(kpi.balance)}
                           </span>
                        </div>
-                       
-                       {/* Nota de rodapé para clareza */}
-                       <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center italic mt-2">
-                         * Os totais incluem valores Pagos e Pendentes dentro do período filtrado.
-                       </p>
                     </div>
 
                     <div className="space-y-3">
@@ -442,18 +456,10 @@ const Reports: React.FC = () => {
                             )}
                         </button>
                     </div>
-                    
-                    {filteredData.length === 0 && (
-                      <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-xs">
-                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                        <p>Nenhum dado encontrado com os filtros atuais. Verifique as datas.</p>
-                      </div>
-                    )}
                   </div>
                 )}
              </div>
           </div>
-
         </div>
       </div>
     </Layout>
