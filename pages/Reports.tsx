@@ -5,7 +5,7 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, FileSpreadsheet } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 
@@ -138,65 +138,6 @@ const Reports: React.FC = () => {
     }, 500);
   };
 
-  const handleExportCSV = () => {
-    // Reutiliza a função de exportação do DataService, mas precisamos adaptar para passar os filtros atuais
-    // Como o DataService espera um FilterState parcial, criamos um objeto compatível
-    const csvFilters = {
-        startDate,
-        endDate,
-        type: selectedTypes.length === 1 ? selectedTypes[0] : '', // Limitação: CSV export via DataService filtra por tipo único ou string. 
-        // Nota: Para exportar múltiplos tipos selecionados no relatório, 
-        // o ideal seria o DataService suportar array ou filtrarmos manualmente os dados antes.
-        // Solução rápida: O DataService.exportToCSV filtra de novo.
-        // Solução melhor: criar uma função local que exporta o `filteredData` que JÁ está filtrado corretamente.
-    };
-
-    // Exportação Manual usando filteredData para garantir fidelidade aos filtros complexos da tela
-    const headers = [
-        'ID',
-        'Data Lançamento',
-        'Data Vencimento',
-        'Conta',
-        'Tipo',
-        'Status',
-        'Cliente',
-        'Pago Por',
-        'Movimento',
-        'Valor Pago',
-        'Valor Recebido',
-      ];
-  
-      const csvContent =
-        'data:text/csv;charset=utf-8,' +
-        [headers.join(';')]
-          .concat(
-            filteredData.map((row) =>
-              [
-                row.id,
-                row.date,
-                row.dueDate,
-                row.bankAccount,
-                row.type,
-                row.status,
-                `"${row.client}"`,
-                row.paidBy,
-                row.movement,
-                row.valuePaid.toFixed(2).replace('.', ','),
-                row.valueReceived.toFixed(2).replace('.', ','),
-              ].join(';')
-            )
-          )
-          .join('\n');
-  
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `relatorio_filtrado_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  };
-
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
@@ -209,7 +150,7 @@ const Reports: React.FC = () => {
             <FileText className="h-7 w-7 text-blue-600 dark:text-blue-400" />
             Relatórios Personalizados
           </h1>
-          <p className="text-slate-500 dark:text-slate-400">Gere relatórios PDF ou CSV com filtros granulares.</p>
+          <p className="text-slate-500 dark:text-slate-400">Gere relatórios PDF com filtros granulares.</p>
         </div>
 
         {/* Quick Report Mode Selector */}
@@ -409,15 +350,6 @@ const Reports: React.FC = () => {
                                 <span>Baixar PDF</span>
                                 </>
                             )}
-                        </button>
-
-                        <button
-                            onClick={handleExportCSV}
-                            disabled={filteredData.length === 0 || generating}
-                            className="w-full py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                        >
-                            <FileSpreadsheet className="h-5 w-5 text-green-600 dark:text-green-400" />
-                            <span>Exportar Excel (CSV)</span>
                         </button>
                     </div>
                     

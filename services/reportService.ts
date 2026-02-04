@@ -66,7 +66,6 @@ export const ReportService = {
       let yPos = 50;
       doc.setTextColor(50, 50, 50);
       
-      // KPI Box Background (Optional visualization aid)
       doc.setFillColor(248, 250, 252);
       doc.setDrawColor(226, 232, 240);
       doc.roundedRect(14, 45, pageWidth - 28, 24, 2, 2, 'FD');
@@ -96,7 +95,6 @@ export const ReportService = {
       doc.text(`Saldo Líquido: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.balance))}`, kpiXStart + 120, kpiYLine);
 
       // --- FILTER PARAMETERS CONTEXT ---
-      // This section details exactly what filters generated this report
       yPos = 76;
       doc.setTextColor(80, 80, 80);
       doc.setFontSize(9);
@@ -122,11 +120,10 @@ export const ReportService = {
           }
       }
 
-      // Draw Filters in a row
       doc.text(`Período: ${dateRange}`, 14, yPos + 5);
       doc.text(`Conta: ${bankInfo}`, 80, yPos + 5);
       doc.text(`Status: ${statusInfo}`, 130, yPos + 5);
-      doc.text(`Tipos: ${typesInfo}`, 180, yPos + 5); // Pode cortar se for muito longo, mas ok para resumo
+      doc.text(`Tipos: ${typesInfo}`, 180, yPos + 5);
 
       yPos += 10;
 
@@ -139,13 +136,15 @@ export const ReportService = {
       const tableBody = safeTransactions.map(t => {
         const dataPagar = formatDate(t.date);
         const dataVencimento = formatDate(t.dueDate);
-        const movimentacao = safeStr(t.movement);
+        const conta = safeStr(t.bankAccount); // COLUNA NOVA
+        const tipo = safeStr(t.type); // COLUNA NOVA
         const status = safeStr(t.status);
         const pagoPor = safeStr(t.paidBy || '-');
+        const favorecido = safeStr(t.client || '-'); // Favorecido separado
         
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
-        const isEntry = movimentacao.toLowerCase().includes('entrada') || (valRec > 0 && valPaid === 0);
+        const isEntry = t.movement === 'Entrada' || (valRec > 0 && valPaid === 0);
         
         const valorOriginalRaw = isEntry ? valRec : valPaid;
         const valorOriginalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorOriginalRaw);
@@ -156,24 +155,22 @@ export const ReportService = {
         }
         const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
 
-        let observacao = safeStr(t.client);
-        if (!observacao) observacao = safeStr(t.type); 
-
         return [
           dataPagar,        // 0
           dataVencimento,   // 1
-          movimentacao,     // 2
-          status,           // 3
-          pagoPor,          // 4
-          valorOriginalFmt, // 5
-          valorPagoFmt,     // 6
-          observacao        // 7
+          conta,            // 2 (NOVO)
+          tipo,             // 3 (NOVO)
+          status,           // 4
+          pagoPor,          // 5
+          valorOriginalFmt, // 6
+          valorPagoFmt,     // 7
+          favorecido        // 8
         ];
       });
 
       autoTable(doc, {
           startY: yPos,
-          head: [['Data', 'Vencimento', 'Movimento', 'Status', 'Pago Por', 'Valor Orig.', 'Valor Pago', 'Favorecido / Obs.']],
+          head: [['Data', 'Venc.', 'Conta', 'Tipo', 'Status', 'Pago Por', 'Valor Orig.', 'Valor Pago', 'Favorecido']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
@@ -184,7 +181,7 @@ export const ReportService = {
               halign: 'center'
           },
           bodyStyles: { 
-              fontSize: 7.5,
+              fontSize: 7, // Fonte levemente menor para caber mais colunas
               textColor: 50,
               cellPadding: 2
           },
@@ -192,22 +189,25 @@ export const ReportService = {
               fillColor: [245, 247, 250] 
           },
           columnStyles: {
-              0: { cellWidth: 22, halign: 'center' }, // Data
-              1: { cellWidth: 22, halign: 'center' }, // Vencimento
-              2: { cellWidth: 22, halign: 'center' }, // Movimento
-              3: { cellWidth: 18, halign: 'center' }, // Status
-              4: { cellWidth: 25, halign: 'left' },   // Pago Por
-              5: { cellWidth: 28, halign: 'right' },  // Valor Orig
-              6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },  // Valor Pago
-              7: { cellWidth: 'auto' }                // Observação
+              0: { cellWidth: 18, halign: 'center' }, // Data
+              1: { cellWidth: 18, halign: 'center' }, // Vencimento
+              2: { cellWidth: 25, halign: 'left' },   // Conta
+              3: { cellWidth: 35, halign: 'left' },   // Tipo
+              4: { cellWidth: 18, halign: 'center' }, // Status
+              5: { cellWidth: 25, halign: 'left' },   // Pago Por
+              6: { cellWidth: 25, halign: 'right' },  // Valor Orig
+              7: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },  // Valor Pago
+              8: { cellWidth: 'auto' }                // Favorecido (restante)
           },
           didParseCell: (data: any) => {
-              if (data.section === 'body' && data.column.index === 3) {
+              // Colorir Status (Index 4)
+              if (data.section === 'body' && data.column.index === 4) {
                   const txt = String(data.cell.raw).toLowerCase();
                   if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74];
                   else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12];
               }
-              if (data.section === 'body' && data.column.index === 6) {
+              // Colorir Valor Pago (Index 7)
+              if (data.section === 'body' && data.column.index === 7) {
                   const txt = String(data.cell.raw);
                   if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175];
                   else data.cell.styles.textColor = [156, 163, 175];
