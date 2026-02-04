@@ -5,7 +5,7 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock, AlertCircle } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -73,7 +73,7 @@ const Reports: React.FC = () => {
     if (mode === 'payables') {
       // Contas a Pagar: Foco em Saídas, Vencimento e Pendentes
       setSelectedTypes(['Saida de Caixa / Contas a Pagar']);
-      setSelectedStatus(''); // Usuário pode querer ver as pagas também, mas geralmente filtra por Vencimento
+      setSelectedStatus(''); // Usuário pode querer ver as pagas também para conferência
       setDateFilterType('dueDate'); // Muda contexto para Vencimento
     } else if (mode === 'receivables') {
       // Contas a Receber: Foco em Entradas, Vencimento
@@ -137,10 +137,14 @@ const Reports: React.FC = () => {
     setFilteredData(result);
 
     // Calculate KPIs locally based on filtered result
+    // IMPORTANTE: Aqui garantimos que "Pendentes" são somados
     const newKpi = result.reduce(
       (acc, curr) => ({
+        // totalPaid acumula o valor de Saída (seja Pago ou Pendente)
         totalPaid: acc.totalPaid + curr.valuePaid,
+        // totalReceived acumula o valor de Entrada (seja Pago ou Pendente)
         totalReceived: acc.totalReceived + curr.valueReceived,
+        // Saldo é Entrada - Saída
         balance: acc.balance + (curr.valueReceived - curr.valuePaid),
       }),
       { totalPaid: 0, totalReceived: 0, balance: 0 }
@@ -313,7 +317,7 @@ const Reports: React.FC = () => {
                                 value={selectedStatus}
                                 onChange={(e) => setSelectedStatus(e.target.value)}
                              >
-                                <option value="">Todos</option>
+                                <option value="">Todos (Aberto + Pago)</option>
                                 {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                              </select>
                         </div>
@@ -394,20 +398,29 @@ const Reports: React.FC = () => {
                     </div>
 
                     <div className="space-y-3">
-                       <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-500 dark:text-slate-400">Entradas</span>
-                          <span className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(kpi.totalReceived)}</span>
+                       {/* ENTRADAS / A RECEBER (PREVISTO) */}
+                       <div className="flex justify-between items-center text-sm p-2 bg-green-50/50 dark:bg-green-900/10 rounded">
+                          <span className="text-slate-600 dark:text-slate-400 font-medium">Entradas (Previsto)</span>
+                          <span className="font-bold text-green-700 dark:text-green-400">{formatCurrency(kpi.totalReceived)}</span>
                        </div>
-                       <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-500 dark:text-slate-400">Saídas</span>
-                          <span className="font-semibold text-red-600 dark:text-red-400">{formatCurrency(kpi.totalPaid)}</span>
+                       
+                       {/* SAÍDAS / A PAGAR (PREVISTO) */}
+                       <div className="flex justify-between items-center text-sm p-2 bg-red-50/50 dark:bg-red-900/10 rounded">
+                          <span className="text-slate-600 dark:text-slate-400 font-medium">Saídas / A Pagar (Previsto)</span>
+                          <span className="font-bold text-red-700 dark:text-red-400">{formatCurrency(kpi.totalPaid)}</span>
                        </div>
+
                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Saldo</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Saldo Previsto</span>
                           <span className={`font-bold text-lg ${kpi.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
                              {formatCurrency(kpi.balance)}
                           </span>
                        </div>
+                       
+                       {/* Nota de rodapé para clareza */}
+                       <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center italic mt-2">
+                         * Os totais incluem valores Pagos e Pendentes dentro do período filtrado.
+                       </p>
                     </div>
 
                     <div className="space-y-3">
@@ -431,9 +444,10 @@ const Reports: React.FC = () => {
                     </div>
                     
                     {filteredData.length === 0 && (
-                      <p className="text-xs text-center text-red-400">
-                        Nenhum dado encontrado com os filtros atuais.
-                      </p>
+                      <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-xs">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <p>Nenhum dado encontrado com os filtros atuais. Verifique as datas.</p>
+                      </div>
                     )}
                   </div>
                 )}
