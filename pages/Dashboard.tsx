@@ -4,7 +4,6 @@ import KpiCard from '../components/KpiCard';
 import DataTable from '../components/DataTable';
 import AIAssistant from '../components/AIAssistant';
 import { DataService } from '../services/dataService';
-import { AuthService } from '../services/authService';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
@@ -13,6 +12,8 @@ const INITIAL_FILTERS: FilterState = {
   id: '',
   startDate: '',
   endDate: '',
+  dueDateStart: '',
+  dueDateEnd: '',
   bankAccount: '',
   type: '',
   status: '',
@@ -138,8 +139,9 @@ const Dashboard: React.FC = () => {
   };
   
   const handleDeleteTransaction = (id: string) => {
-    console.log(`Solicitação de exclusão para o ID: ${id}`);
-    alert(`Funcionalidade de exclusão simulada para o ID: ${id}.\nEm breve será conectada ao banco de dados.`);
+    // A lógica do modal está no componente DataTable, aqui só passamos o callback
+    console.log(`Exclusão confirmada para: ${id}`);
+    alert('Exclusão simulada com sucesso!');
   };
 
   const handleWhatsAppShare = () => {
@@ -247,7 +249,6 @@ const Dashboard: React.FC = () => {
           </div>
           
           <div className="flex flex-wrap items-center gap-2 print:hidden">
-            {/* Filtros Toggle */}
             <button
               onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
               className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm
@@ -260,7 +261,6 @@ const Dashboard: React.FC = () => {
               <span>Filtros</span>
             </button>
 
-            {/* Imprimir */}
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm"
@@ -269,7 +269,6 @@ const Dashboard: React.FC = () => {
               <span>Imprimir</span>
             </button>
 
-             {/* Exportar CSV */}
              <button
               onClick={() => DataService.exportToCSV(filters)}
               className="flex items-center gap-2 px-3 py-2 bg-slate-800 dark:bg-slate-700 text-white border border-slate-800 dark:border-slate-700 rounded-lg hover:bg-slate-900 dark:hover:bg-slate-600 transition-colors text-sm"
@@ -278,7 +277,6 @@ const Dashboard: React.FC = () => {
               <span>Exportar</span>
             </button>
 
-             {/* Exportar WhatsApp */}
              <button
               onClick={handleWhatsAppShare}
               className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white border border-green-600 rounded-lg hover:bg-green-700 transition-colors text-sm"
@@ -289,13 +287,13 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Filters Panel - LABELS IDÊNTICOS À PLANILHA GOOGLE SHEETS */}
+        {/* Filters Panel */}
         {isFilterMenuOpen && (
           <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm animate-in slide-in-from-top-2 print:hidden transition-colors">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                 <Filter className="h-4 w-4 text-blue-500" />
-                Filtros (Idênticos ao Banco de Dados)
+                Painel de Filtros
               </h3>
               <button onClick={clearFilters} className="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
                 <XCircle className="h-4 w-4" />
@@ -312,7 +310,7 @@ const Dashboard: React.FC = () => {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Pesquise por qualquer termo em todas as colunas..."
+                      placeholder="Pesquise por qualquer termo..."
                       value={filters.search}
                       onChange={(e) => handleFilterChange('search', e.target.value)}
                       className="pl-9 w-full form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
@@ -320,41 +318,57 @@ const Dashboard: React.FC = () => {
                  </div>
                </div>
 
-              {/* DATE RANGE */}
+              {/* DATA LANÇAMENTO */}
               <div className="space-y-1 lg:col-span-2">
                 <div className="flex justify-between items-end mb-1">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Período de Análise</label>
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Data de Lançamento</label>
                     <div className="flex gap-1">
                         <button onClick={() => setDateRange('thisMonth')} className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors">Este Mês</button>
                         <button onClick={() => setDateRange('lastMonth')} className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">Mês Anterior</button>
                     </div>
                 </div>
                 <div className="flex gap-2 items-center">
-                    <div className="relative flex-1">
-                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                        <input
-                            type="date"
-                            className="w-full form-input pl-8 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                            value={filters.startDate}
-                            onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                            title="Data Inicial"
-                        />
-                    </div>
+                    <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.startDate}
+                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
+                        title="De"
+                    />
                     <span className="text-slate-400 text-sm">-</span>
-                    <div className="relative flex-1">
-                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                        <input
-                            type="date"
-                            className="w-full form-input pl-8 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                            value={filters.endDate}
-                            onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                            title="Data Final"
-                        />
-                    </div>
+                    <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.endDate}
+                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
+                        title="Até"
+                    />
                 </div>
               </div>
 
-              {/* MOVIMENTAÇÃO - Label idêntico à planilha */}
+              {/* DATA VENCIMENTO - NOVO */}
+              <div className="space-y-1 lg:col-span-2">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Data de Vencimento</label>
+                <div className="flex gap-2 items-center">
+                    <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.dueDateStart || ''}
+                        onChange={(e) => handleFilterChange('dueDateStart', e.target.value)}
+                        title="Vencimento De"
+                    />
+                    <span className="text-slate-400 text-sm">-</span>
+                    <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.dueDateEnd || ''}
+                        onChange={(e) => handleFilterChange('dueDateEnd', e.target.value)}
+                        title="Vencimento Até"
+                    />
+                </div>
+              </div>
+
+              {/* MOVIMENTAÇÃO */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Movimentação</label>
                 <select
@@ -367,9 +381,9 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* CONTAS BANCÁRIAS - Label idêntico à planilha */}
+              {/* TIPO DE CONTA (Conta Bancária) - Populado dinamicamente */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Contas Bancárias</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Conta (Banco)</label>
                 <select
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.bankAccount}
@@ -380,7 +394,7 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-               {/* TIPO DE LANÇAMENTO - Label idêntico à planilha */}
+               {/* TIPO DE LANÇAMENTO */}
                <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Lançamento</label>
                 <select
@@ -406,7 +420,7 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* PAGO POR - Label idêntico à planilha */}
+              {/* PAGO POR */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Pago Por</label>
                 <select
@@ -419,7 +433,7 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-               {/* NOME EMPRESA / CREDOR - Label idêntico à planilha */}
+               {/* NOME EMPRESA / CREDOR */}
                <div className="space-y-1 lg:col-span-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Nome Empresa / Credor</label>
                 <input
@@ -439,11 +453,10 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* KPI Cards - LABELS DINÂMICOS BASEADOS NO TIPO */}
+        {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {isContasAPagar ? (
             <>
-              {/* MODO CONTAS A PAGAR */}
               <KpiCard
                 title="Total Geral"
                 value={kpi.totalReceived}
@@ -465,7 +478,6 @@ const Dashboard: React.FC = () => {
             </>
           ) : (
             <>
-              {/* MODO PADRÃO */}
               <KpiCard
                 title="Total Entradas"
                 value={kpi.totalReceived}
@@ -490,7 +502,6 @@ const Dashboard: React.FC = () => {
 
         {/* Charts & Data */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-           {/* Chart - DINÂMICO baseado no tipo de filtro */}
            <div className="lg:col-span-3 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm print:shadow-none print:border-none transition-colors">
              <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">
                {isContasAPagar ? 'Contas a Pagar por Vencimento' : 'Movimentação Recente'}
@@ -508,13 +519,11 @@ const Dashboard: React.FC = () => {
                     <Legend wrapperStyle={{ color: '#94a3b8' }} />
                     {isContasAPagar ? (
                       <>
-                        {/* MODO CONTAS A PAGAR: Pago (verde) vs Pendente (amarelo/laranja) */}
                         <Bar dataKey="Pago" fill="#16a34a" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Pendente" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                       </>
                     ) : (
                       <>
-                        {/* MODO PADRÃO: Entradas vs Saídas */}
                         <Bar dataKey="Entradas" fill="#16a34a" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Saidas" fill="#dc2626" radius={[4, 4, 0, 0]} />
                       </>
@@ -524,7 +533,6 @@ const Dashboard: React.FC = () => {
              </div>
            </div>
 
-           {/* Table */}
            <div className="lg:col-span-3">
               <DataTable
                 data={data}
@@ -543,7 +551,6 @@ const Dashboard: React.FC = () => {
            </div>
         </div>
 
-        {/* Floating AI Assistant - Hidden on print */}
         <div className="print:hidden">
             <AIAssistant onFiltersUpdate={handleAIUpdate} />
         </div>

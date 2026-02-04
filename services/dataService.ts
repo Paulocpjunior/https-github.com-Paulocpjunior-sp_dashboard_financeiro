@@ -68,9 +68,13 @@ export const DataService = {
       // ID Filter
       if (filters.id && !item.id.toLowerCase().includes(filters.id.toLowerCase())) matches = false;
 
-      // String comparison is safe because format is strict YYYY-MM-DD
+      // Lançamento Date Filter
       if (filters.startDate && item.date < filters.startDate) matches = false;
       if (filters.endDate && item.date > filters.endDate) matches = false;
+
+      // Due Date Filter (Vencimento)
+      if (filters.dueDateStart && item.dueDate < filters.dueDateStart) matches = false;
+      if (filters.dueDateEnd && item.dueDate > filters.dueDateEnd) matches = false;
       
       // Strict filtering for dropdowns
       if (filters.bankAccount && item.bankAccount !== filters.bankAccount) matches = false;
@@ -163,7 +167,8 @@ export const DataService = {
     const { result } = DataService.getTransactions(filters, 1, 999999);
     const headers = [
       'ID',
-      'Data',
+      'Data Lançamento',
+      'Data Vencimento',
       'Conta',
       'Tipo',
       'Status',
@@ -182,6 +187,7 @@ export const DataService = {
             [
               row.id,
               row.date,
+              row.dueDate,
               row.bankAccount,
               row.type,
               row.status,

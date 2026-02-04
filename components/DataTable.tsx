@@ -174,10 +174,10 @@ const DataTable: React.FC<DataTableProps> = ({
                 ) : showDetailedEntryColumns ? (
                   <>
                     {/* Para Entradas: Honorários, Extras, Total Cobrança */}
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
                       Valor Honorários
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
                       Valor Extra
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
@@ -223,6 +223,7 @@ const DataTable: React.FC<DataTableProps> = ({
                 data.map((row) => {
                   const rowType = normalizeText(row.type || '');
                   const isRowSaida = rowType.includes('saida') || rowType.includes('pagar');
+                  const isRowEntrada = rowType.includes('entrada') || rowType.includes('receber');
                   
                   return (
                     <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
@@ -283,14 +284,15 @@ const DataTable: React.FC<DataTableProps> = ({
                         </>
                       ) : showDetailedEntryColumns ? (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
-                            {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.honorarios) : '-'}
+                          {/* Colunas Verdes para Entradas */}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400">
+                            {isRowEntrada ? formatCurrency(row.honorarios) : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-slate-600 dark:text-slate-400">
-                            {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.valorExtra) : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400">
+                            {isRowEntrada ? formatCurrency(row.valorExtra) : '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10">
-                            {row.type === 'Entrada de Caixa / Contas a Receber' ? formatCurrency(row.totalCobranca) : '-'}
+                            {isRowEntrada ? formatCurrency(row.totalCobranca) : '-'}
                           </td>
                         </>
                       ) : (

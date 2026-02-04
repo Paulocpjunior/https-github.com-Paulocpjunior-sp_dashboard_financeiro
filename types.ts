@@ -33,6 +33,8 @@ export interface FilterState {
   id: string;
   startDate: string;
   endDate: string;
+  dueDateStart?: string; // Filtro Data Vencimento Início
+  dueDateEnd?: string;   // Filtro Data Vencimento Fim
   bankAccount: string;
   type: string;
   status: string;

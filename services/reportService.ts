@@ -11,21 +11,30 @@ export const ReportService = {
     currentUser: User | null
   ) => {
     try {
-      // Inicializa o documento
+      // 1. SAFE DATA PREPARATION
+      const safeNum = (val: any) => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        const num = parseFloat(String(val).replace(/[^\d.-]/g, ''));
+        return isNaN(num) ? 0 : num;
+      };
+
+      const safeStr = (val: any) => val ? String(val) : '';
+
+      // 2. Initialize Doc
+      // Explicit casting to any to avoid typescript errors with autoTable
       const doc: any = new jsPDF();
-      const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
       
-      // Cores da Identidade Visual (Royal Blue)
-      const primaryColor = [30, 64, 175]; // Royal Blue 800
-      const secondaryColor = [71, 85, 105]; // Slate 600
+      const pageWidth = doc.internal.pageSize.width || 210;
+      const pageHeight = doc.internal.pageSize.height || 297;
       
-      // --- 1. CABEÇALHO (Header) ---
-      // Fundo Azul
+      const primaryColor = [30, 64, 175]; // Royal Blue
+      const secondaryColor = [71, 85, 105]; // Slate
+      
+      // --- HEADER ---
       doc.setFillColor(...primaryColor);
       doc.rect(0, 0, pageWidth, 40, 'F');
       
-      // Título
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(22);
       doc.setFont('helvetica', 'bold');
@@ -35,19 +44,16 @@ export const ReportService = {
       doc.setFont('helvetica', 'normal');
       doc.text('SP Contábil - Gestão de Fluxo de Caixa', 14, 25);
 
-      // --- DADOS DO COLABORADOR E DATA (Solicitado) ---
       const currentDate = new Date().toLocaleDateString('pt-BR');
       const currentTime = new Date().toLocaleTimeString('pt-BR');
       const collaboratorName = currentUser?.name ? currentUser.name.toUpperCase() : 'USUÁRIO DO SISTEMA';
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      
-      // Alinhado à direita no cabeçalho azul
-      doc.text(`EMITIDO POR: ${collaboratorName}`, pageWidth - 14, 18, { align: 'right' });
+      doc.text(`EMITIDO POR: ${safeStr(collaboratorName)}`, pageWidth - 14, 18, { align: 'right' });
       doc.text(`DATA: ${currentDate} às ${currentTime}`, pageWidth - 14, 25, { align: 'right' });
 
-      // --- 2. RESUMO DOS FILTROS ---
+      // --- FILTERS SUMMARY ---
       let yPos = 50;
       doc.setTextColor(50, 50, 50);
       doc.setFontSize(11);
@@ -67,16 +73,23 @@ export const ReportService = {
       yPos += 5;
 
       if (filters.bankAccount) {
-        doc.text(`• Conta Bancária: ${filters.bankAccount}`, 14, yPos);
+        doc.text(`• Conta Bancária: ${safeStr(filters.bankAccount)}`, 14, yPos);
         yPos += 5;
       }
       
       if (filters.status) {
-        doc.text(`• Status: ${filters.status}`, 14, yPos);
+        doc.text(`• Status: ${safeStr(filters.status)}`, 14, yPos);
         yPos += 5;
       }
 
-      // --- 3. CARDS DE RESUMO (KPIs) ---
+      if (filters.types && Array.isArray(filters.types) && filters.types.length > 0) {
+        const typesStr = filters.types.join(', ');
+        const displayType = typesStr.length > 80 ? typesStr.substring(0, 80) + '...' : typesStr;
+        doc.text(`• Tipos: ${displayType}`, 14, yPos);
+        yPos += 5;
+      }
+
+      // --- KPI CARDS ---
       yPos += 5;
       const cardWidth = (pageWidth - 28 - 10) / 3;
       const cardHeight = 20;
@@ -88,108 +101,132 @@ export const ReportService = {
           
           doc.setFontSize(8);
           doc.setTextColor(100, 100, 100);
-          doc.text(label, x + 5, yPos + 7);
+          doc.text(safeStr(label), x + 5, yPos + 7);
           
           doc.setFontSize(11);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(...color);
-          const valFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+          const valFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(value));
           doc.text(valFormatted, x + 5, yPos + 16);
       };
 
       drawCard(14, 'Total Entradas', kpi.totalReceived, [22, 163, 74]); // Verde
       drawCard(14 + cardWidth + 5, 'Total Saídas', kpi.totalPaid, [220, 38, 38]); // Vermelho
-      drawCard(14 + (cardWidth * 2) + 10, 'Saldo Líquido', kpi.balance, kpi.balance >= 0 ? [37, 99, 235] : [220, 38, 38]); // Azul ou Vermelho
+      drawCard(14 + (cardWidth * 2) + 10, 'Saldo Líquido', kpi.balance, kpi.balance >= 0 ? [37, 99, 235] : [220, 38, 38]); // Azul
 
       yPos += cardHeight + 15;
 
-      // --- 4. TABELA DE ITENS LANÇADOS ---
+      // --- TABLE ---
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
       doc.text('Detalhamento dos Lançamentos', 14, yPos);
       yPos += 2;
 
-      const tableBody = transactions.map(t => {
-        const dateStr = new Date(t.date).toLocaleDateString('pt-BR');
-        // Define a descrição (Cliente ou quem pagou)
-        const description = t.client || t.paidBy || 'Sem descrição';
-        // Formata valor
-        const isEntrada = t.movement === 'Entrada';
-        const value = isEntrada ? t.valueReceived : t.valuePaid;
-        const sign = isEntrada ? '+ ' : '- ';
+      // Ensure transactions is an array
+      const safeTransactions = Array.isArray(transactions) ? transactions : [];
+
+      const tableBody = safeTransactions.map(t => {
+        let dateStr = '-';
+        try {
+            if (t.date && t.date !== '1970-01-01') {
+                dateStr = new Date(t.date).toLocaleDateString('pt-BR');
+            }
+        } catch (e) {}
+
+        const description = safeStr(t.client || t.paidBy || 'Sem descrição');
+        const movement = safeStr(t.movement);
+        const type = safeStr(t.type);
+        
+        const valRec = safeNum(t.valueReceived);
+        const valPaid = safeNum(t.valuePaid);
+        
+        let value = 0;
+        let sign = '';
+        
+        if (movement.toLowerCase().includes('entrada') || (valRec > 0 && valPaid === 0)) {
+            value = valRec;
+            sign = '+ ';
+        } else {
+            value = valPaid;
+            sign = '- ';
+        }
+
         const formattedValue = sign + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
         return [
           dateStr,
-          t.type || '-',
+          type,
           description,
-          t.bankAccount || '-',
-          t.status || '-',
+          safeStr(t.bankAccount),
+          safeStr(t.status),
           formattedValue
         ];
       });
 
-      doc.autoTable({
-        startY: yPos + 3,
-        head: [['Data', 'Tipo', 'Descrição / Cliente', 'Conta', 'Status', 'Valor']],
-        body: tableBody,
-        theme: 'striped',
-        headStyles: { 
-          fillColor: secondaryColor, 
-          textColor: 255, 
-          fontStyle: 'bold',
-          fontSize: 8 
-        },
-        bodyStyles: { 
-          fontSize: 8, 
-          textColor: 50 
-        },
-        alternateRowStyles: { 
-          fillColor: [245, 247, 250] 
-        },
-        columnStyles: {
-          0: { cellWidth: 20 }, // Data
-          1: { cellWidth: 50 }, // Tipo (AUMENTADO)
-          2: { cellWidth: 'auto' }, // Descrição (Expande)
-          3: { cellWidth: 25 }, // Conta
-          4: { cellWidth: 20 }, // Status
-          5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } // Valor
-        },
-        didParseCell: (data: any) => {
-          // Colorir a coluna de valor
-          if (data.section === 'body' && data.column.index === 5) {
-            const rawVal = data.cell.raw as string;
-            if (rawVal.startsWith('+')) {
-              data.cell.styles.textColor = [22, 163, 74]; // Verde
-            } else {
-              data.cell.styles.textColor = [220, 38, 38]; // Vermelho
+      if (doc.autoTable) {
+        doc.autoTable({
+            startY: yPos + 3,
+            head: [['Data', 'Tipo', 'Descrição / Cliente', 'Conta', 'Status', 'Valor']],
+            body: tableBody,
+            theme: 'striped',
+            headStyles: { 
+            fillColor: secondaryColor, 
+            textColor: 255, 
+            fontStyle: 'bold',
+            fontSize: 8 
+            },
+            bodyStyles: { 
+            fontSize: 8, 
+            textColor: 50 
+            },
+            alternateRowStyles: { 
+            fillColor: [245, 247, 250] 
+            },
+            columnStyles: {
+            0: { cellWidth: 20 }, 
+            1: { cellWidth: 50 }, 
+            2: { cellWidth: 'auto' }, 
+            3: { cellWidth: 25 }, 
+            4: { cellWidth: 20 }, 
+            5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } 
+            },
+            didParseCell: (data: any) => {
+            if (data.section === 'body' && data.column.index === 5) {
+                const rawVal = String(data.cell.raw);
+                if (rawVal.includes('+')) {
+                data.cell.styles.textColor = [22, 163, 74];
+                } else {
+                data.cell.styles.textColor = [220, 38, 38];
+                }
             }
-          }
-        }
-      });
+            }
+        });
+      } else {
+          // Fallback simple text if autotable fails to load
+          doc.setFontSize(10);
+          doc.text("Erro: Componente de tabela não carregado. Dados brutos:", 14, yPos + 10);
+          doc.setFontSize(8);
+          doc.text(JSON.stringify(safeTransactions.slice(0, 5), null, 2), 14, yPos + 20);
+      }
 
-      // --- 5. RODAPÉ ---
+      // --- FOOTER ---
       const pageCount = doc.internal.pages.length - 1;
       for(let i = 1; i <= pageCount; i++) {
           doc.setPage(i);
           doc.setFontSize(8);
           doc.setTextColor(150, 150, 150);
-          
-          // Linha divisória
           doc.setDrawColor(220, 220, 220);
           doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
-          
           doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
           doc.text(`SP Contábil - Sistema Integrado`, 14, pageHeight - 8);
       }
 
-      // Salvar arquivo
       const fileName = `Relatorio_Financeiro_${new Date().toISOString().slice(0,10)}.pdf`;
       doc.save(fileName);
 
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Houve um erro ao gerar o PDF. Verifique os dados e tente novamente.");
+    } catch (error: any) {
+      console.error("Erro CRÍTICO ao gerar PDF:", error);
+      alert("Erro ao gerar PDF: " + (error.message || "Verifique o console para detalhes."));
     }
   }
 };

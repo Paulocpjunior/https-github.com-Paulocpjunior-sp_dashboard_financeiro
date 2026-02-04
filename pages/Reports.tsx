@@ -5,7 +5,9 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers } from 'lucide-react';
+
+type ReportMode = 'general' | 'payables' | 'receivables';
 
 const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,9 @@ const Reports: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>(''); // Empty = All
   const [selectedBank, setSelectedBank] = useState<string>(''); // Empty = All
   
+  // Report Mode
+  const [reportMode, setReportMode] = useState<ReportMode>('general');
+
   // Preview Data
   const [filteredData, setFilteredData] = useState<Transaction[]>([]);
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
@@ -30,7 +35,6 @@ const Reports: React.FC = () => {
         if (!DataService.isDataLoaded) {
              await DataService.loadData();
         }
-        // Hack to get all data: use a very loose filter first
         const { result } = DataService.getTransactions({}, 1, 99999);
         setAllTransactions(result.data);
       } catch (e) {
@@ -42,14 +46,41 @@ const Reports: React.FC = () => {
     load();
   }, []);
 
-  // Compute available types dynamically from data + constants
+  // Compute available types dynamically
   const availableTypes = useMemo(() => {
+    const mandatoryTypes = [
+      'Entrada de Caixa / Contas a Receber', 
+      'Saida de Caixa / Contas a Pagar'
+    ];
+    
     const typesFromData = Array.from(new Set(allTransactions.map(t => t.type).filter(Boolean)));
-    // Combine constants and data types, removing duplicates, ensuring the requested ones are present
-    return Array.from(new Set([...TRANSACTION_TYPES, ...typesFromData])).sort();
+    const otherTypesFromConstants = TRANSACTION_TYPES.filter(t => !mandatoryTypes.includes(t));
+    
+    const combined = new Set([
+      ...mandatoryTypes,
+      ...otherTypesFromConstants,
+      ...typesFromData
+    ]);
+
+    return Array.from(combined);
   }, [allTransactions]);
 
-  // Filter Logic specific for Report
+  // Handle Quick Mode Change
+  const handleModeChange = (mode: ReportMode) => {
+    setReportMode(mode);
+    if (mode === 'payables') {
+      setSelectedTypes(['Saida de Caixa / Contas a Pagar']);
+      setSelectedStatus(''); 
+    } else if (mode === 'receivables') {
+      setSelectedTypes(['Entrada de Caixa / Contas a Receber']);
+      setSelectedStatus('');
+    } else {
+      setSelectedTypes([]);
+      setSelectedStatus('');
+    }
+  };
+
+  // Filter Logic
   useEffect(() => {
     let result = allTransactions;
 
@@ -71,7 +102,6 @@ const Reports: React.FC = () => {
 
     setFilteredData(result);
 
-    // Calc KPI
     const newKpi = result.reduce(
       (acc, curr) => ({
         totalPaid: acc.totalPaid + curr.valuePaid,
@@ -88,6 +118,8 @@ const Reports: React.FC = () => {
     setSelectedTypes(prev => 
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
+    // Switch to custom mode if user manually selects
+    setReportMode('general'); 
   };
 
   const selectAllTypes = () => setSelectedTypes([...availableTypes]);
@@ -95,7 +127,6 @@ const Reports: React.FC = () => {
 
   const handleGenerate = () => {
     setGenerating(true);
-    // Timeout to allow UI to show loading state
     setTimeout(() => {
       ReportService.generatePDF(
         filteredData, 
@@ -119,7 +150,41 @@ const Reports: React.FC = () => {
             <FileText className="h-7 w-7 text-blue-600 dark:text-blue-400" />
             Relatórios Personalizados
           </h1>
-          <p className="text-slate-500 dark:text-slate-400">Configure os filtros abaixo para gerar um PDF detalhado.</p>
+          <p className="text-slate-500 dark:text-slate-400">Gere relatórios PDF filtrados para impressão ou análise.</p>
+        </div>
+
+        {/* Quick Report Mode Selector */}
+        <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-2">
+            <button
+                onClick={() => handleModeChange('general')}
+                className={`flex-1 py-3 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
+                ${reportMode === 'general' 
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white ring-2 ring-slate-400/20' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+            >
+                <Layers className="h-4 w-4" />
+                Relatório Geral
+            </button>
+            <button
+                onClick={() => handleModeChange('payables')}
+                className={`flex-1 py-3 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
+                ${reportMode === 'payables' 
+                    ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 ring-2 ring-red-500/20' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-red-50/50 dark:hover:bg-red-900/10'}`}
+            >
+                <ArrowDownCircle className="h-4 w-4" />
+                Contas a Pagar
+            </button>
+            <button
+                onClick={() => handleModeChange('receivables')}
+                className={`flex-1 py-3 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
+                ${reportMode === 'receivables' 
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'}`}
+            >
+                <ArrowUpCircle className="h-4 w-4" />
+                Contas a Receber
+            </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -127,9 +192,7 @@ const Reports: React.FC = () => {
           {/* LEFT: Configuration Panel */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* Date Range & Specific Filters */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {/* Date Range Card */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
                   <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
                     <Calendar className="h-5 w-5 text-slate-500 dark:text-slate-400" />
@@ -157,7 +220,6 @@ const Reports: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Status & Bank Filter */}
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
                     <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
                         <Filter className="h-5 w-5 text-slate-500 dark:text-slate-400" />
@@ -194,7 +256,6 @@ const Reports: React.FC = () => {
                 </div>
             </div>
 
-            {/* Transaction Types Card */}
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
               <div className="flex justify-between items-center mb-4">
                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -210,6 +271,8 @@ const Reports: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                 {availableTypes.map((type) => {
                   const isSelected = selectedTypes.includes(type);
+                  const isSpecial = type.includes('Entrada de Caixa') || type.includes('Saida de Caixa');
+
                   return (
                     <div 
                       key={type}
@@ -219,13 +282,14 @@ const Reports: React.FC = () => {
                         ${isSelected 
                           ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200' 
                           : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}
+                        ${isSpecial ? 'ring-1 ring-blue-100 dark:ring-blue-800' : ''}
                       `}
                     >
                       {isSelected 
                         ? <CheckSquare className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 shrink-0" /> 
                         : <Square className="h-5 w-5 mr-3 text-slate-400 dark:text-slate-500 shrink-0" />
                       }
-                      <span className="text-sm font-medium break-words leading-tight">{type}</span>
+                      <span className={`text-sm font-medium break-words leading-tight ${isSpecial ? 'font-bold' : ''}`}>{type}</span>
                     </div>
                   );
                 })}
@@ -234,7 +298,6 @@ const Reports: React.FC = () => {
 
           </div>
 
-          {/* RIGHT: Preview & Action */}
           <div className="lg:col-span-1">
              <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-lg sticky top-6 transition-colors">
                 <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
