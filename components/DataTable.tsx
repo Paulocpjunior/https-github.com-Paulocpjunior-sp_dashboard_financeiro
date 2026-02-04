@@ -34,14 +34,15 @@ const DataTable: React.FC<DataTableProps> = ({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
 
-  // Normaliza o texto para comparação
+  // Normaliza o texto para comparação (remove acentos e converte para minúsculo)
   const normalizeText = (text: string) => {
     return text
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+      .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
   };
 
+  // Detecta o modo de exibição baseado no filtro de tipo selecionado
   const normalizedType = normalizeText(selectedType);
   
   const isSaidaMode = normalizedType.includes('saida') || 
@@ -52,7 +53,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         normalizedType.includes('receber') ||
                         normalizedType.includes('contas a receber');
 
-  // Se nenhum tipo específico selecionado, verifica os dados para tentar exibir colunas detalhadas de entrada
+  // Se nenhum tipo específico selecionado, verifica os dados
   const showDetailedEntryColumns = isEntradaMode || (!selectedType && data.some(
       t => normalizeText(t.type || '').includes('entrada')
   ));
@@ -91,6 +92,7 @@ const DataTable: React.FC<DataTableProps> = ({
     setTransactionToDelete(null);
   };
 
+  // Função para obter o valor a exibir na coluna "Cliente/Conta"
   const getDisplayClient = (row: Transaction) => {
     const rowType = normalizeText(row.type || '');
     if (isSaidaMode || rowType.includes('saida') || rowType.includes('pagar')) {
@@ -99,6 +101,7 @@ const DataTable: React.FC<DataTableProps> = ({
     return row.client || '-';
   };
 
+  // Calcula o número de colunas para colspan
   const getColSpan = () => {
     if (isSaidaMode) return 8;
     if (showDetailedEntryColumns) return 10;
@@ -112,9 +115,22 @@ const DataTable: React.FC<DataTableProps> = ({
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Vencimento</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
+                {/* COLUNA 1: Data Lançamento */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Data
+                </th>
+                
+                {/* COLUNA 2: Data Vencimento */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Vencimento
+                </th>
+                
+                {/* COLUNA 3: Tipo */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Tipo
+                </th>
+                
+                {/* COLUNA 4: Cliente/Conta a Pagar - MUDA BASEADO NO TIPO */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
                   <div className="flex flex-col gap-2">
                     <span>{isSaidaMode ? 'Conta a Pagar' : 'Cliente'}</span>
@@ -138,29 +154,53 @@ const DataTable: React.FC<DataTableProps> = ({
                     )}
                   </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                 
-                {/* COLUNAS DINÂMICAS */}
+                {/* COLUNA 5: Status */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Status
+                </th>
+                
+                {/* COLUNAS DINÂMICAS BASEADAS NO TIPO */}
                 {isSaidaMode ? (
                   <>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">Valor</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">Valor Pago</th>
+                    {/* Para Saídas: Valor e Valor Pago */}
+                    <th className="px-6 py-3 text-right text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                      Valor
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">
+                      Valor Pago
+                    </th>
                   </>
                 ) : showDetailedEntryColumns ? (
                   <>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Honorários</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Valor Extra</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Total Cobrança</th>
+                    {/* Para Entradas: Honorários, Extras, Total Cobrança */}
+                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                      Valor Honorários
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                      Valor Extra
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                      Total Cobrança
+                    </th>
                   </>
                 ) : (
-                  <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">Valor a Pagar</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider">
+                    Valor a Pagar
+                  </th>
                 )}
 
+                {/* Valor Recebido - só mostra se NÃO for modo Saída */}
                 {!isSaidaMode && (
-                  <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Valor Recebido</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                    Valor Recebido
+                  </th>
                 )}
                 
-                <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
+                {/* Ações */}
+                <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
@@ -187,8 +227,17 @@ const DataTable: React.FC<DataTableProps> = ({
                   
                   return (
                     <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
+                      {/* Data Lançamento */}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                        {formatDate(row.date)}
+                      </td>
+                      
+                      {/* Vencimento */}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">
+                        {formatDate(row.dueDate)}
+                      </td>
+                      
+                      {/* Tipo */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                           isRowSaida 
@@ -198,9 +247,13 @@ const DataTable: React.FC<DataTableProps> = ({
                           {row.type}
                         </span>
                       </td>
+                      
+                      {/* Cliente / Conta a Pagar */}
                       <td className="px-6 py-4 text-sm text-slate-900 dark:text-slate-100 font-medium max-w-xs truncate" title={getDisplayClient(row)}>
                         {getDisplayClient(row)}
                       </td>
+                      
+                      {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                           ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
@@ -210,33 +263,35 @@ const DataTable: React.FC<DataTableProps> = ({
                         </span>
                       </td>
 
-                      {/* CÉLULAS NUMÉRICAS COM CORES PADRONIZADAS */}
+                      {/* CÉLULAS DINÂMICAS BASEADAS NO TIPO */}
                       {isSaidaMode ? (
                         <>
+                          {/* Valor (original) */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-orange-600 dark:text-orange-400">
                             {row.valuePaid > 0 ? formatCurrency(row.valuePaid) : '-'}
                           </td>
+                          {/* Valor Pago */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-red-600 dark:text-red-400 bg-red-50/30 dark:bg-red-900/10">
                             {row.valuePaid > 0 ? (
                               <div className="flex items-center justify-end gap-1">
                                 <ArrowDownCircle className="h-3 w-3" />
                                 {formatCurrency(row.valuePaid)}
                               </div>
-                            ) : '-'}
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-600">-</span>
+                            )}
                           </td>
                         </>
                       ) : showDetailedEntryColumns ? (
                         <>
-                          {/* Honorários (Entrada) = Verde */}
+                          {/* Colunas Verdes para Entradas */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400">
                             {isRowEntrada ? formatCurrency(row.honorarios) : '-'}
                           </td>
-                          {/* Extras (Entrada) = Verde */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400">
                             {isRowEntrada ? formatCurrency(row.valorExtra) : '-'}
                           </td>
-                          {/* Total Cobrança (Entrada) = Verde (Padronizado) */}
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400 bg-green-50/30 dark:bg-green-900/10">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600 dark:text-blue-400 bg-blue-50/30 dark:bg-blue-900/10">
                             {isRowEntrada ? formatCurrency(row.totalCobranca) : '-'}
                           </td>
                         </>
@@ -247,10 +302,13 @@ const DataTable: React.FC<DataTableProps> = ({
                               <ArrowDownCircle className="h-3 w-3" />
                               {formatCurrency(row.valuePaid)}
                             </div>
-                          ) : '-'}
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">-</span>
+                          )}
                         </td>
                       )}
 
+                      {/* Valor Recebido - só mostra se NÃO for modo Saída */}
                       {!isSaidaMode && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-green-600 dark:text-green-400 bg-green-50/30 dark:bg-green-900/10">
                           {row.valueReceived > 0 ? (
@@ -258,10 +316,13 @@ const DataTable: React.FC<DataTableProps> = ({
                               <ArrowUpCircle className="h-3 w-3" />
                               {formatCurrency(row.valueReceived)}
                             </div>
-                          ) : '-'}
+                          ) : (
+                            <span className="text-slate-300 dark:text-slate-600">-</span>
+                          )}
                         </td>
                       )}
                       
+                      {/* Ações */}
                       <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                         <button 
                           onClick={() => handleDeleteClick(row.id)}

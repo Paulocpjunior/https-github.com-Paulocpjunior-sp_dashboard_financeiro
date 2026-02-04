@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable';
 import { Transaction, KPIData, User } from '../types';
 
 export const ReportService = {
@@ -21,14 +21,27 @@ export const ReportService = {
 
       const safeStr = (val: any) => val ? String(val) : '';
 
+      const formatDate = (dateStr: string) => {
+         try {
+             if (!dateStr || dateStr === '1970-01-01') return '-';
+             // Correção de fuso horário simples
+             const date = new Date(dateStr);
+             // Ajuste para exibir a data correta sem voltar 1 dia devido ao UTC
+             const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+             const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+             return adjustedDate.toLocaleDateString('pt-BR');
+         } catch (e) { return dateStr; }
+      };
+
       // 2. Initialize Doc
-      const doc = new jsPDF();
+      // Explicit casting to any to avoid typescript errors with autoTable
+      const doc: any = new jsPDF({ orientation: 'landscape' }); // Landscape para caber melhor as colunas extras
       
-      const pageWidth = doc.internal.pageSize.width || 210;
-      const pageHeight = doc.internal.pageSize.height || 297;
+      const pageWidth = doc.internal.pageSize.width || 297;
+      const pageHeight = doc.internal.pageSize.height || 210;
       
-      const primaryColor: [number, number, number] = [30, 64, 175]; // Royal Blue
-      const secondaryColor: [number, number, number] = [71, 85, 105]; // Slate
+      const primaryColor = [30, 64, 175]; // Royal Blue
+      const secondaryColor = [71, 85, 105]; // Slate
       
       // --- HEADER ---
       doc.setFillColor(...primaryColor);
@@ -37,11 +50,11 @@ export const ReportService = {
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(22);
       doc.setFont('helvetica', 'bold');
-      doc.text('Relatório Financeiro', 14, 18);
+      doc.text('Relatório Financeiro Detalhado', 14, 18);
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text('SP Contábil - Gestão de Fluxo de Caixa', 14, 25);
+      doc.text('SP Contábil - Controle de Contas e Movimentações', 14, 25);
 
       const currentDate = new Date().toLocaleDateString('pt-BR');
       const currentTime = new Date().toLocaleTimeString('pt-BR');
@@ -57,150 +70,127 @@ export const ReportService = {
       doc.setTextColor(50, 50, 50);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text('Parâmetros da Análise:', 14, yPos);
+      doc.text('Resumo da Análise:', 14, yPos);
       
-      yPos += 6;
-      doc.setFontSize(9);
+      // KPI Summary Inline
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(80, 80, 80);
+      const kpiText = `Entradas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalReceived))}  |  Saídas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.totalPaid))}  |  Saldo: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(kpi.balance))}`;
       
-      const periodStr = filters.startDate && filters.endDate 
-        ? `${new Date(filters.startDate).toLocaleDateString('pt-BR')} até ${new Date(filters.endDate).toLocaleDateString('pt-BR')}`
-        : 'Todo o período disponível';
+      // Colorir o saldo
+      if (kpi.balance >= 0) doc.setTextColor(22, 163, 74);
+      else doc.setTextColor(220, 38, 38);
       
-      doc.text(`• Período: ${periodStr}`, 14, yPos);
-      yPos += 5;
+      doc.text(kpiText, pageWidth - 14, yPos, { align: 'right' });
 
-      if (filters.bankAccount) {
-        doc.text(`• Conta Bancária: ${safeStr(filters.bankAccount)}`, 14, yPos);
-        yPos += 5;
-      }
-      
-      if (filters.status) {
-        doc.text(`• Status: ${safeStr(filters.status)}`, 14, yPos);
-        yPos += 5;
-      }
-
-      if (filters.types && Array.isArray(filters.types) && filters.types.length > 0) {
-        const typesStr = filters.types.join(', ');
-        const displayType = typesStr.length > 80 ? typesStr.substring(0, 80) + '...' : typesStr;
-        doc.text(`• Tipos: ${displayType}`, 14, yPos);
-        yPos += 5;
-      }
-
-      // --- KPI CARDS ---
-      yPos += 5;
-      const cardWidth = (pageWidth - 28 - 10) / 3;
-      const cardHeight = 20;
-
-      const drawCard = (x: number, label: string, value: number, color: [number, number, number]) => {
-          doc.setDrawColor(200, 200, 200);
-          doc.setFillColor(252, 252, 252);
-          doc.roundedRect(x, yPos, cardWidth, cardHeight, 2, 2, 'FD');
-          
-          doc.setFontSize(8);
-          doc.setTextColor(100, 100, 100);
-          doc.text(safeStr(label), x + 5, yPos + 7);
-          
-          doc.setFontSize(11);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(...color);
-          const valFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(value));
-          doc.text(valFormatted, x + 5, yPos + 16);
-      };
-
-      drawCard(14, 'Total Entradas', kpi.totalReceived, [22, 163, 74]); // Verde
-      drawCard(14 + cardWidth + 5, 'Total Saídas', kpi.totalPaid, [220, 38, 38]); // Vermelho
-      drawCard(14 + (cardWidth * 2) + 10, 'Saldo Líquido', kpi.balance, kpi.balance >= 0 ? [37, 99, 235] : [220, 38, 38]); // Azul
-
-      yPos += cardHeight + 15;
+      yPos += 10;
 
       // --- TABLE ---
       doc.setFontSize(12);
       doc.setTextColor(0, 0, 0);
-      doc.text('Detalhamento dos Lançamentos', 14, yPos);
-      yPos += 2;
 
       // Ensure transactions is an array
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
+      // Mapeamento EXATO conforme solicitado
       const tableBody = safeTransactions.map(t => {
-        let dateStr = '-';
-        try {
-            if (t.date && t.date !== '1970-01-01') {
-                dateStr = new Date(t.date).toLocaleDateString('pt-BR');
-            }
-        } catch (e) {}
-
-        const description = safeStr(t.client || t.paidBy || 'Sem descrição');
-        const movement = safeStr(t.movement);
-        const type = safeStr(t.type);
         
+        // 1. Data a Pagar (Data de Lançamento/Agendamento)
+        const dataPagar = formatDate(t.date);
+        
+        // 2. Data Vencimento
+        const dataVencimento = formatDate(t.dueDate);
+        
+        // 3. Movimentação
+        const movimentacao = safeStr(t.movement);
+        
+        // 4. Status
+        const status = safeStr(t.status);
+        
+        // Determinar Valores
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
+        const isEntry = movimentacao.toLowerCase().includes('entrada') || (valRec > 0 && valPaid === 0);
         
-        let value = 0;
-        let sign = '';
-        
-        // Lógica de exibição de valor na tabela do PDF
-        if (movement.toLowerCase().includes('entrada') || (valRec > 0 && valPaid === 0)) {
-            value = valRec;
-            sign = '+ ';
-        } else {
-            value = valPaid;
-            sign = '- ';
-        }
+        // 5. Valor Original (Valor cheio do título)
+        // Se for entrada, usa valor recebido/honorarios. Se for saída, usa valor pago.
+        const valorOriginalRaw = isEntry ? valRec : valPaid;
+        const valorOriginalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorOriginalRaw);
 
-        const formattedValue = sign + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        // 6. Valor Pago (Efetivamente liquidado)
+        // Se status for 'Pago', assume o valor original. Se não, é 0.
+        let valorPagoRaw = 0;
+        if (status.toLowerCase() === 'pago') {
+            valorPagoRaw = valorOriginalRaw;
+        }
+        const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
+
+        // 7. Observação a Pagar (Cliente / Descrição / Pago Por)
+        let observacao = safeStr(t.client);
+        if (!observacao) observacao = safeStr(t.paidBy);
+        if (!observacao) observacao = safeStr(t.type);
 
         return [
-          dateStr,
-          type,
-          description,
-          safeStr(t.bankAccount),
-          safeStr(t.status),
-          formattedValue
+          dataPagar,        // "Data a Pagar"
+          dataVencimento,   // "Data Vencimento"
+          movimentacao,     // "Movimentação"
+          status,           // "Status"
+          valorOriginalFmt, // "Valor Original"
+          valorPagoFmt,     // "valor Pago"
+          observacao        // "Observação a Pagar"
         ];
       });
 
-      // Using the imported autoTable function directly
-      autoTable(doc, {
-        startY: yPos + 3,
-        head: [['Data', 'Tipo', 'Descrição / Cliente', 'Conta', 'Status', 'Valor']],
-        body: tableBody,
-        theme: 'striped',
-        headStyles: { 
-          fillColor: secondaryColor, 
-          textColor: 255, 
-          fontStyle: 'bold',
-          fontSize: 8 
-        },
-        bodyStyles: { 
-          fontSize: 8, 
-          textColor: 50 
-        },
-        alternateRowStyles: { 
-          fillColor: [245, 247, 250] 
-        },
-        columnStyles: {
-          0: { cellWidth: 20 }, 
-          1: { cellWidth: 50 }, 
-          2: { cellWidth: 'auto' }, 
-          3: { cellWidth: 25 }, 
-          4: { cellWidth: 20 }, 
-          5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } 
-        },
-        didParseCell: (data: any) => {
-          if (data.section === 'body' && data.column.index === 5) {
-            const rawVal = String(data.cell.raw);
-            if (rawVal.includes('+')) {
-              data.cell.styles.textColor = [22, 163, 74]; // Green
-            } else {
-              data.cell.styles.textColor = [220, 38, 38]; // Red
+      if (doc.autoTable) {
+        doc.autoTable({
+            startY: yPos,
+            // CABEÇALHO EXATO SOLICITADO
+            head: [['Data a Pagar', 'Data Venc.', 'Movimentação', 'Status', 'Valor Original', 'Valor Pago', 'Observação a Pagar']],
+            body: tableBody,
+            theme: 'striped',
+            headStyles: { 
+                fillColor: secondaryColor, 
+                textColor: 255, 
+                fontStyle: 'bold',
+                fontSize: 9,
+                halign: 'center'
+            },
+            bodyStyles: { 
+                fontSize: 8, 
+                textColor: 50,
+                cellPadding: 3
+            },
+            alternateRowStyles: { 
+                fillColor: [245, 247, 250] 
+            },
+            columnStyles: {
+                0: { cellWidth: 25, halign: 'center' }, // Data a Pagar
+                1: { cellWidth: 25, halign: 'center' }, // Data Vencimento
+                2: { cellWidth: 25, halign: 'center' }, // Movimentação
+                3: { cellWidth: 20, halign: 'center' }, // Status
+                4: { cellWidth: 30, halign: 'right' },  // Valor Original
+                5: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },  // Valor Pago
+                6: { cellWidth: 'auto' }                // Observação (ocupa o resto)
+            },
+            didParseCell: (data: any) => {
+                // Colorir coluna "Status"
+                if (data.section === 'body' && data.column.index === 3) {
+                    const txt = String(data.cell.raw).toLowerCase();
+                    if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74]; // Verde
+                    else if (txt === 'pendente') data.cell.styles.textColor = [234, 88, 12]; // Laranja
+                }
+                // Colorir coluna "Valor Pago"
+                if (data.section === 'body' && data.column.index === 5) {
+                    const txt = String(data.cell.raw);
+                    if (txt !== '0,00') data.cell.styles.textColor = [30, 64, 175]; // Azul para pago efetivo
+                    else data.cell.styles.textColor = [156, 163, 175]; // Cinza para não pago
+                }
             }
-          }
-        }
-      });
+        });
+      } else {
+          // Fallback
+          doc.text("Erro ao carregar tabela.", 14, yPos + 10);
+      }
 
       // --- FOOTER ---
       const pageCount = doc.internal.pages.length - 1;
@@ -211,10 +201,10 @@ export const ReportService = {
           doc.setDrawColor(220, 220, 220);
           doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
           doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
-          doc.text(`SP Contábil - Sistema Integrado`, 14, pageHeight - 8);
+          doc.text(`SP Contábil - Relatório de Contas a Pagar/Receber`, 14, pageHeight - 8);
       }
 
-      const fileName = `Relatorio_Financeiro_${new Date().toISOString().slice(0,10)}.pdf`;
+      const fileName = `Relatorio_Contas_${new Date().toISOString().slice(0,10)}.pdf`;
       doc.save(fileName);
 
     } catch (error: any) {
