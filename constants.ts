@@ -18,7 +18,19 @@ export const MOCK_USERS: User[] = [
 ];
 
 export const BANK_ACCOUNTS = ['Itau', 'Bradesco', 'Santander', 'Caixa', 'Nubank', 'Inter'];
-export const TRANSACTION_TYPES = ['Serviço', 'Produto', 'Consultoria', 'Impostos', 'Aluguel', 'Salários', 'Fornecedores'];
+
+export const TRANSACTION_TYPES = [
+  'Entrada de Caixa / Contas a Receber', 
+  'Saida de Caixa / Contas a Pagar',
+  'Serviço', 
+  'Produto', 
+  'Consultoria', 
+  'Impostos', 
+  'Aluguel', 
+  'Salários', 
+  'Fornecedores'
+];
+
 export const STATUSES = ['Pago', 'Pendente', 'Agendado'];
 export const CLIENTS = ['TechSolutions Ltda', 'Mercado Silva', 'João Souza', 'Condomínio Solar', 'Padaria Central', 'Posto Shell'];
 export const PAYERS = ['Financeiro', 'Diretoria', 'RH', 'Automático'];
@@ -38,13 +50,23 @@ const generateTransactions = (count: number): Transaction[] => {
     dueDate.setDate(date.getDate() + Math.floor(Math.random() * 10));
 
     const value = Math.floor(Math.random() * 5000) + 100;
+    
+    // Select type based on movement to be somewhat realistic
+    let type = TRANSACTION_TYPES[Math.floor(Math.random() * TRANSACTION_TYPES.length)];
+    if (isEntry) {
+        if (Math.random() > 0.5) type = 'Entrada de Caixa / Contas a Receber';
+        else type = 'Serviço';
+    } else {
+        if (Math.random() > 0.5) type = 'Saida de Caixa / Contas a Pagar';
+        else type = 'Fornecedores';
+    }
 
     transactions.push({
       id: `trx-${i + 1}`,
       date: date.toISOString().split('T')[0],
       dueDate: dueDate.toISOString().split('T')[0],
       bankAccount: BANK_ACCOUNTS[Math.floor(Math.random() * BANK_ACCOUNTS.length)],
-      type: TRANSACTION_TYPES[Math.floor(Math.random() * TRANSACTION_TYPES.length)],
+      type: type,
       status: STATUSES[Math.floor(Math.random() * STATUSES.length)] as any,
       client: CLIENTS[Math.floor(Math.random() * CLIENTS.length)],
       paidBy: PAYERS[Math.floor(Math.random() * PAYERS.length)],

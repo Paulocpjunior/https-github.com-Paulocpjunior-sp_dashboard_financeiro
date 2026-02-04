@@ -42,6 +42,13 @@ const Reports: React.FC = () => {
     load();
   }, []);
 
+  // Compute available types dynamically from data + constants
+  const availableTypes = useMemo(() => {
+    const typesFromData = Array.from(new Set(allTransactions.map(t => t.type).filter(Boolean)));
+    // Combine constants and data types, removing duplicates, ensuring the requested ones are present
+    return Array.from(new Set([...TRANSACTION_TYPES, ...typesFromData])).sort();
+  }, [allTransactions]);
+
   // Filter Logic specific for Report
   useEffect(() => {
     let result = allTransactions;
@@ -83,7 +90,7 @@ const Reports: React.FC = () => {
     );
   };
 
-  const selectAllTypes = () => setSelectedTypes([...TRANSACTION_TYPES]);
+  const selectAllTypes = () => setSelectedTypes([...availableTypes]);
   const clearTypes = () => setSelectedTypes([]);
 
   const handleGenerate = () => {
@@ -200,8 +207,8 @@ const Reports: React.FC = () => {
                  </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {TRANSACTION_TYPES.map((type) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                {availableTypes.map((type) => {
                   const isSelected = selectedTypes.includes(type);
                   return (
                     <div 
@@ -215,10 +222,10 @@ const Reports: React.FC = () => {
                       `}
                     >
                       {isSelected 
-                        ? <CheckSquare className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400" /> 
-                        : <Square className="h-5 w-5 mr-3 text-slate-400 dark:text-slate-500" />
+                        ? <CheckSquare className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 shrink-0" /> 
+                        : <Square className="h-5 w-5 mr-3 text-slate-400 dark:text-slate-500 shrink-0" />
                       }
-                      <span className="text-sm font-medium">{type}</span>
+                      <span className="text-sm font-medium break-words leading-tight">{type}</span>
                     </div>
                   );
                 })}

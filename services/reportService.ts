@@ -149,7 +149,7 @@ export const ReportService = {
         },
         columnStyles: {
           0: { cellWidth: 20 }, // Data
-          1: { cellWidth: 35 }, // Tipo
+          1: { cellWidth: 50 }, // Tipo (AUMENTADO)
           2: { cellWidth: 'auto' }, // Descrição (Expande)
           3: { cellWidth: 25 }, // Conta
           4: { cellWidth: 20 }, // Status
