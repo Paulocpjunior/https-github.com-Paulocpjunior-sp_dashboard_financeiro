@@ -245,16 +245,21 @@ export const BackendService = {
         let valReceived = Math.abs(parseCurrency(rawValorRecebido));
         const valCobranca = Math.abs(parseCurrency(rawTotalCobranca));
 
-        // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS
-        // Se for Saída mas valPaid é 0, tenta encontrar o valor em outras colunas (erro comum de preenchimento)
-        if (movement === 'Saída' && valPaid === 0) {
-           if (valReceived > 0) {
-               valPaid = valReceived; // Assume que usuário colocou na coluna errada
-               valReceived = 0;
-           } else if (valCobranca > 0) {
-               valPaid = valCobranca;
+        // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS E PREVISÃO
+        // Se for Saída (Conta a Pagar), garante que 'valPaid' contenha o valor da dívida (previsto) 
+        // mesmo que ainda não tenha sido pago (onde o valor na planilha pode estar vazio ou 0).
+        if (movement === 'Saída') {
+           if (valPaid === 0) {
+               // Se o valor pago está zerado, tenta pegar do Total Cobrança ou Valor Recebido (erro de coluna)
+               if (valCobranca > 0) {
+                   valPaid = valCobranca;
+               } else if (valReceived > 0) {
+                   valPaid = valReceived;
+                   valReceived = 0; // Corrige se estava errado na coluna de entrada
+               }
            }
         }
+        
         // Se for Entrada mas valReceived é 0
         if (movement === 'Entrada' && valReceived === 0) {
             if (valPaid > 0) {
@@ -285,7 +290,7 @@ export const BackendService = {
           status: normalizeStatus(get(COL.docPago)),
           client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
-          valuePaid: valPaid,
+          valuePaid: valPaid, // Agora contém o Valor da Conta (Previsto) mesmo se pendente
           valueReceived: valReceived,
           honorarios: parseCurrency(get(COL.valorHonorarios)),
           valorExtra: parseCurrency(get(COL.valorExtras)),

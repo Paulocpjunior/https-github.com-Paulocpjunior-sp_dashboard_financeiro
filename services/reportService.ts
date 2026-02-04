@@ -110,29 +110,39 @@ export const ReportService = {
       doc.setTextColor(80, 80, 80);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('Transações:', 14, yPos);
+      doc.text('Transações Detalhadas:', 14, yPos);
       yPos += 5;
 
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
-      // NOVO LAYOUT SIMPLIFICADO
-      // Colunas: Data, Venc., Status, Valor Original, Valor Pago, Observação (Cliente)
+      // NOVO LAYOUT SOLICITADO
+      // Data, Venc., Data Baixa, Movimentação (Desc), Status, Valor Orig., Valor Pago, Observação a Pagar (Cliente)
       const tableBody = safeTransactions.map(t => {
-        const dataPagar = formatDate(t.date);
-        const dataVencimento = formatDate(t.dueDate);
+        const dataLanc = formatDate(t.date);
+        const dataVenc = formatDate(t.dueDate);
+        const dataBaixa = formatDate(t.paymentDate);
         const status = safeStr(t.status);
         
-        // Observação limpa: Apenas Cliente/Favorecido, removendo tipo repetitivo
+        // Movimentação = Descrição do que está sendo pago. Usaremos o 'type', mas removendo o texto genérico.
+        let movimentacaoDesc = safeStr(t.type);
+        if (movimentacaoDesc.includes('Saida de Caixa') || movimentacaoDesc.includes('Contas a Pagar') || movimentacaoDesc.includes('Entrada de Caixa')) {
+            // Se for o tipo genérico, tenta usar algo mais específico se houver, ou deixa em branco para não poluir
+            movimentacaoDesc = movimentacaoDesc.replace('Saida de Caixa / Contas a Pagar', '').replace('Entrada de Caixa / Contas a Receber', '').trim();
+            if (!movimentacaoDesc) movimentacaoDesc = 'Geral'; 
+        }
+
+        // Observação a Pagar = Cliente / Favorecido
         const observacao = safeStr(t.client);
         
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
         const isEntry = t.movement === 'Entrada' || (valRec > 0 && valPaid === 0);
         
+        // Valor Original = Valor da conta (previsto)
         const valorOriginalRaw = isEntry ? valRec : valPaid;
         const valorOriginalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorOriginalRaw);
 
-        // Valor Pago: Se for pendente, mostra zerado na coluna "Pago" para evidenciar que falta pagar
+        // Valor Pago = Se Pendente é 0, se Pago é o valor total
         let valorPagoRaw = 0;
         if (status.toLowerCase() === 'pago') {
             valorPagoRaw = valorOriginalRaw;
@@ -140,18 +150,20 @@ export const ReportService = {
         const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
 
         return [
-          dataPagar,        // 0
-          dataVencimento,   // 1
-          status,           // 2
-          valorOriginalFmt, // 3 (Valor Previsto)
-          valorPagoFmt,     // 4 (Valor Executado)
-          observacao        // 5 (Observação/Cliente)
+          dataLanc,          // 0: Data
+          dataVenc,          // 1: Vencimento
+          dataBaixa,         // 2: Data Baixa
+          movimentacaoDesc,  // 3: Movimentação (Descrição/Tipo)
+          status,            // 4: Status
+          valorOriginalFmt,  // 5: Valor Original (Previsto)
+          valorPagoFmt,      // 6: Valor Pago (Efetivado)
+          observacao         // 7: Observação a Pagar (Cliente)
         ];
       });
 
       autoTable(doc, {
           startY: yPos,
-          head: [['Data', 'Venc.', 'Status', 'Valor Original', 'Valor Pago', 'Observação']],
+          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig.', 'Valor Pago', 'Observação a Pagar']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
@@ -164,22 +176,24 @@ export const ReportService = {
           bodyStyles: { 
               fontSize: 7, 
               textColor: 50,
-              cellPadding: 3
+              cellPadding: 2
           },
           alternateRowStyles: { 
               fillColor: [245, 247, 250] 
           },
           columnStyles: {
-              0: { cellWidth: 20, halign: 'center' }, // Data
-              1: { cellWidth: 20, halign: 'center' }, // Vencimento
-              2: { cellWidth: 25, halign: 'center' }, // Status
-              3: { cellWidth: 30, halign: 'right' },  // Valor Orig
-              4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },  // Valor Pago
-              5: { cellWidth: 'auto' }                // Observação
+              0: { cellWidth: 16, halign: 'center' }, // Data
+              1: { cellWidth: 16, halign: 'center' }, // Venc
+              2: { cellWidth: 16, halign: 'center' }, // Baixa
+              3: { cellWidth: 35, halign: 'left' },   // Movimentação (Desc)
+              4: { cellWidth: 18, halign: 'center' }, // Status
+              5: { cellWidth: 22, halign: 'right' },  // Valor Orig
+              6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }, // Valor Pago
+              7: { cellWidth: 'auto' }                // Observação (Cliente)
           },
           didParseCell: (data: any) => {
-              // Colorir Status (Index 2)
-              if (data.section === 'body' && data.column.index === 2) {
+              // Colorir Status (Index 4)
+              if (data.section === 'body' && data.column.index === 4) {
                   const txt = String(data.cell.raw).toLowerCase();
                   if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74];
                   else if (txt === 'pendente' || txt === 'agendado') {
@@ -187,12 +201,12 @@ export const ReportService = {
                       data.cell.styles.fontStyle = 'bold';
                   }
               }
-              // Colorir Valor Original se Pendente (Index 3)
-              if (data.section === 'body' && data.column.index === 3) {
-                  const statusRow = data.row.raw[2]; 
+              // Colorir Valor Original se Pendente (Index 5)
+              if (data.section === 'body' && data.column.index === 5) {
+                  const statusRow = data.row.raw[4]; // Coluna Status é indice 4 agora
                   const statusTxt = String(statusRow).toLowerCase();
                   if (statusTxt === 'pendente' || statusTxt === 'agendado') {
-                      data.cell.styles.textColor = [234, 88, 12]; // Orange para destacar o que falta pagar
+                      data.cell.styles.textColor = [234, 88, 12]; // Orange
                       data.cell.styles.fontStyle = 'bold';
                   }
               }
