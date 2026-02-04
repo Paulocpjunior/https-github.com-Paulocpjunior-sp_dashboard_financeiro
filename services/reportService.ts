@@ -6,12 +6,11 @@ export const ReportService = {
   
   generatePDF: (
     transactions: Transaction[], 
-    kpi: any, // Using 'any' to accept DetailedKPI structure
+    kpi: any,
     filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string; dateContext?: string; movement?: string },
     currentUser: User | null
   ) => {
     try {
-      // 1. SAFE DATA PREPARATION
       const safeNum = (val: any) => {
         if (typeof val === 'number') return val;
         if (!val) return 0;
@@ -31,14 +30,11 @@ export const ReportService = {
          } catch (e) { return dateStr || '-'; }
       };
 
-      // 2. Initialize Doc
       const doc = new jsPDF({ orientation: 'landscape' });
-      
       const pageWidth = doc.internal.pageSize.width || 297;
       const pageHeight = doc.internal.pageSize.height || 210;
-      
-      const primaryColor = [30, 64, 175]; // Royal Blue
-      const secondaryColor = [71, 85, 105]; // Slate
+      const primaryColor = [30, 64, 175];
+      const secondaryColor = [71, 85, 105];
       
       // --- HEADER ---
       doc.setFillColor(...primaryColor);
@@ -62,19 +58,18 @@ export const ReportService = {
       doc.text(`EMITIDO POR: ${safeStr(collaboratorName)}`, pageWidth - 14, 18, { align: 'right' });
       doc.text(`DATA: ${currentDate} às ${currentTime}`, pageWidth - 14, 25, { align: 'right' });
 
-      // --- FINANCIAL SUMMARY (KPIs) ---
+      // --- FINANCIAL SUMMARY ---
       let yPos = 50;
       doc.setTextColor(50, 50, 50);
-      
       doc.setFillColor(248, 250, 252);
       doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(14, 45, pageWidth - 28, 28, 2, 2, 'FD'); // Increased height
+      doc.roundedRect(14, 45, pageWidth - 28, 28, 2, 2, 'FD');
 
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text('Resumo Financeiro:', 20, 55);
       
-      doc.setFontSize(9); // Smaller font for detail
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       
       const kpiXStart = 20;
@@ -83,8 +78,8 @@ export const ReportService = {
 
       const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(v));
       
-      // 1. Entradas Detail
-      doc.setTextColor(22, 163, 74); // Green
+      // 1. Entradas
+      doc.setTextColor(22, 163, 74);
       doc.setFont('helvetica', 'bold');
       doc.text(`ENTRADAS PREVISTAS: ${fmt(kpi.totalReceived)}`, kpiXStart, kpiYLine);
       doc.setFont('helvetica', 'normal');
@@ -92,82 +87,43 @@ export const ReportService = {
       doc.text(`- Já Recebido: ${fmt(kpi.settledReceivables)}`, kpiXStart, kpiYLine + 5);
       doc.text(`- Pendente: ${fmt(kpi.pendingReceivables)}`, kpiXStart, kpiYLine + 9);
       
-      // 2. Saídas Detail (Evidenciado)
+      // 2. Saídas
       doc.setFontSize(9);
-      doc.setTextColor(220, 38, 38); // Red
+      doc.setTextColor(220, 38, 38);
       doc.setFont('helvetica', 'bold');
       doc.text(`SAÍDAS PREVISTAS: ${fmt(kpi.totalPaid)}`, kpiXStart + colGap, kpiYLine);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.text(`- Já Pago: ${fmt(kpi.settledPayables)}`, kpiXStart + colGap, kpiYLine + 5);
-      // Evidencing Pendente
-      doc.setTextColor(234, 88, 12); // Orange/Amber
+      doc.setTextColor(234, 88, 12);
       doc.setFont('helvetica', 'bold');
       doc.text(`- A PAGAR (PENDENTE): ${fmt(kpi.pendingPayables)}`, kpiXStart + colGap, kpiYLine + 9);
       
       // 3. Saldo
       doc.setFontSize(12);
-      if (kpi.balance >= 0) doc.setTextColor(30, 64, 175); // Blue
-      else doc.setTextColor(220, 38, 38); // Red
+      if (kpi.balance >= 0) doc.setTextColor(30, 64, 175);
+      else doc.setTextColor(220, 38, 38);
       doc.setFont('helvetica', 'bold');
       doc.text(`Saldo Previsto: ${fmt(kpi.balance)}`, kpiXStart + (colGap * 2), kpiYLine + 5);
 
-      // --- FILTER PARAMETERS CONTEXT ---
       yPos = 80;
       doc.setTextColor(80, 80, 80);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('Parâmetros do Relatório:', 14, yPos);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      
-      const contextLabel = filters.dateContext ? `(${filters.dateContext})` : '';
-      const dateRange = filters.startDate && filters.endDate 
-        ? `${formatDate(filters.startDate)} até ${formatDate(filters.endDate)}` 
-        : 'Todo o período disponível';
-      
-      const bankInfo = filters.bankAccount || 'Todas as contas';
-      const statusInfo = filters.status || 'Todos os status';
-      const movementInfo = filters.movement ? (filters.movement === 'Saída' ? 'SAÍDAS/DESPESAS' : 'ENTRADAS/RECEITAS') : 'Geral (Todas)';
-      
-      let typesInfo = 'Todos os tipos';
-      if (filters.types && filters.types.length > 0) {
-          if (filters.types.length > 3) {
-              typesInfo = `${filters.types.length} tipos selecionados`;
-          } else {
-              typesInfo = filters.types.join(', ');
-          }
-      }
-
-      doc.text(`Período ${contextLabel}: ${dateRange}`, 14, yPos + 5);
-      doc.text(`Movimento: ${movementInfo}`, 90, yPos + 5); 
-      doc.text(`Conta: ${bankInfo}`, 130, yPos + 5);
-      doc.text(`Status: ${statusInfo}`, 170, yPos + 5);
-      doc.text(`Tipos: ${typesInfo}`, 210, yPos + 5);
-
-      yPos += 10;
-
-      // --- TABLE ---
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
+      doc.text('Transações:', 14, yPos);
+      yPos += 5;
 
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
-      // NOVO LAYOUT DE TABELA
-      // Colunas removidas: Tipo, Favorecido
-      // Colunas adicionadas: Movimentação, Observação a Pagar (Combo de Tipo + Cliente)
-
+      // NOVO LAYOUT SIMPLIFICADO
+      // Colunas: Data, Venc., Status, Valor Original, Valor Pago, Observação (Cliente)
       const tableBody = safeTransactions.map(t => {
         const dataPagar = formatDate(t.date);
         const dataVencimento = formatDate(t.dueDate);
-        const dataBaixa = formatDate(t.paymentDate);
-        const conta = safeStr(t.bankAccount);
-        const movimento = safeStr(t.movement); // NOVA COLUNA
         const status = safeStr(t.status);
         
-        // Criando "Observação a Pagar" combinando Tipo e Cliente para manter contexto
-        const observacao = `${safeStr(t.type)} - ${safeStr(t.client)}`; 
+        // Observação limpa: Apenas Cliente/Favorecido, removendo tipo repetitivo
+        const observacao = safeStr(t.client);
         
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
@@ -176,6 +132,7 @@ export const ReportService = {
         const valorOriginalRaw = isEntry ? valRec : valPaid;
         const valorOriginalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorOriginalRaw);
 
+        // Valor Pago: Se for pendente, mostra zerado na coluna "Pago" para evidenciar que falta pagar
         let valorPagoRaw = 0;
         if (status.toLowerCase() === 'pago') {
             valorPagoRaw = valorOriginalRaw;
@@ -185,20 +142,16 @@ export const ReportService = {
         return [
           dataPagar,        // 0
           dataVencimento,   // 1
-          dataBaixa,        // 2
-          conta,            // 3
-          movimento,        // 4 (Novo)
-          status,           // 5
-          valorOriginalFmt, // 6
-          valorPagoFmt,     // 7
-          observacao        // 8 (Novo - Observação)
+          status,           // 2
+          valorOriginalFmt, // 3 (Valor Previsto)
+          valorPagoFmt,     // 4 (Valor Executado)
+          observacao        // 5 (Observação/Cliente)
         ];
       });
 
       autoTable(doc, {
           startY: yPos,
-          // Atualizado Head
-          head: [['Data', 'Venc.', 'Data Baixa', 'Conta', 'Movimentação', 'Status', 'Valor Orig.', 'Valor Pago', 'Observação a Pagar']],
+          head: [['Data', 'Venc.', 'Status', 'Valor Original', 'Valor Pago', 'Observação']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
@@ -211,32 +164,22 @@ export const ReportService = {
           bodyStyles: { 
               fontSize: 7, 
               textColor: 50,
-              cellPadding: 2
+              cellPadding: 3
           },
           alternateRowStyles: { 
               fillColor: [245, 247, 250] 
           },
           columnStyles: {
-              0: { cellWidth: 16, halign: 'center' }, // Data
-              1: { cellWidth: 16, halign: 'center' }, // Vencimento
-              2: { cellWidth: 16, halign: 'center' }, // Data Baixa
-              3: { cellWidth: 20, halign: 'left' },   // Conta
-              4: { cellWidth: 18, halign: 'center' }, // Movimentação (Nova Largura)
-              5: { cellWidth: 18, halign: 'center' }, // Status
-              6: { cellWidth: 22, halign: 'right' },  // Valor Orig
-              7: { cellWidth: 22, halign: 'right', fontStyle: 'bold' },  // Valor Pago
-              8: { cellWidth: 'auto' }                // Observação (Auto width)
+              0: { cellWidth: 20, halign: 'center' }, // Data
+              1: { cellWidth: 20, halign: 'center' }, // Vencimento
+              2: { cellWidth: 25, halign: 'center' }, // Status
+              3: { cellWidth: 30, halign: 'right' },  // Valor Orig
+              4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },  // Valor Pago
+              5: { cellWidth: 'auto' }                // Observação
           },
           didParseCell: (data: any) => {
-              // Colorir Movimentação (Index 4)
-              if (data.section === 'body' && data.column.index === 4) {
-                  const txt = String(data.cell.raw).toLowerCase();
-                  if (txt === 'entrada') data.cell.styles.textColor = [22, 163, 74]; // Green
-                  else if (txt === 'saída' || txt === 'saida') data.cell.styles.textColor = [220, 38, 38]; // Red
-              }
-
-              // Colorir Status (Index 5)
-              if (data.section === 'body' && data.column.index === 5) {
+              // Colorir Status (Index 2)
+              if (data.section === 'body' && data.column.index === 2) {
                   const txt = String(data.cell.raw).toLowerCase();
                   if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74];
                   else if (txt === 'pendente' || txt === 'agendado') {
@@ -244,25 +187,23 @@ export const ReportService = {
                       data.cell.styles.fontStyle = 'bold';
                   }
               }
-              // Colorir Valor Orig se Pendente (Index 6 - baseado na coluna Status Index 5)
-              if (data.section === 'body' && data.column.index === 6) {
-                  const statusRow = data.row.raw[5]; 
+              // Colorir Valor Original se Pendente (Index 3)
+              if (data.section === 'body' && data.column.index === 3) {
+                  const statusRow = data.row.raw[2]; 
                   const statusTxt = String(statusRow).toLowerCase();
                   if (statusTxt === 'pendente' || statusTxt === 'agendado') {
-                      data.cell.styles.textColor = [234, 88, 12]; // Orange
+                      data.cell.styles.textColor = [234, 88, 12]; // Orange para destacar o que falta pagar
                       data.cell.styles.fontStyle = 'bold';
                   }
               }
           }
       });
 
-      // --- FOOTER ---
       const pageCount = (doc.internal as any).getNumberOfPages();
       for(let i = 1; i <= pageCount; i++) {
           doc.setPage(i);
           doc.setFontSize(8);
           doc.setTextColor(150, 150, 150);
-          doc.setDrawColor(220, 220, 220);
           doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
           doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
           doc.text(`SP Contábil - Relatório de Contas a Pagar/Receber`, 14, pageHeight - 8);
@@ -272,8 +213,8 @@ export const ReportService = {
       doc.save(fileName);
 
     } catch (error: any) {
-      console.error("Erro CRÍTICO ao gerar PDF:", error);
-      alert("Erro ao gerar PDF: " + (error.message || "Verifique o console para detalhes."));
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF: " + error.message);
     }
   }
 };

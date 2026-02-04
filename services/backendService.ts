@@ -113,37 +113,28 @@ export const BackendService = {
   },
 
   // =========================================================================================
-  // REGISTRO DE NOVO USUÁRIO - ENVIA DIRETO PARA GOOGLE APPS SCRIPT
+  // REGISTRO DE NOVO USUÁRIO
   // =========================================================================================
   registerUser: async (data: RegisterUserData): Promise<{ success: boolean; message: string }> => {
     console.log('[BackendService] Iniciando registro de usuário:', data.username);
 
     try {
-      // Validações básicas
       if (!data.name || !data.email || !data.username || !data.password) {
         return { success: false, message: 'Todos os campos obrigatórios devem ser preenchidos.' };
       }
-
       if (data.password.length < 6) {
         return { success: false, message: 'A senha deve ter no mínimo 6 caracteres.' };
       }
-
-      // Validar formato de e-mail
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(data.email)) {
         return { success: false, message: 'E-mail inválido.' };
       }
 
-      // Verificar se usuário já existe nos MOCK_USERS (usuários ativos)
-      const existingUser = MOCK_USERS.find(u => 
-        u.username.toLowerCase() === data.username.toLowerCase()
-      );
-
+      const existingUser = MOCK_USERS.find(u => u.username.toLowerCase() === data.username.toLowerCase());
       if (existingUser) {
         return { success: false, message: 'Este nome de usuário já está em uso.' };
       }
 
-      // Chamar Google Apps Script para registrar e enviar e-mail
       const scriptResult = await callAppsScript({
         action: 'register',
         name: data.name,
@@ -154,83 +145,21 @@ export const BackendService = {
       });
 
       return scriptResult;
-
     } catch (error: any) {
       console.error('[BackendService] Erro no registro:', error);
-      return { 
-        success: false, 
-        message: error.message || 'Erro ao processar cadastro. Tente novamente.' 
-      };
+      return { success: false, message: error.message || 'Erro ao processar cadastro.' };
     }
   },
 
-  // =========================================================================================
-  // APROVAR USUÁRIO - CHAMA APPS SCRIPT
-  // =========================================================================================
-  approvePendingUser: async (email: string, name: string, username: string): Promise<{ success: boolean; message: string }> => {
-    const result = await callAppsScript({
-      action: 'approve',
-      email,
-      name,
-      username,
-    });
-
-    return result;
-  },
-
-  // =========================================================================================
-  // REJEITAR USUÁRIO - CHAMA APPS SCRIPT
-  // =========================================================================================
-  rejectPendingUser: async (email: string, name: string, username: string, reason?: string): Promise<{ success: boolean; message: string }> => {
-    const result = await callAppsScript({
-      action: 'reject',
-      email,
-      name,
-      username,
-      reason: reason || '',
-    });
-
-    return result;
-  },
-
-  // =========================================================================================
-  // REENVIAR E-MAIL DE CONFIRMAÇÃO
-  // =========================================================================================
-  resendConfirmationEmail: async (email: string, name: string, username: string): Promise<{ success: boolean; message: string }> => {
-    const result = await callAppsScript({
-      action: 'resend',
-      email,
-      name,
-      username,
-    });
-
-    return result;
-  },
-
-  // =========================================================================================
-  // SOLICITAR RESET DE SENHA
-  // =========================================================================================
-  requestPasswordReset: async (username: string): Promise<{ success: boolean; message: string }> => {
-    // Buscar usuário
+  // Métodos de aprovação/rejeição omitidos para brevidade (mantém os mesmos)
+  approvePendingUser: async (email: string, name: string, username: string) => callAppsScript({ action: 'approve', email, name, username }),
+  rejectPendingUser: async (email: string, name: string, username: string, reason?: string) => callAppsScript({ action: 'reject', email, name, username, reason: reason || '' }),
+  resendConfirmationEmail: async (email: string, name: string, username: string) => callAppsScript({ action: 'resend', email, name, username }),
+  requestPasswordReset: async (username: string) => {
     const user = MOCK_USERS.find(u => u.username.toLowerCase() === username.toLowerCase());
-    
-    if (!user) {
-      return { success: false, message: 'Usuário não encontrado.' };
-    }
-
-    // Chamar Apps Script para enviar e-mail com nova senha
-    const result = await callAppsScript({
-      action: 'reset_password',
-      email: user.email || '',
-      name: user.name,
-      username: user.username,
-    });
-
-    if (result.success) {
-      return { success: true, message: 'Nova senha enviada para o e-mail cadastrado.' };
-    }
-    
-    return { success: false, message: 'Erro ao processar solicitação.' };
+    if (!user) return { success: false, message: 'Usuário não encontrado.' };
+    const result = await callAppsScript({ action: 'reset_password', email: user.email || '', name: user.name, username: user.username });
+    return result.success ? { success: true, message: 'Nova senha enviada.' } : { success: false, message: 'Erro ao processar.' };
   },
 
   fetchTransactions: async (): Promise<Transaction[]> => {
@@ -242,31 +171,20 @@ export const BackendService = {
     
     try {
       const response = await fetch(csvUrl);
-      
-      if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}. Verifique o ID e o compartilhamento.`);
-      }
+      if (!response.ok) throw new Error(`Erro HTTP: ${response.status}.`);
       
       let csvText = await response.text();
-
-      if (csvText.charCodeAt(0) === 0xFEFF) {
-        csvText = csvText.slice(1);
-      }
-
+      if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
       if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.includes('<html')) {
-        throw new Error('A planilha está privada. Altere o compartilhamento para "Qualquer pessoa com o link".');
+        throw new Error('A planilha está privada. Altere o compartilhamento.');
       }
 
       const allRows = parseCSVComplete(csvText);
-      
-      if (allRows.length < 2) {
-        return [];
-      }
+      if (allRows.length < 2) return [];
 
       console.log(`[BackendService] Total de registros parseados: ${allRows.length}`);
 
       const COL = {
-        timestamp: 0,
         dataLancamento: 1,
         contasBancarias: 2,
         tipoLancamento: 3,
@@ -274,7 +192,7 @@ export const BackendService = {
         movimentacao: 5,
         dataAPagar: 7,
         docPago: 9,
-        dataBaixa: 10, // Data de Pagamento / Recebimento efetivo
+        dataBaixa: 10,
         valorPago: 13,
         nomeEmpresa: 26,
         valorHonorarios: 27,
@@ -299,43 +217,16 @@ export const BackendService = {
       const dataRows = allRows.slice(headerRowIndex + 1);
 
       const transactions = dataRows.map((cols, index) => {
-        const get = (idx: number): string => {
-          if (idx >= 0 && idx < cols.length) {
-            return cols[idx] || '';
-          }
-          return '';
-        };
+        const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
 
-        const rawDate = get(COL.dataLancamento);
-        const rawDueDate = get(COL.dataAPagar);
-        const rawPaymentDate = get(COL.dataBaixa); // Data da Baixa
-        const rawBankAccount = get(COL.contasBancarias);
         const rawType = get(COL.tipoLancamento);
-        const rawPaidBy = get(COL.pagoPor);
         const rawMovement = get(COL.movimentacao);
-        const rawStatus = get(COL.docPago);
-        const rawClient = get(COL.nomeEmpresa);
         const rawValorPago = get(COL.valorPago);
         const rawValorRecebido = get(COL.valorRecebido);
-        const rawId = get(COL.submissionId);
-        const rawHonorarios = get(COL.valorHonorarios);
-        const rawValorExtra = get(COL.valorExtras);
         const rawTotalCobranca = get(COL.totalCobranca);
 
-        let finalId = `trx-${index}`;
-        if (rawId && rawId.trim().length > 0 && rawId.length < 50 && !rawId.includes('/')) {
-          finalId = rawId.trim();
-        }
-
-        const valPaid = Math.abs(parseCurrency(rawValorPago));
-        const valReceived = Math.abs(parseCurrency(rawValorRecebido));
-
-        // LÓGICA DE NORMALIZAÇÃO DE MOVIMENTAÇÃO
-        // Prioridade: 
-        // 1. Tipo (se for explícito como Saída/Entrada)
-        // 2. Coluna Movimentação da planilha (se tiver valor válido)
-        // 3. Valores (se tiver pago mas não recebido -> saída)
-        let movement: 'Entrada' | 'Saída' = 'Entrada'; // Default
+        // 1. Determinação da Movimentação (Prioritária)
+        let movement: 'Entrada' | 'Saída' = 'Entrada';
         const tipoLower = rawType.toLowerCase();
         
         if (tipoLower.includes('saída') || tipoLower.includes('saida') || tipoLower.includes('pagar') || tipoLower.includes('despesa') || tipoLower.includes('fornecedor')) {
@@ -347,34 +238,57 @@ export const BackendService = {
           if (mov.includes('saída') || mov.includes('saida') || mov.includes('despesa')) {
             movement = 'Saída';
           }
-        } else if (valPaid > 0 && valReceived === 0) {
-          movement = 'Saída';
         }
 
+        // 2. Parseamento de Valores
+        let valPaid = Math.abs(parseCurrency(rawValorPago));
+        let valReceived = Math.abs(parseCurrency(rawValorRecebido));
+        const valCobranca = Math.abs(parseCurrency(rawTotalCobranca));
+
+        // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS
+        // Se for Saída mas valPaid é 0, tenta encontrar o valor em outras colunas (erro comum de preenchimento)
+        if (movement === 'Saída' && valPaid === 0) {
+           if (valReceived > 0) {
+               valPaid = valReceived; // Assume que usuário colocou na coluna errada
+               valReceived = 0;
+           } else if (valCobranca > 0) {
+               valPaid = valCobranca;
+           }
+        }
+        // Se for Entrada mas valReceived é 0
+        if (movement === 'Entrada' && valReceived === 0) {
+            if (valPaid > 0) {
+                valReceived = valPaid; // Assume que usuário colocou na coluna errada
+                valPaid = 0;
+            } else if (valCobranca > 0) {
+                valReceived = valCobranca;
+            }
+        }
+
+        const rawDate = get(COL.dataLancamento);
+        const rawDueDate = get(COL.dataAPagar);
+        const rawPaymentDate = get(COL.dataBaixa);
+        
         const finalDate = parseDate(rawDate);
         let finalDueDate = parseDate(rawDueDate);
-        if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') {
-          finalDueDate = finalDate;
-        }
-
+        if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') finalDueDate = finalDate;
         const finalPaymentDate = parseDate(rawPaymentDate);
 
         return {
-          id: finalId,
+          id: `trx-${index}`,
           date: finalDate,
           dueDate: finalDueDate,
           paymentDate: finalPaymentDate !== '1970-01-01' ? finalPaymentDate : undefined,
-          bankAccount: cleanString(rawBankAccount),
+          bankAccount: cleanString(get(COL.contasBancarias)),
           type: cleanString(rawType),
-          paidBy: cleanString(rawPaidBy),
-          status: normalizeStatus(rawStatus),
-          client: cleanString(rawClient),
-          // FIX: Retorna a movimentação calculada/normalizada, não a string crua da planilha
+          paidBy: cleanString(get(COL.pagoPor)),
+          status: normalizeStatus(get(COL.docPago)),
+          client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
           valuePaid: valPaid,
           valueReceived: valReceived,
-          honorarios: parseCurrency(rawHonorarios),
-          valorExtra: parseCurrency(rawValorExtra),
+          honorarios: parseCurrency(get(COL.valorHonorarios)),
+          valorExtra: parseCurrency(get(COL.valorExtras)),
           totalCobranca: parseCurrency(rawTotalCobranca),
         } as Transaction;
       });
@@ -389,15 +303,11 @@ export const BackendService = {
       throw new Error(error.message || 'Falha na conexão com a planilha.');
     }
   },
-
-  fetchUsers: async (): Promise<User[]> => {
-    return MOCK_USERS.map(({ passwordHash, ...u }) => u as User);
-  },
-
-  login: async (username: string, passwordHashInput: string): Promise<{ success: boolean; user?: User; message?: string }> => {
+  
+  fetchUsers: async (): Promise<User[]> => MOCK_USERS.map(({ passwordHash, ...u }) => u as User),
+  login: async (username: string, passwordHashInput: string) => {
     const user = MOCK_USERS.find(u => u.username === username);
     if (!user) return { success: false, message: 'Usuário não encontrado.' };
-    
     if (passwordHashInput === user.passwordHash && user.active) {
       const { passwordHash, ...safeUser } = user;
       return { success: true, user: safeUser as User };
@@ -406,98 +316,52 @@ export const BackendService = {
   },
 };
 
-// =============================================================================
-// PARSER CSV COMPLETO
-// =============================================================================
-
+// Funções Auxiliares (mantidas)
 function parseCSVComplete(csvText: string): string[][] {
   const rows: string[][] = [];
   let currentRow: string[] = [];
   let currentField = '';
   let inQuotes = false;
-  
   for (let i = 0; i < csvText.length; i++) {
     const char = csvText[i];
     const nextChar = csvText[i + 1];
-    
     if (char === '"') {
-      if (inQuotes) {
-        if (nextChar === '"') {
-          currentField += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        inQuotes = true;
-      }
+      if (inQuotes && nextChar === '"') { currentField += '"'; i++; }
+      else inQuotes = !inQuotes;
     } else if (char === ',' && !inQuotes) {
-      currentRow.push(currentField.trim());
-      currentField = '';
+      currentRow.push(currentField.trim()); currentField = '';
     } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
       if (char === '\r') i++;
       currentRow.push(currentField.trim());
-      if (currentRow.some(f => f.length > 0)) {
-        rows.push(currentRow);
-      }
-      currentRow = [];
-      currentField = '';
+      if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
+      currentRow = []; currentField = '';
     } else if (char === '\r' && !inQuotes) {
       currentRow.push(currentField.trim());
-      if (currentRow.some(f => f.length > 0)) {
-        rows.push(currentRow);
-      }
-      currentRow = [];
-      currentField = '';
-    } else {
-      currentField += char;
-    }
+      if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
+      currentRow = []; currentField = '';
+    } else currentField += char;
   }
-  
   if (currentField.length > 0 || currentRow.length > 0) {
     currentRow.push(currentField.trim());
-    if (currentRow.some(f => f.length > 0)) {
-      rows.push(currentRow);
-    }
+    if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
   }
-  
   return rows;
 }
-
-function cleanString(str: string): string {
-  if (!str) return '';
-  return str.replace(/^["']|["']$/g, '').replace(/[\r\n]+/g, ' ').trim();
-}
-
+function cleanString(str: string) { return str ? str.replace(/^["']|["']$/g, '').replace(/[\r\n]+/g, ' ').trim() : ''; }
 function parseCurrency(val: string | undefined): number {
   if (!val) return 0;
-  
-  let clean = val.replace(/^["']|["']$/g, '').trim();
-  clean = clean.replace(/[R$\s]/g, '');
-
-  if (clean.startsWith('(') && clean.endsWith(')')) {
-    clean = '-' + clean.slice(1, -1);
-  }
-  
+  let clean = val.replace(/^["']|["']$/g, '').trim().replace(/[R$\s]/g, '');
+  if (clean.startsWith('(') && clean.endsWith(')')) clean = '-' + clean.slice(1, -1);
   if (!clean || clean === '-') return 0;
-
   const lastComma = clean.lastIndexOf(',');
   const lastDot = clean.lastIndexOf('.');
-
-  if (lastComma > lastDot) {
-    clean = clean.replace(/\./g, '').replace(',', '.');
-  } else if (lastDot > lastComma) {
-    clean = clean.replace(/,/g, '');
-  } else if (lastComma > -1 && lastDot === -1) {
-    clean = clean.replace(',', '.');
-  }
-  
+  if (lastComma > lastDot) clean = clean.replace(/\./g, '').replace(',', '.');
+  else if (lastDot > lastComma) clean = clean.replace(/,/g, '');
+  else if (lastComma > -1 && lastDot === -1) clean = clean.replace(',', '.');
   clean = clean.replace(/[^0-9.-]/g, '');
-
   const num = parseFloat(clean);
   return isNaN(num) ? 0 : num;
 }
-
 function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agendado' {
   if (!val) return 'Pendente';
   const v = val.toLowerCase().trim();
@@ -506,32 +370,17 @@ function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agenda
   if (v.includes('agenda')) return 'Agendado';
   return 'Pendente';
 }
-
 function parseDate(dateStr: string | undefined): string {
   if (!dateStr) return '1970-01-01';
-  
-  let clean = dateStr.replace(/^["']|["']$/g, '').trim();
-  
-  if (clean.includes(' ')) {
-    clean = clean.split(' ')[0];
-  }
-
+  let clean = dateStr.replace(/^["']|["']$/g, '').trim().split(' ')[0];
   const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
   const ptMatch = clean.match(ptBrRegex);
-
   if (ptMatch) {
-    const day = ptMatch[1].padStart(2, '0');
-    const month = ptMatch[2].padStart(2, '0');
     let year = ptMatch[3];
     if (year.length === 2) year = '20' + year;
-    return `${year}-${month}-${day}`;
+    return `${year}-${ptMatch[2].padStart(2, '0')}-${ptMatch[1].padStart(2, '0')}`;
   }
-
   const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
-  const isoMatch = clean.match(isoRegex);
-  if (isoMatch) {
-    return clean.substring(0, 10);
-  }
-
+  if (clean.match(isoRegex)) return clean.substring(0, 10);
   return '1970-01-01';
 }
