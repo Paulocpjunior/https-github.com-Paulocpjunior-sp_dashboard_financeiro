@@ -330,15 +330,21 @@ export const BackendService = {
         const valPaid = Math.abs(parseCurrency(rawValorPago));
         const valReceived = Math.abs(parseCurrency(rawValorRecebido));
 
-        let movement: 'Entrada' | 'Saída' = 'Entrada';
+        // LÓGICA DE NORMALIZAÇÃO DE MOVIMENTAÇÃO
+        // Prioridade: 
+        // 1. Tipo (se for explícito como Saída/Entrada)
+        // 2. Coluna Movimentação da planilha (se tiver valor válido)
+        // 3. Valores (se tiver pago mas não recebido -> saída)
+        let movement: 'Entrada' | 'Saída' = 'Entrada'; // Default
         const tipoLower = rawType.toLowerCase();
-        if (tipoLower.includes('saída') || tipoLower.includes('saida') || tipoLower.includes('pagar')) {
+        
+        if (tipoLower.includes('saída') || tipoLower.includes('saida') || tipoLower.includes('pagar') || tipoLower.includes('despesa') || tipoLower.includes('fornecedor')) {
           movement = 'Saída';
-        } else if (tipoLower.includes('entrada') || tipoLower.includes('receber')) {
+        } else if (tipoLower.includes('entrada') || tipoLower.includes('receber') || tipoLower.includes('receita')) {
           movement = 'Entrada';
         } else if (rawMovement) {
           const mov = rawMovement.toLowerCase();
-          if (mov.includes('saída') || mov.includes('saida')) {
+          if (mov.includes('saída') || mov.includes('saida') || mov.includes('despesa')) {
             movement = 'Saída';
           }
         } else if (valPaid > 0 && valReceived === 0) {
@@ -363,7 +369,8 @@ export const BackendService = {
           paidBy: cleanString(rawPaidBy),
           status: normalizeStatus(rawStatus),
           client: cleanString(rawClient),
-          movement: cleanString(rawMovement),
+          // FIX: Retorna a movimentação calculada/normalizada, não a string crua da planilha
+          movement: movement, 
           valuePaid: valPaid,
           valueReceived: valReceived,
           honorarios: parseCurrency(rawHonorarios),

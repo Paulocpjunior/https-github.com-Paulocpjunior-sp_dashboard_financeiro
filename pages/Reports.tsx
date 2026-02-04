@@ -85,20 +85,22 @@ const Reports: React.FC = () => {
 
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
+    
+    // Reset filters before applying new mode specifics to avoid conflicts
+    setSelectedStatus('');
+    setSelectedBank('');
+    
     if (mode === 'payables') {
       setSelectedMovement('Saída');
       setSelectedTypes([]); 
-      setSelectedStatus(''); 
       setDateFilterType('dueDate'); 
     } else if (mode === 'receivables') {
       setSelectedMovement('Entrada');
       setSelectedTypes([]); 
-      setSelectedStatus('');
       setDateFilterType('dueDate'); 
     } else {
       setSelectedMovement('');
       setSelectedTypes([]);
-      setSelectedStatus('');
       setDateFilterType('date');
     }
   };
