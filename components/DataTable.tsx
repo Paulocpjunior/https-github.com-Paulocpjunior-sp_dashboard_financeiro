@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Transaction } from '../types';
 import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2 } from 'lucide-react';
 
@@ -39,22 +39,21 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const normalizedType = normalizeText(selectedType || '');
   
-  // Modos de Exibição
-  // 1. Modo Saída: Foca em valor a pagar.
-  const isExitMode = normalizedType.includes('saida') || 
-                     normalizedType.includes('pagar') ||
-                     normalizedType.includes('fornecedor') ||
-                     normalizedType.includes('imposto') ||
-                     normalizedType.includes('aluguel');
+  // MODO CONTAS A PAGAR: Quando tipo = "Saída de Caixa / Contas a Pagar"
+  const isContasAPagar = normalizedType.includes('saida') || 
+                         normalizedType.includes('pagar') ||
+                         normalizedType.includes('fornecedor') ||
+                         normalizedType.includes('imposto') ||
+                         normalizedType.includes('aluguel');
   
-  // 2. Modo Entrada: Foca em detalhes de recebimento (Honorários, etc).
-  const isEntryMode = normalizedType.includes('entrada') || 
-                      normalizedType.includes('receber') ||
-                      normalizedType.includes('servico') ||
-                      normalizedType.includes('consultoria');
+  // MODO CONTAS A RECEBER: Quando tipo = "Entrada" ou similar
+  const isContasAReceber = normalizedType.includes('entrada') || 
+                           normalizedType.includes('receber') ||
+                           normalizedType.includes('servico') ||
+                           normalizedType.includes('consultoria');
 
-  // 3. Modo Misto (Padrão): Exibe coluna unificada de valor.
-  const isMixedMode = !isExitMode && !isEntryMode;
+  // MODO MISTO (Padrão): Quando nenhum tipo específico selecionado
+  const isMixedMode = !isContasAPagar && !isContasAReceber;
 
   const formatCurrency = (val: number | string | undefined) => {
     const num = Number(val || 0);
@@ -72,22 +71,11 @@ const DataTable: React.FC<DataTableProps> = ({
     return `${day}/${month}/${year}`;
   };
 
-  const getDisplayClient = (row: Transaction) => {
-    const rowType = normalizeText(row.type || '');
-    if (isExitMode || rowType.includes('saida') || rowType.includes('pagar')) {
-      // Quando for Saída/Contas a Pagar, exibe a Descrição (Coluna F da planilha)
-      // para evidenciar qual conta está sendo paga (ex: Energia, Aluguel, Fornecedor X)
-      return row.description || row.client || '-';
-    }
-    return row.client || '-';
-  };
-
-  // Calcula colspan dinâmico (removido 1 por causa da coluna Ações)
+  // Calcula colspan dinâmico
   const getColSpan = () => {
-    let base = 5; // Date, Due, Type, Client, Status
-    if (isExitMode) return base + 1; // + Valor
-    if (isEntryMode) return base + 4; // + Honorarios, Extra, Total, Recebido
-    return base + 1; // Mixed: + Valor Unificado
+    if (isContasAPagar) return 8; // Data Lanç, Vencimento, Pagamento, Tipo, Movimentação, Status, Valor a Pagar, Valor Pago
+    if (isContasAReceber) return 9; // Data, Vencimento, Tipo, Cliente, Status, Honorários, Extras, Total, Recebido
+    return 6; // Mixed: Data, Vencimento, Tipo, Cliente/Mov, Status, Valor
   };
 
   return (
@@ -97,58 +85,155 @@ const DataTable: React.FC<DataTableProps> = ({
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[100px]">Data</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[100px]">Vencimento</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
-                
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
-                  <div className="flex flex-col gap-2">
-                    {/* Altera o título da coluna dinamicamente para evidenciar Movimentação */}
-                    <span>{isExitMode ? 'Movimentação' : 'Cliente / Pagador'}</span>
-                    {onClientFilterChange && (
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                        <input 
-                          type="text" 
-                          list="table-client-options"
-                          value={clientFilterValue || ''}
-                          onChange={(e) => onClientFilterChange(e.target.value)}
-                          placeholder="Filtrar..."
-                          className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
-                        />
-                        <datalist id="table-client-options">
-                          {clientOptions.slice(0, 50).map((opt, i) => (
-                            <option key={i} value={opt} />
-                          ))}
-                        </datalist>
-                      </div>
-                    )}
-                  </div>
-                </th>
-                
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                
-                {/* COLUNAS DINÂMICAS DE VALOR */}
-                {isMixedMode && (
-                   <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Valor</th>
-                )}
-
-                {isExitMode && (
-                   <th className="px-6 py-3 text-right text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">Valor a Pagar</th>
-                )}
-
-                {isEntryMode && (
+                {/* ========== MODO CONTAS A PAGAR ========== */}
+                {isContasAPagar && (
                   <>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Honorários</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Extras</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">Total Cobrança</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Recebido</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Data Lançamento
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Vencimento
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Pagamento
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Tipo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
+                      <div className="flex flex-col gap-2">
+                        <span>Movimentação</span>
+                        {onClientFilterChange && (
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                            <input 
+                              type="text" 
+                              list="table-client-options"
+                              value={clientFilterValue || ''}
+                              onChange={(e) => onClientFilterChange(e.target.value)}
+                              placeholder="Filtrar..."
+                              className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
+                            />
+                            <datalist id="table-client-options">
+                              {clientOptions.slice(0, 50).map((opt, i) => (
+                                <option key={i} value={opt} />
+                              ))}
+                            </datalist>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                      Valor a Pagar
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                      Valor Pago
+                    </th>
                   </>
                 )}
 
-                {/* COLUNA AÇÕES REMOVIDA */}
+                {/* ========== MODO CONTAS A RECEBER ========== */}
+                {isContasAReceber && (
+                  <>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Data
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Vencimento
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Tipo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
+                      <div className="flex flex-col gap-2">
+                        <span>Cliente / Pagador</span>
+                        {onClientFilterChange && (
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                            <input 
+                              type="text" 
+                              list="table-client-options-receber"
+                              value={clientFilterValue || ''}
+                              onChange={(e) => onClientFilterChange(e.target.value)}
+                              placeholder="Filtrar..."
+                              className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
+                            />
+                            <datalist id="table-client-options-receber">
+                              {clientOptions.slice(0, 50).map((opt, i) => (
+                                <option key={i} value={opt} />
+                              ))}
+                            </datalist>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Honorários
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Extras
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                      Total Cobrança
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                      Recebido
+                    </th>
+                  </>
+                )}
+
+                {/* ========== MODO MISTO (PADRÃO) ========== */}
+                {isMixedMode && (
+                  <>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Data
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Vencimento
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Tipo
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
+                      <div className="flex flex-col gap-2">
+                        <span>Cliente / Movimentação</span>
+                        {onClientFilterChange && (
+                          <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                            <input 
+                              type="text" 
+                              list="table-client-options-mixed"
+                              value={clientFilterValue || ''}
+                              onChange={(e) => onClientFilterChange(e.target.value)}
+                              placeholder="Filtrar..."
+                              className="w-full text-xs py-1 pl-7 pr-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400 font-normal"
+                            />
+                            <datalist id="table-client-options-mixed">
+                              {clientOptions.slice(0, 50).map((opt, i) => (
+                                <option key={i} value={opt} />
+                              ))}
+                            </datalist>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Valor
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
+
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
               {isLoading ? (
                 <tr>
@@ -169,96 +254,166 @@ const DataTable: React.FC<DataTableProps> = ({
                 data.map((row) => {
                   const rowType = normalizeText(row.type || '');
                   const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
-                  
-                  // Determinar valor principal para exibição mista
-                  const displayValue = isRowSaida ? row.valuePaid : (row.totalCobranca || row.valueReceived);
                   const isPending = row.status === 'Pendente' || row.status === 'Agendado';
                   
-                  // Style logic for evidence
-                  const valueClass = isPending 
+                  // Style para valores pendentes
+                  const pendingClass = isPending 
                     ? "font-extrabold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 px-2 py-1 rounded" 
                     : "font-medium";
 
                   return (
                     <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate max-w-[150px] ${
-                          isRowSaida 
-                            ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
-                            : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
-                        }`}>
-                          {row.type}
-                        </span>
-                      </td>
-                      
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-slate-100 font-medium max-w-xs truncate" title={getDisplayClient(row)}>
-                        {getDisplayClient(row)}
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                          ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                            isPending ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 ring-2 ring-amber-500/20' : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
-                        `}>
-                          {isPending && <AlertTriangle className="w-3 h-3 mr-1" />}
-                          {row.status}
-                        </span>
-                      </td>
-
-                      {/* --- COLUNAS DE VALOR --- */}
-                      
-                      {/* MODO MISTO: Coluna Única Colorida */}
-                      {isMixedMode && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                           {isRowSaida ? (
-                             <span className={`text-red-600 dark:text-red-400 flex items-center justify-end gap-1 ${valueClass}`}>
-                               <ArrowDownCircle className="h-3 w-3" />
-                               {formatCurrency(displayValue)}
-                             </span>
-                           ) : (
-                             <span className={`text-green-600 dark:text-green-400 flex items-center justify-end gap-1 ${valueClass}`}>
-                               <ArrowUpCircle className="h-3 w-3" />
-                               {formatCurrency(displayValue)}
-                             </span>
-                           )}
-                        </td>
-                      )}
-
-                      {/* MODO SAÍDA: Valor Único */}
-                      {isExitMode && (
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                            <span className={`text-red-600 dark:text-red-400 ${valueClass}`}>
-                                {formatCurrency(row.valuePaid)}
-                            </span>
-                        </td>
-                      )}
-
-                      {/* MODO ENTRADA: Detalhado */}
-                      {isEntryMode && (
+                      {/* ========== LINHAS MODO CONTAS A PAGAR ========== */}
+                      {isContasAPagar && (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-slate-600 dark:text-slate-400">
-                             {formatCurrency(row.honorarios)}
+                          {/* Data Lançamento */}
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                            {formatDate(row.date)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-slate-600 dark:text-slate-400">
-                             {formatCurrency(row.valorExtra)}
+                          
+                          {/* Vencimento */}
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">
+                            {formatDate(row.dueDate)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                             <span className={`text-blue-600 dark:text-blue-400 ${valueClass}`}>
-                                {formatCurrency(row.totalCobranca)}
-                             </span>
+                          
+                          {/* Data Pagamento */}
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                            {formatDate(row.paymentDate || '')}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                             <span className={`text-green-600 dark:text-green-400 ${valueClass}`}>
-                                {formatCurrency(row.valueReceived)}
-                             </span>
+                          
+                          {/* Tipo */}
+                          <td className="px-4 py-4 whitespace-nowrap text-sm">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate max-w-[120px] bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                              {row.type}
+                            </span>
+                          </td>
+                          
+                          {/* Movimentação (Descrição) */}
+                          <td className="px-4 py-4 text-sm text-slate-900 dark:text-slate-100 font-medium max-w-xs truncate" title={row.description || row.client || '-'}>
+                            {row.description || row.client || '-'}
+                          </td>
+                          
+                          {/* Status */}
+                          <td className="px-4 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                              ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                                isPending ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 ring-2 ring-amber-500/20' : 
+                                'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
+                            `}>
+                              {isPending && <AlertTriangle className="w-3 h-3 mr-1" />}
+                              {row.status}
+                            </span>
+                          </td>
+                          
+                          {/* Valor a Pagar */}
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
+                            <span className={`text-amber-600 dark:text-amber-400 ${pendingClass}`}>
+                              {formatCurrency(row.valuePaid)}
+                            </span>
+                          </td>
+                          
+                          {/* Valor Pago */}
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
+                            <span className={`text-green-600 dark:text-green-400 font-medium`}>
+                              {row.status === 'Pago' ? formatCurrency(row.valuePaid) : formatCurrency(0)}
+                            </span>
                           </td>
                         </>
                       )}
 
-                      {/* COLUNA AÇÕES REMOVIDA */}
+                      {/* ========== LINHAS MODO CONTAS A RECEBER ========== */}
+                      {isContasAReceber && (
+                        <>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                            {formatDate(row.date)}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">
+                            {formatDate(row.dueDate)}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate max-w-[120px] bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300">
+                              {row.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-900 dark:text-slate-100 font-medium max-w-xs truncate" title={row.client || '-'}>
+                            {row.client || '-'}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                              ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                                isPending ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 ring-2 ring-amber-500/20' : 
+                                'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
+                            `}>
+                              {isPending && <AlertTriangle className="w-3 h-3 mr-1" />}
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-right text-slate-600 dark:text-slate-400">
+                            {formatCurrency(row.honorarios)}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-right text-slate-600 dark:text-slate-400">
+                            {formatCurrency(row.valorExtra)}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
+                            <span className={`text-blue-600 dark:text-blue-400 ${pendingClass}`}>
+                              {formatCurrency(row.totalCobranca)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              {formatCurrency(row.valueReceived)}
+                            </span>
+                          </td>
+                        </>
+                      )}
+
+                      {/* ========== LINHAS MODO MISTO ========== */}
+                      {isMixedMode && (
+                        <>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                            {formatDate(row.date)}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">
+                            {formatDate(row.dueDate)}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium truncate max-w-[120px] ${
+                              isRowSaida 
+                                ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
+                                : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                            }`}>
+                              {row.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-slate-900 dark:text-slate-100 font-medium max-w-xs truncate" title={isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}>
+                            {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                              ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                                isPending ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 ring-2 ring-amber-500/20' : 
+                                'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'}
+                            `}>
+                              {isPending && <AlertTriangle className="w-3 h-3 mr-1" />}
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-right">
+                            {isRowSaida ? (
+                              <span className={`text-red-600 dark:text-red-400 flex items-center justify-end gap-1 ${pendingClass}`}>
+                                <ArrowDownCircle className="h-3 w-3" />
+                                {formatCurrency(row.valuePaid)}
+                              </span>
+                            ) : (
+                              <span className={`text-green-600 dark:text-green-400 flex items-center justify-end gap-1 ${pendingClass}`}>
+                                <ArrowUpCircle className="h-3 w-3" />
+                                {formatCurrency(row.totalCobranca || row.valueReceived)}
+                              </span>
+                            )}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   );
                 })
