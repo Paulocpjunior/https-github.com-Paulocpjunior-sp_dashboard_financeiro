@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -16,6 +16,9 @@ interface DataTableProps {
   selectedType?: string;
 }
 
+type SortField = 'client' | 'dueDate' | 'receiptDate' | 'none';
+type SortDirection = 'asc' | 'desc';
+
 const DataTable: React.FC<DataTableProps> = ({ 
     data, 
     page, 
@@ -27,6 +30,32 @@ const DataTable: React.FC<DataTableProps> = ({
     isLoading = false,
     selectedType = ''
 }) => {
+  const [sortField, setSortField] = useState<SortField>('none');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortField('none');
+        setSortDirection('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return <ChevronsUpDown className="h-3 w-3 text-slate-400" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="h-3 w-3 text-blue-500" />
+      : <ChevronDown className="h-3 w-3 text-blue-500" />;
+  };
+
   const normalizeText = (text: string) => {
     return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   };
@@ -45,6 +74,35 @@ const DataTable: React.FC<DataTableProps> = ({
                            normalizedType.includes('consultoria');
 
   const isMixedMode = !isContasAPagar && !isContasAReceber;
+
+  // Dados ordenados
+  const sortedData = useMemo(() => {
+    if (sortField === 'none') return data;
+
+    return [...data].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'client':
+          const clientA = (a.client || '').toLowerCase();
+          const clientB = (b.client || '').toLowerCase();
+          comparison = clientA.localeCompare(clientB, 'pt-BR');
+          break;
+        case 'dueDate':
+          const dateA = new Date(a.dueDate || '1970-01-01').getTime();
+          const dateB = new Date(b.dueDate || '1970-01-01').getTime();
+          comparison = dateA - dateB;
+          break;
+        case 'receiptDate':
+          const recA = new Date(a.receiptDate || a.paymentDate || '1970-01-01').getTime();
+          const recB = new Date(b.receiptDate || b.paymentDate || '1970-01-01').getTime();
+          comparison = recA - recB;
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [data, sortField, sortDirection]);
 
   const formatCurrency = (val: number | string | undefined) => {
     const num = Number(val || 0);
@@ -94,6 +152,19 @@ const DataTable: React.FC<DataTableProps> = ({
     return 6;
   };
 
+  // Cabeçalho ordenável
+  const SortableHeader = ({ field, label, className = '' }: { field: SortField; label: string; className?: string }) => (
+    <th 
+      className={`px-2 py-2 font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors select-none ${className}`}
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        <span>{label}</span>
+        <SortIcon field={field} />
+      </div>
+    </th>
+  );
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors">
       <div className="overflow-x-auto min-h-[400px]">
@@ -104,12 +175,18 @@ const DataTable: React.FC<DataTableProps> = ({
               {isContasAPagar && (
                 <>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Lanç.</th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Venc.</th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Pgto.</th>
+                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                  <SortableHeader field="receiptDate" label="Pgto." className="text-left" />
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
                     <div className="flex flex-col gap-1">
-                      <span>Movimentação</span>
+                      <div 
+                        className="flex items-center gap-1 cursor-pointer hover:text-blue-500 transition-colors"
+                        onClick={() => handleSort('client')}
+                      >
+                        <span>Movimentação</span>
+                        <SortIcon field="client" />
+                      </div>
                       {onClientFilterChange && (
                         <div className="relative">
                           <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
@@ -118,6 +195,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             list="table-client-pagar"
                             value={clientFilterValue || ''}
                             onChange={(e) => onClientFilterChange(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
                             placeholder="Filtrar..."
                             className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
                           />
@@ -134,15 +212,21 @@ const DataTable: React.FC<DataTableProps> = ({
                 </>
               )}
 
-              {/* ========== CONTAS A RECEBER (PAISAGEM) ========== */}
+              {/* ========== CONTAS A RECEBER ========== */}
               {isContasAReceber && (
                 <>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Venc.</th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Receb.</th>
+                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                  <SortableHeader field="receiptDate" label="Receb." className="text-left" />
                   <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Atraso</th>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[140px]">
                     <div className="flex flex-col gap-1">
-                      <span>Cliente</span>
+                      <div 
+                        className="flex items-center gap-1 cursor-pointer hover:text-blue-500 transition-colors"
+                        onClick={() => handleSort('client')}
+                      >
+                        <span>Cliente</span>
+                        <SortIcon field="client" />
+                      </div>
                       {onClientFilterChange && (
                         <div className="relative">
                           <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
@@ -151,6 +235,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             list="table-client-receber"
                             value={clientFilterValue || ''}
                             onChange={(e) => onClientFilterChange(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
                             placeholder="Filtrar..."
                             className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
                           />
@@ -175,11 +260,17 @@ const DataTable: React.FC<DataTableProps> = ({
               {isMixedMode && (
                 <>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Data</th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Venc.</th>
+                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
                     <div className="flex flex-col gap-1">
-                      <span>Cliente / Mov.</span>
+                      <div 
+                        className="flex items-center gap-1 cursor-pointer hover:text-blue-500 transition-colors"
+                        onClick={() => handleSort('client')}
+                      >
+                        <span>Cliente / Mov.</span>
+                        <SortIcon field="client" />
+                      </div>
                       {onClientFilterChange && (
                         <div className="relative">
                           <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
@@ -188,6 +279,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             list="table-client-mixed"
                             value={clientFilterValue || ''}
                             onChange={(e) => onClientFilterChange(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
                             placeholder="Filtrar..."
                             className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
                           />
@@ -215,14 +307,14 @@ const DataTable: React.FC<DataTableProps> = ({
                   </div>
                 </td>
               </tr>
-            ) : data.length === 0 ? (
+            ) : sortedData.length === 0 ? (
               <tr>
                 <td colSpan={getColSpan()} className="px-6 py-10 text-center text-slate-500">
                   Nenhum registro encontrado.
                 </td>
               </tr>
             ) : (
-              data.map((row) => {
+              sortedData.map((row) => {
                 const rowType = normalizeText(row.type || '');
                 const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
                 const isPending = row.status === 'Pendente' || row.status === 'Agendado';
@@ -268,12 +360,9 @@ const DataTable: React.FC<DataTableProps> = ({
                     {/* ========== LINHAS CONTAS A RECEBER ========== */}
                     {isContasAReceber && (
                       <>
-                        {/* Vencimento */}
                         <td className={`px-2 py-2 whitespace-nowrap font-medium ${isVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
                           {formatDateFull(row.dueDate)}
                         </td>
-                        
-                        {/* Data Recebido */}
                         <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
                           {isPago ? (
                             <span className="text-green-600 dark:text-green-400">{formatDateFull(row.receiptDate || row.paymentDate || '')}</span>
@@ -281,8 +370,6 @@ const DataTable: React.FC<DataTableProps> = ({
                             <span className="text-slate-400">-</span>
                           )}
                         </td>
-                        
-                        {/* Atraso */}
                         <td className="px-2 py-2 whitespace-nowrap text-center">
                           {diasAtraso > 0 ? (
                             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
@@ -295,13 +382,9 @@ const DataTable: React.FC<DataTableProps> = ({
                             <span className="text-slate-400 text-[10px]">-</span>
                           )}
                         </td>
-                        
-                        {/* Cliente */}
                         <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px]" title={row.client || '-'}>
                           {row.client || '-'}
                         </td>
-                        
-                        {/* Status */}
                         <td className="px-2 py-2 whitespace-nowrap text-center">
                           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
                             ${isPago ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
@@ -311,28 +394,18 @@ const DataTable: React.FC<DataTableProps> = ({
                             {row.status}
                           </span>
                         </td>
-                        
-                        {/* Honorários */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
                           {formatCurrency(row.honorarios)}
                         </td>
-                        
-                        {/* Extras */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
                           {formatCurrency(row.valorExtra)}
                         </td>
-                        
-                        {/* Total */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-blue-600 dark:text-blue-400 font-semibold">
                           {formatCurrency(row.totalCobranca)}
                         </td>
-                        
-                        {/* Recebido */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
                           {formatCurrency(row.valueReceived)}
                         </td>
-                        
-                        {/* Saldo */}
                         <td className="px-2 py-2 whitespace-nowrap text-right">
                           {saldoRestante > 0 ? (
                             <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded text-[11px]">
@@ -342,8 +415,6 @@ const DataTable: React.FC<DataTableProps> = ({
                             <span className="text-green-600 dark:text-green-400 text-[10px] font-medium">Quitado</span>
                           )}
                         </td>
-                        
-                        {/* Método */}
                         <td className="px-2 py-2 whitespace-nowrap text-center">
                           <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">
                             {row.paymentMethod || 'Pix'}
