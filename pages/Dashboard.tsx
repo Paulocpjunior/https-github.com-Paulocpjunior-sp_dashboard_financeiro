@@ -5,7 +5,7 @@ import DataTable from '../components/DataTable';
 import AIAssistant from '../components/AIAssistant';
 import { DataService } from '../services/dataService';
 import { FilterState, KPIData, Transaction } from '../types';
-import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle } from 'lucide-react';
+import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 const INITIAL_FILTERS: FilterState = {
@@ -42,6 +42,8 @@ const Dashboard: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [showAdvancedDates, setShowAdvancedDates] = useState(false);
+  const [activePeriod, setActivePeriod] = useState<string>('thisMonth');
   
   // Dynamic Options derived from Data
   const [options, setOptions] = useState({
@@ -86,8 +88,21 @@ const Dashboard: React.FC = () => {
           paidBys: DataService.getUniqueValues('paidBy'),
         });
 
+        // Aplicar filtro "Este Mês" por padrão
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        const initialFilters = {
+          ...INITIAL_FILTERS,
+          startDate: start.toISOString().split('T')[0],
+          endDate: end.toISOString().split('T')[0]
+        };
+        
+        setFilters(initialFilters);
+
         // Initial fetch
-        const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
+        const { result, kpi: newKpi } = DataService.getTransactions(initialFilters, page);
         setData(result.data);
         setTotalPages(result.totalPages);
         setKpi(newKpi);
@@ -117,6 +132,7 @@ const Dashboard: React.FC = () => {
 
   const clearFilters = () => {
     setFilters(INITIAL_FILTERS);
+    setActivePeriod('');
     setPage(1);
   };
 
@@ -125,24 +141,64 @@ const Dashboard: React.FC = () => {
     setPage(1);
   };
 
-  const setDateRange = (type: 'thisMonth' | 'lastMonth') => {
-      const now = new Date();
-      let start, end;
+  // Função melhorada para definir períodos
+  const setDateRange = (type: 'today' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'custom') => {
+    const now = new Date();
+    let start: Date, end: Date;
 
-      if (type === 'thisMonth') {
-          start = new Date(now.getFullYear(), now.getMonth(), 1);
-          end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      } else {
-          start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          end = new Date(now.getFullYear(), now.getMonth(), 0);
-      }
+    switch (type) {
+      case 'today':
+        start = now;
+        end = now;
+        break;
+      case 'thisWeek':
+        const dayOfWeek = now.getDay();
+        start = new Date(now);
+        start.setDate(now.getDate() - dayOfWeek);
+        end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        break;
+      case 'thisMonth':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case 'lastMonth':
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        end = new Date(now.getFullYear(), now.getMonth(), 0);
+        break;
+      case 'thisYear':
+        start = new Date(now.getFullYear(), 0, 1);
+        end = new Date(now.getFullYear(), 11, 31);
+        break;
+      case 'custom':
+        setActivePeriod('custom');
+        return; // Não altera as datas, apenas marca como personalizado
+      default:
+        return;
+    }
 
-      setFilters(prev => ({
-          ...prev,
-          startDate: start.toISOString().split('T')[0],
-          endDate: end.toISOString().split('T')[0]
-      }));
-      setPage(1);
+    setActivePeriod(type);
+    setFilters(prev => ({
+      ...prev,
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0]
+    }));
+    setPage(1);
+  };
+
+  // Função para formatar data para exibição
+  const formatDateDisplay = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  // Texto do período selecionado
+  const getPeriodText = () => {
+    if (filters.startDate && filters.endDate) {
+      return `${formatDateDisplay(filters.startDate)} até ${formatDateDisplay(filters.endDate)}`;
+    }
+    return 'Selecione um período';
   };
 
   const handlePrint = () => {
@@ -150,7 +206,6 @@ const Dashboard: React.FC = () => {
   };
   
   const handleDeleteTransaction = (id: string) => {
-    // A lógica do modal está no componente DataTable, aqui só passamos o callback
     console.log(`Exclusão confirmada para: ${id}`);
     alert('Exclusão simulada com sucesso!');
   };
@@ -170,14 +225,12 @@ const Dashboard: React.FC = () => {
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
-  // Prepare chart data - DINÂMICO baseado no tipo de filtro
+  // Prepare chart data
   const chartData = useMemo(() => {
     if (isContasAPagar) {
-      // MODO CONTAS A PAGAR: Agrupa por data de VENCIMENTO, separando Pago vs Pendente
       const grouped: Record<string, { date: string; Pago: number; Pendente: number }> = {};
       
       data.forEach(t => {
-        // Usa data de vencimento para contas a pagar
         const dateToUse = t.dueDate || t.date;
         const d = new Date(dateToUse).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         
@@ -190,7 +243,6 @@ const Dashboard: React.FC = () => {
         }
       });
 
-      // Ordena por data e retorna os últimos 10
       return Object.values(grouped)
         .sort((a, b) => {
           const [dayA, monthA] = a.date.split('/').map(Number);
@@ -200,7 +252,6 @@ const Dashboard: React.FC = () => {
         })
         .slice(-10);
     } else {
-      // MODO PADRÃO: Entradas vs Saídas por data de lançamento
       const grouped: Record<string, { date: string; Entradas: number; Saidas: number }> = {};
       
       data.forEach(t => {
@@ -298,9 +349,11 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Filters Panel */}
+        {/* Filters Panel - REDESENHADO */}
         {isFilterMenuOpen && (
           <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm animate-in slide-in-from-top-2 print:hidden transition-colors">
+            
+            {/* Header */}
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                 <Filter className="h-4 w-4 text-blue-500" />
@@ -312,74 +365,169 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              
-               {/* SEARCH GERAL */}
-               <div className="space-y-1 lg:col-span-4 mb-2">
-                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Busca Geral</label>
-                 <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Pesquise por qualquer termo..."
-                      value={filters.search}
-                      onChange={(e) => handleFilterChange('search', e.target.value)}
-                      className="pl-9 w-full form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                    />
-                 </div>
-               </div>
+            {/* BUSCA GERAL */}
+            <div className="mb-4">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1 block">Busca Geral</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Pesquise por qualquer termo..."
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="pl-9 w-full form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
 
-              {/* 1. DATA LANÇAMENTO */}
-              <div className="space-y-1 lg:col-span-2">
-                <div className="flex justify-between items-end mb-1">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Data de Lançamento</label>
-                    <div className="flex gap-1">
-                        <button onClick={() => setDateRange('thisMonth')} className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors">Este Mês</button>
-                        <button onClick={() => setDateRange('lastMonth')} className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">Mês Anterior</button>
-                    </div>
-                </div>
-                <div className="flex gap-2 items-center">
-                    <input
-                        type="date"
-                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                        value={filters.startDate}
-                        onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                        title="De"
-                    />
-                    <span className="text-slate-400 text-sm">-</span>
-                    <input
-                        type="date"
-                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                        value={filters.endDate}
-                        onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                        title="Até"
-                    />
+            {/* SEÇÃO 1: PERÍODO RÁPIDO */}
+            <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="h-4 w-4 text-blue-500" />
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Período Rápido</span>
+                <span className="text-xs text-slate-500 ml-2">({getPeriodText()})</span>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'today', label: 'Hoje' },
+                  { key: 'thisWeek', label: 'Esta Semana' },
+                  { key: 'thisMonth', label: 'Este Mês' },
+                  { key: 'lastMonth', label: 'Mês Anterior' },
+                  { key: 'thisYear', label: 'Este Ano' },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setDateRange(key as any)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      activePeriod === key
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                
+                {/* Datas personalizadas inline */}
+                <div className="flex items-center gap-2 ml-2">
+                  <input
+                    type="date"
+                    className="form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 w-36"
+                    value={filters.startDate}
+                    onChange={(e) => {
+                      handleFilterChange('startDate', e.target.value);
+                      setActivePeriod('custom');
+                    }}
+                    title="Data Inicial"
+                  />
+                  <span className="text-slate-400 text-sm">até</span>
+                  <input
+                    type="date"
+                    className="form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 w-36"
+                    value={filters.endDate}
+                    onChange={(e) => {
+                      handleFilterChange('endDate', e.target.value);
+                      setActivePeriod('custom');
+                    }}
+                    title="Data Final"
+                  />
                 </div>
               </div>
+            </div>
 
-              {/* 2. DATA VENCIMENTO */}
-              <div className="space-y-1 lg:col-span-2">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Data de Vencimento</label>
-                <div className="flex gap-2 items-center">
-                    <input
+            {/* SEÇÃO 2: DATAS AVANÇADAS (Colapsável) */}
+            <div className="mb-4">
+              <button
+                onClick={() => setShowAdvancedDates(!showAdvancedDates)}
+                className="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                {showAdvancedDates ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <Calendar className="h-4 w-4" />
+                Datas Detalhadas (Vencimento, Pagamento, Recebimento)
+              </button>
+              
+              {showAdvancedDates && (
+                <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  
+                  {/* Data Vencimento */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Data Vencimento
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.dueDateStart || ''}
                         onChange={(e) => handleFilterChange('dueDateStart', e.target.value)}
-                        title="Vencimento De"
-                    />
-                    <span className="text-slate-400 text-sm">-</span>
-                    <input
+                      />
+                      <span className="text-slate-400 text-xs">-</span>
+                      <input
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.dueDateEnd || ''}
                         onChange={(e) => handleFilterChange('dueDateEnd', e.target.value)}
-                        title="Vencimento Até"
-                    />
-                </div>
-              </div>
+                      />
+                    </div>
+                  </div>
 
-              {/* 3. TIPO DE LANÇAMENTO (Movemos para cima para ficar claro que controla a data abaixo) */}
+                  {/* Data Pagamento */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
+                      <ArrowDown className="h-3 w-3 text-red-500" />
+                      Data Pagamento
+                      <span className="text-red-500 text-[10px]">(Saídas)</span>
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.paymentDateStart || ''}
+                        onChange={(e) => handleFilterChange('paymentDateStart', e.target.value)}
+                      />
+                      <span className="text-slate-400 text-xs">-</span>
+                      <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.paymentDateEnd || ''}
+                        onChange={(e) => handleFilterChange('paymentDateEnd', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Data Recebimento */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
+                      <ArrowUp className="h-3 w-3 text-green-500" />
+                      Data Recebimento
+                      <span className="text-green-500 text-[10px]">(Entradas)</span>
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.receiptDateStart || ''}
+                        onChange={(e) => handleFilterChange('receiptDateStart', e.target.value)}
+                      />
+                      <span className="text-slate-400 text-xs">-</span>
+                      <input
+                        type="date"
+                        className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                        value={filters.receiptDateEnd || ''}
+                        onChange={(e) => handleFilterChange('receiptDateEnd', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SEÇÃO 3: OUTROS FILTROS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              
+              {/* TIPO DE LANÇAMENTO */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Lançamento</label>
                 <select
@@ -392,69 +540,6 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-              {/* 4. DATA PAGAMENTO / RECEBIMENTO (CONDICIONAL) */}
-              {/* Se for SAÍDA (Pagar), mostra Pagamento. Se for ENTRADA (Receber), mostra Recebimento. Se indefinido, mostra ambos ou genérico? 
-                  User pediu 4 campos, então mostramos Pagamento e Recebimento condicionalmente ou juntos. */}
-              
-              <div className="space-y-1 lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 
-                 {/* Exibe Data Pagamento se for saída ou se nenhum tipo específico selecionado */}
-                 {(!isContasAReceber) && (
-                    <div className="space-y-1">
-                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
-                            Data Pagamento
-                            {isContasAPagar && <span className="text-red-500 text-[10px]">(Saídas)</span>}
-                        </label>
-                        <div className="flex gap-2 items-center">
-                            <input
-                                type="date"
-                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                                value={filters.paymentDateStart || ''}
-                                onChange={(e) => handleFilterChange('paymentDateStart', e.target.value)}
-                                title="Pagamento De"
-                            />
-                            <span className="text-slate-400 text-sm">-</span>
-                            <input
-                                type="date"
-                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                                value={filters.paymentDateEnd || ''}
-                                onChange={(e) => handleFilterChange('paymentDateEnd', e.target.value)}
-                                title="Pagamento Até"
-                            />
-                        </div>
-                    </div>
-                 )}
-
-                 {/* Exibe Data Recebimento se for entrada ou se nenhum tipo específico selecionado */}
-                 {(!isContasAPagar) && (
-                    <div className="space-y-1">
-                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
-                            Data Recebimento
-                            {isContasAReceber && <span className="text-green-500 text-[10px]">(Entradas)</span>}
-                        </label>
-                        <div className="flex gap-2 items-center">
-                            <input
-                                type="date"
-                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                                value={filters.receiptDateStart || ''}
-                                onChange={(e) => handleFilterChange('receiptDateStart', e.target.value)}
-                                title="Recebimento De"
-                            />
-                            <span className="text-slate-400 text-sm">-</span>
-                            <input
-                                type="date"
-                                className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
-                                value={filters.receiptDateEnd || ''}
-                                onChange={(e) => handleFilterChange('receiptDateEnd', e.target.value)}
-                                title="Recebimento Até"
-                            />
-                        </div>
-                    </div>
-                 )}
-              </div>
-
-              {/* OUTROS FILTROS (Linha de Baixo) */}
-              
               {/* MOVIMENTAÇÃO */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Movimentação</label>
@@ -470,7 +555,7 @@ const Dashboard: React.FC = () => {
 
               {/* TIPO DE CONTA */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Conta (Banco)</label>
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Conta (Banco)</label>
                 <select
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.bankAccount}
@@ -494,9 +579,9 @@ const Dashboard: React.FC = () => {
                 </select>
               </div>
 
-               {/* NOME EMPRESA / CREDOR */}
-               <div className="space-y-1 lg:col-span-1">
-                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Nome Empresa / Credor</label>
+              {/* NOME EMPRESA / CREDOR */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Empresa / Credor</label>
                 <input
                   list="clients-list"
                   type="text"
@@ -509,7 +594,6 @@ const Dashboard: React.FC = () => {
                   {options.clients.slice(0, 100).map((o, i) => <option key={i} value={o} />)}
                 </datalist>
               </div>
-
             </div>
           </div>
         )}
