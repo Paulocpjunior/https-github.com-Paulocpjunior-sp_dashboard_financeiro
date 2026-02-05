@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -14,6 +14,7 @@ interface DataTableProps {
   onIdFilterChange?: (value: string) => void;
   isLoading?: boolean;
   selectedType?: string;
+  allData?: Transaction[]; // Todos os dados para exportação
 }
 
 type SortField = 'client' | 'dueDate' | 'receiptDate' | 'none';
@@ -28,7 +29,8 @@ const DataTable: React.FC<DataTableProps> = ({
     onClientFilterChange,
     clientOptions = [],
     isLoading = false,
-    selectedType = ''
+    selectedType = '',
+    allData = []
 }) => {
   const [sortField, setSortField] = useState<SortField>('none');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -74,6 +76,97 @@ const DataTable: React.FC<DataTableProps> = ({
                            normalizedType.includes('consultoria');
 
   const isMixedMode = !isContasAPagar && !isContasAReceber;
+
+  // Função para exportar CSV de boletos
+  const exportBoletosCSV = () => {
+    const dataToExport = allData.length > 0 ? allData : data;
+    
+    // Filtrar apenas pendentes (boletos a receber)
+    const pendentes = dataToExport.filter(row => 
+      row.status === 'Pendente' || row.status === 'Agendado'
+    );
+
+    if (pendentes.length === 0) {
+      alert('Nenhum boleto pendente para exportar.');
+      return;
+    }
+
+    // Cabeçalho do CSV
+    const headers = [
+      'Vencimento',
+      'Cliente',
+      'Dias Atraso',
+      'Status',
+      'Honorários',
+      'Extras',
+      'Total Cobrança',
+      'Valor Recebido',
+      'Saldo',
+      'Método'
+    ];
+
+    // Formatar data
+    const formatDateCSV = (dateStr: string) => {
+      if (!dateStr || dateStr === '1970-01-01') return '';
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+    };
+
+    // Calcular dias em atraso
+    const calcDiasAtrasoCSV = (dueDate: string) => {
+      if (!dueDate || dueDate === '1970-01-01') return 0;
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const vencimento = new Date(dueDate);
+      vencimento.setHours(0, 0, 0, 0);
+      const diffTime = hoje.getTime() - vencimento.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays > 0 ? diffDays : 0;
+    };
+
+    // Formatar valor para CSV
+    const formatValueCSV = (val: number | string | undefined) => {
+      const num = Number(val || 0);
+      return num.toFixed(2).replace('.', ',');
+    };
+
+    // Linhas do CSV
+    const rows = pendentes.map(row => {
+      const saldo = (Number(row.totalCobranca) || 0) - (Number(row.valueReceived) || 0);
+      return [
+        formatDateCSV(row.dueDate),
+        `"${(row.client || '').replace(/"/g, '""')}"`,
+        calcDiasAtrasoCSV(row.dueDate),
+        row.status,
+        formatValueCSV(row.honorarios),
+        formatValueCSV(row.valorExtra),
+        formatValueCSV(row.totalCobranca),
+        formatValueCSV(row.valueReceived),
+        formatValueCSV(saldo > 0 ? saldo : 0),
+        row.paymentMethod || 'Pix'
+      ];
+    });
+
+    // Montar CSV
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.join(';'))
+    ].join('\n');
+
+    // Adicionar BOM para Excel reconhecer UTF-8
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    // Download
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `boletos_pendentes_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Dados ordenados
   const sortedData = useMemo(() => {
@@ -152,7 +245,6 @@ const DataTable: React.FC<DataTableProps> = ({
     return 6;
   };
 
-  // Cabeçalho ordenável
   const SortableHeader = ({ field, label, className = '' }: { field: SortField; label: string; className?: string }) => (
     <th 
       className={`px-2 py-2 font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors select-none ${className}`}
@@ -167,6 +259,23 @@ const DataTable: React.FC<DataTableProps> = ({
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors">
+      
+      {/* Header com botão de exportar */}
+      {isContasAReceber && (
+        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            Contas a Receber
+          </span>
+          <button
+            onClick={exportBoletosCSV}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar .CSV Boletos
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto min-h-[400px]">
         <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800">
