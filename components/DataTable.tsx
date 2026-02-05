@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, Trash2, AlertTriangle, X, Search, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2 } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
   page: number;
   totalPages: number;
   onPageChange: (newPage: number) => void;
-  onDelete?: (id: string) => void;
   clientFilterValue?: string;
   onClientFilterChange?: (value: string) => void;
   clientOptions?: string[];
@@ -22,7 +21,6 @@ const DataTable: React.FC<DataTableProps> = ({
     page, 
     totalPages, 
     onPageChange, 
-    onDelete,
     clientFilterValue,
     onClientFilterChange,
     clientOptions = [],
@@ -31,9 +29,6 @@ const DataTable: React.FC<DataTableProps> = ({
     isLoading = false,
     selectedType = ''
 }) => {
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
-
   // Normaliza o texto para comparação
   const normalizeText = (text: string) => {
     return text
@@ -77,24 +72,6 @@ const DataTable: React.FC<DataTableProps> = ({
     return `${day}/${month}/${year}`;
   };
 
-  const handleDeleteClick = (id: string) => {
-    setTransactionToDelete(id);
-    setDeleteModalOpen(true);
-  };
-
-  const confirmDelete = () => {
-    if (onDelete && transactionToDelete) {
-      onDelete(transactionToDelete);
-    }
-    setDeleteModalOpen(false);
-    setTransactionToDelete(null);
-  };
-
-  const cancelDelete = () => {
-    setDeleteModalOpen(false);
-    setTransactionToDelete(null);
-  };
-
   const getDisplayClient = (row: Transaction) => {
     const rowType = normalizeText(row.type || '');
     if (isExitMode || rowType.includes('saida') || rowType.includes('pagar')) {
@@ -105,9 +82,9 @@ const DataTable: React.FC<DataTableProps> = ({
     return row.client || '-';
   };
 
-  // Calcula colspan dinâmico
+  // Calcula colspan dinâmico (removido 1 por causa da coluna Ações)
   const getColSpan = () => {
-    let base = 6; // Date, Due, Type, Client, Status, Actions
+    let base = 5; // Date, Due, Type, Client, Status
     if (isExitMode) return base + 1; // + Valor
     if (isEntryMode) return base + 4; // + Honorarios, Extra, Total, Recebido
     return base + 1; // Mixed: + Valor Unificado
@@ -169,7 +146,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   </>
                 )}
 
-                <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
+                {/* COLUNA AÇÕES REMOVIDA */}
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
@@ -281,15 +258,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         </>
                       )}
 
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                        <button 
-                          onClick={() => handleDeleteClick(row.id)}
-                          className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
-                          title="Excluir Registro"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
+                      {/* COLUNA AÇÕES REMOVIDA */}
                     </tr>
                   );
                 })
@@ -329,54 +298,6 @@ const DataTable: React.FC<DataTableProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Delete Confirmation Modal */}
-      {deleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 print:hidden">
-          <div 
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
-            onClick={cancelDelete}
-          ></div>
-
-          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-sm w-full p-6 border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
-            <button 
-              onClick={cancelDelete}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="flex flex-col items-center text-center">
-              <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
-                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-              </div>
-              
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                Excluir Transação?
-              </h3>
-              
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                Tem certeza que deseja remover este registro? Esta ação não pode ser desfeita e afetará o saldo atual.
-              </p>
-
-              <div className="flex gap-3 w-full">
-                <button
-                  onClick={cancelDelete}
-                  className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all hover:translate-y-[-1px]"
-                >
-                  Sim, Excluir
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
