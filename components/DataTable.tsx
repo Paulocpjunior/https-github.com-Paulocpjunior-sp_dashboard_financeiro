@@ -98,7 +98,9 @@ const DataTable: React.FC<DataTableProps> = ({
   const getDisplayClient = (row: Transaction) => {
     const rowType = normalizeText(row.type || '');
     if (isExitMode || rowType.includes('saida') || rowType.includes('pagar')) {
-      return row.movement || row.client || '-';
+      // Quando for Saída/Contas a Pagar, exibe a Descrição (Coluna F da planilha)
+      // para evidenciar qual conta está sendo paga (ex: Energia, Aluguel, Fornecedor X)
+      return row.description || row.client || '-';
     }
     return row.client || '-';
   };
@@ -124,7 +126,8 @@ const DataTable: React.FC<DataTableProps> = ({
                 
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[200px]">
                   <div className="flex flex-col gap-2">
-                    <span>{isExitMode ? 'Conta / Credor' : 'Cliente / Pagador'}</span>
+                    {/* Altera o título da coluna dinamicamente para evidenciar Movimentação */}
+                    <span>{isExitMode ? 'Movimentação' : 'Cliente / Pagador'}</span>
                     {onClientFilterChange && (
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
