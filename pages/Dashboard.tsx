@@ -205,7 +205,46 @@ const Dashboard: React.FC = () => {
   }, [filters, page, isLoading, initError]);
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setFilters((prev) => {
+      const updated = { ...prev, [key]: value };
+      
+      // Detectar se a nova combinação é Contas a Pagar ou Contas a Receber
+      const newNormalizedType = normalizeText(updated.type || '');
+      const newIsContasMode = newNormalizedType.includes('saida') || 
+                              newNormalizedType.includes('pagar') ||
+                              newNormalizedType.includes('fornecedor') ||
+                              newNormalizedType.includes('aluguel') ||
+                              updated.movement === 'Saída' ||
+                              newNormalizedType.includes('entrada') || 
+                              newNormalizedType.includes('receber') ||
+                              newNormalizedType.includes('servico') ||
+                              updated.movement === 'Entrada';
+
+      const wasContasMode = isContasAPagar || isContasAReceber;
+
+      // Migrar datas automaticamente ao entrar/sair do modo Contas a Pagar/Receber
+      if (key === 'type' || key === 'movement') {
+        if (newIsContasMode && !wasContasMode) {
+          // Entrando no modo Contas — mover startDate/endDate → dueDateStart/dueDateEnd
+          if (updated.startDate || updated.endDate) {
+            updated.dueDateStart = updated.startDate;
+            updated.dueDateEnd = updated.endDate;
+            updated.startDate = '';
+            updated.endDate = '';
+          }
+        } else if (!newIsContasMode && wasContasMode) {
+          // Saindo do modo Contas — mover dueDateStart/dueDateEnd → startDate/endDate
+          if (updated.dueDateStart || updated.dueDateEnd) {
+            updated.startDate = updated.dueDateStart || '';
+            updated.endDate = updated.dueDateEnd || '';
+            updated.dueDateStart = '';
+            updated.dueDateEnd = '';
+          }
+        }
+      }
+
+      return updated;
+    });
     setPage(1); // Reset to page 1 on filter change
   };
 
@@ -221,6 +260,7 @@ const Dashboard: React.FC = () => {
   };
 
   // Função melhorada para definir períodos
+  // Quando isContasAPagar ou isContasAReceber, usa Data de Vencimento (dueDate)
   const setDateRange = (type: 'today' | 'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'custom') => {
     const now = new Date();
     let start: Date, end: Date;
@@ -256,12 +296,29 @@ const Dashboard: React.FC = () => {
         return;
     }
 
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+
     setActivePeriod(type);
-    setFilters(prev => ({
-      ...prev,
-      startDate: start.toISOString().split('T')[0],
-      endDate: end.toISOString().split('T')[0]
-    }));
+
+    // Se está em modo Contas a Pagar ou Contas a Receber, usa Data de Vencimento
+    if (isContasAPagar || isContasAReceber) {
+      setFilters(prev => ({
+        ...prev,
+        startDate: '',
+        endDate: '',
+        dueDateStart: startStr,
+        dueDateEnd: endStr
+      }));
+    } else {
+      setFilters(prev => ({
+        ...prev,
+        startDate: startStr,
+        endDate: endStr,
+        dueDateStart: '',
+        dueDateEnd: ''
+      }));
+    }
     setPage(1);
   };
 
@@ -274,6 +331,10 @@ const Dashboard: React.FC = () => {
 
   // Texto do período selecionado
   const getPeriodText = () => {
+    // Verificar se está usando dueDate (Contas a Pagar/Receber)
+    if (filters.dueDateStart && filters.dueDateEnd) {
+      return `${formatDateDisplay(filters.dueDateStart)} até ${formatDateDisplay(filters.dueDateEnd)} (Vencimento)`;
+    }
     if (filters.startDate && filters.endDate) {
       return `${formatDateDisplay(filters.startDate)} até ${formatDateDisplay(filters.endDate)}`;
     }
@@ -492,7 +553,14 @@ const Dashboard: React.FC = () => {
             <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 mb-3">
                 <Calendar className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Período Rápido</span>
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  Período Rápido
+                  {(isContasAPagar || isContasAReceber) && (
+                    <span className="ml-2 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full">
+                      📅 por Vencimento
+                    </span>
+                  )}
+                </span>
                 <span className="text-xs text-slate-500 ml-2">({getPeriodText()})</span>
               </div>
               
@@ -517,28 +585,36 @@ const Dashboard: React.FC = () => {
                   </button>
                 ))}
                 
-                {/* Datas personalizadas inline */}
+                {/* Datas personalizadas inline — usam dueDate quando em Contas a Pagar/Receber */}
                 <div className="flex items-center gap-2 ml-2">
                   <input
                     type="date"
                     className="form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 w-36"
-                    value={filters.startDate}
+                    value={(isContasAPagar || isContasAReceber) ? (filters.dueDateStart || '') : filters.startDate}
                     onChange={(e) => {
-                      handleFilterChange('startDate', e.target.value);
+                      if (isContasAPagar || isContasAReceber) {
+                        handleFilterChange('dueDateStart', e.target.value);
+                      } else {
+                        handleFilterChange('startDate', e.target.value);
+                      }
                       setActivePeriod('custom');
                     }}
-                    title="Data Inicial"
+                    title={(isContasAPagar || isContasAReceber) ? "Vencimento Início" : "Data Inicial"}
                   />
                   <span className="text-slate-400 text-sm">até</span>
                   <input
                     type="date"
                     className="form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 w-36"
-                    value={filters.endDate}
+                    value={(isContasAPagar || isContasAReceber) ? (filters.dueDateEnd || '') : filters.endDate}
                     onChange={(e) => {
-                      handleFilterChange('endDate', e.target.value);
+                      if (isContasAPagar || isContasAReceber) {
+                        handleFilterChange('dueDateEnd', e.target.value);
+                      } else {
+                        handleFilterChange('endDate', e.target.value);
+                      }
                       setActivePeriod('custom');
                     }}
-                    title="Data Final"
+                    title={(isContasAPagar || isContasAReceber) ? "Vencimento Fim" : "Data Final"}
                   />
                 </div>
               </div>
