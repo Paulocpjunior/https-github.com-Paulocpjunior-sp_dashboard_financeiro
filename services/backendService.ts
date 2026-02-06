@@ -192,15 +192,15 @@ export const BackendService = {
         contasBancarias: 2,
         tipoLancamento: 3,
         pagoPor: 4,
-        movimentacao: 5,    // COLUNA F - descrição da movimentação
-        valorAPagar: 6,     // COLUNA G - VALOR A PAGAR (previsto) <<<< NOVA COLUNA
-        dataAPagar: 7,      // COLUNA H - data vencimento
-        valorPrevisto: 8,   // COLUNA I - valor previsto (backup) <<<< NOVA COLUNA
-        docPago: 9,         // COLUNA J - documento pago (sim/não)
-        dataBaixa: 10,      // COLUNA K - data da baixa/pagamento
-        valorEfetivo: 11,   // COLUNA L - valor efetivamente pago <<<< NOVA COLUNA
-        valorDesconto: 12,  // COLUNA M - desconto <<<< NOVA COLUNA
-        valorPago: 13,      // COLUNA N - valor pago final
+        movimentacao: 5,           // COLUNA F - descrição da movimentação
+        dataLancamento2: 6,        // COLUNA G - Data Lançamento 2
+        dataAPagar: 7,             // COLUNA H - Data a Pagar (vencimento)
+        eventoRecorrente: 8,       // COLUNA I - Evento Recorrente
+        docPago: 9,                // COLUNA J - Doc.Pago (SIM/NÃO)
+        dataBaixa: 10,             // COLUNA K - Data Baixa / Pagamento
+        valorRefOriginal: 11,      // COLUNA L - "Valor Ref./Valor Original" ← VALOR DA DESPESA PREVISTA!
+        valorOriginalRecorrente: 12, // COLUNA M - Valor Original Recorrente
+        valorPago: 13,             // COLUNA N - Valor Pago (só preenchido quando já pago)
         nomeEmpresa: 26,
         valorHonorarios: 27,
         valorExtras: 28,
@@ -241,9 +241,8 @@ export const BackendService = {
         const rawValorPago = get(COL.valorPago);
         const rawValorRecebido = get(COL.valorRecebido);
         const rawTotalCobranca = get(COL.totalCobranca);
-        const rawValorAPagar = get(COL.valorAPagar);       // COLUNA G
-        const rawValorPrevisto = get(COL.valorPrevisto);    // COLUNA I
-        const rawValorEfetivo = get(COL.valorEfetivo);      // COLUNA L
+        const rawValorRefOriginal = get(COL.valorRefOriginal);       // COLUNA L - Valor Ref./Valor Original
+        const rawValorOrigRecorrente = get(COL.valorOriginalRecorrente); // COLUNA M
 
         // 1. Determinação da Movimentação
         let movement: 'Entrada' | 'Saída' = 'Entrada';
@@ -264,38 +263,33 @@ export const BackendService = {
         let valPaid = Math.abs(parseCurrency(rawValorPago));
         let valReceived = Math.abs(parseCurrency(rawValorRecebido));
         const valCobranca = Math.abs(parseCurrency(rawTotalCobranca));
-        const valAPagar = Math.abs(parseCurrency(rawValorAPagar));
-        const valPrevisto = Math.abs(parseCurrency(rawValorPrevisto));
-        const valEfetivo = Math.abs(parseCurrency(rawValorEfetivo));
+        const valRefOriginal = Math.abs(parseCurrency(rawValorRefOriginal));
+        const valOrigRecorrente = Math.abs(parseCurrency(rawValorOrigRecorrente));
 
         // Determinar status antes da correção de valores
         const status = normalizeStatus(get(COL.docPago));
 
         // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS
         // ============================================================
-        // Para SAÍDAS: o valor da despesa pode estar em várias colunas
-        // dependendo se já foi paga ou não.
+        // Na planilha, para SAÍDAS:
+        // - Coluna N ("Valor Pago") = preenchido SOMENTE quando já pagou
+        // - Coluna L ("Valor Ref./Valor Original") = valor da despesa prevista
         // 
-        // PAGO:     valorPago (col 13) geralmente preenchido
-        // PENDENTE: valorPago (col 13) pode estar VAZIO!
-        //           Precisamos buscar em colunas alternativas:
-        //           - valorAPagar (col 6)
-        //           - valorPrevisto (col 8)  
-        //           - valorEfetivo (col 11)
-        //           - totalCobranca (col 30)
-        //           - valorRecebido (col 31) como último recurso
+        // Quando status é PENDENTE: col N está vazia, valor está na col L!
+        // Quando status é PAGO: col N tem o valor pago
         // ============================================================
         if (movement === 'Saída') {
            if (valPaid === 0) {
-               // Tentar todas as colunas alternativas em ordem de prioridade
-               if (valAPagar > 0) {
-                   valPaid = valAPagar;
-               } else if (valPrevisto > 0) {
-                   valPaid = valPrevisto;
-               } else if (valEfetivo > 0) {
-                   valPaid = valEfetivo;
+               // Prioridade 1: Valor Ref./Valor Original (col L) - VALOR DA DESPESA PREVISTA
+               if (valRefOriginal > 0) {
+                   valPaid = valRefOriginal;
+               // Prioridade 2: Valor Original Recorrente (col M)
+               } else if (valOrigRecorrente > 0) {
+                   valPaid = valOrigRecorrente;
+               // Prioridade 3: Total Cobrança (col AD)
                } else if (valCobranca > 0) {
                    valPaid = valCobranca;
+               // Prioridade 4: Valor Recebido (col AE) - último recurso
                } else if (valReceived > 0) {
                    valPaid = valReceived;
                    valReceived = 0; 
@@ -319,12 +313,11 @@ export const BackendService = {
           console.warn(`  Descrição: ${rawMovement}`);
           console.warn(`  Tipo: ${rawType}`);
           console.warn(`  Status raw: "${get(COL.docPago)}"`);
-          console.warn(`  valorPago (col 13): "${rawValorPago}" → ${parseCurrency(rawValorPago)}`);
-          console.warn(`  valorAPagar (col 6): "${rawValorAPagar}" → ${parseCurrency(rawValorAPagar)}`);
-          console.warn(`  valorPrevisto (col 8): "${rawValorPrevisto}" → ${parseCurrency(rawValorPrevisto)}`);
-          console.warn(`  valorEfetivo (col 11): "${rawValorEfetivo}" → ${parseCurrency(rawValorEfetivo)}`);
-          console.warn(`  totalCobranca (col 30): "${rawTotalCobranca}" → ${parseCurrency(rawTotalCobranca)}`);
-          console.warn(`  valorRecebido (col 31): "${rawValorRecebido}" → ${parseCurrency(rawValorRecebido)}`);
+          console.warn(`  valorPago (col N/13): "${rawValorPago}" → ${parseCurrency(rawValorPago)}`);
+          console.warn(`  valorRefOriginal (col L/11): "${rawValorRefOriginal}" → ${parseCurrency(rawValorRefOriginal)}`);
+          console.warn(`  valorOrigRecorrente (col M/12): "${rawValorOrigRecorrente}" → ${parseCurrency(rawValorOrigRecorrente)}`);
+          console.warn(`  totalCobranca (col AD/30): "${rawTotalCobranca}" → ${parseCurrency(rawTotalCobranca)}`);
+          console.warn(`  valorRecebido (col AE/31): "${rawValorRecebido}" → ${parseCurrency(rawValorRecebido)}`);
           // Mostrar TODAS as colunas para identificar onde está o valor
           console.warn(`  === TODAS AS COLUNAS DESTA LINHA ===`);
           cols.forEach((c, i) => {
