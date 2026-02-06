@@ -7,7 +7,7 @@ export const ReportService = {
   generatePDF: (
     transactions: Transaction[], 
     kpi: any,
-    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string; dateContext?: string; movement?: string },
+    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string; dateContext?: string; movement?: string; sortField?: string; sortDirection?: string },
     currentUser: User | null
   ) => {
     try {
@@ -111,6 +111,26 @@ export const ReportService = {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.text('Transações Detalhadas:', 14, yPos);
+
+      // Sort info label
+      if (filters.sortField) {
+        const sortFieldLabels: Record<string, string> = {
+          'date': 'Data de Lançamento',
+          'dueDate': 'Data de Vencimento',
+          'paymentDate': 'Data de Pagamento/Baixa',
+          'valorOriginal': 'Valor Original',
+          'valorPago': 'Valor Pago',
+          'status': 'Status',
+          'client': 'Cliente / Observação'
+        };
+        const sortDirLabel = filters.sortDirection === 'desc' ? 'Decrescente' : 'Crescente';
+        const sortLabel = `Ordenado por: ${sortFieldLabels[filters.sortField] || filters.sortField} (${sortDirLabel})`;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text(sortLabel, pageWidth - 14, yPos, { align: 'right' });
+      }
+
       yPos += 5;
 
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
