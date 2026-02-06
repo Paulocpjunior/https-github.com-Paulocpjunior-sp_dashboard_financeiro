@@ -14,7 +14,7 @@ interface DataTableProps {
   onIdFilterChange?: (value: string) => void;
   isLoading?: boolean;
   selectedType?: string;
-  allData?: Transaction[]; // Todos os dados para exportação
+  allData?: Transaction[];
 }
 
 type SortField = 'client' | 'dueDate' | 'receiptDate' | 'none';
@@ -77,11 +77,11 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const isMixedMode = !isContasAPagar && !isContasAReceber;
 
-  // Função para exportar CSV de boletos
+  // Exportar CSV para Boleto Cloud
   const exportBoletosCSV = () => {
     const dataToExport = allData.length > 0 ? allData : data;
     
-    // Filtrar apenas pendentes (boletos a receber)
+    // Filtrar apenas pendentes
     const pendentes = dataToExport.filter(row => 
       row.status === 'Pendente' || row.status === 'Agendado'
     );
@@ -91,84 +91,62 @@ const DataTable: React.FC<DataTableProps> = ({
       return;
     }
 
-    // Cabeçalho do CSV
+    // Formato Boleto Cloud: separador ;
     const headers = [
+      'Nome/Razao Social',
+      'Valor',
       'Vencimento',
-      'Cliente',
-      'Dias Atraso',
-      'Status',
-      'Honorários',
-      'Extras',
-      'Total Cobrança',
-      'Valor Recebido',
-      'Saldo',
-      'Método'
+      'Descricao'
     ];
 
-    // Formatar data
     const formatDateCSV = (dateStr: string) => {
       if (!dateStr || dateStr === '1970-01-01') return '';
       const [year, month, day] = dateStr.split('-');
-      return `${day}/${month}/${year}`;
+      return `${year}-${month}-${day}`; // Formato ISO que Boleto Cloud aceita
     };
 
-    // Calcular dias em atraso
-    const calcDiasAtrasoCSV = (dueDate: string) => {
-      if (!dueDate || dueDate === '1970-01-01') return 0;
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      const vencimento = new Date(dueDate);
-      vencimento.setHours(0, 0, 0, 0);
-      const diffTime = hoje.getTime() - vencimento.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays > 0 ? diffDays : 0;
-    };
-
-    // Formatar valor para CSV
     const formatValueCSV = (val: number | string | undefined) => {
       const num = Number(val || 0);
-      return num.toFixed(2).replace('.', ',');
+      return num.toFixed(2); // Formato: 1234.56 (ponto decimal)
     };
 
-    // Linhas do CSV
-    const rows = pendentes.map(row => {
-      const saldo = (Number(row.totalCobranca) || 0) - (Number(row.valueReceived) || 0);
-      return [
-        formatDateCSV(row.dueDate),
-        `"${(row.client || '').replace(/"/g, '""')}"`,
-        calcDiasAtrasoCSV(row.dueDate),
-        row.status,
-        formatValueCSV(row.honorarios),
-        formatValueCSV(row.valorExtra),
-        formatValueCSV(row.totalCobranca),
-        formatValueCSV(row.valueReceived),
-        formatValueCSV(saldo > 0 ? saldo : 0),
-        row.paymentMethod || 'Pix'
-      ];
-    });
+    const getDescricao = (row: Transaction) => {
+      if (row.description) return row.description;
+      const date = new Date(row.dueDate);
+      const mes = date.toLocaleString('pt-BR', { month: 'long' });
+      const ano = date.getFullYear();
+      return `Honorarios ${mes}/${ano}`;
+    };
 
-    // Montar CSV
+    const rows = pendentes.map(row => [
+      `"${(row.client || '').replace(/"/g, '""')}"`,
+      formatValueCSV(row.totalCobranca || row.honorarios),
+      formatDateCSV(row.dueDate),
+      `"${getDescricao(row).replace(/"/g, '""')}"`
+    ]);
+
     const csvContent = [
       headers.join(';'),
       ...rows.map(row => row.join(';'))
     ].join('\n');
 
-    // Adicionar BOM para Excel reconhecer UTF-8
+    // BOM para UTF-8 no Excel
     const BOM = '\uFEFF';
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     
-    // Download
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
+    const hoje = new Date().toISOString().split('T')[0];
     link.setAttribute('href', url);
-    link.setAttribute('download', `boletos_pendentes_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `boletos_pendentes_${hoje}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    alert(`✅ Exportados ${pendentes.length} boletos pendentes!\n\nImporte o arquivo no Boleto Cloud para gerar os boletos.`);
   };
 
-  // Dados ordenados
   const sortedData = useMemo(() => {
     if (sortField === 'none') return data;
 
@@ -257,18 +235,30 @@ const DataTable: React.FC<DataTableProps> = ({
     </th>
   );
 
+  // Contar pendentes para mostrar no botão
+  const pendentesCount = useMemo(() => {
+    const dataToCount = allData.length > 0 ? allData : data;
+    return dataToCount.filter(row => row.status === 'Pendente' || row.status === 'Agendado').length;
+  }, [data, allData]);
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors">
       
-      {/* Header com botão de exportar */}
+      {/* Header com botão de exportar - Apenas Contas a Receber */}
       {isContasAReceber && (
         <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Contas a Receber
+            📋 Contas a Receber
+            {pendentesCount > 0 && (
+              <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold">
+                {pendentesCount} pendente{pendentesCount > 1 ? 's' : ''}
+              </span>
+            )}
           </span>
           <button
             onClick={exportBoletosCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors"
+            disabled={pendentesCount === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
           >
             <Download className="h-3.5 w-3.5" />
             Exportar .CSV Boletos
@@ -280,7 +270,6 @@ const DataTable: React.FC<DataTableProps> = ({
         <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
           <thead className="bg-slate-50 dark:bg-slate-800">
             <tr>
-              {/* ========== CONTAS A PAGAR ========== */}
               {isContasAPagar && (
                 <>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Lanç.</th>
@@ -289,10 +278,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
                     <div className="flex flex-col gap-1">
-                      <div 
-                        className="flex items-center gap-1 cursor-pointer hover:text-blue-500 transition-colors"
-                        onClick={() => handleSort('client')}
-                      >
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
                         <span>Movimentação</span>
                         <SortIcon field="client" />
                       </div>
@@ -321,7 +307,6 @@ const DataTable: React.FC<DataTableProps> = ({
                 </>
               )}
 
-              {/* ========== CONTAS A RECEBER ========== */}
               {isContasAReceber && (
                 <>
                   <SortableHeader field="dueDate" label="Venc." className="text-left" />
@@ -329,10 +314,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Atraso</th>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[140px]">
                     <div className="flex flex-col gap-1">
-                      <div 
-                        className="flex items-center gap-1 cursor-pointer hover:text-blue-500 transition-colors"
-                        onClick={() => handleSort('client')}
-                      >
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
                         <span>Cliente</span>
                         <SortIcon field="client" />
                       </div>
@@ -365,7 +347,6 @@ const DataTable: React.FC<DataTableProps> = ({
                 </>
               )}
 
-              {/* ========== MODO MISTO ========== */}
               {isMixedMode && (
                 <>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Data</th>
@@ -373,10 +354,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
                   <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
                     <div className="flex flex-col gap-1">
-                      <div 
-                        className="flex items-center gap-1 cursor-pointer hover:text-blue-500 transition-colors"
-                        onClick={() => handleSort('client')}
-                      >
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
                         <span>Cliente / Mov.</span>
                         <SortIcon field="client" />
                       </div>
@@ -435,16 +413,13 @@ const DataTable: React.FC<DataTableProps> = ({
                 return (
                   <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
                     
-                    {/* ========== LINHAS CONTAS A PAGAR ========== */}
                     {isContasAPagar && (
                       <>
                         <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
                         <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
                         <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.paymentDate || '')}</td>
                         <td className="px-2 py-2 whitespace-nowrap">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 truncate max-w-[80px] inline-block">
-                            Saída
-                          </span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">Saída</span>
                         </td>
                         <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]" title={row.description || row.client || '-'}>
                           {row.description || row.client || '-'}
@@ -466,7 +441,6 @@ const DataTable: React.FC<DataTableProps> = ({
                       </>
                     )}
 
-                    {/* ========== LINHAS CONTAS A RECEBER ========== */}
                     {isContasAReceber && (
                       <>
                         <td className={`px-2 py-2 whitespace-nowrap font-medium ${isVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
@@ -532,13 +506,12 @@ const DataTable: React.FC<DataTableProps> = ({
                       </>
                     )}
 
-                    {/* ========== LINHAS MODO MISTO ========== */}
                     {isMixedMode && (
                       <>
                         <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
                         <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
                         <td className="px-2 py-2 whitespace-nowrap">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium truncate max-w-[70px] inline-block ${
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                             isRowSaida ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
                           }`}>
                             {isRowSaida ? 'Saída' : 'Entrada'}
