@@ -184,23 +184,18 @@ export const BackendService = {
 
       console.log(`[BackendService] Total de registros parseados: ${allRows.length}`);
 
-      // =========================================================================================
-      // MAPEAMENTO DE COLUNAS (0-indexed)
-      // =========================================================================================
       const COL = {
         dataLancamento: 1,
         contasBancarias: 2,
         tipoLancamento: 3,
         pagoPor: 4,
-        movimentacao: 5,           // COLUNA F - descrição da movimentação
-        dataLancamento2: 6,        // COLUNA G - Data Lançamento 2
-        dataAPagar: 7,             // COLUNA H - Data a Pagar (vencimento)
-        eventoRecorrente: 8,       // COLUNA I - Evento Recorrente
-        docPago: 9,                // COLUNA J - Doc.Pago (SIM/NÃO)
-        dataBaixa: 10,             // COLUNA K - Data Baixa / Pagamento
-        valorRefOriginal: 11,      // COLUNA L - "Valor Ref./Valor Original" ← VALOR DA DESPESA PREVISTA!
+        movimentacao: 5, // COLUNA F
+        dataAPagar: 7,
+        docPago: 9,
+        dataBaixa: 10,
+        valorRefOriginal: 11,      // COLUNA L - "Valor Ref./Valor Original" (despesa prevista)
         valorOriginalRecorrente: 12, // COLUNA M - Valor Original Recorrente
-        valorPago: 13,             // COLUNA N - Valor Pago (só preenchido quando já pago)
+        valorPago: 13,
         nomeEmpresa: 26,
         valorHonorarios: 27,
         valorExtras: 28,
@@ -221,30 +216,20 @@ export const BackendService = {
         }
       }
 
-      // ========== DEBUG: Mostrar cabeçalhos para identificar colunas ==========
-      const headerRow = allRows[headerRowIndex];
-      console.log('[BackendService] === CABEÇALHOS DA PLANILHA ===');
-      headerRow.forEach((col, idx) => {
-        if (col.trim()) console.log(`  Coluna ${idx}: "${col.trim()}"`);
-      });
-
       const dataRows = allRows.slice(headerRowIndex + 1);
-
-      // Flag para limitar debug a primeiras 5 linhas pendentes
-      let debugPendingCount = 0;
 
       const transactions = dataRows.map((cols, index) => {
         const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
 
         const rawType = get(COL.tipoLancamento);
-        const rawMovement = get(COL.movimentacao);
+        const rawMovement = get(COL.movimentacao); // COLUNA F (Texto Original)
         const rawValorPago = get(COL.valorPago);
         const rawValorRecebido = get(COL.valorRecebido);
         const rawTotalCobranca = get(COL.totalCobranca);
-        const rawValorRefOriginal = get(COL.valorRefOriginal);       // COLUNA L - Valor Ref./Valor Original
+        const rawValorRefOriginal = get(COL.valorRefOriginal);       // COLUNA L
         const rawValorOrigRecorrente = get(COL.valorOriginalRecorrente); // COLUNA M
 
-        // 1. Determinação da Movimentação
+        // 1. Determinação da Movimentação (Prioritária para Lógica do Sistema)
         let movement: 'Entrada' | 'Saída' = 'Entrada';
         const tipoLower = rawType.toLowerCase();
         
@@ -266,18 +251,7 @@ export const BackendService = {
         const valRefOriginal = Math.abs(parseCurrency(rawValorRefOriginal));
         const valOrigRecorrente = Math.abs(parseCurrency(rawValorOrigRecorrente));
 
-        // Determinar status antes da correção de valores
-        const status = normalizeStatus(get(COL.docPago));
-
-        // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS
-        // ============================================================
-        // Na planilha, para SAÍDAS:
-        // - Coluna N ("Valor Pago") = preenchido SOMENTE quando já pagou
-        // - Coluna L ("Valor Ref./Valor Original") = valor da despesa prevista
-        // 
-        // Quando status é PENDENTE: col N está vazia, valor está na col L!
-        // Quando status é PAGO: col N tem o valor pago
-        // ============================================================
+        // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS E PREVISÃO
         if (movement === 'Saída') {
            if (valPaid === 0) {
                // Prioridade 1: Valor Ref./Valor Original (col L) - VALOR DA DESPESA PREVISTA
@@ -286,10 +260,9 @@ export const BackendService = {
                // Prioridade 2: Valor Original Recorrente (col M)
                } else if (valOrigRecorrente > 0) {
                    valPaid = valOrigRecorrente;
-               // Prioridade 3: Total Cobrança (col AD)
+               // Prioridade 3: Total Cobrança (col AD) - fallback original
                } else if (valCobranca > 0) {
                    valPaid = valCobranca;
-               // Prioridade 4: Valor Recebido (col AE) - último recurso
                } else if (valReceived > 0) {
                    valPaid = valReceived;
                    valReceived = 0; 
@@ -304,25 +277,6 @@ export const BackendService = {
             } else if (valCobranca > 0) {
                 valReceived = valCobranca;
             }
-        }
-
-        // ========== DEBUG: Log detalhado para itens PENDENTES com valor zero ==========
-        if (status === 'Pendente' && movement === 'Saída' && valPaid === 0 && debugPendingCount < 5) {
-          debugPendingCount++;
-          console.warn(`[BackendService] ⚠️ PENDENTE COM VALOR ZERO - Linha ${index + 2}:`);
-          console.warn(`  Descrição: ${rawMovement}`);
-          console.warn(`  Tipo: ${rawType}`);
-          console.warn(`  Status raw: "${get(COL.docPago)}"`);
-          console.warn(`  valorPago (col N/13): "${rawValorPago}" → ${parseCurrency(rawValorPago)}`);
-          console.warn(`  valorRefOriginal (col L/11): "${rawValorRefOriginal}" → ${parseCurrency(rawValorRefOriginal)}`);
-          console.warn(`  valorOrigRecorrente (col M/12): "${rawValorOrigRecorrente}" → ${parseCurrency(rawValorOrigRecorrente)}`);
-          console.warn(`  totalCobranca (col AD/30): "${rawTotalCobranca}" → ${parseCurrency(rawTotalCobranca)}`);
-          console.warn(`  valorRecebido (col AE/31): "${rawValorRecebido}" → ${parseCurrency(rawValorRecebido)}`);
-          // Mostrar TODAS as colunas para identificar onde está o valor
-          console.warn(`  === TODAS AS COLUNAS DESTA LINHA ===`);
-          cols.forEach((c, i) => {
-            if (c.trim()) console.warn(`    Col ${i}: "${c.trim()}"`);
-          });
         }
 
         const rawDate = get(COL.dataLancamento);
@@ -341,9 +295,9 @@ export const BackendService = {
           paymentDate: finalPaymentDate !== '1970-01-01' ? finalPaymentDate : undefined,
           bankAccount: cleanString(get(COL.contasBancarias)),
           type: cleanString(rawType),
-          description: cleanString(rawMovement),
+          description: cleanString(rawMovement), // Armazena o valor exato da COLUNA F aqui
           paidBy: cleanString(get(COL.pagoPor)),
-          status: status,
+          status: normalizeStatus(get(COL.docPago)),
           client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
           valuePaid: valPaid,
