@@ -5,10 +5,12 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock, AlertCircle, ArrowLeftRight, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock, AlertCircle, ArrowLeftRight, CheckCircle2, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
+type SortField = 'date' | 'dueDate' | 'paymentDate' | 'valorOriginal' | 'valorPago' | 'status' | 'client';
+type SortDirection = 'asc' | 'desc';
 
 // Interface estendida localmente para detalhar Pendente vs Pago
 interface DetailedKPI extends KPIData {
@@ -31,6 +33,10 @@ const Reports: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>(''); 
   const [selectedBank, setSelectedBank] = useState<string>(''); 
   const [selectedMovement, setSelectedMovement] = useState<string>(''); 
+  
+  // Sort States
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
   // Report Mode
   const [reportMode, setReportMode] = useState<ReportMode>('general');
@@ -150,6 +156,58 @@ const Reports: React.FC = () => {
       result = result.filter(t => t.bankAccount === selectedBank);
     }
 
+    // 6. Sorting
+    result = [...result].sort((a, b) => {
+      let valA: any;
+      let valB: any;
+      
+      switch (sortField) {
+        case 'date':
+          valA = a.date || '';
+          valB = b.date || '';
+          break;
+        case 'dueDate':
+          valA = a.dueDate || '';
+          valB = b.dueDate || '';
+          break;
+        case 'paymentDate':
+          valA = a.paymentDate || '';
+          valB = b.paymentDate || '';
+          break;
+        case 'valorOriginal': {
+          const isEntryA = a.movement === 'Entrada' || (a.valueReceived > 0 && a.valuePaid === 0);
+          const isEntryB = b.movement === 'Entrada' || (b.valueReceived > 0 && b.valuePaid === 0);
+          valA = isEntryA ? a.valueReceived : a.valuePaid;
+          valB = isEntryB ? b.valueReceived : b.valuePaid;
+          break;
+        }
+        case 'valorPago': {
+          const isPaidA = a.status === 'Pago';
+          const isPaidB = b.status === 'Pago';
+          const isEA = a.movement === 'Entrada' || (a.valueReceived > 0 && a.valuePaid === 0);
+          const isEB = b.movement === 'Entrada' || (b.valueReceived > 0 && b.valuePaid === 0);
+          valA = isPaidA ? (isEA ? a.valueReceived : a.valuePaid) : 0;
+          valB = isPaidB ? (isEB ? b.valueReceived : b.valuePaid) : 0;
+          break;
+        }
+        case 'status':
+          valA = a.status || '';
+          valB = b.status || '';
+          break;
+        case 'client':
+          valA = (a.client || '').toLowerCase();
+          valB = (b.client || '').toLowerCase();
+          break;
+        default:
+          valA = a.date || '';
+          valB = b.date || '';
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
     setFilteredData(result);
 
     // Calculate Detailed KPIs
@@ -185,7 +243,7 @@ const Reports: React.FC = () => {
     );
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
@@ -217,7 +275,9 @@ const Reports: React.FC = () => {
             status: selectedStatus, 
             bankAccount: selectedBank,
             movement: selectedMovement,
-            dateContext: dateLabelMap[dateFilterType]
+            dateContext: dateLabelMap[dateFilterType],
+            sortField,
+            sortDirection
         },
         AuthService.getCurrentUser()
       );
@@ -335,6 +395,51 @@ const Reports: React.FC = () => {
                                 <option value="Entrada">Entradas / Receitas</option>
                                 <option value="Saída">Saídas / Despesas</option>
                              </select>
+                        </div>
+                    </div>
+            </div>
+
+            {/* SORT CONFIGURATION */}
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+                        <ArrowUpDown className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                        Ordenação do Relatório
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Ordenar por</label>
+                             <select 
+                                className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" 
+                                value={sortField} 
+                                onChange={(e) => setSortField(e.target.value as SortField)}
+                             >
+                                <option value="date">Data de Lançamento</option>
+                                <option value="dueDate">Data de Vencimento</option>
+                                <option value="paymentDate">Data de Pagamento/Baixa</option>
+                                <option value="valorOriginal">Valor Original</option>
+                                <option value="valorPago">Valor Pago</option>
+                                <option value="status">Status</option>
+                                <option value="client">Cliente / Observação</option>
+                             </select>
+                        </div>
+                        <div>
+                             <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Direção</label>
+                             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                                <button 
+                                    onClick={() => setSortDirection('asc')} 
+                                    className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${sortDirection === 'asc' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                                >
+                                    <ArrowUp className="h-3.5 w-3.5" />
+                                    Crescente (A→Z / Menor→Maior)
+                                </button>
+                                <button 
+                                    onClick={() => setSortDirection('desc')} 
+                                    className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${sortDirection === 'desc' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                                >
+                                    <ArrowDown className="h-3.5 w-3.5" />
+                                    Decrescente (Z→A / Maior→Menor)
+                                </button>
+                             </div>
                         </div>
                     </div>
             </div>
