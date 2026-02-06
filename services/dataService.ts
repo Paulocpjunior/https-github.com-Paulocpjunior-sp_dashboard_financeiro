@@ -4,6 +4,12 @@ import { BackendService } from './backendService';
 // In-memory cache to store data fetched from Sheet
 let CACHED_TRANSACTIONS: Transaction[] = [];
 let isDataLoaded = false;
+let lastUpdatedAt: Date | null = null;
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let autoRefreshListeners: Array<() => void> = [];
+
+// Intervalo padrão de auto-refresh: 1 minuto (60000ms)
+const AUTO_REFRESH_INTERVAL_MS = 1 * 60 * 1000;
 
 // Função para normalizar texto (remove acentos)
 const normalizeText = (text: string) => {
@@ -31,6 +37,7 @@ export const DataService = {
       CACHED_TRANSACTIONS = data;
 
       isDataLoaded = true;
+      lastUpdatedAt = new Date();
     } catch (error) {
       console.error("Failed to load transactions", error);
       throw error;
@@ -40,6 +47,64 @@ export const DataService = {
   refreshCache: async (): Promise<void> => {
     isDataLoaded = false;
     await DataService.loadData();
+    // Notificar todos os listeners que o cache foi atualizado
+    autoRefreshListeners.forEach(fn => fn());
+  },
+
+  /**
+   * Retorna a data/hora da última atualização dos dados.
+   */
+  getLastUpdatedAt: (): Date | null => {
+    return lastUpdatedAt;
+  },
+
+  /**
+   * Inicia o auto-refresh periódico. Se já estiver ativo, reinicia o timer.
+   * @param intervalMs Intervalo em milissegundos (padrão: AUTO_REFRESH_INTERVAL_MS)
+   */
+  startAutoRefresh: (intervalMs?: number): void => {
+    DataService.stopAutoRefresh(); // Limpa timer anterior se existir
+    const interval = intervalMs || AUTO_REFRESH_INTERVAL_MS;
+    
+    autoRefreshTimer = setInterval(async () => {
+      try {
+        console.log(`[AutoRefresh] Atualizando dados... (${new Date().toLocaleTimeString('pt-BR')})`);
+        await DataService.refreshCache();
+      } catch (error) {
+        console.error('[AutoRefresh] Erro ao atualizar:', error);
+      }
+    }, interval);
+    
+    console.log(`[AutoRefresh] Ativado a cada ${interval / 1000}s`);
+  },
+
+  /**
+   * Para o auto-refresh periódico.
+   */
+  stopAutoRefresh: (): void => {
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+      console.log('[AutoRefresh] Desativado');
+    }
+  },
+
+  /**
+   * Verifica se o auto-refresh está ativo.
+   */
+  isAutoRefreshActive: (): boolean => {
+    return autoRefreshTimer !== null;
+  },
+
+  /**
+   * Registra um listener que será chamado sempre que o cache for atualizado.
+   * Retorna uma função de cleanup para remover o listener.
+   */
+  onRefresh: (callback: () => void): (() => void) => {
+    autoRefreshListeners.push(callback);
+    return () => {
+      autoRefreshListeners = autoRefreshListeners.filter(fn => fn !== callback);
+    };
   },
 
   /**

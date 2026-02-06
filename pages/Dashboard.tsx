@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import KpiCard from '../components/KpiCard';
 import DataTable from '../components/DataTable';
 import AIAssistant from '../components/AIAssistant';
 import { DataService } from '../services/dataService';
 import { FilterState, KPIData, Transaction } from '../types';
-import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 const INITIAL_FILTERS: FilterState = {
@@ -59,6 +59,11 @@ const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState('');
 
+  // Refresh States
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshCountdown, setRefreshCountdown] = useState(60); // segundos até próximo refresh
+
   // Detecta se está no modo "Contas a Pagar" (Saída) ou "Receber" (Entrada)
   const normalizedType = normalizeText(filters.type || '');
   const isContasAPagar = normalizedType.includes('saida') || 
@@ -88,6 +93,9 @@ const Dashboard: React.FC = () => {
           paidBys: DataService.getUniqueValues('paidBy'),
         });
 
+        // Registrar timestamp da primeira carga
+        setLastUpdated(DataService.getLastUpdatedAt());
+
         // Aplicar filtro "Este Mês" por padrão
         const now = new Date();
         const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -114,6 +122,77 @@ const Dashboard: React.FC = () => {
     };
     load();
   }, []);
+
+  // Auto-refresh: Ativar timer de 1 minuto ao montar, parar ao desmontar
+  useEffect(() => {
+    if (isLoading || initError) return;
+
+    // Listener que recarrega dados quando o auto-refresh atualiza o cache
+    const unsubscribe = DataService.onRefresh(() => {
+      setLastUpdated(DataService.getLastUpdatedAt());
+      setRefreshCountdown(60);
+      
+      // Atualizar opções de filtro
+      setOptions({
+        bankAccounts: DataService.getUniqueValues('bankAccount'),
+        types: DataService.getUniqueValues('type'),
+        statuses: DataService.getUniqueValues('status'),
+        movements: DataService.getUniqueValues('movement'),
+        clients: DataService.getUniqueValues('client'),
+        paidBys: DataService.getUniqueValues('paidBy'),
+      });
+    });
+
+    // Iniciar auto-refresh
+    DataService.startAutoRefresh();
+
+    return () => {
+      unsubscribe();
+      DataService.stopAutoRefresh();
+    };
+  }, [isLoading, initError]);
+
+  // Countdown visual: atualiza a cada segundo
+  useEffect(() => {
+    if (isLoading || initError) return;
+    
+    const countdownTimer = setInterval(() => {
+      setRefreshCountdown(prev => (prev <= 1 ? 60 : prev - 1));
+    }, 1000);
+
+    return () => clearInterval(countdownTimer);
+  }, [isLoading, initError]);
+
+  // Refresh manual
+  const handleManualRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await DataService.refreshCache();
+      setLastUpdated(DataService.getLastUpdatedAt());
+      setRefreshCountdown(60);
+      
+      // Recarregar dados com filtros atuais
+      const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
+      setData(result.data);
+      setTotalPages(result.totalPages);
+      setKpi(newKpi);
+
+      // Atualizar opções de filtro
+      setOptions({
+        bankAccounts: DataService.getUniqueValues('bankAccount'),
+        types: DataService.getUniqueValues('type'),
+        statuses: DataService.getUniqueValues('status'),
+        movements: DataService.getUniqueValues('movement'),
+        clients: DataService.getUniqueValues('client'),
+        paidBys: DataService.getUniqueValues('paidBy'),
+      });
+    } catch (e) {
+      console.error('Erro no refresh manual:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [filters, page, isRefreshing]);
 
   // Handle Filter Changes
   useEffect(() => {
@@ -311,6 +390,35 @@ const Dashboard: React.FC = () => {
           </div>
           
           <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {/* REFRESH INDICATOR */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-500 dark:text-slate-400">
+              <Timer className="h-3.5 w-3.5" />
+              {lastUpdated ? (
+                <span>
+                  Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
+                  <span className="ml-1.5 text-blue-500 dark:text-blue-400 font-medium">
+                    ({refreshCountdown}s)
+                  </span>
+                </span>
+              ) : (
+                <span>Carregando...</span>
+              )}
+            </div>
+
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm
+                ${isRefreshing 
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-500 cursor-not-allowed' 
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-400'
+                }`}
+              title="Atualizar dados agora"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
+            </button>
+
             <button
               onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
               className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm
