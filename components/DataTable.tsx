@@ -432,11 +432,17 @@ const DataTable: React.FC<DataTableProps> = ({
                             {row.status}
                           </span>
                         </td>
+                        {/* ============================================================ */}
+                        {/* CORREÇÃO: Coluna "A PAGAR" - Mostra valor SOMENTE se Pendente */}
+                        {/* ============================================================ */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
-                          {formatCurrency(row.valuePaid)}
+                          {isPending ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
                         </td>
+                        {/* ============================================================ */}
+                        {/* Coluna "PAGO" - Mostra valor SOMENTE se status = Pago        */}
+                        {/* ============================================================ */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                          {row.status === 'Pago' ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                          {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
                         </td>
                       </>
                     )}
