@@ -172,24 +172,33 @@ export const DataService = {
     let kpi: KPIData;
 
     if (isContasAPagar) {
-      // LÓGICA ESPECIAL PARA CONTAS A PAGAR:
-      // - Total Geral = soma de todos os valores (valuePaid) no filtro
-      // - Total Pago = soma dos valores onde status = "Pago"
-      // - Total Pendente (Saldo) = Total Geral - Total Pago
+      // ============================================================
+      // CORREÇÃO: LÓGICA PARA CONTAS A PAGAR
+      // ============================================================
+      // - Total Geral = soma de TODOS os valuePaid (independente do status)
+      // - Total Pago  = soma dos valuePaid onde status = "Pago"
+      // - Saldo a Pagar (Pendente) = soma dos valuePaid onde status = "Pendente" ou "Agendado"
+      // ============================================================
       
       const totalGeral = filtered.reduce((acc, curr) => acc + curr.valuePaid, 0);
+      
       const totalPago = filtered
         .filter(item => item.status === 'Pago')
         .reduce((acc, curr) => acc + curr.valuePaid, 0);
-      const totalPendente = totalGeral - totalPago;
+      
+      // CORREÇÃO PRINCIPAL: calcular pendente DIRETAMENTE dos itens pendentes
+      // Em vez de (totalGeral - totalPago), que pode dar errado se houver status "Agendado"
+      const totalPendente = filtered
+        .filter(item => item.status === 'Pendente' || item.status === 'Agendado')
+        .reduce((acc, curr) => acc + curr.valuePaid, 0);
 
       kpi = {
-        totalPaid: totalPago,        // "Total Saídas" = Total já pago
-        totalReceived: totalGeral,   // "Total Entradas" = Total Geral (ou pode ser 0)
-        balance: totalPendente,      // "Saldo Líquido" = Total pendente a pagar
+        totalPaid: totalPago,        // Card "Total Pago" (verde)
+        totalReceived: totalGeral,   // Card "Total Geral" (azul)
+        balance: totalPendente,      // Card "Saldo a Pagar" (vermelho/amber) = PENDENTES
       };
     } else {
-      // LÓGICA PADRÃO para outros tipos
+      // LÓGICA PADRÃO para outros tipos (Entradas, Misto, etc.)
       kpi = filtered.reduce(
         (acc, curr) => ({
           totalPaid: acc.totalPaid + curr.valuePaid,
