@@ -1,401 +1,586 @@
-import { Transaction, User } from '../types';
-import { MOCK_USERS } from '../constants';
+import React, { useState, useMemo } from 'react';
+import { Transaction } from '../types';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
 
-// =========================================================================================
-// CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
-// =========================================================================================
-const DEFAULT_SPREADSHEET_ID = '17mHd8eqKoj7Cl6E2MCkr0PczFj-lKv_vmFRCY5hypwg'; 
-const DEFAULT_GID = '1276925607';
-
-const STORAGE_KEY_DB_SOURCE = 'cashflow_db_source_id';
-const STORAGE_KEY_DB_GID = 'cashflow_db_gid';
-
-// =========================================================================================
-// URL DO GOOGLE APPS SCRIPT
-// =========================================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1hCtCHpomiGpyLujr0SNdfL4AYXg0rUG_N0-s8e4B5hwOxjKa7rGsR1D2/exec';
-
-// Interface para dados de registro
-interface RegisterUserData {
-  name: string;
-  email: string;
-  phone?: string;
-  username: string;
-  password: string;
+interface DataTableProps {
+  data: Transaction[];
+  page: number;
+  totalPages: number;
+  onPageChange: (newPage: number) => void;
+  clientFilterValue?: string;
+  onClientFilterChange?: (value: string) => void;
+  clientOptions?: string[];
+  idFilterValue?: string;
+  onIdFilterChange?: (value: string) => void;
+  isLoading?: boolean;
+  selectedType?: string;
+  allData?: Transaction[];
 }
 
-// =========================================================================================
-// FUNÇÃO PARA CHAMAR O GOOGLE APPS SCRIPT
-// =========================================================================================
-const callAppsScript = async (data: any): Promise<{ success: boolean; message: string; [key: string]: any }> => {
+type SortField = 'client' | 'dueDate' | 'receiptDate' | 'none';
+type SortDirection = 'asc' | 'desc';
 
-  try {
-    console.log('[BackendService] Enviando para Apps Script:', data.action);
+const DataTable: React.FC<DataTableProps> = ({ 
+    data, 
+    page, 
+    totalPages, 
+    onPageChange, 
+    clientFilterValue,
+    onClientFilterChange,
+    clientOptions = [],
+    isLoading = false,
+    selectedType = '',
+    allData = []
+}) => {
+  const [sortField, setSortField] = useState<SortField>('none');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortField('none');
+        setSortDirection('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return <ChevronsUpDown className="h-3 w-3 text-slate-400" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="h-3 w-3 text-blue-500" />
+      : <ChevronDown className="h-3 w-3 text-blue-500" />;
+  };
+
+  const normalizeText = (text: string) => {
+    return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  };
+
+  const normalizedType = normalizeText(selectedType || '');
+  
+  const isContasAPagar = normalizedType.includes('saida') || 
+                         normalizedType.includes('pagar') ||
+                         normalizedType.includes('fornecedor') ||
+                         normalizedType.includes('imposto') ||
+                         normalizedType.includes('aluguel');
+  
+  const isContasAReceber = normalizedType.includes('entrada') || 
+                           normalizedType.includes('receber') ||
+                           normalizedType.includes('servico') ||
+                           normalizedType.includes('consultoria');
+
+  const isMixedMode = !isContasAPagar && !isContasAReceber;
+
+  // Exportar CSV para Boleto Cloud
+  const exportBoletosCSV = () => {
+    const dataToExport = allData.length > 0 ? allData : data;
     
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-      redirect: 'follow',
+    // Filtrar apenas pendentes
+    const pendentes = dataToExport.filter(row => 
+      row.status === 'Pendente' || row.status === 'Agendado'
+    );
+
+    if (pendentes.length === 0) {
+      alert('Nenhum boleto pendente para exportar.');
+      return;
+    }
+
+    // Formato Boleto Cloud: separador ;
+    const headers = [
+      'Nome/Razao Social',
+      'Valor',
+      'Vencimento',
+      'Descricao'
+    ];
+
+    const formatDateCSV = (dateStr: string) => {
+      if (!dateStr || dateStr === '1970-01-01') return '';
+      const [year, month, day] = dateStr.split('-');
+      return `${year}-${month}-${day}`; // Formato ISO que Boleto Cloud aceita
+    };
+
+    const formatValueCSV = (val: number | string | undefined) => {
+      const num = Number(val || 0);
+      return num.toFixed(2); // Formato: 1234.56 (ponto decimal)
+    };
+
+    const getDescricao = (row: Transaction) => {
+      if (row.description) return row.description;
+      const date = new Date(row.dueDate);
+      const mes = date.toLocaleString('pt-BR', { month: 'long' });
+      const ano = date.getFullYear();
+      return `Honorarios ${mes}/${ano}`;
+    };
+
+    const rows = pendentes.map(row => [
+      `"${(row.client || '').replace(/"/g, '""')}"`,
+      formatValueCSV(row.totalCobranca || row.honorarios),
+      formatDateCSV(row.dueDate),
+      `"${getDescricao(row).replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.join(';'))
+    ].join('\n');
+
+    // BOM para UTF-8 no Excel
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const hoje = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `boletos_pendentes_${hoje}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert(`✅ Exportados ${pendentes.length} boletos pendentes!\n\nImporte o arquivo no Boleto Cloud para gerar os boletos.`);
+  };
+
+  const sortedData = useMemo(() => {
+    if (sortField === 'none') return data;
+
+    return [...data].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'client':
+          const clientA = (a.client || '').toLowerCase();
+          const clientB = (b.client || '').toLowerCase();
+          comparison = clientA.localeCompare(clientB, 'pt-BR');
+          break;
+        case 'dueDate':
+          const dateA = new Date(a.dueDate || '1970-01-01').getTime();
+          const dateB = new Date(b.dueDate || '1970-01-01').getTime();
+          comparison = dateA - dateB;
+          break;
+        case 'receiptDate':
+          const recA = new Date(a.receiptDate || a.paymentDate || '1970-01-01').getTime();
+          const recB = new Date(b.receiptDate || b.paymentDate || '1970-01-01').getTime();
+          comparison = recA - recB;
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
     });
+  }, [data, sortField, sortDirection]);
 
-    if (response.ok) {
-      const result = await response.json();
-      console.log('[BackendService] Resposta do Apps Script:', result);
-      return result;
-    } else {
-      console.error('[BackendService] Erro na resposta:', response.status);
-      return { success: false, message: 'Erro ao comunicar com o servidor.' };
-    }
-  } catch (error: any) {
-    console.error('[BackendService] Erro ao chamar Apps Script:', error);
+  const formatCurrency = (val: number | string | undefined) => {
+    const num = Number(val || 0);
+    return new Intl.NumberFormat('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num);
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr || dateStr === '1970-01-01') return '-';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}`;
+  };
+
+  const formatDateFull = (dateStr: string) => {
+    if (!dateStr || dateStr === '1970-01-01') return '-';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const calcDiasAtraso = (dueDate: string, status: string) => {
+    if (status === 'Pago' || status === 'Recebido') return 0;
+    if (!dueDate || dueDate === '1970-01-01') return 0;
     
-    // Tenta com mode: no-cors como fallback
-    try {
-      await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const vencimento = new Date(dueDate);
+    vencimento.setHours(0, 0, 0, 0);
+    
+    const diffTime = hoje.getTime() - vencimento.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  const calcSaldoRestante = (total: number, recebido: number) => {
+    const saldo = (total || 0) - (recebido || 0);
+    return saldo > 0 ? saldo : 0;
+  };
+
+  const getColSpan = () => {
+    if (isContasAPagar) return 8;
+    if (isContasAReceber) return 11;
+    return 6;
+  };
+
+  const SortableHeader = ({ field, label, className = '' }: { field: SortField; label: string; className?: string }) => (
+    <th 
+      className={`px-2 py-2 font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors select-none ${className}`}
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        <span>{label}</span>
+        <SortIcon field={field} />
+      </div>
+    </th>
+  );
+
+  // Contar pendentes para mostrar no botão
+  const pendentesCount = useMemo(() => {
+    const dataToCount = allData.length > 0 ? allData : data;
+    return dataToCount.filter(row => row.status === 'Pendente' || row.status === 'Agendado').length;
+  }, [data, allData]);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors">
       
-      console.log('[BackendService] Requisição enviada (no-cors)');
-      return { success: true, message: 'Cadastro enviado! Verifique seu e-mail.' };
-    } catch (noCorsError) {
-      return { success: false, message: 'Erro de conexão com o servidor.' };
-    }
-  }
+      {/* Header com botão de exportar - Apenas Contas a Receber */}
+      {isContasAReceber && (
+        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            📋 Contas a Receber
+            {pendentesCount > 0 && (
+              <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold">
+                {pendentesCount} pendente{pendentesCount > 1 ? 's' : ''}
+              </span>
+            )}
+          </span>
+          <button
+            onClick={exportBoletosCSV}
+            disabled={pendentesCount === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar .CSV Boletos
+          </button>
+        </div>
+      )}
+
+      <div className="overflow-x-auto min-h-[400px]">
+        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
+          <thead className="bg-slate-50 dark:bg-slate-800">
+            <tr>
+              {isContasAPagar && (
+                <>
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Lanç.</th>
+                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                  <SortableHeader field="receiptDate" label="Pgto." className="text-left" />
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
+                        <span>Movimentação</span>
+                        <SortIcon field="client" />
+                      </div>
+                      {onClientFilterChange && (
+                        <div className="relative">
+                          <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                          <input 
+                            type="text" 
+                            list="table-client-pagar"
+                            value={clientFilterValue || ''}
+                            onChange={(e) => onClientFilterChange(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Filtrar..."
+                            className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
+                          />
+                          <datalist id="table-client-pagar">
+                            {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
+                          </datalist>
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                  <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
+                  <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
+                </>
+              )}
+
+              {isContasAReceber && (
+                <>
+                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                  <SortableHeader field="receiptDate" label="Receb." className="text-left" />
+                  <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Atraso</th>
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[140px]">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
+                        <span>Cliente</span>
+                        <SortIcon field="client" />
+                      </div>
+                      {onClientFilterChange && (
+                        <div className="relative">
+                          <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                          <input 
+                            type="text" 
+                            list="table-client-receber"
+                            value={clientFilterValue || ''}
+                            onChange={(e) => onClientFilterChange(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Filtrar..."
+                            className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
+                          />
+                          <datalist id="table-client-receber">
+                            {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
+                          </datalist>
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                  <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Honor.</th>
+                  <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Extras</th>
+                  <th className="px-2 py-2 text-right font-medium text-blue-600 dark:text-blue-400 uppercase">Total</th>
+                  <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Recebido</th>
+                  <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">Saldo</th>
+                  <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Método</th>
+                </>
+              )}
+
+              {isMixedMode && (
+                <>
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Data</th>
+                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
+                        <span>Cliente / Mov.</span>
+                        <SortIcon field="client" />
+                      </div>
+                      {onClientFilterChange && (
+                        <div className="relative">
+                          <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                          <input 
+                            type="text" 
+                            list="table-client-mixed"
+                            value={clientFilterValue || ''}
+                            onChange={(e) => onClientFilterChange(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Filtrar..."
+                            className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
+                          />
+                          <datalist id="table-client-mixed">
+                            {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
+                          </datalist>
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                  <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
+                </>
+              )}
+            </tr>
+          </thead>
+
+          <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
+            {isLoading ? (
+              <tr>
+                <td colSpan={getColSpan()} className="px-6 py-16 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+                    <span className="text-sm text-slate-500">Carregando...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : sortedData.length === 0 ? (
+              <tr>
+                <td colSpan={getColSpan()} className="px-6 py-10 text-center text-slate-500">
+                  Nenhum registro encontrado.
+                </td>
+              </tr>
+            ) : (
+              sortedData.map((row) => {
+                const rowType = normalizeText(row.type || '');
+                const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
+                const isPending = row.status === 'Pendente' || row.status === 'Agendado';
+                const diasAtraso = calcDiasAtraso(row.dueDate, row.status);
+                const saldoRestante = calcSaldoRestante(row.totalCobranca, row.valueReceived);
+                const isVencido = diasAtraso > 0;
+                const isPago = row.status === 'Pago' || row.status === 'Recebido';
+
+                return (
+                  <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
+                    
+                    {isContasAPagar && (
+                      <>
+                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.paymentDate || '')}</td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">Saída</span>
+                        </td>
+                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]" title={row.description || row.client || '-'}>
+                          {row.description || row.client || '-'}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
+                            ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                              'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                            {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
+                            {row.status}
+                          </span>
+                        </td>
+                        {/* ============================================================ */}
+                        {/* CORREÇÃO: Coluna "A PAGAR" - Mostra valor SOMENTE se Pendente */}
+                        {/* ============================================================ */}
+                        <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
+                          {isPending ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                        </td>
+                        {/* ============================================================ */}
+                        {/* Coluna "PAGO" - Mostra valor SOMENTE se status = Pago        */}
+                        {/* ============================================================ */}
+                        <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
+                          {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                        </td>
+                      </>
+                    )}
+
+                    {isContasAReceber && (
+                      <>
+                        <td className={`px-2 py-2 whitespace-nowrap font-medium ${isVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                          {formatDateFull(row.dueDate)}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                          {isPago ? (
+                            <span className="text-green-600 dark:text-green-400">{formatDateFull(row.receiptDate || row.paymentDate || '')}</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-center">
+                          {diasAtraso > 0 ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                              <AlertCircle className="w-2.5 h-2.5" />
+                              {diasAtraso}d
+                            </span>
+                          ) : isPago ? (
+                            <span className="text-green-500 text-[10px]">✓</span>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">-</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px]" title={row.client || '-'}>
+                          {row.client || '-'}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-center">
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
+                            ${isPago ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                              isVencido ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                              'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                            {isVencido && !isPago && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
+                          {formatCurrency(row.honorarios)}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
+                          {formatCurrency(row.valorExtra)}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-right text-blue-600 dark:text-blue-400 font-semibold">
+                          {formatCurrency(row.totalCobranca)}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
+                          {formatCurrency(row.valueReceived)}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-right">
+                          {saldoRestante > 0 ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded text-[11px]">
+                              {formatCurrency(saldoRestante)}
+                            </span>
+                          ) : (
+                            <span className="text-green-600 dark:text-green-400 text-[10px] font-medium">Quitado</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-center">
+                          <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">
+                            {row.paymentMethod || 'Pix'}
+                          </span>
+                        </td>
+                      </>
+                    )}
+
+                    {isMixedMode && (
+                      <>
+                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
+                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            isRowSaida ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                          }`}>
+                            {isRowSaida ? 'Saída' : 'Entrada'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]">
+                          {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
+                            ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                              'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                            {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap text-right">
+                          {isRowSaida ? (
+                            <span className="text-red-600 dark:text-red-400 flex items-center justify-end gap-0.5 font-medium">
+                              <ArrowDownCircle className="h-3 w-3" />
+                              {formatCurrency(row.valuePaid)}
+                            </span>
+                          ) : (
+                            <span className="text-green-600 dark:text-green-400 flex items-center justify-end gap-0.5 font-medium">
+                              <ArrowUpCircle className="h-3 w-3" />
+                              {formatCurrency(row.totalCobranca || row.valueReceived)}
+                            </span>
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      <div className="bg-white dark:bg-slate-900 px-3 py-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <p className="text-xs text-slate-600 dark:text-slate-400">
+          Pág. <span className="font-medium">{page}</span> de <span className="font-medium">{totalPages}</span>
+        </p>
+        <div className="flex gap-1">
+          <button
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1 || isLoading}
+            className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages || isLoading}
+            className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-export const BackendService = {
-  
-  isProduction: (): boolean => true,
-
-  getSpreadsheetId: (): string => {
-    return localStorage.getItem(STORAGE_KEY_DB_SOURCE) || DEFAULT_SPREADSHEET_ID;
-  },
-
-  getSpreadsheetGid: (): string => {
-    return localStorage.getItem(STORAGE_KEY_DB_GID) || DEFAULT_GID;
-  },
-
-  updateSpreadsheetId: (input: string): void => {
-    let cleanedId = input.trim();
-    let gid = DEFAULT_GID;
-
-    const gidMatch = input.match(/[?&]gid=([0-9]+)/) || input.match(/#gid=([0-9]+)/);
-    if (gidMatch && gidMatch[1]) {
-      gid = gidMatch[1];
-    } else {
-       if (cleanedId !== DEFAULT_SPREADSHEET_ID) {
-           gid = '0'; 
-       }
-    }
-
-    if (cleanedId.includes('/d/')) {
-        const match = cleanedId.match(/\/d\/([a-zA-Z0-9-_]+)/);
-        if (match && match[1]) {
-            cleanedId = match[1];
-        }
-    }
-
-    localStorage.setItem(STORAGE_KEY_DB_SOURCE, cleanedId);
-    localStorage.setItem(STORAGE_KEY_DB_GID, gid);
-  },
-
-  resetSpreadsheetId: (): void => {
-    localStorage.removeItem(STORAGE_KEY_DB_SOURCE);
-    localStorage.removeItem(STORAGE_KEY_DB_GID);
-  },
-
-  // =========================================================================================
-  // REGISTRO DE NOVO USUÁRIO
-  // =========================================================================================
-  registerUser: async (data: RegisterUserData): Promise<{ success: boolean; message: string }> => {
-    console.log('[BackendService] Iniciando registro de usuário:', data.username);
-
-    try {
-      if (!data.name || !data.email || !data.username || !data.password) {
-        return { success: false, message: 'Todos os campos obrigatórios devem ser preenchidos.' };
-      }
-      if (data.password.length < 6) {
-        return { success: false, message: 'A senha deve ter no mínimo 6 caracteres.' };
-      }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(data.email)) {
-        return { success: false, message: 'E-mail inválido.' };
-      }
-
-      const existingUser = MOCK_USERS.find(u => u.username.toLowerCase() === data.username.toLowerCase());
-      if (existingUser) {
-        return { success: false, message: 'Este nome de usuário já está em uso.' };
-      }
-
-      const scriptResult = await callAppsScript({
-        action: 'register',
-        name: data.name,
-        email: data.email,
-        phone: data.phone || '',
-        username: data.username,
-        password: data.password,
-      });
-
-      return scriptResult;
-    } catch (error: any) {
-      console.error('[BackendService] Erro no registro:', error);
-      return { success: false, message: error.message || 'Erro ao processar cadastro.' };
-    }
-  },
-
-  // Métodos de aprovação/rejeição omitidos para brevidade (mantém os mesmos)
-  approvePendingUser: async (email: string, name: string, username: string) => callAppsScript({ action: 'approve', email, name, username }),
-  rejectPendingUser: async (email: string, name: string, username: string, reason?: string) => callAppsScript({ action: 'reject', email, name, username, reason: reason || '' }),
-  resendConfirmationEmail: async (email: string, name: string, username: string) => callAppsScript({ action: 'resend', email, name, username }),
-  requestPasswordReset: async (username: string) => {
-    const user = MOCK_USERS.find(u => u.username.toLowerCase() === username.toLowerCase());
-    if (!user) return { success: false, message: 'Usuário não encontrado.' };
-    const result = await callAppsScript({ action: 'reset_password', email: user.email || '', name: user.name, username: user.username });
-    return result.success ? { success: true, message: 'Nova senha enviada.' } : { success: false, message: 'Erro ao processar.' };
-  },
-
-  fetchTransactions: async (): Promise<Transaction[]> => {
-    const spreadsheetId = BackendService.getSpreadsheetId();
-    const gid = BackendService.getSpreadsheetGid();
-    
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`; 
-    console.log(`[BackendService] Conectando à planilha: ${spreadsheetId} (Tab: ${gid})...`);
-    
-    try {
-      const response = await fetch(csvUrl);
-      if (!response.ok) throw new Error(`Erro HTTP: ${response.status}.`);
-      
-      let csvText = await response.text();
-      if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
-      if (csvText.trim().startsWith('<!DOCTYPE html>') || csvText.includes('<html')) {
-        throw new Error('A planilha está privada. Altere o compartilhamento.');
-      }
-
-      const allRows = parseCSVComplete(csvText);
-      if (allRows.length < 2) return [];
-
-      console.log(`[BackendService] Total de registros parseados: ${allRows.length}`);
-
-      const COL = {
-        dataLancamento: 1,
-        contasBancarias: 2,
-        tipoLancamento: 3,
-        pagoPor: 4,
-        movimentacao: 5, // COLUNA F
-        dataAPagar: 7,
-        docPago: 9,
-        dataBaixa: 10,
-        valorRefOriginal: 11,      // COLUNA L - "Valor Ref./Valor Original" (despesa prevista)
-        valorOriginalRecorrente: 12, // COLUNA M - Valor Original Recorrente
-        valorPago: 13,
-        nomeEmpresa: 26,
-        valorHonorarios: 27,
-        valorExtras: 28,
-        totalCobranca: 30,
-        valorRecebido: 31,
-        submissionId: 39,
-      };
-
-      let headerRowIndex = 0;
-      for (let i = 0; i < Math.min(allRows.length, 5); i++) {
-        const row = allRows[i];
-        if (row.length > 3) {
-          const combined = row.slice(0, 5).join(' ').toLowerCase();
-          if (combined.includes('tipo de lan') || combined.includes('contas banc')) {
-            headerRowIndex = i;
-            break;
-          }
-        }
-      }
-
-      const dataRows = allRows.slice(headerRowIndex + 1);
-
-      const transactions = dataRows.map((cols, index) => {
-        const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
-
-        const rawType = get(COL.tipoLancamento);
-        const rawMovement = get(COL.movimentacao); // COLUNA F (Texto Original)
-        const rawValorPago = get(COL.valorPago);
-        const rawValorRecebido = get(COL.valorRecebido);
-        const rawTotalCobranca = get(COL.totalCobranca);
-        const rawValorRefOriginal = get(COL.valorRefOriginal);       // COLUNA L
-        const rawValorOrigRecorrente = get(COL.valorOriginalRecorrente); // COLUNA M
-
-        // 1. Determinação da Movimentação (Prioritária para Lógica do Sistema)
-        let movement: 'Entrada' | 'Saída' = 'Entrada';
-        const tipoLower = rawType.toLowerCase();
-        
-        if (tipoLower.includes('saída') || tipoLower.includes('saida') || tipoLower.includes('pagar') || tipoLower.includes('despesa') || tipoLower.includes('fornecedor')) {
-          movement = 'Saída';
-        } else if (tipoLower.includes('entrada') || tipoLower.includes('receber') || tipoLower.includes('recebimento') || tipoLower.includes('receita')) {
-          movement = 'Entrada';
-        } else if (rawMovement) {
-          const mov = rawMovement.toLowerCase();
-          if (mov.includes('saída') || mov.includes('saida') || mov.includes('despesa')) {
-            movement = 'Saída';
-          }
-        }
-
-        // 2. Parseamento de Valores
-        let valPaid = Math.abs(parseCurrency(rawValorPago));
-        let valReceived = Math.abs(parseCurrency(rawValorRecebido));
-        const valCobranca = Math.abs(parseCurrency(rawTotalCobranca));
-        const valRefOriginal = Math.abs(parseCurrency(rawValorRefOriginal));
-        const valOrigRecorrente = Math.abs(parseCurrency(rawValorOrigRecorrente));
-
-        // 3. CORREÇÃO INTELIGENTE DE VALORES ZERADOS E PREVISÃO
-        if (movement === 'Saída') {
-           if (valPaid === 0) {
-               // Prioridade 1: Valor Ref./Valor Original (col L) - VALOR DA DESPESA PREVISTA
-               if (valRefOriginal > 0) {
-                   valPaid = valRefOriginal;
-               // Prioridade 2: Valor Original Recorrente (col M)
-               } else if (valOrigRecorrente > 0) {
-                   valPaid = valOrigRecorrente;
-               // Prioridade 3: Total Cobrança (col AD) - fallback original
-               } else if (valCobranca > 0) {
-                   valPaid = valCobranca;
-               } else if (valReceived > 0) {
-                   valPaid = valReceived;
-                   valReceived = 0; 
-               }
-           }
-        }
-        
-        if (movement === 'Entrada' && valReceived === 0) {
-            if (valPaid > 0) {
-                valReceived = valPaid; 
-                valPaid = 0;
-            } else if (valCobranca > 0) {
-                valReceived = valCobranca;
-            }
-        }
-
-        const rawDate = get(COL.dataLancamento);
-        const rawDueDate = get(COL.dataAPagar);
-        const rawPaymentDate = get(COL.dataBaixa);
-        
-        const finalDate = parseDate(rawDate);
-        let finalDueDate = parseDate(rawDueDate);
-        if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') finalDueDate = finalDate;
-        const finalPaymentDate = parseDate(rawPaymentDate);
-
-        return {
-          id: `trx-${index}`,
-          date: finalDate,
-          dueDate: finalDueDate,
-          paymentDate: finalPaymentDate !== '1970-01-01' ? finalPaymentDate : undefined,
-          bankAccount: cleanString(get(COL.contasBancarias)),
-          type: cleanString(rawType),
-          description: cleanString(rawMovement), // Armazena o valor exato da COLUNA F aqui
-          paidBy: cleanString(get(COL.pagoPor)),
-          status: normalizeStatus(get(COL.docPago)),
-          client: cleanString(get(COL.nomeEmpresa)),
-          movement: movement, 
-          valuePaid: valPaid,
-          valueReceived: valReceived,
-          honorarios: parseCurrency(get(COL.valorHonorarios)),
-          valorExtra: parseCurrency(get(COL.valorExtras)),
-          totalCobranca: parseCurrency(rawTotalCobranca),
-        } as Transaction;
-      });
-
-      return transactions.sort((a, b) => {
-        if (a.date === b.date) return 0;
-        return a.date > b.date ? -1 : 1;
-      });
-
-    } catch (error: any) {
-      console.error('[BackendService] Erro ao buscar dados:', error);
-      throw new Error(error.message || 'Falha na conexão com a planilha.');
-    }
-  },
-  
-  fetchUsers: async (): Promise<User[]> => MOCK_USERS.map(({ passwordHash, ...u }) => u as User),
-  login: async (username: string, passwordHashInput: string) => {
-    const user = MOCK_USERS.find(u => u.username === username);
-    if (!user) return { success: false, message: 'Usuário não encontrado.' };
-    if (passwordHashInput === user.passwordHash && user.active) {
-      const { passwordHash, ...safeUser } = user;
-      return { success: true, user: safeUser as User };
-    }
-    return { success: false, message: 'Senha incorreta.' };
-  },
-};
-
-// Funções Auxiliares (mantidas)
-function parseCSVComplete(csvText: string): string[][] {
-  const rows: string[][] = [];
-  let currentRow: string[] = [];
-  let currentField = '';
-  let inQuotes = false;
-  for (let i = 0; i < csvText.length; i++) {
-    const char = csvText[i];
-    const nextChar = csvText[i + 1];
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') { currentField += '"'; i++; }
-      else inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      currentRow.push(currentField.trim()); currentField = '';
-    } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
-      if (char === '\r') i++;
-      currentRow.push(currentField.trim());
-      if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
-      currentRow = []; currentField = '';
-    } else if (char === '\r' && !inQuotes) {
-      currentRow.push(currentField.trim());
-      if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
-      currentRow = []; currentField = '';
-    } else currentField += char;
-  }
-  if (currentField.length > 0 || currentRow.length > 0) {
-    currentRow.push(currentField.trim());
-    if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
-  }
-  return rows;
-}
-function cleanString(str: string) { return str ? str.replace(/^["']|["']$/g, '').replace(/[\r\n]+/g, ' ').trim() : ''; }
-function parseCurrency(val: string | undefined): number {
-  if (!val) return 0;
-  let clean = val.replace(/^["']|["']$/g, '').trim().replace(/[R$\s]/g, '');
-  if (clean.startsWith('(') && clean.endsWith(')')) clean = '-' + clean.slice(1, -1);
-  if (!clean || clean === '-') return 0;
-  const lastComma = clean.lastIndexOf(',');
-  const lastDot = clean.lastIndexOf('.');
-  if (lastComma > lastDot) clean = clean.replace(/\./g, '').replace(',', '.');
-  else if (lastDot > lastComma) clean = clean.replace(/,/g, '');
-  else if (lastComma > -1 && lastDot === -1) clean = clean.replace(',', '.');
-  clean = clean.replace(/[^0-9.-]/g, '');
-  const num = parseFloat(clean);
-  return isNaN(num) ? 0 : num;
-}
-function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agendado' {
-  if (!val) return 'Pendente';
-  const v = val.toLowerCase().trim();
-  if (v === 'sim' || v === 'pago' || v === 'ok' || v === 'liquidado') return 'Pago';
-  if (v === 'não' || v === 'nao' || v === 'pendente' || v === 'aberto') return 'Pendente';
-  if (v.includes('agenda')) return 'Agendado';
-  return 'Pendente';
-}
-function parseDate(dateStr: string | undefined): string {
-  if (!dateStr) return '1970-01-01';
-  let clean = dateStr.replace(/^["']|["']$/g, '').trim().split(' ')[0];
-  const ptBrRegex = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/;
-  const ptMatch = clean.match(ptBrRegex);
-  if (ptMatch) {
-    let year = ptMatch[3];
-    if (year.length === 2) year = '20' + year;
-    return `${year}-${ptMatch[2].padStart(2, '0')}-${ptMatch[1].padStart(2, '0')}`;
-  }
-  const isoRegex = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/;
-  if (clean.match(isoRegex)) return clean.substring(0, 10);
-  return '1970-01-01';
-}
+export default DataTable;
