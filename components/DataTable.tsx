@@ -403,7 +403,7 @@ const DataTable: React.FC<DataTableProps> = ({
             ) : (
               sortedData.map((row) => {
                 const rowType = normalizeText(row.type || '');
-                const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
+                const isRowSaida = row.movement === 'Saída';
                 const isPending = row.status === 'Pendente' || row.status === 'Agendado';
                 const diasAtraso = calcDiasAtraso(row.dueDate, row.status);
                 const saldoRestante = calcSaldoRestante(row.totalCobranca, row.valueReceived);
@@ -523,8 +523,13 @@ const DataTable: React.FC<DataTableProps> = ({
                             {isRowSaida ? 'Saída' : 'Entrada'}
                           </span>
                         </td>
-                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]">
-                          {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]" title={`${row.client || ''} ${row.description ? '- ' + row.description : ''}`}>
+                          {isRowSaida ? (row.description || row.client || '-') : (
+                            <div>
+                              <div>{row.client || row.description || '-'}</div>
+                              {row.client && row.description && <div className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">{row.description}</div>}
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap">
                           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
