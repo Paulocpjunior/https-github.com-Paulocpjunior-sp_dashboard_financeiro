@@ -64,7 +64,8 @@ const callAppsScript = async (data: any): Promise<{ success: boolean; message: s
       });
       
       console.log('[BackendService] Requisição enviada (no-cors)');
-      return { success: true, message: 'Cadastro enviado! Verifique seu e-mail.' };
+      // Retorna sucesso genérico para no-cors, pois não podemos ler a resposta
+      return { success: true, message: 'Solicitação enviada com sucesso.' };
     } catch (noCorsError) {
       return { success: false, message: 'Erro de conexão com o servidor.' };
     }
@@ -110,6 +111,28 @@ export const BackendService = {
   resetSpreadsheetId: (): void => {
     localStorage.removeItem(STORAGE_KEY_DB_SOURCE);
     localStorage.removeItem(STORAGE_KEY_DB_GID);
+  },
+
+  // =========================================================================================
+  // GESTÃO DE USUÁRIOS (ADMIN)
+  // =========================================================================================
+  
+  // Alterar Status (Bloquear/Desbloquear)
+  toggleUserStatus: async (username: string, newStatus: boolean): Promise<{ success: boolean; message: string }> => {
+     return callAppsScript({
+       action: 'admin_toggle_status',
+       username: username,
+       active: newStatus
+     });
+  },
+
+  // Alterar Senha (Admin force reset)
+  adminChangePassword: async (username: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+     return callAppsScript({
+       action: 'admin_change_password',
+       username: username,
+       newPassword: newPassword
+     });
   },
 
   // =========================================================================================

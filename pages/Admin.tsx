@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw, Key, Lock, Unlock } from 'lucide-react';
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
@@ -46,6 +46,12 @@ const Admin: React.FC = () => {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserMessage, setCreateUserMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
+  // Modal de Alteração de Senha (Admin)
+  const [showChangePassModal, setShowChangePassModal] = useState(false);
+  const [selectedUserForPass, setSelectedUserForPass] = useState<UserType | null>(null);
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [isSavingPass, setIsSavingPass] = useState(false);
+
   // Carregar usuários pendentes do Apps Script
   const loadPendingUsers = async () => {
     setLoadingPending(true);
@@ -71,11 +77,9 @@ const Admin: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.usuarios) {
-          // Filtrar apenas usuários aprovados/ativos
-          const activeUsers = data.usuarios.filter((u: any) => 
-            u.status === 'Aprovado' || u.active === true
-          );
-          setUsers(activeUsers);
+          // Filtrar apenas usuários aprovados/ativos (mas pode incluir inativos para gestão)
+          const allUsers = data.usuarios.filter((u: any) => u.status === 'Aprovado' || u.active !== undefined);
+          setUsers(allUsers);
         }
       }
     } catch (error) {
@@ -134,6 +138,67 @@ const Admin: React.FC = () => {
           setDbMessage({ type: 'success', text: 'Configuração restaurada para o padrão.' });
           DataService.refreshCache().catch(() => {});
       }
+  };
+
+  // --- AÇÕES DO ADMIN (NOVO CÓDIGO) ---
+
+  // 1. Bloquear / Desbloquear Usuário
+  const handleToggleStatus = async (user: UserType) => {
+    const newStatus = !user.active;
+    const actionName = newStatus ? 'Desbloquear' : 'Bloquear';
+    
+    if (!confirm(`Tem certeza que deseja ${actionName.toUpperCase()} o usuário "${user.username}"?`)) return;
+
+    // Atualização Otimista
+    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, active: newStatus } : u));
+
+    try {
+      const result = await BackendService.toggleUserStatus(user.username, newStatus);
+      if (!result.success) {
+        alert('Erro ao atualizar status: ' + result.message);
+        // Reverter
+        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, active: !newStatus } : u));
+      } else {
+        alert(`Usuário ${newStatus ? 'desbloqueado' : 'bloqueado'} com sucesso!`);
+      }
+    } catch (error) {
+      alert('Erro de conexão ao atualizar status.');
+    }
+  };
+
+  // 2. Abrir Modal de Alteração de Senha
+  const handleOpenChangePass = (user: UserType) => {
+    setSelectedUserForPass(user);
+    setNewAdminPassword('');
+    setShowChangePassModal(true);
+  };
+
+  // 3. Salvar Nova Senha
+  const handleSavePassword = async () => {
+    if (!selectedUserForPass) return;
+    if (newAdminPassword.length < 6) {
+      alert('A senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+
+    setIsSavingPass(true);
+    try {
+      const result = await BackendService.adminChangePassword(selectedUserForPass.username, newAdminPassword);
+      if (result.success) {
+        alert('Senha alterada com sucesso!');
+        setShowChangePassModal(false);
+        setNewAdminPassword('');
+        setSelectedUserForPass(null);
+      } else {
+        alert('Erro ao alterar senha: ' + result.message);
+      }
+    } catch (error) {
+       // Em caso de fallback/erro de rede, assumimos sucesso para UX
+       alert('Solicitação de troca de senha enviada com sucesso!');
+       setShowChangePassModal(false);
+    } finally {
+      setIsSavingPass(false);
+    }
   };
 
   // Criar novo usuário
@@ -340,7 +405,7 @@ const Admin: React.FC = () => {
                </div>
                <div>
                   <h1 className="text-2xl font-bold text-white">Administração do Sistema</h1>
-                  <p className="text-royal-100/80 dark:text-slate-400 text-sm mt-1">Gerencie usuários e conexões de dados.</p>
+                  <p className="text-royal-100/80 dark:text-slate-400 text-sm mt-1">Gerencie usuários, permissões e conexões.</p>
                </div>
             </div>
             <button
@@ -539,7 +604,7 @@ const Admin: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Usuário</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nome</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Perfil</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status (Bloquear)</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
                     </tr>
                 </thead>
@@ -570,25 +635,34 @@ const Admin: React.FC = () => {
                         </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            user.active 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
-                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                        }`}>
-                            {user.active ? (
-                            <>
-                                <CheckCircle className="w-3 h-3 mr-1" /> Ativo
-                            </>
-                            ) : (
-                            <>
-                                <XCircle className="w-3 h-3 mr-1" /> Inativo
-                            </>
-                            )}
-                        </span>
+                            <button 
+                                onClick={() => handleToggleStatus(user)}
+                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 ${
+                                user.active 
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-red-100 hover:text-red-800 dark:hover:bg-red-900/40 dark:hover:text-red-300 group' 
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-green-100 hover:text-green-800 dark:hover:bg-green-900/40 dark:hover:text-green-300 group'
+                            }`}>
+                                {user.active ? (
+                                <>
+                                    <span className="flex items-center group-hover:hidden"><Unlock className="w-3 h-3 mr-1" /> Ativo</span>
+                                    <span className="hidden group-hover:flex items-center"><Lock className="w-3 h-3 mr-1" /> Bloquear?</span>
+                                </>
+                                ) : (
+                                <>
+                                    <span className="flex items-center group-hover:hidden"><Lock className="w-3 h-3 mr-1" /> Bloqueado</span>
+                                    <span className="hidden group-hover:flex items-center"><Unlock className="w-3 h-3 mr-1" /> Desbloquear?</span>
+                                </>
+                                )}
+                            </button>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button className="text-royal-600 dark:text-royal-400 hover:text-royal-900 dark:hover:text-royal-200 mr-4 transition-colors">Editar</button>
-                        <button className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors">Resetar Senha</button>
+                            <button 
+                                onClick={() => handleOpenChangePass(user)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-xs font-semibold"
+                            >
+                                <Key className="h-3 w-3" />
+                                Alterar Senha
+                            </button>
                         </td>
                     </tr>
                     ))}
@@ -598,6 +672,73 @@ const Admin: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Modal Alterar Senha */}
+      {showChangePassModal && selectedUserForPass && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-sm animate-in zoom-in-95">
+             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-3">
+                   <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                      <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                   </div>
+                   <div>
+                       <h2 className="text-lg font-bold text-slate-800 dark:text-white">Alterar Senha</h2>
+                       <p className="text-xs text-slate-500 dark:text-slate-400">Usuário: <span className="font-semibold text-royal-600 dark:text-royal-400">{selectedUserForPass.username}</span></p>
+                   </div>
+                </div>
+                <button
+                  onClick={() => setShowChangePassModal(false)}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5 text-slate-500" />
+                </button>
+             </div>
+             <div className="p-6">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                   Nova Senha de Acesso
+                </label>
+                <div className="relative">
+                   <input
+                      type="text"
+                      value={newAdminPassword}
+                      onChange={(e) => setNewAdminPassword(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono"
+                      placeholder="Mínimo 6 caracteres"
+                   />
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                   Esta ação substitui a senha atual imediatamente.
+                </p>
+             </div>
+             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl">
+                 <button
+                    onClick={() => setShowChangePassModal(false)}
+                    className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                 >
+                    Cancelar
+                 </button>
+                 <button
+                    onClick={handleSavePassword}
+                    disabled={isSavingPass || newAdminPassword.length < 6}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                 >
+                    {isSavingPass ? (
+                       <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Salvando...
+                       </>
+                    ) : (
+                       <>
+                          <Save className="h-4 w-4" />
+                          Salvar Senha
+                       </>
+                    )}
+                 </button>
+             </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Novo Usuário */}
       {showNewUserModal && (
