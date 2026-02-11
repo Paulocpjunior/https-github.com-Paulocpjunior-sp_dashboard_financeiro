@@ -151,17 +151,33 @@ export const ReportService = {
         
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
+        const totalCobranca = safeNum(t.totalCobranca);
+
         const isEntry = t.movement === 'Entrada' || (valRec > 0 && valPaid === 0);
         
         // Valor Original = Valor da conta (previsto)
-        const valorOriginalRaw = isEntry ? valRec : valPaid;
+        let valorOriginalRaw = 0;
+        if (isEntry) {
+            // Se for entrada e estiver pendente, preferir totalCobranca se disponível
+            if ((status.toLowerCase() === 'pendente' || status.toLowerCase() === 'agendado') && totalCobranca > 0) {
+                valorOriginalRaw = totalCobranca;
+            } else {
+                valorOriginalRaw = valRec > 0 ? valRec : totalCobranca;
+            }
+        } else {
+            valorOriginalRaw = valPaid;
+        }
+        
         const valorOriginalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorOriginalRaw);
 
         // Valor Pago = Se Pendente é 0, se Pago é o valor total
         let valorPagoRaw = 0;
-        if (status.toLowerCase() === 'pago') {
-            valorPagoRaw = valorOriginalRaw;
+        if (status.toLowerCase() === 'pago' || status.toLowerCase() === 'recebido') {
+            valorPagoRaw = isEntry ? valRec : valPaid; // Se pago, usa o valor efetivamente pago/recebido
+        } else {
+            valorPagoRaw = 0; // Se pendente, valor pago é 0
         }
+        
         const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
 
         return [
@@ -178,7 +194,7 @@ export const ReportService = {
 
       autoTable(doc, {
           startY: yPos,
-          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig.', 'Valor Pago', 'Observação a Pagar']],
+          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Observação a Pagar']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 

@@ -99,32 +99,45 @@ const Reports: React.FC = () => {
     if (mode === 'payables') {
       setSelectedMovement('Saída');
       setSelectedTypes([]); 
-      setDateFilterType('dueDate'); 
+      setDateFilterType('dueDate');
+      setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
     } else if (mode === 'receivables') {
       setSelectedMovement('Entrada');
       setSelectedTypes([]); 
       setDateFilterType('dueDate'); 
+      setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
     } else {
       setSelectedMovement('');
       setSelectedTypes([]);
       setDateFilterType('date');
+      setSelectedStatus(''); // Modo geral permite ver tudo
     }
   };
 
   useEffect(() => {
     let result = allTransactions;
 
-    // 1. Date Filtering
+    // 1. Date Filtering (RIGOROSA)
     if (startDate || endDate) {
       result = result.filter(t => {
         let checkDate: string | undefined;
         
-        if (dateFilterType === 'dueDate') checkDate = t.dueDate;
-        else if (dateFilterType === 'paymentDate') checkDate = t.paymentDate;
-        else checkDate = t.date;
+        // Seleção explícita da data baseada no filtro escolhido
+        if (dateFilterType === 'dueDate') {
+            checkDate = t.dueDate;
+        } else if (dateFilterType === 'paymentDate') {
+            checkDate = t.paymentDate;
+        } else {
+            checkDate = t.date; // Lançamento
+        }
 
-        if (dateFilterType === 'paymentDate' && !checkDate) return false;
-        if (!checkDate) return false;
+        // Se filtrar por data de pagamento e o item não tiver pagamento, remove (correto para Pendentes)
+        if (dateFilterType === 'paymentDate' && (!checkDate || checkDate === '1970-01-01')) {
+             return false; 
+        }
+        
+        // Se a data for inválida ou vazia, não passa no filtro
+        if (!checkDate || checkDate === '1970-01-01') return false;
 
         let matchesStart = true;
         let matchesEnd = true;
@@ -230,7 +243,11 @@ const Reports: React.FC = () => {
         // Detalhamento Entradas (Contas a Receber)
         if (curr.movement === 'Entrada' || curr.valueReceived > 0) {
             if (isPaid) acc.settledReceivables += curr.valueReceived;
-            if (isPending) acc.pendingReceivables += curr.valueReceived;
+            if (isPending) {
+                // Se estiver pendente, preferir totalCobranca se existir, senão valueReceived
+                const val = (curr.totalCobranca && curr.totalCobranca > 0) ? curr.totalCobranca : curr.valueReceived;
+                acc.pendingReceivables += val;
+            }
         }
 
         return acc;
