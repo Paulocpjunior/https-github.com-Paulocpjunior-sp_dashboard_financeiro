@@ -805,6 +805,27 @@ const Dashboard: React.FC = () => {
                 color={kpi.balance > 0 ? 'red' : 'green'}
               />
             </>
+          ) : isContasAReceber ? (
+            <>
+              <KpiCard
+                title="Total Geral a Receber"
+                value={kpi.totalReceived}
+                icon={DollarSign}
+                color="blue"
+              />
+              <KpiCard
+                title="Valor Recebido"
+                value={kpi.totalPaid}
+                icon={CheckCircle}
+                color="green"
+              />
+              <KpiCard
+                title="Saldo a Receber"
+                value={kpi.balance}
+                icon={Clock}
+                color={kpi.balance > 0 ? 'red' : 'green'}
+              />
+            </>
           ) : (
             <>
               <KpiCard

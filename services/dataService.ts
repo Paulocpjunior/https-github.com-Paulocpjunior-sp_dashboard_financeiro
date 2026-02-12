@@ -227,11 +227,13 @@ export const DataService = {
       return matches;
     });
 
-    // 2. Detecta se é modo "Contas a Pagar"
+    // 2. Detecta se é modo "Contas a Pagar" ou "Contas a Receber"
     const normalizedType = normalizeText(filters.type || '');
     const isContasAPagar = normalizedType.includes('saida') || 
                           normalizedType.includes('pagar') ||
                           normalizedType.includes('contas a pagar');
+    const isContasAReceber = normalizedType.includes('entrada') || 
+                          normalizedType.includes('receber');
 
     // 3. Calculate KPIs based on filter type
     let kpi: KPIData;
@@ -261,6 +263,28 @@ export const DataService = {
         totalPaid: totalPago,        // Card "Total Pago" (verde)
         totalReceived: totalGeral,   // Card "Total Geral" (azul)
         balance: totalPendente,      // Card "Saldo a Pagar" (vermelho/amber) = PENDENTES
+      };
+    } else if (isContasAReceber) {
+      // ============================================================
+      // LÓGICA PARA CONTAS A RECEBER
+      // ============================================================
+      // - Total Geral a Receber = soma de TODOS os totalCobranca
+      // - Valor Recebido = soma dos valueReceived onde status = "Pago"
+      // - Saldo a Receber = Total Geral - Valor Recebido
+      // ============================================================
+      
+      const totalGeralReceber = filtered.reduce((acc, curr) => acc + (curr.totalCobranca || curr.valueReceived || 0), 0);
+      
+      const totalRecebido = filtered
+        .filter(item => item.status === 'Pago')
+        .reduce((acc, curr) => acc + (curr.valueReceived || curr.totalCobranca || 0), 0);
+      
+      const saldoReceber = totalGeralReceber - totalRecebido;
+
+      kpi = {
+        totalReceived: totalGeralReceber,  // Card "Total Geral a Receber"
+        totalPaid: totalRecebido,          // Card "Valor Recebido"
+        balance: saldoReceber,             // Card "Saldo a Receber"
       };
     } else {
       // LÓGICA PADRÃO para outros tipos (Entradas, Misto, etc.)
