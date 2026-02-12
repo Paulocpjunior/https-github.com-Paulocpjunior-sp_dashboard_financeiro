@@ -201,6 +201,7 @@ export const BackendService = {
         valorExtras: 28,
         totalCobranca: 30,
         valorRecebido: 31,
+        docPagoReceber: 35,
         submissionId: 39,
       };
 
@@ -297,7 +298,9 @@ export const BackendService = {
           type: cleanString(rawType),
           description: cleanString(rawMovement), // Armazena o valor exato da COLUNA F aqui
           paidBy: cleanString(get(COL.pagoPor)),
-          status: normalizeStatus(get(COL.docPago)),
+          status: movement === 'Entrada' 
+            ? normalizeStatus(get(COL.docPagoReceber) || get(COL.docPago))
+            : normalizeStatus(get(COL.docPago)),
           client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
           valuePaid: valPaid,
