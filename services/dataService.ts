@@ -265,11 +265,17 @@ export const DataService = {
     } else {
       // LÓGICA PADRÃO para outros tipos (Entradas, Misto, etc.)
       kpi = filtered.reduce(
-        (acc, curr) => ({
-          totalPaid: acc.totalPaid + curr.valuePaid,
-          totalReceived: acc.totalReceived + curr.valueReceived,
-          balance: acc.balance + (curr.valueReceived - curr.valuePaid),
-        }),
+        (acc, curr) => {
+          // Para Entradas Pendentes, usar totalCobranca como valor de referência
+          const entradaVal = curr.movement === 'Entrada' && curr.status === 'Pendente' && curr.valueReceived === 0
+            ? (curr.totalCobranca || 0)
+            : curr.valueReceived;
+          return {
+            totalPaid: acc.totalPaid + curr.valuePaid,
+            totalReceived: acc.totalReceived + entradaVal,
+            balance: acc.balance + (entradaVal - curr.valuePaid),
+          };
+        },
         { totalPaid: 0, totalReceived: 0, balance: 0 }
       );
     }

@@ -272,13 +272,25 @@ export const BackendService = {
            }
         }
         
+        // Determinar status de Entrada ANTES do fallback
+        let entradaStatus = '';
+        if (movement === 'Entrada') {
+            const ajVal = get(COL.docPagoReceber);
+            const rawAF = Math.abs(parseCurrency(rawValorRecebido));
+            if (ajVal && normalizeStatus(ajVal) === 'Pago') entradaStatus = 'Pago';
+            else if (rawAF > 0) entradaStatus = 'Pago';
+            else entradaStatus = 'Pendente';
+        }
+
         if (movement === 'Entrada' && valReceived === 0) {
             if (valPaid > 0) {
                 valReceived = valPaid; 
                 valPaid = 0;
+            } else if (entradaStatus === 'Pago' && valCobranca > 0) {
+                // Só copia totalCobranca se for PAGO (para mostrar valor recebido)
+                valReceived = valCobranca;
             }
-            // NÃO copiar valCobranca para valReceived
-            // Se AF está vazio, valReceived deve ficar 0 (Pendente)
+            // Se Pendente, valReceived fica 0
         }
 
         const rawDate = get(COL.dataLancamento);
@@ -299,16 +311,7 @@ export const BackendService = {
           type: cleanString(rawType),
           description: cleanString(rawMovement), // Armazena o valor exato da COLUNA F aqui
           paidBy: cleanString(get(COL.pagoPor)),
-          status: (() => {
-            if (movement !== 'Entrada') return normalizeStatus(get(COL.docPago));
-            // Entrada: AJ = SIM → Pago
-            const ajVal = get(COL.docPagoReceber);
-            if (ajVal && normalizeStatus(ajVal) === 'Pago') return 'Pago';
-            // Usar valor RAW da coluna AF (antes do fallback)
-            const rawAF = Math.abs(parseCurrency(rawValorRecebido));
-            if (rawAF > 0) return 'Pago';
-            return 'Pendente';
-          })(),
+          status: movement === 'Entrada' ? entradaStatus as 'Pago' | 'Pendente' : normalizeStatus(get(COL.docPago)),
           client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
           valuePaid: valPaid,
