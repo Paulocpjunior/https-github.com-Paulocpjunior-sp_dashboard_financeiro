@@ -64,8 +64,7 @@ const callAppsScript = async (data: any): Promise<{ success: boolean; message: s
       });
       
       console.log('[BackendService] Requisição enviada (no-cors)');
-      // Retorna sucesso genérico para no-cors, pois não podemos ler a resposta
-      return { success: true, message: 'Solicitação enviada com sucesso.' };
+      return { success: true, message: 'Cadastro enviado! Verifique seu e-mail.' };
     } catch (noCorsError) {
       return { success: false, message: 'Erro de conexão com o servidor.' };
     }
@@ -111,28 +110,6 @@ export const BackendService = {
   resetSpreadsheetId: (): void => {
     localStorage.removeItem(STORAGE_KEY_DB_SOURCE);
     localStorage.removeItem(STORAGE_KEY_DB_GID);
-  },
-
-  // =========================================================================================
-  // GESTÃO DE USUÁRIOS (ADMIN)
-  // =========================================================================================
-  
-  // Alterar Status (Bloquear/Desbloquear)
-  toggleUserStatus: async (username: string, newStatus: boolean): Promise<{ success: boolean; message: string }> => {
-     return callAppsScript({
-       action: 'admin_toggle_status',
-       username: username,
-       active: newStatus
-     });
-  },
-
-  // Alterar Senha (Admin force reset)
-  adminChangePassword: async (username: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
-     return callAppsScript({
-       action: 'admin_change_password',
-       username: username,
-       newPassword: newPassword
-     });
   },
 
   // =========================================================================================
@@ -258,7 +235,7 @@ export const BackendService = {
         
         if (tipoLower.includes('saída') || tipoLower.includes('saida') || tipoLower.includes('pagar') || tipoLower.includes('despesa') || tipoLower.includes('fornecedor')) {
           movement = 'Saída';
-        } else if (tipoLower.includes('entrada') || tipoLower.includes('receber') || tipoLower.includes('receita')) {
+        } else if (tipoLower.includes('entrada') || tipoLower.includes('receber') || tipoLower.includes('recebimento') || tipoLower.includes('receita')) {
           movement = 'Entrada';
         } else if (rawMovement) {
           const mov = rawMovement.toLowerCase();
@@ -403,7 +380,7 @@ function parseCurrency(val: string | undefined): number {
 function normalizeStatus(val: string | undefined): 'Pago' | 'Pendente' | 'Agendado' {
   if (!val) return 'Pendente';
   const v = val.toLowerCase().trim();
-  if (v === 'sim' || v === 'pago' || v === 'ok' || v === 'liquidado') return 'Pago';
+  if (v === 'sim' || v === 'pago' || v === 'ok' || v === 'liquidado' || v === 'recebido') return 'Pago';
   if (v === 'não' || v === 'nao' || v === 'pendente' || v === 'aberto') return 'Pendente';
   if (v.includes('agenda')) return 'Agendado';
   return 'Pendente';
