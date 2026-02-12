@@ -299,8 +299,7 @@ export const BackendService = {
           description: cleanString(rawMovement), // Armazena o valor exato da COLUNA F aqui
           paidBy: cleanString(get(COL.pagoPor)),
           status: movement === 'Entrada' 
-            ? ((valReceived > 0 && valCobranca > 0 && valReceived >= valCobranca) ? 'Pago' 
-              : (normalizeStatus(get(COL.docPagoReceber)) === 'Pago' ? 'Pago' : 'Pendente'))
+            ? normalizeStatus(get(COL.docPagoReceber))
             : normalizeStatus(get(COL.docPago)),
           client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
