@@ -202,6 +202,7 @@ export const BackendService = {
         totalCobranca: 30,
         valorRecebido: 31,
         docPagoReceber: 35,
+        saldoMes: 32,
         submissionId: 39,
       };
 
@@ -221,6 +222,11 @@ export const BackendService = {
 
       const transactions = dataRows.map((cols, index) => {
         const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
+
+        // Debug: log column count for first data row
+        if (index === 0) {
+          console.log(`[BackendService] Row cols: ${cols.length}, AJ(35)="${get(35)}", AG(32)="${get(32)}", AF(31)="${get(31)}", J(9)="${get(9)}"`);
+        }
 
         const rawType = get(COL.tipoLancamento);
         const rawMovement = get(COL.movimentacao); // COLUNA F (Texto Original)
@@ -298,9 +304,16 @@ export const BackendService = {
           type: cleanString(rawType),
           description: cleanString(rawMovement), // Armazena o valor exato da COLUNA F aqui
           paidBy: cleanString(get(COL.pagoPor)),
-          status: movement === 'Entrada' 
-            ? normalizeStatus(get(COL.docPagoReceber))
-            : normalizeStatus(get(COL.docPago)),
+          status: (() => {
+            if (movement !== 'Entrada') return normalizeStatus(get(COL.docPago));
+            // Entrada: coluna AJ = SIM → Pago
+            const ajStatus = normalizeStatus(get(COL.docPagoReceber));
+            if (ajStatus === 'Pago') return 'Pago';
+            // Se tem valor recebido e saldo = 0 → Pago
+            const saldoRaw = parseCurrency(get(COL.saldoMes));
+            if (valReceived > 0 && saldoRaw <= 0) return 'Pago';
+            return 'Pendente';
+          })(),
           client: cleanString(get(COL.nomeEmpresa)),
           movement: movement, 
           valuePaid: valPaid,
