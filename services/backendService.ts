@@ -306,12 +306,12 @@ export const BackendService = {
           paidBy: cleanString(get(COL.pagoPor)),
           status: (() => {
             if (movement !== 'Entrada') return normalizeStatus(get(COL.docPago));
-            // Entrada: coluna AJ = SIM → Pago
-            const ajStatus = normalizeStatus(get(COL.docPagoReceber));
-            if (ajStatus === 'Pago') return 'Pago';
-            // Se tem valor recebido e saldo = 0 → Pago
-            const saldoRaw = parseCurrency(get(COL.saldoMes));
-            if (valReceived > 0 && saldoRaw <= 0) return 'Pago';
+            // Entrada: AJ = SIM → Pago
+            const ajVal = get(COL.docPagoReceber);
+            if (ajVal && normalizeStatus(ajVal) === 'Pago') return 'Pago';
+            // Usar valor RAW da coluna AF (antes do fallback)
+            const rawAF = Math.abs(parseCurrency(rawValorRecebido));
+            if (rawAF > 0) return 'Pago';
             return 'Pendente';
           })(),
           client: cleanString(get(COL.nomeEmpresa)),
