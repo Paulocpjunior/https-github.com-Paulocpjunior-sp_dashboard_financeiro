@@ -223,9 +223,10 @@ export const BackendService = {
       const transactions = dataRows.map((cols, index) => {
         const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
 
-        // Debug: log column count for first data row
-        if (index === 0) {
-          console.log(`[BackendService] Row cols: ${cols.length}, AJ(35)="${get(35)}", AG(32)="${get(32)}", AF(31)="${get(31)}", J(9)="${get(9)}"`);
+        // Debug: log Feb 2026 entries
+        const debugName = get(COL.nomeEmpresa);
+        if (debugName && (debugName.includes('SEA LINE') || debugName.includes('INPLAF') || debugName.includes('WALDESA MOTO'))) {
+          console.warn(`🔍 ${debugName} | cols:${cols.length} | AF(31)="${get(31)}" | AE(30)="${get(30)}" | AJ(35)="${get(35)}" | AG(32)="${get(32)}" | J(9)="${get(9)}"`);
         }
 
         const rawType = get(COL.tipoLancamento);
