@@ -223,12 +223,6 @@ export const BackendService = {
       const transactions = dataRows.map((cols, index) => {
         const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
 
-        // Debug: log Feb 2026 entries
-        const debugName = get(COL.nomeEmpresa);
-        if (debugName && (debugName.includes('SEA LINE') || debugName.includes('INPLAF') || debugName.includes('WALDESA MOTO'))) {
-          console.warn(`🔍 ${debugName} | cols:${cols.length} | AF(31)="${get(31)}" | AE(30)="${get(30)}" | AJ(35)="${get(35)}" | AG(32)="${get(32)}" | J(9)="${get(9)}"`);
-        }
-
         const rawType = get(COL.tipoLancamento);
         const rawMovement = get(COL.movimentacao); // COLUNA F (Texto Original)
         const rawValorPago = get(COL.valorPago);
@@ -282,9 +276,9 @@ export const BackendService = {
             if (valPaid > 0) {
                 valReceived = valPaid; 
                 valPaid = 0;
-            } else if (valCobranca > 0) {
-                valReceived = valCobranca;
             }
+            // NÃO copiar valCobranca para valReceived
+            // Se AF está vazio, valReceived deve ficar 0 (Pendente)
         }
 
         const rawDate = get(COL.dataLancamento);
