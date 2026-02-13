@@ -238,13 +238,13 @@ export const BackendService = {
         valorRefOriginal: getColIdx(['valor ref', 'valor original'], 11),
         valorOriginalRecorrente: getColIdx(['recorrente'], 12),
         valorPago: getColIdx(['valor pago'], 13),
-        nomeEmpresa: getColIdx(['nome empresa', 'credor', 'identificação'], 26),
+        // CORREÇÃO: Removido 'identificação' para evitar pegar o tipo de pessoa em vez do nome
+        nomeEmpresa: getColIdx(['nome empresa', 'credor', 'cliente', 'razao social'], 26), 
         valorHonorarios: getColIdx(['honorários', 'honorarios'], 27),
         valorExtras: getColIdx(['extras'], 28),
         totalCobranca: getColIdx(['total cobrança', 'total cobranca'], 30),
         valorRecebido: getColIdx(['valor recebido'], 31),
         saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
-        // Adicionando termos de busca mais robustos para a coluna AJ
         docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber', 'pago - receber', 'status receber', 'recebido?'], 35), 
         submissionId: 39,
       };
@@ -252,7 +252,8 @@ export const BackendService = {
       console.log('[BackendService] Mapeamento de Colunas Detectado:', {
           docPagoReceber: COL.docPagoReceber,
           totalCobranca: COL.totalCobranca,
-          valorRecebido: COL.valorRecebido
+          valorRecebido: COL.valorRecebido,
+          cliente: COL.nomeEmpresa
       });
 
       const dataRows = allRows.slice(headerRowIndex + 1);
