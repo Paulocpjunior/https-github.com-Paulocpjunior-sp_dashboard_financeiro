@@ -244,9 +244,16 @@ export const BackendService = {
         totalCobranca: getColIdx(['total cobrança', 'total cobranca'], 30),
         valorRecebido: getColIdx(['valor recebido'], 31),
         saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
-        docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber'], 35), // Coluna AJ
+        // Adicionando termos de busca mais robustos para a coluna AJ
+        docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber', 'pago - receber', 'status receber', 'recebido?'], 35), 
         submissionId: 39,
       };
+
+      console.log('[BackendService] Mapeamento de Colunas Detectado:', {
+          docPagoReceber: COL.docPagoReceber,
+          totalCobranca: COL.totalCobranca,
+          valorRecebido: COL.valorRecebido
+      });
 
       const dataRows = allRows.slice(headerRowIndex + 1);
 
@@ -310,7 +317,8 @@ export const BackendService = {
             const normalizedAj = ajVal ? ajVal.toLowerCase().trim() : '';
 
             // Se Doc.Pago - Receber (AJ) for SIM, força status PAGO
-            if (normalizedAj === 'sim' || normalizeStatus(ajVal) === 'Pago') {
+            // Verifica variações como "sim", "pago", "ok"
+            if (normalizedAj === 'sim' || normalizedAj === 's' || normalizeStatus(ajVal) === 'Pago') {
                 entradaStatus = 'Pago';
             } 
             // Se houver valor recebido (AF) preenchido, considera PAGO
@@ -327,7 +335,7 @@ export const BackendService = {
                 valReceived = valPaid; 
                 valPaid = 0;
             } else if (entradaStatus === 'Pago' && valCobranca > 0) {
-                // Só copia totalCobranca se for PAGO (para mostrar valor recebido)
+                // Só copia totalCobranca se for PAGO (para mostrar valor recebido no Dashboard)
                 valReceived = valCobranca;
             }
             // Se Pendente, valReceived fica 0
