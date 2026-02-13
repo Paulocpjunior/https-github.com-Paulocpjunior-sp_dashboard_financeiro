@@ -238,8 +238,9 @@ export const BackendService = {
         valorRefOriginal: getColIdx(['valor ref', 'valor original'], 11),
         valorOriginalRecorrente: getColIdx(['recorrente'], 12),
         valorPago: getColIdx(['valor pago'], 13),
-        // CORREÇÃO: Removido 'identificação' para evitar pegar o tipo de pessoa em vez do nome
-        nomeEmpresa: getColIdx(['nome empresa', 'credor', 'cliente', 'razao social'], 26), 
+        // CORREÇÃO: Usar apenas termos que indicam NOME e não CÓDIGO. 
+        // Remover 'cliente' genérico para evitar pegar 'N.Cliente' (que é o ID)
+        nomeEmpresa: getColIdx(['nome empresa', 'razao social', 'razão social', 'credor', 'sacado'], 26), 
         valorHonorarios: getColIdx(['honorários', 'honorarios'], 27),
         valorExtras: getColIdx(['extras'], 28),
         totalCobranca: getColIdx(['total cobrança', 'total cobranca'], 30),

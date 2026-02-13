@@ -5,7 +5,7 @@ import DataTable from '../components/DataTable';
 import AIAssistant from '../components/AIAssistant';
 import { DataService } from '../services/dataService';
 import { FilterState, KPIData, Transaction } from '../types';
-import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer } from 'lucide-react';
+import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 const INITIAL_FILTERS: FilterState = {
@@ -249,9 +249,51 @@ const Dashboard: React.FC = () => {
   };
 
   const clearFilters = () => {
-    setFilters(INITIAL_FILTERS);
-    setActivePeriod('');
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    setFilters({
+      ...INITIAL_FILTERS,
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0]
+    });
+    setActivePeriod('thisMonth');
     setPage(1);
+  };
+
+  const applyViewMode = (mode: 'general' | 'payables' | 'receivables') => {
+      const now = new Date();
+      // Padrão: Mês atual
+      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+      
+      setActivePeriod('thisMonth');
+
+      if (mode === 'payables') {
+          setFilters(prev => ({
+              ...INITIAL_FILTERS,
+              movement: 'Saída',
+              status: 'Pendente',
+              dueDateStart: start,
+              dueDateEnd: end
+          }));
+      } else if (mode === 'receivables') {
+          setFilters(prev => ({
+              ...INITIAL_FILTERS,
+              movement: 'Entrada',
+              status: 'Pendente',
+              dueDateStart: start,
+              dueDateEnd: end
+          }));
+      } else {
+          setFilters(prev => ({
+              ...INITIAL_FILTERS,
+              startDate: start,
+              endDate: end
+          }));
+      }
+      setPage(1);
   };
 
   const handleAIUpdate = (newFilters: Partial<FilterState>) => {
@@ -516,6 +558,40 @@ const Dashboard: React.FC = () => {
               <span className="hidden sm:inline">WhatsApp</span>
             </button>
           </div>
+        </div>
+
+        {/* Quick View Modes (Similar to Reports) */}
+        <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
+            <button
+                onClick={() => applyViewMode('general')}
+                className={`flex-1 py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
+                ${!isContasAPagar && !isContasAReceber
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white ring-2 ring-slate-400/20' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+            >
+                <Layers className="h-4 w-4" />
+                Visão Geral
+            </button>
+            <button
+                onClick={() => applyViewMode('payables')}
+                className={`flex-1 py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
+                ${isContasAPagar 
+                    ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 ring-2 ring-red-500/20' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-red-50/50 dark:hover:bg-red-900/10'}`}
+            >
+                <ArrowDownCircle className="h-4 w-4" />
+                A Pagar (Aberto)
+            </button>
+            <button
+                onClick={() => applyViewMode('receivables')}
+                className={`flex-1 py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
+                ${isContasAReceber 
+                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20' 
+                    : 'text-slate-500 dark:text-slate-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'}`}
+            >
+                <ArrowUpCircle className="h-4 w-4" />
+                A Receber (Aberto)
+            </button>
         </div>
 
         {/* Filters Panel - REDESENHADO */}

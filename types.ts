@@ -30,6 +30,7 @@ export interface Transaction {
   honorarios?: number;
   valorExtra?: number;
   totalCobranca?: number;
+  paymentMethod?: string;
 }
 
 export interface FilterState {
