@@ -113,6 +113,28 @@ export const BackendService = {
   },
 
   // =========================================================================================
+  // GESTÃO DE USUÁRIOS (ADMIN)
+  // =========================================================================================
+  
+  // Alterar Status (Bloquear/Desbloquear)
+  toggleUserStatus: async (username: string, newStatus: boolean): Promise<{ success: boolean; message: string }> => {
+     return callAppsScript({
+       action: 'admin_toggle_status',
+       username: username,
+       active: newStatus
+     });
+  },
+
+  // Alterar Senha (Admin force reset)
+  adminChangePassword: async (username: string, newPassword: string): Promise<{ success: boolean; message: string }> => {
+     return callAppsScript({
+       action: 'admin_change_password',
+       username: username,
+       newPassword: newPassword
+     });
+  },
+
+  // =========================================================================================
   // REGISTRO DE NOVO USUÁRIO
   // =========================================================================================
   registerUser: async (data: RegisterUserData): Promise<{ success: boolean; message: string }> => {
@@ -184,39 +206,47 @@ export const BackendService = {
 
       console.log(`[BackendService] Total de registros parseados: ${allRows.length}`);
 
-      const COL = {
-        dataLancamento: 1,
-        contasBancarias: 2,
-        tipoLancamento: 3,
-        pagoPor: 4,
-        movimentacao: 5, // COLUNA F
-        dataAPagar: 7,
-        docPago: 9,
-        dataBaixa: 10,
-        valorRefOriginal: 11,      // COLUNA L - "Valor Ref./Valor Original" (despesa prevista)
-        valorOriginalRecorrente: 12, // COLUNA M - Valor Original Recorrente
-        valorPago: 13,
-        nomeEmpresa: 26,
-        valorHonorarios: 27,
-        valorExtras: 28,
-        totalCobranca: 30,
-        valorRecebido: 31,
-        docPagoReceber: 35,
-        saldoMes: 32,
-        submissionId: 39,
-      };
-
+      // Encontrar a linha de cabeçalho
       let headerRowIndex = 0;
-      for (let i = 0; i < Math.min(allRows.length, 5); i++) {
+      for (let i = 0; i < Math.min(allRows.length, 10); i++) {
         const row = allRows[i];
         if (row.length > 3) {
           const combined = row.slice(0, 5).join(' ').toLowerCase();
-          if (combined.includes('tipo de lan') || combined.includes('contas banc')) {
+          if (combined.includes('tipo de lan') || combined.includes('contas banc') || combined.includes('data')) {
             headerRowIndex = i;
             break;
           }
         }
       }
+
+      // Mapeamento Dinâmico de Colunas
+      const headerRow = allRows[headerRowIndex].map(c => c.toLowerCase().trim());
+      const getColIdx = (hints: string[], fallback: number) => {
+          const idx = headerRow.findIndex(h => hints.some(hint => h.includes(hint)));
+          return idx !== -1 ? idx : fallback;
+      };
+
+      const COL = {
+        dataLancamento: getColIdx(['data lança', 'data lanca'], 1),
+        contasBancarias: getColIdx(['contas banc', 'conta banc'], 2),
+        tipoLancamento: getColIdx(['tipo de lan', 'tipo lan'], 3),
+        pagoPor: getColIdx(['pago por'], 4),
+        movimentacao: getColIdx(['movimentação', 'movimentacao'], 5), // Coluna F
+        dataAPagar: getColIdx(['data vencimento', 'data a pagar', 'data.vencimento'], 7),
+        docPago: getColIdx(['doc.pago', 'documento pago'], 9), // Saídas
+        dataBaixa: getColIdx(['data baixa', 'data pagamento'], 10),
+        valorRefOriginal: getColIdx(['valor ref', 'valor original'], 11),
+        valorOriginalRecorrente: getColIdx(['recorrente'], 12),
+        valorPago: getColIdx(['valor pago'], 13),
+        nomeEmpresa: getColIdx(['nome empresa', 'credor', 'identificação'], 26),
+        valorHonorarios: getColIdx(['honorários', 'honorarios'], 27),
+        valorExtras: getColIdx(['extras'], 28),
+        totalCobranca: getColIdx(['total cobrança', 'total cobranca'], 30),
+        valorRecebido: getColIdx(['valor recebido'], 31),
+        saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
+        docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber'], 35), // Coluna AJ
+        submissionId: 39,
+      };
 
       const dataRows = allRows.slice(headerRowIndex + 1);
 
@@ -277,9 +307,19 @@ export const BackendService = {
         if (movement === 'Entrada') {
             const ajVal = get(COL.docPagoReceber);
             const rawAF = Math.abs(parseCurrency(rawValorRecebido));
-            if (ajVal && normalizeStatus(ajVal) === 'Pago') entradaStatus = 'Pago';
-            else if (rawAF > 0) entradaStatus = 'Pago';
-            else entradaStatus = 'Pendente';
+            const normalizedAj = ajVal ? ajVal.toLowerCase().trim() : '';
+
+            // Se Doc.Pago - Receber (AJ) for SIM, força status PAGO
+            if (normalizedAj === 'sim' || normalizeStatus(ajVal) === 'Pago') {
+                entradaStatus = 'Pago';
+            } 
+            // Se houver valor recebido (AF) preenchido, considera PAGO
+            else if (rawAF > 0) {
+                entradaStatus = 'Pago';
+            } 
+            else {
+                entradaStatus = 'Pendente';
+            }
         }
 
         if (movement === 'Entrada' && valReceived === 0) {
