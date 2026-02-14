@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -37,6 +37,11 @@ const DataTable: React.FC<DataTableProps> = ({
 }) => {
   const [sortField, setSortField] = useState<SortField>('none');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [selectedExportClients, setSelectedExportClients] = useState<string[]>([]);
+  const [exportSearchTerm, setExportSearchTerm] = useState('');
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -80,19 +85,58 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const isMixedMode = !isContasAPagar && !isContasAReceber;
 
-  // Exportar CSV para Boleto Cloud
-  const exportBoletosCSV = () => {
-    const dataToExport = allData.length > 0 ? allData : data;
-    
-    // Filtrar apenas pendentes
-    const pendentes = dataToExport.filter(row => 
-      row.status === 'Pendente' || row.status === 'Agendado'
-    );
+  // --- LÓGICA DE EXPORTAÇÃO COM SELEÇÃO DE CLIENTES ---
 
-    if (pendentes.length === 0) {
-      alert('Nenhum boleto pendente para exportar.');
+  // 1. Identificar todos os dados pendentes disponíveis (não apenas da página atual)
+  const pendingReceivablesData = useMemo(() => {
+    const source = allData.length > 0 ? allData : data;
+    return source.filter(row => 
+      (row.status === 'Pendente' || row.status === 'Agendado')
+    );
+  }, [allData, data]);
+
+  // 2. Extrair clientes únicos dos pendentes
+  const availableExportClients = useMemo(() => {
+    const clients = new Set(pendingReceivablesData.map(t => t.client).filter(Boolean));
+    return Array.from(clients).sort();
+  }, [pendingReceivablesData]);
+
+  // 3. Inicializar seleção quando o modal abre ou dados mudam
+  useEffect(() => {
+    if (showExportModal && selectedExportClients.length === 0 && availableExportClients.length > 0) {
+        setSelectedExportClients(availableExportClients); // Selecionar todos por padrão
+    }
+  }, [showExportModal, availableExportClients]);
+
+  const toggleExportClient = (client: string) => {
+    setSelectedExportClients(prev => 
+      prev.includes(client) ? prev.filter(c => c !== client) : [...prev, client]
+    );
+  };
+
+  const toggleAllExportClients = () => {
+    if (selectedExportClients.length === availableExportClients.length) {
+      setSelectedExportClients([]);
+    } else {
+      setSelectedExportClients(availableExportClients);
+    }
+  };
+
+  const filteredExportClients = availableExportClients.filter(client => 
+    client.toLowerCase().includes(exportSearchTerm.toLowerCase())
+  );
+
+  // 4. Função Final de Exportação
+  const handleConfirmExport = () => {
+    if (selectedExportClients.length === 0) {
+      alert('Selecione pelo menos um cliente para exportar.');
       return;
     }
+
+    // Filtrar dados baseados nos clientes selecionados
+    const dataToExport = pendingReceivablesData.filter(row => 
+      selectedExportClients.includes(row.client)
+    );
 
     // Formato Boleto Cloud: separador ;
     const headers = [
@@ -121,7 +165,7 @@ const DataTable: React.FC<DataTableProps> = ({
       return `Honorarios ${mes}/${ano}`;
     };
 
-    const rows = pendentes.map(row => [
+    const rows = dataToExport.map(row => [
       `"${(row.client || '').replace(/"/g, '""')}"`,
       formatValueCSV(row.totalCobranca || row.honorarios),
       formatDateCSV(row.dueDate),
@@ -141,13 +185,14 @@ const DataTable: React.FC<DataTableProps> = ({
     const url = URL.createObjectURL(blob);
     const hoje = new Date().toISOString().split('T')[0];
     link.setAttribute('href', url);
-    link.setAttribute('download', `boletos_pendentes_${hoje}.csv`);
+    link.setAttribute('download', `boletos_selecionados_${hoje}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    alert(`✅ Exportados ${pendentes.length} boletos pendentes!\n\nImporte o arquivo no Boleto Cloud para gerar os boletos.`);
+    setShowExportModal(false);
+    alert(`✅ Arquivo gerado com ${dataToExport.length} boletos para ${selectedExportClients.length} clientes.`);
   };
 
   const sortedData = useMemo(() => {
@@ -267,339 +312,461 @@ const DataTable: React.FC<DataTableProps> = ({
   }, [data, allData]);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors">
-      
-      {/* Header com botão de exportar - Apenas Contas a Receber */}
-      {isContasAReceber && (
-        <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            📋 Contas a Receber
-            {pendentesCount > 0 && (
-              <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold">
-                {pendentesCount} pendente{pendentesCount > 1 ? 's' : ''}
-              </span>
-            )}
-          </span>
-          <button
-            onClick={exportBoletosCSV}
-            disabled={pendentesCount === 0}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Exportar .CSV Boletos
-          </button>
+    <>
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors relative">
+        
+        {/* Header com botão de exportar - Apenas Contas a Receber */}
+        {isContasAReceber && (
+          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              📋 Contas a Receber
+              {pendentesCount > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold">
+                  {pendentesCount} pendente{pendentesCount > 1 ? 's' : ''}
+                </span>
+              )}
+            </span>
+            <button
+              onClick={() => {
+                  if (pendentesCount === 0) {
+                      alert('Nenhum boleto pendente para exportar.');
+                      return;
+                  }
+                  setShowExportModal(true);
+                  setExportSearchTerm('');
+              }}
+              disabled={pendentesCount === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar .CSV Boletos
+            </button>
+          </div>
+        )}
+
+        <div className="overflow-x-auto min-h-[400px]">
+          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800">
+              <tr>
+                {isContasAPagar && (
+                  <>
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Lanç.</th>
+                    <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                    <SortableHeader field="receiptDate" label="Pgto." className="text-left" />
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
+                          <span>Movimentação</span>
+                          <SortIcon field="client" />
+                        </div>
+                        {onClientFilterChange && (
+                          <div className="relative">
+                            <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                            <input 
+                              type="text" 
+                              list="table-client-pagar"
+                              value={clientFilterValue || ''}
+                              onChange={(e) => onClientFilterChange(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="Filtrar..."
+                              className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
+                            />
+                            <datalist id="table-client-pagar">
+                              {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
+                            </datalist>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                    <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
+                    <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
+                  </>
+                )}
+
+                {isContasAReceber && (
+                  <>
+                    <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                    <SortableHeader field="receiptDate" label="Receb." className="text-left" />
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Atraso</th>
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[140px]">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
+                          <span>Cliente</span>
+                          <SortIcon field="client" />
+                        </div>
+                        {onClientFilterChange && (
+                          <div className="relative">
+                            <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                            <input 
+                              type="text" 
+                              list="table-client-receber"
+                              value={clientFilterValue || ''}
+                              onChange={(e) => onClientFilterChange(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="Filtrar..."
+                              className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
+                            />
+                            <datalist id="table-client-receber">
+                              {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
+                            </datalist>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                    <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Honor.</th>
+                    <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Extras</th>
+                    <th className="px-2 py-2 text-right font-medium text-blue-600 dark:text-blue-400 uppercase">Total</th>
+                    <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Recebido</th>
+                    <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">Saldo</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Método</th>
+                  </>
+                )}
+
+                {isMixedMode && (
+                  <>
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Data</th>
+                    <SortableHeader field="dueDate" label="Venc." className="text-left" />
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
+                          <span>Cliente / Mov.</span>
+                          <SortIcon field="client" />
+                        </div>
+                        {onClientFilterChange && (
+                          <div className="relative">
+                            <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                            <input 
+                              type="text" 
+                              list="table-client-mixed"
+                              value={clientFilterValue || ''}
+                              onChange={(e) => onClientFilterChange(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              placeholder="Filtrar..."
+                              className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
+                            />
+                            <datalist id="table-client-mixed">
+                              {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
+                            </datalist>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
+                    <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+
+            <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={getColSpan()} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+                      <span className="text-sm text-slate-500">Carregando...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : sortedData.length === 0 ? (
+                <tr>
+                  <td colSpan={getColSpan()} className="px-6 py-10 text-center text-slate-500">
+                    Nenhum registro encontrado.
+                  </td>
+                </tr>
+              ) : (
+                sortedData.map((row) => {
+                  const rowType = normalizeText(row.type || '');
+                  const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
+                  const isPending = row.status === 'Pendente' || row.status === 'Agendado';
+                  const diasAtraso = calcDiasAtraso(row.dueDate, row.status);
+                  const saldoRestante = calcSaldoRestante(row.totalCobranca, row.valueReceived);
+                  const isVencido = diasAtraso > 0;
+                  // Fix: Cast 'Recebido' since it's not in the Transaction.status type union but might come from data
+                  const isPago = row.status === 'Pago' || (row.status as string) === 'Recebido';
+
+                  return (
+                    <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
+                      
+                      {isContasAPagar && (
+                        <>
+                          <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
+                          <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
+                          <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.paymentDate || '')}</td>
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">Saída</span>
+                          </td>
+                          <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]" title={row.description || row.client || '-'}>
+                            {row.description || row.client || '-'}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
+                              ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                                'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                              {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
+                            {isPending ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
+                            {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                          </td>
+                        </>
+                      )}
+
+                      {isContasAReceber && (
+                        <>
+                          <td className={`px-2 py-2 whitespace-nowrap font-medium ${isVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {formatDateFull(row.dueDate)}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                            {isPago ? (
+                              <span className="text-green-600 dark:text-green-400">{formatDateFull(row.paymentDate || '')}</span>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-center">
+                            {diasAtraso > 0 ? (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                <AlertCircle className="w-2.5 h-2.5" />
+                                {diasAtraso}d
+                              </span>
+                            ) : isPago ? (
+                              <span className="text-green-500 text-[10px]">✓</span>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">-</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px]" title={row.client || '-'}>
+                            {row.client || '-'}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-center">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
+                              ${isPago ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                                isVencido ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                                'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                              {isVencido && !isPago && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
+                            {formatCurrency(row.honorarios)}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
+                            {formatCurrency(row.valorExtra)}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right text-blue-600 dark:text-blue-400 font-semibold">
+                            {formatCurrency(row.totalCobranca)}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
+                            {formatCurrency(row.valueReceived)}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right">
+                            {saldoRestante > 0 ? (
+                              <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded text-[11px]">
+                                {formatCurrency(saldoRestante)}
+                              </span>
+                            ) : (
+                              <span className="text-green-600 dark:text-green-400 text-[10px] font-medium">Quitado</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-center">
+                            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">
+                              {row.paymentMethod || 'Pix'}
+                            </span>
+                          </td>
+                        </>
+                      )}
+
+                      {isMixedMode && (
+                        <>
+                          <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
+                          <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                              isRowSaida ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                            }`}>
+                              {isRowSaida ? 'Saída' : 'Entrada'}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]">
+                            {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
+                              ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
+                                'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+                              {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-right">
+                            {isRowSaida ? (
+                              <span className="text-red-600 dark:text-red-400 flex items-center justify-end gap-0.5 font-medium">
+                                <ArrowDownCircle className="h-3 w-3" />
+                                {formatCurrency(row.valuePaid)}
+                              </span>
+                            ) : (
+                              <span className="text-green-600 dark:text-green-400 flex items-center justify-end gap-0.5 font-medium">
+                                <ArrowUpCircle className="h-3 w-3" />
+                                {formatCurrency(row.totalCobranca || row.valueReceived)}
+                              </span>
+                            )}
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="bg-white dark:bg-slate-900 px-3 py-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
+            Pág. <span className="font-medium">{page}</span> de <span className="font-medium">{totalPages}</span>
+          </p>
+          <div className="flex gap-1">
+            <button
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1 || isLoading}
+              className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= totalPages || isLoading}
+              className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* MODAL DE SELEÇÃO DE CLIENTES PARA EXPORTAÇÃO */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
+             
+             {/* Header */}
+             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-t-xl">
+                 <div className="flex items-center gap-3">
+                     <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                         <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                     </div>
+                     <div>
+                         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Exportação de Boletos</h2>
+                         <p className="text-xs text-slate-500 dark:text-slate-400">Selecione os clientes para gerar o arquivo CSV</p>
+                     </div>
+                 </div>
+                 <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                     <X className="h-5 w-5" />
+                 </button>
+             </div>
+
+             {/* Search and Toolbar */}
+             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex gap-4 items-center flex-wrap">
+                 <div className="relative flex-1">
+                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                     <input 
+                        type="text" 
+                        placeholder="Buscar cliente..." 
+                        value={exportSearchTerm}
+                        onChange={(e) => setExportSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                     />
+                 </div>
+                 <div className="flex gap-2">
+                     <button 
+                        onClick={toggleAllExportClients}
+                        className="px-3 py-2 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors flex items-center gap-2"
+                     >
+                         {selectedExportClients.length === availableExportClients.length ? (
+                             <><CheckSquare className="h-3.5 w-3.5" /> Desmarcar Todos</>
+                         ) : (
+                             <><Square className="h-3.5 w-3.5" /> Marcar Todos</>
+                         )}
+                     </button>
+                 </div>
+             </div>
+
+             {/* Clients List */}
+             <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/50 min-h-[300px]">
+                 {filteredExportClients.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                         <Filter className="h-8 w-8 mb-2 opacity-50" />
+                         <p className="text-sm">Nenhum cliente encontrado.</p>
+                     </div>
+                 ) : (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                         {filteredExportClients.map(client => {
+                             const isSelected = selectedExportClients.includes(client);
+                             return (
+                                 <div 
+                                    key={client} 
+                                    onClick={() => toggleExportClient(client)}
+                                    className={`
+                                        cursor-pointer flex items-center p-3 rounded-lg border transition-all select-none
+                                        ${isSelected 
+                                            ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' 
+                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700'}
+                                    `}
+                                 >
+                                     <div className={`
+                                        flex items-center justify-center h-5 w-5 rounded border mr-3 shrink-0 transition-colors
+                                        ${isSelected 
+                                            ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                            : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-500 text-transparent'}
+                                     `}>
+                                         <CheckSquare className="h-3.5 w-3.5" />
+                                     </div>
+                                     <span className={`text-sm truncate ${isSelected ? 'font-medium text-emerald-900 dark:text-emerald-100' : 'text-slate-600 dark:text-slate-300'}`}>
+                                         {client}
+                                     </span>
+                                 </div>
+                             );
+                         })}
+                     </div>
+                 )}
+             </div>
+
+             {/* Footer */}
+             <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-b-xl flex items-center justify-between">
+                 <div className="text-xs text-slate-500 dark:text-slate-400">
+                     <span className="font-semibold text-slate-900 dark:text-white">{selectedExportClients.length}</span> cliente(s) selecionado(s)
+                 </div>
+                 <div className="flex gap-3">
+                     <button 
+                        onClick={() => setShowExportModal(false)}
+                        className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                     >
+                         Cancelar
+                     </button>
+                     <button 
+                        onClick={handleConfirmExport}
+                        disabled={selectedExportClients.length === 0}
+                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                     >
+                         <Download className="h-4 w-4" />
+                         Gerar Arquivo
+                     </button>
+                 </div>
+             </div>
+          </div>
         </div>
       )}
-
-      <div className="overflow-x-auto min-h-[400px]">
-        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800">
-            <tr>
-              {isContasAPagar && (
-                <>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Lanç.</th>
-                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
-                  <SortableHeader field="receiptDate" label="Pgto." className="text-left" />
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
-                        <span>Movimentação</span>
-                        <SortIcon field="client" />
-                      </div>
-                      {onClientFilterChange && (
-                        <div className="relative">
-                          <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                          <input 
-                            type="text" 
-                            list="table-client-pagar"
-                            value={clientFilterValue || ''}
-                            onChange={(e) => onClientFilterChange(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="Filtrar..."
-                            className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
-                          />
-                          <datalist id="table-client-pagar">
-                            {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
-                          </datalist>
-                        </div>
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
-                  <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
-                  <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
-                </>
-              )}
-
-              {isContasAReceber && (
-                <>
-                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
-                  <SortableHeader field="receiptDate" label="Receb." className="text-left" />
-                  <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Atraso</th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[140px]">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
-                        <span>Cliente</span>
-                        <SortIcon field="client" />
-                      </div>
-                      {onClientFilterChange && (
-                        <div className="relative">
-                          <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                          <input 
-                            type="text" 
-                            list="table-client-receber"
-                            value={clientFilterValue || ''}
-                            onChange={(e) => onClientFilterChange(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="Filtrar..."
-                            className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
-                          />
-                          <datalist id="table-client-receber">
-                            {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
-                          </datalist>
-                        </div>
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
-                  <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Honor.</th>
-                  <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Extras</th>
-                  <th className="px-2 py-2 text-right font-medium text-blue-600 dark:text-blue-400 uppercase">Total</th>
-                  <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Recebido</th>
-                  <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">Saldo</th>
-                  <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Método</th>
-                </>
-              )}
-
-              {isMixedMode && (
-                <>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Data</th>
-                  <SortableHeader field="dueDate" label="Venc." className="text-left" />
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Tipo</th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase min-w-[150px]">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1 cursor-pointer hover:text-blue-500" onClick={() => handleSort('client')}>
-                        <span>Cliente / Mov.</span>
-                        <SortIcon field="client" />
-                      </div>
-                      {onClientFilterChange && (
-                        <div className="relative">
-                          <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                          <input 
-                            type="text" 
-                            list="table-client-mixed"
-                            value={clientFilterValue || ''}
-                            onChange={(e) => onClientFilterChange(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            placeholder="Filtrar..."
-                            className="w-full text-xs py-0.5 pl-6 pr-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 outline-none font-normal"
-                          />
-                          <datalist id="table-client-mixed">
-                            {clientOptions.slice(0, 50).map((opt, i) => <option key={i} value={opt} />)}
-                          </datalist>
-                        </div>
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
-                  <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
-                </>
-              )}
-            </tr>
-          </thead>
-
-          <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-            {isLoading ? (
-              <tr>
-                <td colSpan={getColSpan()} className="px-6 py-16 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
-                    <span className="text-sm text-slate-500">Carregando...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : sortedData.length === 0 ? (
-              <tr>
-                <td colSpan={getColSpan()} className="px-6 py-10 text-center text-slate-500">
-                  Nenhum registro encontrado.
-                </td>
-              </tr>
-            ) : (
-              sortedData.map((row) => {
-                const rowType = normalizeText(row.type || '');
-                const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
-                const isPending = row.status === 'Pendente' || row.status === 'Agendado';
-                const diasAtraso = calcDiasAtraso(row.dueDate, row.status);
-                const saldoRestante = calcSaldoRestante(row.totalCobranca, row.valueReceived);
-                const isVencido = diasAtraso > 0;
-                // Fix: Cast 'Recebido' since it's not in the Transaction.status type union but might come from data
-                const isPago = row.status === 'Pago' || (row.status as string) === 'Recebido';
-
-                return (
-                  <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
-                    
-                    {isContasAPagar && (
-                      <>
-                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.paymentDate || '')}</td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">Saída</span>
-                        </td>
-                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]" title={row.description || row.client || '-'}>
-                          {row.description || row.client || '-'}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
-                            ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                              'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
-                            {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
-                          {isPending ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                          {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
-                        </td>
-                      </>
-                    )}
-
-                    {isContasAReceber && (
-                      <>
-                        <td className={`px-2 py-2 whitespace-nowrap font-medium ${isVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-300'}`}>
-                          {formatDateFull(row.dueDate)}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
-                          {isPago ? (
-                            <span className="text-green-600 dark:text-green-400">{formatDateFull(row.paymentDate || '')}</span>
-                          ) : (
-                            <span className="text-slate-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-center">
-                          {diasAtraso > 0 ? (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                              <AlertCircle className="w-2.5 h-2.5" />
-                              {diasAtraso}d
-                            </span>
-                          ) : isPago ? (
-                            <span className="text-green-500 text-[10px]">✓</span>
-                          ) : (
-                            <span className="text-slate-400 text-[10px]">-</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px]" title={row.client || '-'}>
-                          {row.client || '-'}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-center">
-                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
-                            ${isPago ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                              isVencido ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                              'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
-                            {isVencido && !isPago && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
-                          {formatCurrency(row.honorarios)}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
-                          {formatCurrency(row.valorExtra)}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-blue-600 dark:text-blue-400 font-semibold">
-                          {formatCurrency(row.totalCobranca)}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                          {formatCurrency(row.valueReceived)}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right">
-                          {saldoRestante > 0 ? (
-                            <span className="text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded text-[11px]">
-                              {formatCurrency(saldoRestante)}
-                            </span>
-                          ) : (
-                            <span className="text-green-600 dark:text-green-400 text-[10px] font-medium">Quitado</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-center">
-                          <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">
-                            {row.paymentMethod || 'Pix'}
-                          </span>
-                        </td>
-                      </>
-                    )}
-
-                    {isMixedMode && (
-                      <>
-                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{formatDate(row.date)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300 font-medium">{formatDate(row.dueDate)}</td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                            isRowSaida ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
-                          }`}>
-                            {isRowSaida ? 'Saída' : 'Entrada'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]">
-                          {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
-                            ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
-                              'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
-                            {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap text-right">
-                          {isRowSaida ? (
-                            <span className="text-red-600 dark:text-red-400 flex items-center justify-end gap-0.5 font-medium">
-                              <ArrowDownCircle className="h-3 w-3" />
-                              {formatCurrency(row.valuePaid)}
-                            </span>
-                          ) : (
-                            <span className="text-green-600 dark:text-green-400 flex items-center justify-end gap-0.5 font-medium">
-                              <ArrowUpCircle className="h-3 w-3" />
-                              {formatCurrency(row.totalCobranca || row.valueReceived)}
-                            </span>
-                          )}
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="bg-white dark:bg-slate-900 px-3 py-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-        <p className="text-xs text-slate-600 dark:text-slate-400">
-          Pág. <span className="font-medium">{page}</span> de <span className="font-medium">{totalPages}</span>
-        </p>
-        <div className="flex gap-1">
-          <button
-            onClick={() => onPageChange(page - 1)}
-            disabled={page <= 1 || isLoading}
-            className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => onPageChange(page + 1)}
-            disabled={page >= totalPages || isLoading}
-            className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    </div>
+    </>
   );
 };
 
