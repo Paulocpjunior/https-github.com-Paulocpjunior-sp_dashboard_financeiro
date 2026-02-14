@@ -228,11 +228,14 @@ const DataTable: React.FC<DataTableProps> = ({
     };
 
     const getDescricao = (row: Transaction) => {
-      if (row.description) return row.description;
+      if (row.description) {
+          return row.description;
+      }
       const date = new Date(row.dueDate);
-      const mes = date.toLocaleString('pt-BR', { month: 'long' });
+      // Mês abreviado para economizar caracteres (Ex: fev/2026)
+      const mes = date.toLocaleString('pt-BR', { month: 'short' }).replace('.', '');
       const ano = date.getFullYear();
-      return `Honorarios ${mes}/${ano}`;
+      return `Hon ${mes}/${ano}`;
     };
 
     // Função auxiliar para tentar extrair CPF/CNPJ do nome do cliente
@@ -245,7 +248,14 @@ const DataTable: React.FC<DataTableProps> = ({
     const rows = dataToExport.map(row => {
         const valor = formatValueCSV(row.totalCobranca || row.honorarios);
         const vencimento = formatDateCSV(row.dueDate);
-        const documento = `"${(getDescricao(row) || '').replace(/"/g, '""')}"`;
+        
+        // Truncar descrição para máximo 20 caracteres (limite do layout Boleto Cloud)
+        let rawDoc = getDescricao(row) || '';
+        if (rawDoc.length > 20) {
+            rawDoc = rawDoc.substring(0, 20);
+        }
+        const documento = `"${rawDoc.replace(/"/g, '""')}"`;
+        
         const infoPagador = `"${(row.client || '').replace(/"/g, '""')}"`;
         
         // Tenta extrair do nome, se não conseguir, usa o padrão preenchido no modal
@@ -258,7 +268,7 @@ const DataTable: React.FC<DataTableProps> = ({
             valor,       // VALOR
             vencimento,  // VENCIMENTO (DD/MM/YYYY)
             '',          // NOSSO_NUMERO
-            documento,   // DOCUMENTO (Usando a descrição do serviço)
+            documento,   // DOCUMENTO (Truncado para 20 chars)
             '',          // MULTA
             '',          // JUROS
             '',          // DIAS_PARA_ENCARGOS
