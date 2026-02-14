@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -50,6 +50,9 @@ const DataTable: React.FC<DataTableProps> = ({
       }
       return '';
   });
+
+  // Novo Estado: Documento Padrão (Fallback)
+  const [exportDefaultDocument, setExportDefaultDocument] = useState('');
   
   // Ref para controlar inicialização e evitar loop de re-seleção
   const hasInitializedExport = useRef(false);
@@ -130,6 +133,7 @@ const DataTable: React.FC<DataTableProps> = ({
         hasInitializedExport.current = false;
         setSelectedExportClients([]);
         setExportSearchTerm('');
+        setExportDefaultDocument('');
     }
   }, [showExportModal, availableExportClients]);
 
@@ -243,12 +247,14 @@ const DataTable: React.FC<DataTableProps> = ({
         const vencimento = formatDateCSV(row.dueDate);
         const documento = `"${(getDescricao(row) || '').replace(/"/g, '""')}"`;
         const infoPagador = `"${(row.client || '').replace(/"/g, '""')}"`;
-        const cpfCnpj = extractCpfCnpj(row.client || '');
+        
+        // Tenta extrair do nome, se não conseguir, usa o padrão preenchido no modal
+        const cpfCnpj = extractCpfCnpj(row.client || '') || exportDefaultDocument;
 
         // Mapeamento para as 19 colunas esperadas
         return [
             exportToken, // TOKEN_CONTA_BANCARIA (Preenchido pelo usuário no modal)
-            cpfCnpj,     // CPRF_PAGADOR (Tentativa de extração ou vazio)
+            cpfCnpj,     // CPRF_PAGADOR (Tentativa de extração ou fallback do modal)
             valor,       // VALOR
             vencimento,  // VENCIMENTO (DD/MM/YYYY)
             '',          // NOSSO_NUMERO
@@ -289,7 +295,7 @@ const DataTable: React.FC<DataTableProps> = ({
     document.body.removeChild(link);
     
     setShowExportModal(false);
-    alert(`✅ Arquivo gerado com layout corrigido (Data DD/MM/YYYY e Token) para ${selectedExportClients.length} clientes.`);
+    alert(`✅ Arquivo gerado com ${selectedExportClients.length} boletos.`);
   };
 
   const sortedData = useMemo(() => {
@@ -792,6 +798,23 @@ const DataTable: React.FC<DataTableProps> = ({
                             value={exportToken}
                             onChange={(e) => handleTokenChange(e.target.value)}
                             className="w-full text-sm bg-transparent border-0 border-b border-amber-300 dark:border-amber-700 focus:ring-0 focus:border-amber-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
+                         />
+                     </div>
+                 </div>
+
+                 {/* Input Documento Padrão (Fallback) */}
+                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                     <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400">
+                         <FileText className="h-4 w-4" />
+                     </div>
+                     <div className="flex-1">
+                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">CPF/CNPJ Padrão (Fallback)</label>
+                         <input 
+                            type="text" 
+                            placeholder="Caso não encontre no nome do cliente (Ex: 000.000.000-00)" 
+                            value={exportDefaultDocument}
+                            onChange={(e) => setExportDefaultDocument(e.target.value)}
+                            className="w-full text-sm bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 focus:ring-0 focus:border-emerald-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
                          />
                      </div>
                  </div>
