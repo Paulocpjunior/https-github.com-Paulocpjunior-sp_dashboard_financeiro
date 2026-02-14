@@ -277,7 +277,18 @@ export const BackendService = {
       const transactions = dataRows.map((cols, index) => {
         const get = (idx: number) => (idx >= 0 && idx < cols.length ? cols[idx] || '' : '');
 
-        const rawType = get(COL.tipoLancamento);
+        let rawType = get(COL.tipoLancamento);
+        
+        // --- NORMALIZAÇÃO DE TIPO DE LANÇAMENTO (FIX DUPLICIDADE) ---
+        // Padroniza variações como "Contas a Pagar / Saida Caixa" para um único valor consistente
+        const tLower = rawType.toLowerCase();
+        if (tLower.includes('pagar') && (tLower.includes('saida') || tLower.includes('saída'))) {
+            rawType = 'Saída de Caixa / Contas a Pagar';
+        } else if (tLower.includes('receber') && (tLower.includes('entrada'))) {
+            rawType = 'Entrada de Caixa / Contas a Receber';
+        }
+        // -----------------------------------------------------------
+
         const rawMovement = get(COL.movimentacao); // COLUNA F (Texto Original)
         const rawValorPago = get(COL.valorPago);
         const rawValorRecebido = get(COL.valorRecebido);

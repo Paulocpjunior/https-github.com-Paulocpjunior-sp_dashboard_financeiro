@@ -201,19 +201,40 @@ const DataTable: React.FC<DataTableProps> = ({
     return `${day}/${month}/${year}`;
   };
 
+  // Cálculo Robusto de Dias em Atraso
   const calcDiasAtraso = (dueDate: string, status: string) => {
-    if (status === 'Pago' || status === 'Recebido') return 0;
+    // 1. Normalizar status para ignorar pagos
+    const st = (status || '').toLowerCase().trim();
+    const isPaid = st === 'pago' || st === 'recebido' || st === 'liquidado';
+    if (isPaid) return 0;
+
+    // 2. Verificar se data existe
     if (!dueDate || dueDate === '1970-01-01') return 0;
     
+    // 3. Obter data de Hoje (00:00:00)
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    const vencimento = new Date(dueDate);
+    
+    // 4. Parse manual da data de vencimento (YYYY-MM-DD) para evitar bugs de timezone (UTC vs Local)
+    const parts = dueDate.split('-');
+    if (parts.length !== 3) return 0;
+    
+    // new Date(ano, mesIndex, dia) cria data no fuso local corretamente
+    const vencimento = new Date(
+        parseInt(parts[0]), 
+        parseInt(parts[1]) - 1, 
+        parseInt(parts[2])
+    );
     vencimento.setHours(0, 0, 0, 0);
     
+    // 5. Comparação: Atraso só existe se Vencimento < Hoje
+    if (vencimento.getTime() >= hoje.getTime()) return 0;
+    
+    // 6. Diferença em dias
     const diffTime = hoje.getTime() - vencimento.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
-    return diffDays > 0 ? diffDays : 0;
+    return diffDays;
   };
 
   const calcSaldoRestante = (total: number, recebido: number) => {
@@ -437,15 +458,9 @@ const DataTable: React.FC<DataTableProps> = ({
                             {row.status}
                           </span>
                         </td>
-                        {/* ============================================================ */}
-                        {/* CORREÇÃO: Coluna "A PAGAR" - Mostra valor SOMENTE se Pendente */}
-                        {/* ============================================================ */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
                           {isPending ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
                         </td>
-                        {/* ============================================================ */}
-                        {/* Coluna "PAGO" - Mostra valor SOMENTE se status = Pago        */}
-                        {/* ============================================================ */}
                         <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
                           {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
                         </td>
