@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
 import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter } from 'lucide-react';
 
@@ -42,6 +42,9 @@ const DataTable: React.FC<DataTableProps> = ({
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedExportClients, setSelectedExportClients] = useState<string[]>([]);
   const [exportSearchTerm, setExportSearchTerm] = useState('');
+  
+  // Ref para controlar inicialização e evitar loop de re-seleção
+  const hasInitializedExport = useRef(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -103,8 +106,17 @@ const DataTable: React.FC<DataTableProps> = ({
 
   // 3. Inicializar seleção quando o modal abre ou dados mudam
   useEffect(() => {
-    if (showExportModal && selectedExportClients.length === 0 && availableExportClients.length > 0) {
-        setSelectedExportClients(availableExportClients); // Selecionar todos por padrão
+    if (showExportModal) {
+        // Inicializa apenas uma vez por abertura de modal para evitar sobrescrever a ação do usuário
+        if (!hasInitializedExport.current && availableExportClients.length > 0) {
+            setSelectedExportClients(availableExportClients); // Selecionar todos por padrão
+            hasInitializedExport.current = true;
+        }
+    } else {
+        // Resetar quando fecha
+        hasInitializedExport.current = false;
+        setSelectedExportClients([]);
+        setExportSearchTerm('');
     }
   }, [showExportModal, availableExportClients]);
 
@@ -114,17 +126,36 @@ const DataTable: React.FC<DataTableProps> = ({
     );
   };
 
-  const toggleAllExportClients = () => {
-    if (selectedExportClients.length === availableExportClients.length) {
-      setSelectedExportClients([]);
-    } else {
-      setSelectedExportClients(availableExportClients);
-    }
-  };
-
   const filteredExportClients = availableExportClients.filter(client => 
     client.toLowerCase().includes(exportSearchTerm.toLowerCase())
   );
+
+  const toggleAllExportClients = () => {
+    // Determina qual lista estamos manipulando (Todos ou Filtrados)
+    const targetList = exportSearchTerm ? filteredExportClients : availableExportClients;
+    
+    // Verifica se TODOS da lista alvo estão selecionados
+    const areAllTargetSelected = targetList.every(c => selectedExportClients.includes(c));
+
+    if (areAllTargetSelected) {
+      if (exportSearchTerm) {
+         // Desmarcar apenas os visíveis no filtro
+         setSelectedExportClients(prev => prev.filter(c => !targetList.includes(c)));
+      } else {
+         // Desmarcar todos globalmente
+         setSelectedExportClients([]);
+      }
+    } else {
+      if (exportSearchTerm) {
+         // Marcar os visíveis (mantendo os que já estavam marcados fora do filtro)
+         const newSelection = new Set([...selectedExportClients, ...targetList]);
+         setSelectedExportClients(Array.from(newSelection));
+      } else {
+         // Marcar todos globalmente
+         setSelectedExportClients(availableExportClients);
+      }
+    }
+  };
 
   // 4. Função Final de Exportação
   const handleConfirmExport = () => {
@@ -310,6 +341,10 @@ const DataTable: React.FC<DataTableProps> = ({
     const dataToCount = allData.length > 0 ? allData : data;
     return dataToCount.filter(row => row.status === 'Pendente' || row.status === 'Agendado').length;
   }, [data, allData]);
+
+  // Derivar estado do botão "Selecionar Todos" com base na busca atual
+  const areAllVisibleSelected = filteredExportClients.length > 0 && filteredExportClients.every(c => selectedExportClients.includes(c));
+  const isSelectionEmpty = selectedExportClients.length === 0;
 
   return (
     <>
@@ -692,7 +727,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         onClick={toggleAllExportClients}
                         className="px-3 py-2 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors flex items-center gap-2"
                      >
-                         {selectedExportClients.length === availableExportClients.length ? (
+                         {areAllVisibleSelected ? (
                              <><CheckSquare className="h-3.5 w-3.5" /> Desmarcar Todos</>
                          ) : (
                              <><Square className="h-3.5 w-3.5" /> Marcar Todos</>
