@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight, ShieldCheck, Ban } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -28,23 +28,30 @@ const cleanDigits = (value: string) => value.replace(/\D/g, '');
 
 const validateCPF = (cpf: string): boolean => {
   const clean = cleanDigits(cpf);
-  if (clean.length !== 11 || /^(\d)\1+$/.test(clean)) return false;
+  if (clean.length !== 11) return false;
+  // Elimina CPFs com todos os dígitos iguais (ex: 111.111.111-11)
+  if (/^(\d)\1+$/.test(clean)) return false; 
+
   let sum = 0, remainder;
   for (let i = 1; i <= 9; i++) sum = sum + parseInt(clean.substring(i - 1, i)) * (11 - i);
   remainder = (sum * 10) % 11;
   if ((remainder === 10) || (remainder === 11)) remainder = 0;
   if (remainder !== parseInt(clean.substring(9, 10))) return false;
+  
   sum = 0;
   for (let i = 1; i <= 10; i++) sum = sum + parseInt(clean.substring(i - 1, i)) * (12 - i);
   remainder = (sum * 10) % 11;
   if ((remainder === 10) || (remainder === 11)) remainder = 0;
   if (remainder !== parseInt(clean.substring(10, 11))) return false;
+  
   return true;
 };
 
 const validateCNPJ = (cnpj: string): boolean => {
   const clean = cleanDigits(cnpj);
-  if (clean.length !== 14 || /^(\d)\1+$/.test(clean)) return false;
+  if (clean.length !== 14) return false;
+  if (/^(\d)\1+$/.test(clean)) return false;
+
   let size = clean.length - 2;
   let numbers = clean.substring(0, size);
   const digits = clean.substring(size);
@@ -56,6 +63,7 @@ const validateCNPJ = (cnpj: string): boolean => {
   }
   let result = sum % 11 < 2 ? 0 : 11 - sum % 11;
   if (result !== parseInt(digits.charAt(0))) return false;
+  
   size = size + 1;
   numbers = clean.substring(0, size);
   sum = 0;
@@ -66,11 +74,14 @@ const validateCNPJ = (cnpj: string): boolean => {
   }
   result = sum % 11 < 2 ? 0 : 11 - sum % 11;
   if (result !== parseInt(digits.charAt(1))) return false;
+  
   return true;
 };
 
 const formatDocument = (value: string): string => {
   const clean = cleanDigits(value);
+  if (!clean) return value;
+  
   if (clean.length <= 11) {
     return clean.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   }
@@ -118,8 +129,8 @@ const DataTable: React.FC<DataTableProps> = ({
       return {};
   });
 
-  // Estado para validação visual (Cliente -> Status)
-  const [validationStatus, setValidationStatus] = useState<Record<string, 'valid' | 'invalid' | 'loading' | 'unchecked'>>({});
+  // Estado para validação visual detalhada (Cliente -> Status + Mensagem)
+  const [validationStatus, setValidationStatus] = useState<Record<string, { status: 'valid' | 'invalid' | 'loading' | 'unchecked', message?: string }>>({});
   
   // Ref para controlar inicialização e evitar loop de re-seleção
   const hasInitializedExport = useRef(false);
@@ -149,8 +160,11 @@ const DataTable: React.FC<DataTableProps> = ({
       setClientDocs(newDocs);
       localStorage.setItem('boleto_client_docs', JSON.stringify(newDocs));
       
-      // Resetar status de validação ao editar
-      setValidationStatus(prev => ({ ...prev, [clientName]: 'unchecked' }));
+      // Resetar status de validação ao editar para forçar nova verificação
+      setValidationStatus(prev => ({ 
+          ...prev, 
+          [clientName]: { status: 'unchecked' } 
+      }));
   };
 
   // Validação Ativa (Matemática + API BrasilAPI para CNPJ)
@@ -158,23 +172,42 @@ const DataTable: React.FC<DataTableProps> = ({
       const doc = clientDocs[clientName] || '';
       const clean = cleanDigits(doc);
 
-      setValidationStatus(prev => ({ ...prev, [clientName]: 'loading' }));
+      // Se estiver vazio
+      if (!clean) {
+          setValidationStatus(prev => ({ 
+              ...prev, 
+              [clientName]: { status: 'invalid', message: 'Documento vazio' } 
+          }));
+          return;
+      }
+
+      setValidationStatus(prev => ({ 
+          ...prev, 
+          [clientName]: { status: 'loading', message: 'Verificando...' } 
+      }));
 
       // 1. Validação Matemática Básica
       let isValidMath = false;
       let isCnpj = false;
+      let errorMsg = 'Formato inválido';
 
       if (clean.length === 11) {
           isValidMath = validateCPF(clean);
+          if (!isValidMath) errorMsg = 'CPF inválido (Dígito verificador)';
       } else if (clean.length === 14) {
           isValidMath = validateCNPJ(clean);
           isCnpj = true;
+          if (!isValidMath) errorMsg = 'CNPJ inválido (Dígito verificador)';
       } else {
           isValidMath = false;
+          errorMsg = 'Deve ter 11 (CPF) ou 14 (CNPJ) números';
       }
 
       if (!isValidMath) {
-          setValidationStatus(prev => ({ ...prev, [clientName]: 'invalid' }));
+          setValidationStatus(prev => ({ 
+              ...prev, 
+              [clientName]: { status: 'invalid', message: errorMsg } 
+          }));
           // Formatar mesmo se inválido para melhor leitura
           handleClientDocChange(clientName, formatDocument(clean));
           return;
@@ -183,22 +216,47 @@ const DataTable: React.FC<DataTableProps> = ({
       // 2. Se for CNPJ, consultar API Pública (BrasilAPI)
       if (isCnpj) {
           try {
-              const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`);
+              // Timeout de 3s para não travar a UI
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+              const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`, { 
+                  signal: controller.signal 
+              });
+              clearTimeout(timeoutId);
+
               if (response.ok) {
                   // CNPJ Existe na Receita
-                  setValidationStatus(prev => ({ ...prev, [clientName]: 'valid' }));
-              } else {
+                  setValidationStatus(prev => ({ 
+                      ...prev, 
+                      [clientName]: { status: 'valid', message: 'CNPJ Ativo na Receita' } 
+                  }));
+              } else if (response.status === 404) {
                   // CNPJ Inválido ou Inexistente na base pública
-                  setValidationStatus(prev => ({ ...prev, [clientName]: 'invalid' }));
+                  setValidationStatus(prev => ({ 
+                      ...prev, 
+                      [clientName]: { status: 'invalid', message: 'CNPJ não encontrado na Receita' } 
+                  }));
+              } else {
+                  // Erro de servidor/rate limit, mas matemático ok
+                  setValidationStatus(prev => ({ 
+                      ...prev, 
+                      [clientName]: { status: 'valid', message: 'Matematicamente Válido (API Indisponível)' } 
+                  }));
               }
           } catch (e) {
-              console.warn("Erro ao consultar API BrasilAPI (pode estar offline), assumindo válido pelo checksum:", e);
-              // Fallback: se a API falhar (rede), mas o checksum for válido, aceitamos com alerta visual se possível
-              setValidationStatus(prev => ({ ...prev, [clientName]: 'valid' }));
+              // Fallback: se a API falhar (rede/timeout), mas o checksum for válido, aceitamos
+              setValidationStatus(prev => ({ 
+                  ...prev, 
+                  [clientName]: { status: 'valid', message: 'Válido (Sem verificação online)' } 
+              }));
           }
       } else {
-          // CPF não tem API pública gratuita legal para checagem de nome, ficamos apenas com o Checksum
-          setValidationStatus(prev => ({ ...prev, [clientName]: 'valid' }));
+          // CPF Válido Matematicamente (Não há API pública para verificar nome x CPF)
+          setValidationStatus(prev => ({ 
+              ...prev, 
+              [clientName]: { status: 'valid', message: 'CPF Válido' } 
+          }));
       }
 
       // 3. Aplicar máscara final
@@ -344,6 +402,21 @@ const DataTable: React.FC<DataTableProps> = ({
 
   // 4. Função Final de Exportação (Gera CSV)
   const handleGenerateCSV = () => {
+    // Validação Final: Verificar se há documentos inválidos
+    const invalidClients = selectedExportClients.filter(client => {
+        const status = validationStatus[client]?.status;
+        const doc = clientDocs[client] || '';
+        // Considera inválido se foi marcado como inválido OU se está vazio
+        return status === 'invalid' || !doc;
+    });
+
+    if (invalidClients.length > 0) {
+        const msg = `Atenção: Existem ${invalidClients.length} clientes com documentos inválidos ou vazios.\n\n` +
+                    `Exemplos: ${invalidClients.slice(0, 3).join(', ')}...\n\n` +
+                    `O arquivo pode ser rejeitado pelo banco. Deseja gerar mesmo assim?`;
+        if (!confirm(msg)) return;
+    }
+
     if (!exportToken) {
         if (!confirm('O Token da Conta Bancária está vazio. O arquivo pode ser rejeitado. Deseja continuar mesmo assim?')) {
             return;
@@ -1071,10 +1144,13 @@ const DataTable: React.FC<DataTableProps> = ({
                  <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/10">
                      <div className="flex items-start gap-3">
                          <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                         <p className="text-sm text-blue-800 dark:text-blue-200">
-                             <strong>Validação de Documentos:</strong> Clique na lupa para verificar CPF/CNPJ. 
-                             A validação de CNPJ consulta a base oficial pública. O sistema formata automaticamente.
-                         </p>
+                         <div className="text-sm text-blue-800 dark:text-blue-200">
+                             <strong>Validação de Documentos:</strong>
+                             <ul className="list-disc pl-4 mt-1 text-xs opacity-90 space-y-0.5">
+                                <li><strong>CPF:</strong> Validação matemática dos dígitos.</li>
+                                <li><strong>CNPJ:</strong> Consulta automática na Receita Federal (BrasilAPI).</li>
+                             </ul>
+                         </div>
                      </div>
                  </div>
 
@@ -1089,9 +1165,10 @@ const DataTable: React.FC<DataTableProps> = ({
                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                              {selectedExportClients.map(client => {
                                  const currentValue = clientDocs[client] || '';
-                                 const status = validationStatus[client] || 'unchecked';
+                                 const validation = validationStatus[client] || { status: 'unchecked' };
+                                 const { status, message } = validation;
                                  
-                                 // Define cor da borda baseada no status
+                                 // Define cor da borda e ícone baseada no status
                                  let borderColor = 'border-slate-300 dark:border-slate-600';
                                  let ringColor = 'focus:ring-blue-500/20';
                                  
@@ -1105,34 +1182,48 @@ const DataTable: React.FC<DataTableProps> = ({
                                  
                                  return (
                                      <tr key={client} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                         <td className="px-6 py-3 align-middle">
+                                         <td className="px-6 py-3 align-top pt-4">
                                              <span className="font-medium text-slate-800 dark:text-slate-200 block truncate max-w-[280px]" title={client}>{client}</span>
                                          </td>
-                                         <td className="px-6 py-2 align-middle">
-                                             <div className="flex gap-2 items-center">
-                                                 <div className="relative flex-1">
-                                                     <input 
-                                                         type="text" 
-                                                         value={currentValue}
-                                                         onChange={(e) => handleClientDocChange(client, e.target.value)}
-                                                         onBlur={() => handleValidateDoc(client)}
-                                                         placeholder="00.000.000/0000-00"
-                                                         className={`
-                                                             w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 outline-none font-mono transition-colors
-                                                             bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${borderColor} ${ringColor}
-                                                         `}
-                                                     />
-                                                     {status === 'loading' && <Loader2 className="h-4 w-4 text-blue-500 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />}
-                                                     {status === 'valid' && <CheckCircle2 className="h-4 w-4 text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />}
-                                                     {status === 'invalid' && <Ban className="h-4 w-4 text-red-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />}
+                                         <td className="px-6 py-3 align-top">
+                                             <div className="flex flex-col gap-1">
+                                                 <div className="flex gap-2 items-center">
+                                                     <div className="relative flex-1">
+                                                         <input 
+                                                             type="text" 
+                                                             value={currentValue}
+                                                             onChange={(e) => handleClientDocChange(client, e.target.value)}
+                                                             onBlur={() => handleValidateDoc(client)}
+                                                             placeholder="00.000.000/0000-00"
+                                                             className={`
+                                                                 w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 outline-none font-mono transition-colors
+                                                                 bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${borderColor} ${ringColor}
+                                                             `}
+                                                         />
+                                                         {status === 'loading' && <Loader2 className="h-4 w-4 text-blue-500 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />}
+                                                         {status === 'valid' && <CheckCircle2 className="h-4 w-4 text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />}
+                                                         {status === 'invalid' && <Ban className="h-4 w-4 text-red-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />}
+                                                     </div>
+                                                     <button 
+                                                        onClick={() => handleValidateDoc(client)}
+                                                        className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors"
+                                                        title="Validar na Receita Federal (CNPJ) ou Checksum (CPF)"
+                                                     >
+                                                         <Search className="h-4 w-4" />
+                                                     </button>
                                                  </div>
-                                                 <button 
-                                                    onClick={() => handleValidateDoc(client)}
-                                                    className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors"
-                                                    title="Validar na Receita Federal (CNPJ) ou Checksum (CPF)"
-                                                 >
-                                                     <Search className="h-4 w-4" />
-                                                 </button>
+                                                 
+                                                 {/* MENSAGEM DE ERRO/SUCESSO EXPLÍCITA */}
+                                                 {message && (
+                                                     <div className={`text-[10px] flex items-center gap-1 font-medium ${
+                                                         status === 'invalid' ? 'text-red-600 dark:text-red-400' : 
+                                                         status === 'valid' ? 'text-emerald-600 dark:text-emerald-400' : 
+                                                         'text-blue-600 dark:text-blue-400'
+                                                     }`}>
+                                                         {status === 'invalid' && <AlertCircle className="h-3 w-3" />}
+                                                         {message}
+                                                     </div>
+                                                 )}
                                              </div>
                                          </td>
                                      </tr>
