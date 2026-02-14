@@ -332,14 +332,31 @@ const DataTable: React.FC<DataTableProps> = ({
     }
   }, [showExportModal, availableExportClients]);
 
-  // Ao avançar para o passo 2, pré-preencher documentos extraídos se não existirem no cache
+  // Ao avançar para o passo 2, pré-preencher documentos
   useEffect(() => {
       if (showExportModal && exportStep === 2) {
           const newDocs = { ...clientDocs };
           let changed = false;
           
           selectedExportClients.forEach(client => {
-              if (!newDocs[client]) {
+              // Buscar transação deste cliente para pegar o CPF/CNPJ da planilha
+              // Usa pendingReceivablesData para achar o dado mais recente disponível para este cliente
+              const clientTrx = pendingReceivablesData.find(t => t.client === client);
+              const sheetDoc = clientTrx?.cpfCnpj;
+
+              // Prioridade:
+              // 1. Planilha (se existir e for válido)
+              // 2. Cache Local (já carregado em newDocs)
+              // 3. Extração do Nome
+              
+              if (sheetDoc && cleanDigits(sheetDoc).length >= 11) {
+                   // Se a planilha tem o dado, prioriza sobre o cache para garantir que atualizações do Jotform reflitam aqui
+                   if (newDocs[client] !== sheetDoc) {
+                       newDocs[client] = sheetDoc;
+                       changed = true;
+                   }
+              } else if (!newDocs[client]) {
+                  // Se não tem na planilha nem no cache, tenta extrair
                   const extracted = extractCpfCnpj(client);
                   if (extracted) {
                       newDocs[client] = extracted;
@@ -352,7 +369,7 @@ const DataTable: React.FC<DataTableProps> = ({
               setClientDocs(newDocs);
           }
       }
-  }, [exportStep, showExportModal, selectedExportClients]);
+  }, [exportStep, showExportModal, selectedExportClients, pendingReceivablesData]);
 
   const toggleExportClient = (client: string) => {
     setSelectedExportClients(prev => 
@@ -1147,6 +1164,7 @@ const DataTable: React.FC<DataTableProps> = ({
                          <div className="text-sm text-blue-800 dark:text-blue-200">
                              <strong>Validação de Documentos:</strong>
                              <ul className="list-disc pl-4 mt-1 text-xs opacity-90 space-y-0.5">
+                                <li><strong>Origem:</strong> Jotform/Planilha (Prioritário).</li>
                                 <li><strong>CPF:</strong> Validação matemática dos dígitos.</li>
                                 <li><strong>CNPJ:</strong> Consulta automática na Receita Federal (BrasilAPI).</li>
                              </ul>

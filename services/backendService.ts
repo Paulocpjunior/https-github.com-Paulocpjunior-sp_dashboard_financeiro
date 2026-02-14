@@ -1,3 +1,4 @@
+
 import { Transaction, User } from '../types';
 import { MOCK_USERS } from '../constants';
 
@@ -261,6 +262,7 @@ export const BackendService = {
         valorRecebido: getColIdx(['valor recebido'], 31),
         saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
         docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber', 'pago - receber', 'status receber', 'recebido?'], 35), 
+        cpfCnpj: getColIdx(['cpf', 'cnpj', 'documento', 'cprf'], -1), // Tenta localizar coluna de CPF/CNPJ
         submissionId: 39,
       };
 
@@ -269,7 +271,8 @@ export const BackendService = {
           dueDateCandidates: COL.dueDateCandidates,
           totalCobranca: COL.totalCobranca,
           valorRecebido: COL.valorRecebido,
-          cliente: COL.nomeEmpresa
+          cliente: COL.nomeEmpresa,
+          cpfCnpj: COL.cpfCnpj
       });
 
       const dataRows = allRows.slice(headerRowIndex + 1);
@@ -391,10 +394,7 @@ export const BackendService = {
         let finalDueDate = parseDate(rawDueDate);
         
         // Fallback APENAS se não encontrou nenhuma data de vencimento válida E a data de lançamento for válida
-        // ATENÇÃO: O usuário pediu para NÃO considerar Data de Lançamento se for "Data Vencimento a Receber"
-        // Então removemos a cópia automática cega, mantendo apenas se realmente não existir nada.
         if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') {
-             // Mantemos o fallback como última opção para evitar quebras, mas a lógica acima deve priorizar a coluna correta
              finalDueDate = finalDate;
         }
         
@@ -417,6 +417,7 @@ export const BackendService = {
           honorarios: parseCurrency(get(COL.valorHonorarios)),
           valorExtra: parseCurrency(get(COL.valorExtras)),
           totalCobranca: parseCurrency(rawTotalCobranca),
+          cpfCnpj: cleanString(get(COL.cpfCnpj)), // Captura CPF/CNPJ da planilha
         } as Transaction;
       });
 
