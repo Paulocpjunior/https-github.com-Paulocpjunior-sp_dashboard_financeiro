@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -43,6 +43,14 @@ const DataTable: React.FC<DataTableProps> = ({
   const [selectedExportClients, setSelectedExportClients] = useState<string[]>([]);
   const [exportSearchTerm, setExportSearchTerm] = useState('');
   
+  // Novo Estado: Token para Exportação (Persistente)
+  const [exportToken, setExportToken] = useState(() => {
+      if (typeof window !== 'undefined') {
+          return localStorage.getItem('boleto_cloud_token') || '';
+      }
+      return '';
+  });
+  
   // Ref para controlar inicialização e evitar loop de re-seleção
   const hasInitializedExport = useRef(false);
 
@@ -58,6 +66,11 @@ const DataTable: React.FC<DataTableProps> = ({
       setSortField(field);
       setSortDirection('asc');
     }
+  };
+
+  const handleTokenChange = (val: string) => {
+      setExportToken(val);
+      localStorage.setItem('boleto_cloud_token', val);
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -164,6 +177,12 @@ const DataTable: React.FC<DataTableProps> = ({
       return;
     }
 
+    if (!exportToken) {
+        if (!confirm('O Token da Conta Bancária está vazio. O arquivo pode ser rejeitado. Deseja continuar mesmo assim?')) {
+            return;
+        }
+    }
+
     // Filtrar dados baseados nos clientes selecionados
     const dataToExport = pendingReceivablesData.filter(row => 
       selectedExportClients.includes(row.client)
@@ -192,10 +211,11 @@ const DataTable: React.FC<DataTableProps> = ({
       'INFORMACAO_PAGADOR'
     ];
 
+    // FIX: Alterado para formato DD/MM/YYYY (Padrão Brasileiro para Boleto)
     const formatDateCSV = (dateStr: string) => {
       if (!dateStr || dateStr === '1970-01-01') return '';
       const [year, month, day] = dateStr.split('-');
-      return `${year}-${month}-${day}`;
+      return `${day}/${month}/${year}`;
     };
 
     const formatValueCSV = (val: number | string | undefined) => {
@@ -211,33 +231,41 @@ const DataTable: React.FC<DataTableProps> = ({
       return `Honorarios ${mes}/${ano}`;
     };
 
+    // Função auxiliar para tentar extrair CPF/CNPJ do nome do cliente
+    const extractCpfCnpj = (text: string) => {
+        // Procura por padrões de CPF (XXX.XXX.XXX-XX) ou CNPJ (XX.XXX.XXX/XXXX-XX)
+        const match = text.match(/(\d{2,3}\.?\d{3}\.?\d{3}[\/\-]?\d{4}[\-]?\d{2})|(\d{3}\.?\d{3}\.?\d{3}[\-]?\d{2})/);
+        return match ? match[0] : '';
+    };
+
     const rows = dataToExport.map(row => {
         const valor = formatValueCSV(row.totalCobranca || row.honorarios);
         const vencimento = formatDateCSV(row.dueDate);
         const documento = `"${(getDescricao(row) || '').replace(/"/g, '""')}"`;
         const infoPagador = `"${(row.client || '').replace(/"/g, '""')}"`;
+        const cpfCnpj = extractCpfCnpj(row.client || '');
 
         // Mapeamento para as 19 colunas esperadas
         return [
-            '', // TOKEN_CONTA_BANCARIA (Vazio para preenchimento ou default do sistema importador)
-            '', // CPRF_PAGADOR (Vazio, pois o sistema não possui CPF cadastrado nos dados atuais)
-            valor, // VALOR
-            vencimento, // VENCIMENTO
-            '', // NOSSO_NUMERO
-            documento, // DOCUMENTO (Usando a descrição do serviço)
-            '', // MULTA
-            '', // JUROS
-            '', // DIAS_PARA_ENCARGOS
-            '', // DESCONTO
-            '', // DIAS_PARA_DESCONTO
-            '', // TIPO_VALOR_DESCONTO
-            '', // DESCONTO2
-            '', // DIAS_PARA_DESCONTO2
-            '', // TIPO_VALOR_DESCONTO2
-            '', // DESCONTO3
-            '', // DIAS_PARA_DESCONTO3
-            '', // TIPO_VALOR_DESCONTO3
-            infoPagador // INFORMACAO_PAGADOR (Nome do Cliente para identificação)
+            exportToken, // TOKEN_CONTA_BANCARIA (Preenchido pelo usuário no modal)
+            cpfCnpj,     // CPRF_PAGADOR (Tentativa de extração ou vazio)
+            valor,       // VALOR
+            vencimento,  // VENCIMENTO (DD/MM/YYYY)
+            '',          // NOSSO_NUMERO
+            documento,   // DOCUMENTO (Usando a descrição do serviço)
+            '',          // MULTA
+            '',          // JUROS
+            '',          // DIAS_PARA_ENCARGOS
+            '',          // DESCONTO
+            '',          // DIAS_PARA_DESCONTO
+            '',          // TIPO_VALOR_DESCONTO
+            '',          // DESCONTO2
+            '',          // DIAS_PARA_DESCONTO2
+            '',          // TIPO_VALOR_DESCONTO2
+            '',          // DESCONTO3
+            '',          // DIAS_PARA_DESCONTO3
+            '',          // TIPO_VALOR_DESCONTO3
+            infoPagador  // INFORMACAO_PAGADOR (Nome do Cliente para identificação)
         ];
     });
 
@@ -261,7 +289,7 @@ const DataTable: React.FC<DataTableProps> = ({
     document.body.removeChild(link);
     
     setShowExportModal(false);
-    alert(`✅ Arquivo gerado com layout corrigido (19 colunas) para ${selectedExportClients.length} clientes.`);
+    alert(`✅ Arquivo gerado com layout corrigido (Data DD/MM/YYYY e Token) para ${selectedExportClients.length} clientes.`);
   };
 
   const sortedData = useMemo(() => {
@@ -749,28 +777,48 @@ const DataTable: React.FC<DataTableProps> = ({
              </div>
 
              {/* Search and Toolbar */}
-             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex gap-4 items-center flex-wrap">
-                 <div className="relative flex-1">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                     <input 
-                        type="text" 
-                        placeholder="Buscar cliente..." 
-                        value={exportSearchTerm}
-                        onChange={(e) => setExportSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                     />
+             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
+                 
+                 {/* Input Token da Conta */}
+                 <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800">
+                     <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
+                         <Key className="h-4 w-4" />
+                     </div>
+                     <div className="flex-1">
+                         <label className="block text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Token da Conta Bancária (Boleto Cloud)</label>
+                         <input 
+                            type="text" 
+                            placeholder="Insira o token de integração da conta..." 
+                            value={exportToken}
+                            onChange={(e) => handleTokenChange(e.target.value)}
+                            className="w-full text-sm bg-transparent border-0 border-b border-amber-300 dark:border-amber-700 focus:ring-0 focus:border-amber-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
+                         />
+                     </div>
                  </div>
-                 <div className="flex gap-2">
-                     <button 
-                        onClick={toggleAllExportClients}
-                        className="px-3 py-2 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors flex items-center gap-2"
-                     >
-                         {areAllVisibleSelected ? (
-                             <><CheckSquare className="h-3.5 w-3.5" /> Desmarcar Todos</>
-                         ) : (
-                             <><Square className="h-3.5 w-3.5" /> Marcar Todos</>
-                         )}
-                     </button>
+
+                 <div className="flex gap-4 items-center flex-wrap">
+                     <div className="relative flex-1">
+                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                         <input 
+                            type="text" 
+                            placeholder="Buscar cliente..." 
+                            value={exportSearchTerm}
+                            onChange={(e) => setExportSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                         />
+                     </div>
+                     <div className="flex gap-2">
+                         <button 
+                            onClick={toggleAllExportClients}
+                            className="px-3 py-2 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors flex items-center gap-2"
+                         >
+                             {areAllVisibleSelected ? (
+                                 <><CheckSquare className="h-3.5 w-3.5" /> Desmarcar Todos</>
+                             ) : (
+                                 <><Square className="h-3.5 w-3.5" /> Marcar Todos</>
+                             )}
+                         </button>
+                     </div>
                  </div>
              </div>
 
