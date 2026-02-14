@@ -221,9 +221,22 @@ export const BackendService = {
 
       // Mapeamento Dinâmico de Colunas
       const headerRow = allRows[headerRowIndex].map(c => c.toLowerCase().trim());
+      
       const getColIdx = (hints: string[], fallback: number) => {
           const idx = headerRow.findIndex(h => hints.some(hint => h.includes(hint)));
           return idx !== -1 ? idx : fallback;
+      };
+
+      // Nova Função: Encontrar TODOS os índices que correspondem aos hints
+      // Isso é crucial quando há múltiplas colunas de "Vencimento" (Ex: Vencimento-Receber, Vencimento-Pagar)
+      const getColIndices = (hints: string[]) => {
+          const indices: number[] = [];
+          headerRow.forEach((h, i) => {
+              if (hints.some(hint => h.includes(hint))) {
+                  indices.push(i);
+              }
+          });
+          return indices;
       };
 
       const COL = {
@@ -232,14 +245,15 @@ export const BackendService = {
         tipoLancamento: getColIdx(['tipo de lan', 'tipo lan'], 3),
         pagoPor: getColIdx(['pago por'], 4),
         movimentacao: getColIdx(['movimentação', 'movimentacao'], 5), // Coluna F
-        dataAPagar: getColIdx(['data vencimento', 'data a pagar', 'data.vencimento'], 7),
+        
+        // CORREÇÃO: Capturar todas as possíveis colunas de vencimento
+        dueDateCandidates: getColIndices(['vencimento', 'data a pagar', 'data.vencimento']),
+        
         docPago: getColIdx(['doc.pago', 'documento pago'], 9), // Saídas
         dataBaixa: getColIdx(['data baixa', 'data pagamento'], 10),
         valorRefOriginal: getColIdx(['valor ref', 'valor original'], 11),
         valorOriginalRecorrente: getColIdx(['recorrente'], 12),
         valorPago: getColIdx(['valor pago'], 13),
-        // CORREÇÃO: Usar apenas termos que indicam NOME e não CÓDIGO. 
-        // Remover 'cliente' genérico para evitar pegar 'N.Cliente' (que é o ID)
         nomeEmpresa: getColIdx(['nome empresa', 'razao social', 'razão social', 'credor', 'sacado'], 26), 
         valorHonorarios: getColIdx(['honorários', 'honorarios'], 27),
         valorExtras: getColIdx(['extras'], 28),
@@ -252,6 +266,7 @@ export const BackendService = {
 
       console.log('[BackendService] Mapeamento de Colunas Detectado:', {
           docPagoReceber: COL.docPagoReceber,
+          dueDateCandidates: COL.dueDateCandidates,
           totalCobranca: COL.totalCobranca,
           valorRecebido: COL.valorRecebido,
           cliente: COL.nomeEmpresa
@@ -343,13 +358,35 @@ export const BackendService = {
             // Se Pendente, valReceived fica 0
         }
 
+        // LÓGICA DE DATAS (CORREÇÃO DE VENCIMENTO)
         const rawDate = get(COL.dataLancamento);
-        const rawDueDate = get(COL.dataAPagar);
         const rawPaymentDate = get(COL.dataBaixa);
         
+        // Tenta encontrar a data de vencimento em MÚLTIPLAS colunas candidatas
+        // Isso resolve o problema de formulários condicionais onde "Vencimento-Receber" e "Vencimento-Pagar" são colunas diferentes
+        let rawDueDate = '';
+        for (const idx of COL.dueDateCandidates) {
+            const candidateVal = get(idx);
+            if (candidateVal && candidateVal.trim() !== '') {
+                // Validação extra: não pegar a própria data de lançamento se a coluna for ambígua
+                if (idx !== COL.dataLancamento) {
+                    rawDueDate = candidateVal;
+                    break;
+                }
+            }
+        }
+
         const finalDate = parseDate(rawDate);
         let finalDueDate = parseDate(rawDueDate);
-        if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') finalDueDate = finalDate;
+        
+        // Fallback APENAS se não encontrou nenhuma data de vencimento válida E a data de lançamento for válida
+        // ATENÇÃO: O usuário pediu para NÃO considerar Data de Lançamento se for "Data Vencimento a Receber"
+        // Então removemos a cópia automática cega, mantendo apenas se realmente não existir nada.
+        if (finalDueDate === '1970-01-01' && finalDate !== '1970-01-01') {
+             // Mantemos o fallback como última opção para evitar quebras, mas a lógica acima deve priorizar a coluna correta
+             finalDueDate = finalDate;
+        }
+        
         const finalPaymentDate = parseDate(rawPaymentDate);
 
         return {
