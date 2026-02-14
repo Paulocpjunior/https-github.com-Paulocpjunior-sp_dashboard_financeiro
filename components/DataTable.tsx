@@ -169,23 +169,38 @@ const DataTable: React.FC<DataTableProps> = ({
       selectedExportClients.includes(row.client)
     );
 
-    // Formato Boleto Cloud: separador ;
+    // Formato CSV Específico Solicitado (Layout Boleto)
     const headers = [
-      'Nome/Razao Social',
-      'Valor',
-      'Vencimento',
-      'Descricao'
+      'TOKEN_CONTA_BANCARIA',
+      'CPRF_PAGADOR',
+      'VALOR',
+      'VENCIMENTO',
+      'NOSSO_NUMERO',
+      'DOCUMENTO',
+      'MULTA',
+      'JUROS',
+      'DIAS_PARA_ENCARGOS',
+      'DESCONTO',
+      'DIAS_PARA_DESCONTO',
+      'TIPO_VALOR_DESCONTO',
+      'DESCONTO2',
+      'DIAS_PARA_DESCONTO2',
+      'TIPO_VALOR_DESCONTO2',
+      'DESCONTO3',
+      'DIAS_PARA_DESCONTO3',
+      'TIPO_VALOR_DESCONTO3',
+      'INFORMACAO_PAGADOR'
     ];
 
     const formatDateCSV = (dateStr: string) => {
       if (!dateStr || dateStr === '1970-01-01') return '';
       const [year, month, day] = dateStr.split('-');
-      return `${year}-${month}-${day}`; // Formato ISO que Boleto Cloud aceita
+      return `${year}-${month}-${day}`;
     };
 
     const formatValueCSV = (val: number | string | undefined) => {
       const num = Number(val || 0);
-      return num.toFixed(2); // Formato: 1234.56 (ponto decimal)
+      return num.toFixed(2); // Formato: 1234.56
     };
 
     const getDescricao = (row: Transaction) => {
@@ -196,12 +211,35 @@ const DataTable: React.FC<DataTableProps> = ({
       return `Honorarios ${mes}/${ano}`;
     };
 
-    const rows = dataToExport.map(row => [
-      `"${(row.client || '').replace(/"/g, '""')}"`,
-      formatValueCSV(row.totalCobranca || row.honorarios),
-      formatDateCSV(row.dueDate),
-      `"${getDescricao(row).replace(/"/g, '""')}"`
-    ]);
+    const rows = dataToExport.map(row => {
+        const valor = formatValueCSV(row.totalCobranca || row.honorarios);
+        const vencimento = formatDateCSV(row.dueDate);
+        const documento = `"${(getDescricao(row) || '').replace(/"/g, '""')}"`;
+        const infoPagador = `"${(row.client || '').replace(/"/g, '""')}"`;
+
+        // Mapeamento para as 19 colunas esperadas
+        return [
+            '', // TOKEN_CONTA_BANCARIA (Vazio para preenchimento ou default do sistema importador)
+            '', // CPRF_PAGADOR (Vazio, pois o sistema não possui CPF cadastrado nos dados atuais)
+            valor, // VALOR
+            vencimento, // VENCIMENTO
+            '', // NOSSO_NUMERO
+            documento, // DOCUMENTO (Usando a descrição do serviço)
+            '', // MULTA
+            '', // JUROS
+            '', // DIAS_PARA_ENCARGOS
+            '', // DESCONTO
+            '', // DIAS_PARA_DESCONTO
+            '', // TIPO_VALOR_DESCONTO
+            '', // DESCONTO2
+            '', // DIAS_PARA_DESCONTO2
+            '', // TIPO_VALOR_DESCONTO2
+            '', // DESCONTO3
+            '', // DIAS_PARA_DESCONTO3
+            '', // TIPO_VALOR_DESCONTO3
+            infoPagador // INFORMACAO_PAGADOR (Nome do Cliente para identificação)
+        ];
+    });
 
     const csvContent = [
       headers.join(';'),
@@ -216,14 +254,14 @@ const DataTable: React.FC<DataTableProps> = ({
     const url = URL.createObjectURL(blob);
     const hoje = new Date().toISOString().split('T')[0];
     link.setAttribute('href', url);
-    link.setAttribute('download', `boletos_selecionados_${hoje}.csv`);
+    link.setAttribute('download', `boletos_importacao_${hoje}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
     setShowExportModal(false);
-    alert(`✅ Arquivo gerado com ${dataToExport.length} boletos para ${selectedExportClients.length} clientes.`);
+    alert(`✅ Arquivo gerado com layout corrigido (19 colunas) para ${selectedExportClients.length} clientes.`);
   };
 
   const sortedData = useMemo(() => {
