@@ -224,7 +224,10 @@ const DataTable: React.FC<DataTableProps> = ({
 
     const formatValueCSV = (val: number | string | undefined) => {
       const num = Number(val || 0);
-      return num.toFixed(2); // Formato: 1234.56
+      // Alterado para substituir ponto por vírgula (Formato BR)
+      // Ex: 1.00 -> 1,00
+      // Isso previne que sistemas legados leiam 1.00 como 100
+      return num.toFixed(2).replace('.', ',');
     };
 
     const getDescricao = (row: Transaction) => {
