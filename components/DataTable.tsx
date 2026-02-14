@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight } from 'lucide-react';
 
 interface DataTableProps {
   data: Transaction[];
@@ -40,6 +40,7 @@ const DataTable: React.FC<DataTableProps> = ({
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStep, setExportStep] = useState<1 | 2>(1); // Passo 1: Seleção, Passo 2: Documentos
   const [selectedExportClients, setSelectedExportClients] = useState<string[]>([]);
   const [exportSearchTerm, setExportSearchTerm] = useState('');
   
@@ -51,8 +52,14 @@ const DataTable: React.FC<DataTableProps> = ({
       return '';
   });
 
-  // Novo Estado: Documento Padrão (Fallback)
-  const [exportDefaultDocument, setExportDefaultDocument] = useState('');
+  // Mapa de Documentos Persistente (Cliente -> CPF/CNPJ)
+  const [clientDocs, setClientDocs] = useState<Record<string, string>>(() => {
+      if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('boleto_client_docs');
+          return saved ? JSON.parse(saved) : {};
+      }
+      return {};
+  });
   
   // Ref para controlar inicialização e evitar loop de re-seleção
   const hasInitializedExport = useRef(false);
@@ -74,6 +81,13 @@ const DataTable: React.FC<DataTableProps> = ({
   const handleTokenChange = (val: string) => {
       setExportToken(val);
       localStorage.setItem('boleto_cloud_token', val);
+  };
+
+  // Atualiza o documento de um cliente específico e salva no localStorage
+  const handleClientDocChange = (clientName: string, docValue: string) => {
+      const newDocs = { ...clientDocs, [clientName]: docValue };
+      setClientDocs(newDocs);
+      localStorage.setItem('boleto_client_docs', JSON.stringify(newDocs));
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -120,6 +134,13 @@ const DataTable: React.FC<DataTableProps> = ({
     return Array.from(clients).sort();
   }, [pendingReceivablesData]);
 
+  // Função auxiliar para tentar extrair CPF/CNPJ do nome do cliente
+  const extractCpfCnpj = (text: string) => {
+    // Procura por padrões de CPF (XXX.XXX.XXX-XX) ou CNPJ (XX.XXX.XXX/XXXX-XX)
+    const match = text.match(/(\d{2,3}\.?\d{3}\.?\d{3}[\/\-]?\d{4}[\-]?\d{2})|(\d{3}\.?\d{3}\.?\d{3}[\-]?\d{2})/);
+    return match ? match[0] : '';
+  };
+
   // 3. Inicializar seleção quando o modal abre ou dados mudam
   useEffect(() => {
     if (showExportModal) {
@@ -133,9 +154,33 @@ const DataTable: React.FC<DataTableProps> = ({
         hasInitializedExport.current = false;
         setSelectedExportClients([]);
         setExportSearchTerm('');
-        setExportDefaultDocument('');
+        setExportStep(1); // Volta para passo 1
     }
   }, [showExportModal, availableExportClients]);
+
+  // Ao avançar para o passo 2, pré-preencher documentos extraídos se não existirem no cache
+  useEffect(() => {
+      if (showExportModal && exportStep === 2) {
+          const newDocs = { ...clientDocs };
+          let changed = false;
+          
+          selectedExportClients.forEach(client => {
+              if (!newDocs[client]) {
+                  const extracted = extractCpfCnpj(client);
+                  if (extracted) {
+                      newDocs[client] = extracted;
+                      changed = true;
+                  }
+              }
+          });
+
+          if (changed) {
+              setClientDocs(newDocs);
+              // Não salvamos no localStorage ainda para não poluir com extrações erradas automáticas,
+              // salvamos apenas quando o usuário edita ou confirma (opcional, aqui estamos salvando no handle change)
+          }
+      }
+  }, [exportStep, showExportModal, selectedExportClients]);
 
   const toggleExportClient = (client: string) => {
     setSelectedExportClients(prev => 
@@ -174,13 +219,17 @@ const DataTable: React.FC<DataTableProps> = ({
     }
   };
 
-  // 4. Função Final de Exportação
-  const handleConfirmExport = () => {
-    if (selectedExportClients.length === 0) {
-      alert('Selecione pelo menos um cliente para exportar.');
-      return;
-    }
+  // Avançar para o passo 2
+  const handleNextStep = () => {
+      if (selectedExportClients.length === 0) {
+          alert('Selecione pelo menos um cliente para continuar.');
+          return;
+      }
+      setExportStep(2);
+  };
 
+  // 4. Função Final de Exportação (Gera CSV)
+  const handleGenerateCSV = () => {
     if (!exportToken) {
         if (!confirm('O Token da Conta Bancária está vazio. O arquivo pode ser rejeitado. Deseja continuar mesmo assim?')) {
             return;
@@ -241,13 +290,6 @@ const DataTable: React.FC<DataTableProps> = ({
       return `Hon ${mes}/${ano}`;
     };
 
-    // Função auxiliar para tentar extrair CPF/CNPJ do nome do cliente
-    const extractCpfCnpj = (text: string) => {
-        // Procura por padrões de CPF (XXX.XXX.XXX-XX) ou CNPJ (XX.XXX.XXX/XXXX-XX)
-        const match = text.match(/(\d{2,3}\.?\d{3}\.?\d{3}[\/\-]?\d{4}[\-]?\d{2})|(\d{3}\.?\d{3}\.?\d{3}[\-]?\d{2})/);
-        return match ? match[0] : '';
-    };
-
     const rows = dataToExport.map(row => {
         const valor = formatValueCSV(row.totalCobranca || row.honorarios);
         const vencimento = formatDateCSV(row.dueDate);
@@ -261,13 +303,14 @@ const DataTable: React.FC<DataTableProps> = ({
         
         const infoPagador = `"${(row.client || '').replace(/"/g, '""')}"`;
         
-        // Tenta extrair do nome, se não conseguir, usa o padrão preenchido no modal
-        const cpfCnpj = extractCpfCnpj(row.client || '') || exportDefaultDocument;
+        // USA O DOCUMENTO DEFINIDO NO PASSO 2 (ou extraído/cacheado)
+        // Se estiver vazio no input, vai vazio pro CSV (usuário deve preencher)
+        const cpfCnpj = clientDocs[row.client] || '';
 
         // Mapeamento para as 19 colunas esperadas
         return [
             exportToken, // TOKEN_CONTA_BANCARIA (Preenchido pelo usuário no modal)
-            cpfCnpj,     // CPRF_PAGADOR (Tentativa de extração ou fallback do modal)
+            cpfCnpj,     // CPRF_PAGADOR (Específico por cliente)
             valor,       // VALOR
             vencimento,  // VENCIMENTO (DD/MM/YYYY)
             '',          // NOSSO_NUMERO
@@ -465,6 +508,7 @@ const DataTable: React.FC<DataTableProps> = ({
         )}
 
         <div className="overflow-x-auto min-h-[400px]">
+          {/* ... (Tabela Principal Mantida Inalterada) ... */}
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800">
               <tr>
@@ -774,12 +818,12 @@ const DataTable: React.FC<DataTableProps> = ({
         </div>
       </div>
 
-      {/* MODAL DE SELEÇÃO DE CLIENTES PARA EXPORTAÇÃO */}
+      {/* MODAL DE EXPORTAÇÃO EM 2 ETAPAS */}
       {showExportModal && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
              
-             {/* Header */}
+             {/* Header Comum */}
              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-t-xl">
                  <div className="flex items-center gap-3">
                      <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
@@ -787,7 +831,9 @@ const DataTable: React.FC<DataTableProps> = ({
                      </div>
                      <div>
                          <h2 className="text-lg font-bold text-slate-800 dark:text-white">Exportação de Boletos</h2>
-                         <p className="text-xs text-slate-500 dark:text-slate-400">Selecione os clientes para gerar o arquivo CSV</p>
+                         <p className="text-xs text-slate-500 dark:text-slate-400">
+                             {exportStep === 1 ? 'Etapa 1: Seleção de Clientes' : 'Etapa 2: Dados de Cobrança (CPF/CNPJ)'}
+                         </p>
                      </div>
                  </div>
                  <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -795,131 +841,194 @@ const DataTable: React.FC<DataTableProps> = ({
                  </button>
              </div>
 
-             {/* Search and Toolbar */}
-             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
-                 
-                 {/* Input Token da Conta */}
-                 <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800">
-                     <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
-                         <Key className="h-4 w-4" />
+             {/* ======================= ETAPA 1: SELEÇÃO ======================= */}
+             {exportStep === 1 && (
+               <>
+                 <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
+                     
+                     {/* Input Token da Conta (Global) */}
+                     <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800">
+                         <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
+                             <Key className="h-4 w-4" />
+                         </div>
+                         <div className="flex-1">
+                             <label className="block text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Token da Conta Bancária (Boleto Cloud)</label>
+                             <input 
+                                type="text" 
+                                placeholder="Insira o token de integração da conta..." 
+                                value={exportToken}
+                                onChange={(e) => handleTokenChange(e.target.value)}
+                                className="w-full text-sm bg-transparent border-0 border-b border-amber-300 dark:border-amber-700 focus:ring-0 focus:border-amber-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
+                             />
+                         </div>
                      </div>
-                     <div className="flex-1">
-                         <label className="block text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Token da Conta Bancária (Boleto Cloud)</label>
-                         <input 
-                            type="text" 
-                            placeholder="Insira o token de integração da conta..." 
-                            value={exportToken}
-                            onChange={(e) => handleTokenChange(e.target.value)}
-                            className="w-full text-sm bg-transparent border-0 border-b border-amber-300 dark:border-amber-700 focus:ring-0 focus:border-amber-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
-                         />
+
+                     <div className="flex gap-4 items-center flex-wrap">
+                         <div className="relative flex-1">
+                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                             <input 
+                                type="text" 
+                                placeholder="Buscar cliente..." 
+                                value={exportSearchTerm}
+                                onChange={(e) => setExportSearchTerm(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                             />
+                         </div>
+                         <div className="flex gap-2">
+                             <button 
+                                onClick={toggleAllExportClients}
+                                className="px-3 py-2 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors flex items-center gap-2"
+                             >
+                                 {areAllVisibleSelected ? (
+                                     <><CheckSquare className="h-3.5 w-3.5" /> Desmarcar Todos</>
+                                 ) : (
+                                     <><Square className="h-3.5 w-3.5" /> Marcar Todos</>
+                                 )}
+                             </button>
+                         </div>
                      </div>
                  </div>
 
-                 {/* Input Documento Padrão (Fallback) */}
-                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                     <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400">
-                         <FileText className="h-4 w-4" />
-                     </div>
-                     <div className="flex-1">
-                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">CPF/CNPJ Padrão (Fallback)</label>
-                         <input 
-                            type="text" 
-                            placeholder="Caso não encontre no nome do cliente (Ex: 000.000.000-00)" 
-                            value={exportDefaultDocument}
-                            onChange={(e) => setExportDefaultDocument(e.target.value)}
-                            className="w-full text-sm bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 focus:ring-0 focus:border-emerald-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
-                         />
-                     </div>
+                 <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/50 min-h-[300px]">
+                     {filteredExportClients.length === 0 ? (
+                         <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                             <Filter className="h-8 w-8 mb-2 opacity-50" />
+                             <p className="text-sm">Nenhum cliente encontrado.</p>
+                         </div>
+                     ) : (
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                             {filteredExportClients.map(client => {
+                                 const isSelected = selectedExportClients.includes(client);
+                                 return (
+                                     <div 
+                                        key={client} 
+                                        onClick={() => toggleExportClient(client)}
+                                        className={`
+                                            cursor-pointer flex items-center p-3 rounded-lg border transition-all select-none
+                                            ${isSelected 
+                                                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' 
+                                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700'}
+                                        `}
+                                     >
+                                         <div className={`
+                                            flex items-center justify-center h-5 w-5 rounded border mr-3 shrink-0 transition-colors
+                                            ${isSelected 
+                                                ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                                : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-500 text-transparent'}
+                                         `}>
+                                             <CheckSquare className="h-3.5 w-3.5" />
+                                         </div>
+                                         <span className={`text-sm truncate ${isSelected ? 'font-medium text-emerald-900 dark:text-emerald-100' : 'text-slate-600 dark:text-slate-300'}`}>
+                                             {client}
+                                         </span>
+                                     </div>
+                                 );
+                             })}
+                         </div>
+                     )}
                  </div>
 
-                 <div className="flex gap-4 items-center flex-wrap">
-                     <div className="relative flex-1">
-                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                         <input 
-                            type="text" 
-                            placeholder="Buscar cliente..." 
-                            value={exportSearchTerm}
-                            onChange={(e) => setExportSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                         />
+                 <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-b-xl flex items-center justify-between">
+                     <div className="text-xs text-slate-500 dark:text-slate-400">
+                         <span className="font-semibold text-slate-900 dark:text-white">{selectedExportClients.length}</span> cliente(s) selecionado(s)
                      </div>
-                     <div className="flex gap-2">
+                     <div className="flex gap-3">
                          <button 
-                            onClick={toggleAllExportClients}
-                            className="px-3 py-2 text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg transition-colors flex items-center gap-2"
+                            onClick={() => setShowExportModal(false)}
+                            className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                          >
-                             {areAllVisibleSelected ? (
-                                 <><CheckSquare className="h-3.5 w-3.5" /> Desmarcar Todos</>
-                             ) : (
-                                 <><Square className="h-3.5 w-3.5" /> Marcar Todos</>
-                             )}
+                             Cancelar
+                         </button>
+                         <button 
+                            onClick={handleNextStep}
+                            disabled={selectedExportClients.length === 0}
+                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                         >
+                             Próximo <ArrowRight className="h-4 w-4" />
                          </button>
                      </div>
                  </div>
-             </div>
+               </>
+             )}
 
-             {/* Clients List */}
-             <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 dark:bg-slate-900/50 min-h-[300px]">
-                 {filteredExportClients.length === 0 ? (
-                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                         <Filter className="h-8 w-8 mb-2 opacity-50" />
-                         <p className="text-sm">Nenhum cliente encontrado.</p>
+             {/* ======================= ETAPA 2: DOCUMENTOS ======================= */}
+             {exportStep === 2 && (
+               <>
+                 <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/10">
+                     <div className="flex items-start gap-3">
+                         <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                         <p className="text-sm text-blue-800 dark:text-blue-200">
+                             <strong>Confira os documentos:</strong> O sistema tentou identificar o CPF/CNPJ de cada cliente. 
+                             Preencha os campos vazios. As alterações são salvas automaticamente para a próxima vez.
+                         </p>
                      </div>
-                 ) : (
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                         {filteredExportClients.map(client => {
-                             const isSelected = selectedExportClients.includes(client);
-                             return (
-                                 <div 
-                                    key={client} 
-                                    onClick={() => toggleExportClient(client)}
-                                    className={`
-                                        cursor-pointer flex items-center p-3 rounded-lg border transition-all select-none
-                                        ${isSelected 
-                                            ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' 
-                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700'}
-                                    `}
-                                 >
-                                     <div className={`
-                                        flex items-center justify-center h-5 w-5 rounded border mr-3 shrink-0 transition-colors
-                                        ${isSelected 
-                                            ? 'bg-emerald-500 border-emerald-500 text-white' 
-                                            : 'bg-white dark:bg-slate-700 border-slate-300 dark:border-slate-500 text-transparent'}
-                                     `}>
-                                         <CheckSquare className="h-3.5 w-3.5" />
-                                     </div>
-                                     <span className={`text-sm truncate ${isSelected ? 'font-medium text-emerald-900 dark:text-emerald-100' : 'text-slate-600 dark:text-slate-300'}`}>
-                                         {client}
-                                     </span>
-                                 </div>
-                             );
-                         })}
-                     </div>
-                 )}
-             </div>
+                 </div>
 
-             {/* Footer */}
-             <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-b-xl flex items-center justify-between">
-                 <div className="text-xs text-slate-500 dark:text-slate-400">
-                     <span className="font-semibold text-slate-900 dark:text-white">{selectedExportClients.length}</span> cliente(s) selecionado(s)
+                 <div className="flex-1 overflow-y-auto p-0 bg-white dark:bg-slate-900 min-h-[300px]">
+                     <table className="w-full text-left text-sm">
+                         <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
+                             <tr>
+                                 <th className="px-6 py-3 font-semibold text-slate-600 dark:text-slate-300">Cliente Selecionado</th>
+                                 <th className="px-6 py-3 font-semibold text-slate-600 dark:text-slate-300 w-[200px]">CPF / CNPJ</th>
+                             </tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                             {selectedExportClients.map(client => {
+                                 const currentValue = clientDocs[client] || '';
+                                 const isValid = currentValue.length >= 11; // Validação básica visual
+                                 
+                                 return (
+                                     <tr key={client} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                         <td className="px-6 py-3 align-middle">
+                                             <span className="font-medium text-slate-800 dark:text-slate-200 block truncate max-w-[300px]" title={client}>{client}</span>
+                                         </td>
+                                         <td className="px-6 py-2 align-middle">
+                                             <div className="relative">
+                                                 <input 
+                                                     type="text" 
+                                                     value={currentValue}
+                                                     onChange={(e) => handleClientDocChange(client, e.target.value)}
+                                                     placeholder="000.000.000-00"
+                                                     className={`
+                                                         w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 outline-none font-mono transition-colors
+                                                         ${isValid 
+                                                             ? 'border-slate-300 dark:border-slate-600 focus:border-emerald-500 focus:ring-emerald-500/20 bg-white dark:bg-slate-800 text-slate-900 dark:text-white' 
+                                                             : 'border-amber-300 dark:border-amber-700 focus:border-amber-500 focus:ring-amber-500/20 bg-amber-50 dark:bg-amber-900/10 text-amber-900 dark:text-amber-100'}
+                                                     `}
+                                                 />
+                                                 {isValid && <CheckCircle2 className="h-4 w-4 text-emerald-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />}
+                                             </div>
+                                         </td>
+                                     </tr>
+                                 );
+                             })}
+                         </tbody>
+                     </table>
                  </div>
-                 <div className="flex gap-3">
-                     <button 
-                        onClick={() => setShowExportModal(false)}
-                        className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                     >
-                         Cancelar
-                     </button>
-                     <button 
-                        onClick={handleConfirmExport}
-                        disabled={selectedExportClients.length === 0}
-                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                     >
-                         <Download className="h-4 w-4" />
-                         Gerar Arquivo
-                     </button>
+
+                 <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-b-xl flex items-center justify-between">
+                     <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                         <Save className="h-3 w-3" />
+                         Dados salvos localmente
+                     </div>
+                     <div className="flex gap-3">
+                         <button 
+                            onClick={() => setExportStep(1)}
+                            className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2"
+                         >
+                             <ChevronLeft className="h-4 w-4" /> Voltar
+                         </button>
+                         <button 
+                            onClick={handleGenerateCSV}
+                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 flex items-center gap-2"
+                         >
+                             <Download className="h-4 w-4" />
+                             Gerar Arquivo
+                         </button>
+                     </div>
                  </div>
-             </div>
+               </>
+             )}
           </div>
         </div>
       )}
