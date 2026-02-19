@@ -9,7 +9,18 @@ export const ReportService = {
   generatePDF: (
     transactions: Transaction[], 
     kpi: any,
-    filters: { startDate: string; endDate: string; types: string[]; status?: string; bankAccount?: string; dateContext?: string; movement?: string; sortField?: string; sortDirection?: string },
+    filters: { 
+        startDate: string; 
+        endDate: string; 
+        types: string[]; 
+        status?: string; 
+        bankAccount?: string; 
+        dateContext?: string; 
+        movement?: string; 
+        sortField?: string; 
+        sortDirection?: string;
+        client?: string; // Novo Campo: Cliente
+    },
     currentUser: User | null
   ) => {
     try {
@@ -59,6 +70,14 @@ export const ReportService = {
       doc.setFont('helvetica', 'bold');
       doc.text(`EMITIDO POR: ${safeStr(collaboratorName)}`, pageWidth - 14, 18, { align: 'right' });
       doc.text(`DATA: ${currentDate} às ${currentTime}`, pageWidth - 14, 25, { align: 'right' });
+
+      // --- CONTEXTO DO RELATÓRIO (CLIENTE) ---
+      // Se houver filtro de cliente, mostramos em destaque no header azul
+      if (filters.client) {
+          doc.setFontSize(11);
+          doc.setTextColor(255, 255, 0); // Amarelo para destaque
+          doc.text(`CLIENTE / FAVORECIDO: ${filters.client.toUpperCase()}`, 14, 34);
+      }
 
       // --- FINANCIAL SUMMARY ---
       let yPos = 50;
@@ -115,6 +134,7 @@ export const ReportService = {
       doc.text('Transações Detalhadas:', 14, yPos);
 
       // Sort info label
+      let infoText = "";
       if (filters.sortField) {
         const sortFieldLabels: Record<string, string> = {
           'date': 'Data de Lançamento',
@@ -126,12 +146,17 @@ export const ReportService = {
           'client': 'Cliente / Observação'
         };
         const sortDirLabel = filters.sortDirection === 'desc' ? 'Decrescente' : 'Crescente';
-        const sortLabel = `Ordenado por: ${sortFieldLabels[filters.sortField] || filters.sortField} (${sortDirLabel})`;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(120, 120, 120);
-        doc.text(sortLabel, pageWidth - 14, yPos, { align: 'right' });
+        infoText += `Ordenado por: ${sortFieldLabels[filters.sortField] || filters.sortField} (${sortDirLabel})`;
       }
+      
+      if(filters.client) {
+          infoText += ` | Filtro: ${filters.client}`;
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.text(infoText, pageWidth - 14, yPos, { align: 'right' });
 
       yPos += 5;
 

@@ -6,7 +6,7 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUpAZ, ArrowDownAZ } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUpAZ, ArrowDownAZ, Users, Search } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -35,6 +35,7 @@ const Reports: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>(''); 
   const [selectedBank, setSelectedBank] = useState<string>(''); 
   const [selectedMovement, setSelectedMovement] = useState<string>(''); 
+  const [selectedClient, setSelectedClient] = useState<string>(''); // Novo estado para Cliente
   
   // Sort States
   const [sortField, setSortField] = useState<SortField>('date');
@@ -101,12 +102,19 @@ const Reports: React.FC = () => {
     return Array.from(combined);
   }, [allTransactions]);
 
+  // Compute available clients dynamically
+  const availableClients = useMemo(() => {
+    const clients = new Set(allTransactions.map(t => t.client).filter(Boolean));
+    return Array.from(clients).sort();
+  }, [allTransactions]);
+
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
     
     // Reset filters before applying new mode specifics to avoid conflicts
     setSelectedStatus('');
     setSelectedBank('');
+    // Nota: Não resetamos o Cliente aqui intencionalmente, para permitir "Recebíveis do Cliente X"
     
     if (mode === 'payables') {
       setSelectedMovement('Saída');
@@ -187,7 +195,13 @@ const Reports: React.FC = () => {
       result = result.filter(t => t.bankAccount === selectedBank);
     }
 
-    // 6. Sorting
+    // 6. Client Filtering (NOVO)
+    if (selectedClient) {
+      const search = selectedClient.toLowerCase();
+      result = result.filter(t => (t.client || '').toLowerCase().includes(search));
+    }
+
+    // 7. Sorting
     result = [...result].sort((a, b) => {
       let valA: any;
       let valB: any;
@@ -278,7 +292,7 @@ const Reports: React.FC = () => {
     );
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
@@ -310,6 +324,7 @@ const Reports: React.FC = () => {
             status: selectedStatus, 
             bankAccount: selectedBank,
             movement: selectedMovement,
+            client: selectedClient, // Passando Cliente
             dateContext: dateLabelMap[dateFilterType],
             sortField,
             sortDirection
@@ -466,6 +481,37 @@ const Reports: React.FC = () => {
                                 <option value="Entrada">Entradas / Receitas</option>
                                 <option value="Saída">Saídas / Despesas</option>
                              </select>
+                        </div>
+                         {/* NOVO CAMPO: SELETOR DE CLIENTES */}
+                        <div>
+                            <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                <Users className="h-4 w-4" /> 
+                                Cliente / Favorecido
+                            </label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    list="report-clients-list"
+                                    value={selectedClient} 
+                                    onChange={(e) => setSelectedClient(e.target.value)}
+                                    placeholder="Buscar cliente..."
+                                    className="w-full pl-8 form-input rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 placeholder:text-slate-400"
+                                />
+                                <datalist id="report-clients-list">
+                                    {availableClients.map((client, idx) => (
+                                        <option key={`${client}-${idx}`} value={client} />
+                                    ))}
+                                </datalist>
+                                {selectedClient && (
+                                    <button 
+                                        onClick={() => setSelectedClient('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500"
+                                    >
+                                        <span className="text-xs font-bold">✕</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
             </div>
