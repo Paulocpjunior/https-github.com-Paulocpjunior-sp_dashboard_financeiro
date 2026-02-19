@@ -21,8 +21,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const user = AuthService.getCurrentUser();
 
   const handleLogout = () => {
-    AuthService.logout();
-    navigate('/login');
+    try {
+      console.log('Logging out...');
+      AuthService.logout();
+      navigate('/login');
+    } catch (e) {
+      console.error('Logout error:', e);
+      window.location.href = '#/login';
+    }
   };
 
   // Load Global Financial Data for Header
@@ -82,8 +88,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       
       {/* Session Active Toast */}
       {showSessionAlert && user && (
-        <div className="fixed top-5 right-5 z-[60] animate-in slide-in-from-right fade-in duration-500 print:hidden">
-           <div className="bg-emerald-600 text-white shadow-xl rounded-lg p-4 flex items-center gap-3 max-w-sm">
+        <div className="fixed top-5 right-5 z-[60] animate-in slide-in-from-right fade-in duration-500 print:hidden pointer-events-none">
+           <div className="bg-emerald-600 text-white shadow-xl rounded-lg p-4 flex items-center gap-3 max-w-sm pointer-events-auto">
               <CheckCircle className="h-5 w-5 text-white/90" />
               <div className="flex-1">
                  <h4 className="font-bold text-sm">Sessão Ativa</h4>
@@ -91,7 +97,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <button 
                 onClick={() => setShowSessionAlert(false)}
-                className="text-white/60 hover:text-white p-1 transition-colors"
+                className="text-white/60 hover:text-white p-1 transition-colors cursor-pointer"
+                type="button"
               >
                  <X className="h-4 w-4" />
               </button>
@@ -102,7 +109,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden print:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden print:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -110,7 +117,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Sidebar - Hidden on Print - Updated to Royal Blue Theme */}
       <aside 
         className={`
-          fixed lg:static inset-y-0 left-0 z-30 w-64 bg-royal-950 dark:bg-slate-900 text-white transform transition-transform duration-200 ease-in-out print:hidden shadow-xl
+          fixed lg:static inset-y-0 left-0 z-50 w-64 bg-royal-950 dark:bg-slate-900 text-white transform transition-transform duration-200 ease-in-out print:hidden shadow-xl
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col border-r border-royal-900 dark:border-slate-800
         `}
       >
@@ -125,7 +132,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className="text-[10px] text-royal-200 dark:text-slate-400 uppercase tracking-widest font-semibold mt-1">Gestão Financeira</span>
             </div>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-royal-200 hover:text-white">
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-royal-200 hover:text-white cursor-pointer" type="button">
             <X className="h-6 w-6" />
           </button>
         </div>
@@ -150,12 +157,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               return (
                 <button
                   key={item.path}
+                  type="button"
                   onClick={() => {
+                    console.log('Navigating to:', item.path);
                     navigate(item.path);
                     setIsSidebarOpen(false);
                   }}
                   className={`
-                    w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-200
+                    w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-200 cursor-pointer relative z-10
                     ${isActive 
                         ? 'bg-royal-800 dark:bg-blue-900/50 text-white shadow-md border border-royal-700/50' 
                         : 'text-royal-200 dark:text-slate-400 hover:bg-royal-900/50 dark:hover:bg-slate-800 hover:text-white'}
@@ -182,8 +191,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
 
           <button 
+            type="button"
             onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-3 text-royal-300 dark:text-slate-400 hover:text-white hover:bg-royal-900 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            className="w-full flex items-center space-x-3 px-4 py-3 text-royal-300 dark:text-slate-400 hover:text-white hover:bg-royal-900 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer relative z-10"
           >
             <LogOut className="h-5 w-5" />
             <span>Sair</span>
@@ -192,10 +202,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-0">
         {/* Mobile Header - Hidden on Print */}
-        <header className="lg:hidden flex items-center justify-between px-4 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 print:hidden transition-colors">
-          <button onClick={() => setIsSidebarOpen(true)} className="text-royal-800 dark:text-slate-300">
+        <header className="lg:hidden flex items-center justify-between px-4 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 print:hidden transition-colors relative z-20">
+          <button onClick={() => setIsSidebarOpen(true)} className="text-royal-800 dark:text-slate-300 cursor-pointer p-1" type="button">
             <Menu className="h-6 w-6" />
           </button>
           <div className="flex items-center gap-3">
@@ -207,7 +217,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <ThemeToggle />
         </header>
 
-        <main className="flex-1 overflow-auto p-4 lg:p-8 bg-slate-50/50 dark:bg-slate-950/50 print:bg-white print:p-0 transition-colors">
+        <main className="flex-1 overflow-auto p-4 lg:p-8 bg-slate-50/50 dark:bg-slate-950/50 print:bg-white print:p-0 transition-colors relative z-0">
           <div className="max-w-7xl mx-auto">
             
             {/* Global Financial Header Summary */}
@@ -253,8 +263,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                  <div className="flex items-center justify-center p-4 border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 print:hidden">
                     <button 
                         onClick={handleGlobalWhatsAppShare}
-                        className="flex flex-col items-center justify-center gap-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors w-full h-full"
+                        className="flex flex-col items-center justify-center gap-1 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors w-full h-full cursor-pointer"
                         title="Compartilhar Resumo Global via WhatsApp"
+                        type="button"
                     >
                         <MessageCircle className="h-6 w-6" />
                         <span className="text-xs font-semibold">Compartilhar</span>
