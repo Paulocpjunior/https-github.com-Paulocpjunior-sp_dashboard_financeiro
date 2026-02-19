@@ -1,3 +1,4 @@
+
 import { User } from '../types';
 
 // URL do Apps Script
@@ -59,15 +60,23 @@ export const AuthService = {
     const apiResult = await loginViaAPI(username, password);
     
     if (apiResult.success && apiResult.user) {
+      // NORMALIZAÇÃO DE DADOS DO USUÁRIO
+      // Garante que o role seja sempre minúsculo e sem espaços ('Admin ' -> 'admin')
+      // Isso corrige problemas de permissão se a planilha tiver formatação diferente
+      const normalizedUser: User = {
+        ...apiResult.user,
+        role: (apiResult.user.role || 'operacional').toLowerCase().trim() as any
+      };
+
       // Salvar no localStorage
       const authState: AuthState = {
-        user: apiResult.user,
+        user: normalizedUser,
         isAuthenticated: true,
       };
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
       
-      console.log('[AuthService] Login bem sucedido:', apiResult.user.name);
-      return { success: true, user: apiResult.user };
+      console.log('[AuthService] Login bem sucedido:', normalizedUser.name, 'Role:', normalizedUser.role);
+      return { success: true, user: normalizedUser };
     }
     
     return { success: false, message: apiResult.message || 'Credenciais inválidas.' };
