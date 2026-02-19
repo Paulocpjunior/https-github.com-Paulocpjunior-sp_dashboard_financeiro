@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import KpiCard from '../components/KpiCard';
@@ -469,12 +470,38 @@ const Dashboard: React.FC = () => {
             <p className="text-sm text-slate-500 mb-6">
               Verifique se a aplicação está publicada corretamente e se o ID da planilha é válido.
             </p>
-            <button 
-                onClick={() => window.location.reload()} 
-                className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all font-medium"
-            >
-              Tentar Novamente
-            </button>
+            <div className="flex gap-3 justify-center">
+                <button 
+                    onClick={() => window.location.reload()} 
+                    className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all font-medium"
+                >
+                  Tentar Novamente
+                </button>
+                <button
+                    onClick={() => {
+                        DataService.loadMockData();
+                        setInitError('');
+                        setIsLoading(false);
+                        // Trigger a local refresh to grab the mock data
+                        const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
+                        setData(result.data);
+                        setTotalPages(result.totalPages);
+                        setKpi(newKpi);
+                        // Atualizar opções de filtro
+                        setOptions({
+                            bankAccounts: DataService.getUniqueValues('bankAccount'),
+                            types: DataService.getUniqueValues('type'),
+                            statuses: DataService.getUniqueValues('status'),
+                            movements: DataService.getUniqueValues('movement'),
+                            clients: DataService.getUniqueValues('client'),
+                            paidBys: DataService.getUniqueValues('paidBy'),
+                        });
+                    }}
+                    className="px-6 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all font-medium"
+                >
+                    Entrar com Dados de Exemplo
+                </button>
+            </div>
           </div>
         </div>
       </Layout>

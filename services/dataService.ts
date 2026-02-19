@@ -1,5 +1,7 @@
+
 import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { BackendService } from './backendService';
+import { MOCK_TRANSACTIONS } from '../constants';
 
 // In-memory cache to store data fetched from Sheet
 let CACHED_TRANSACTIONS: Transaction[] = [];
@@ -42,6 +44,15 @@ export const DataService = {
       console.error("Failed to load transactions", error);
       throw error;
     }
+  },
+
+  loadMockData: (): void => {
+    console.warn("Carregando dados de exemplo (Mock Mode)");
+    CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
+    isDataLoaded = true;
+    lastUpdatedAt = new Date();
+    // Notificar todos os listeners que o cache foi atualizado
+    autoRefreshListeners.forEach(fn => fn());
   },
 
   refreshCache: async (): Promise<void> => {

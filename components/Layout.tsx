@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle } from 'lucide-react';
@@ -72,7 +73,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navItems = [
     { path: '/', label: 'Painel Principal', icon: LayoutDashboard },
     { path: '/reports', label: 'Relatórios', icon: FileText },
-    ...(user?.role === 'admin' ? [{ path: '/admin', label: 'Usuários', icon: Users }] : []),
+    // Verificação Case-Insensitive para Admin
+    ...((user?.role || '').toLowerCase() === 'admin' ? [{ path: '/admin', label: 'Usuários', icon: Users }] : []),
   ];
 
   return (
