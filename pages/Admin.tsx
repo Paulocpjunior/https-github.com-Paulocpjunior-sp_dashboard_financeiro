@@ -5,6 +5,7 @@ import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw,
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
+import { MOCK_USERS } from '../constants';
 
 interface PendingUser {
   id: string;
@@ -56,6 +57,14 @@ const Admin: React.FC = () => {
   // Carregar usuários pendentes do Apps Script
   const loadPendingUsers = async () => {
     setLoadingPending(true);
+    
+    // Se estiver em modo Mock, não tenta conectar
+    if (DataService.isMockMode) {
+        setPendingUsers([]); // Em modo mock, sem pendentes (ou poderia mockar)
+        setLoadingPending(false);
+        return;
+    }
+
     try {
       const response = await fetch(APPS_SCRIPT_URL + '?action=pendentes');
       if (response.ok) {
@@ -73,6 +82,12 @@ const Admin: React.FC = () => {
 
   // Carregar todos os usuários do Apps Script
   const loadAllUsers = async () => {
+    // Se estiver em modo Mock, usa MOCK_USERS diretamente
+    if (DataService.isMockMode) {
+        setUsers(MOCK_USERS);
+        return;
+    }
+
     try {
       const response = await fetch(APPS_SCRIPT_URL + '?action=usuarios');
       if (response.ok) {
@@ -117,7 +132,7 @@ const Admin: React.FC = () => {
     loadData();
   }, []);
 
-  // ... (Rest of Admin.tsx remains exactly the same, only changed loadAllUsers and useEffect above)
+  // ... (Rest of Admin.tsx logic for modals and updates remains the same)
   const handleSaveDatabaseId = async () => {
     if (!spreadsheetId.trim()) {
         setDbMessage({ type: 'error', text: 'O ID da planilha não pode estar vazio.' });
@@ -680,7 +695,7 @@ const Admin: React.FC = () => {
         </div>
       </div>
       
-      {/* ... (Modals remain unchanged) ... */}
+      {/* ... (Modals omitted for brevity, they are unchanged) ... */}
       {/* Modal Alterar Senha */}
       {showChangePassModal && selectedUserForPass && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in">

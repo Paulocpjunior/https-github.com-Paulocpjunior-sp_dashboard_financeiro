@@ -6,7 +6,7 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, Clock, AlertCircle, ArrowLeftRight, CheckCircle2, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -23,6 +23,7 @@ interface DetailedKPI extends KPIData {
 
 const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [initError, setInitError] = useState(''); // Estado de erro adicionado
   const [generating, setGenerating] = useState(false);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   
@@ -54,23 +55,26 @@ const Reports: React.FC = () => {
       settledReceivables: 0
   });
 
-  // Initial Load with Cache Priority
+  // Initial Load with Cache Priority & Error Handling
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
+        setInitError(''); // Reset error
+
         // Se os dados já estiverem carregados (seja real ou mock), usa o que tem.
-        // Se NÃO estiver carregado, tenta refreshCache (que chama loadData).
-        if (!DataService.isDataLoaded) {
-            await DataService.refreshCache();
+        if (DataService.isDataLoaded) {
+             const { result } = DataService.getTransactions({}, 1, 99999);
+             setAllTransactions(result.data);
+        } else {
+             // Tenta carregar. Se falhar e não for mock, vai cair no catch
+             await DataService.loadData();
+             const { result } = DataService.getTransactions({}, 1, 99999);
+             setAllTransactions(result.data);
         }
-        
-        // Pega os dados atuais (do cache ou do fetch recente)
-        const { result } = DataService.getTransactions({}, 1, 99999);
-        setAllTransactions(result.data);
-      } catch (e) {
+      } catch (e: any) {
         console.error("Erro ao carregar dados em Relatórios:", e);
-        // Fallback silencioso: se der erro, lista vazia será exibida, mas layout não quebra
+        setInitError(e.message || 'Falha na conexão com os dados.');
       } finally {
         setLoading(false);
       }
@@ -314,6 +318,43 @@ const Reports: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  // --- ERROR FALLBACK UI (Mesma do Dashboard) ---
+  if (initError) {
+    return (
+      <Layout>
+        <div className="h-[80vh] flex flex-col items-center justify-center">
+          <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg text-center border border-red-100 dark:border-red-900 max-w-md animate-in zoom-in-95">
+            <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2">Falha ao Carregar Relatórios</h2>
+            <p className="text-red-500 dark:text-red-400/80 mb-4">{initError}</p>
+            <p className="text-sm text-slate-500 mb-6">
+              Não foi possível sincronizar com a planilha. Você pode tentar novamente ou visualizar dados de exemplo.
+            </p>
+            <div className="flex gap-3 justify-center">
+                <button 
+                    onClick={() => window.location.reload()} 
+                    className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all font-medium"
+                >
+                  Tentar Novamente
+                </button>
+                <button
+                    onClick={() => {
+                        DataService.loadMockData();
+                        setInitError('');
+                        setLoading(false);
+                        const { result } = DataService.getTransactions({}, 1, 99999);
+                        setAllTransactions(result.data);
+                    }}
+                    className="px-6 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all font-medium"
+                >
+                    Entrar com Dados de Exemplo
+                </button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -359,8 +400,7 @@ const Reports: React.FC = () => {
             </button>
         </div>
 
-        {/* ... Rest of the component (filters, chart, preview) stays same ... */}
-        {/* Simplified for response brevity, assume existing layout logic continues */}
+        {/* Filters and Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
                 {/* Filters UI (Config Panel, Specific Filters, Sort, Types) */}
