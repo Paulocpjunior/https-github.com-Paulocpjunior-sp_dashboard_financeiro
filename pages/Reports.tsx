@@ -6,7 +6,7 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUpAZ, ArrowDownAZ } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -113,16 +113,22 @@ const Reports: React.FC = () => {
       setSelectedTypes([]); 
       setDateFilterType('dueDate');
       setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
+      setSortField('dueDate'); // Ordenar por vencimento
+      setSortDirection('asc');
     } else if (mode === 'receivables') {
       setSelectedMovement('Entrada');
       setSelectedTypes([]); 
       setDateFilterType('dueDate'); 
       setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
+      setSortField('dueDate'); // Ordenar por vencimento
+      setSortDirection('asc');
     } else {
       setSelectedMovement('');
       setSelectedTypes([]);
       setDateFilterType('date');
       setSelectedStatus(''); // Modo geral permite ver tudo
+      setSortField('date');
+      setSortDirection('desc');
     }
   };
 
@@ -462,6 +468,47 @@ const Reports: React.FC = () => {
                              </select>
                         </div>
                     </div>
+            </div>
+
+            {/* SEÇÃO DE ORDENAÇÃO */}
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+                    <ArrowUpDown className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                    Ordenação
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                         <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Ordenar Por</label>
+                         <select 
+                            className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
+                            value={sortField}
+                            onChange={(e) => setSortField(e.target.value as SortField)}
+                         >
+                            <option value="date">Data Lançamento</option>
+                            <option value="dueDate">Data Vencimento</option>
+                            <option value="paymentDate">Data Pagamento/Baixa</option>
+                            <option value="client">Cliente / Favorecido</option>
+                            <option value="valorOriginal">Valor (Original)</option>
+                         </select>
+                    </div>
+                    <div>
+                         <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Ordem</label>
+                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                            <button 
+                              onClick={() => setSortDirection('asc')} 
+                              className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-2 ${sortDirection === 'asc' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                            >
+                                <ArrowUpAZ className="h-4 w-4" /> Crescente
+                            </button>
+                            <button 
+                              onClick={() => setSortDirection('desc')} 
+                              className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-2 ${sortDirection === 'desc' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                            >
+                                <ArrowDownAZ className="h-4 w-4" /> Decrescente
+                            </button>
+                         </div>
+                    </div>
+                </div>
             </div>
             
             <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">

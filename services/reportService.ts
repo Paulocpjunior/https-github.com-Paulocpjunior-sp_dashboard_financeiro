@@ -1,3 +1,5 @@
+
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Transaction, KPIData, User } from '../types';
@@ -33,8 +35,8 @@ export const ReportService = {
       const doc = new jsPDF({ orientation: 'landscape' });
       const pageWidth = doc.internal.pageSize.width || 297;
       const pageHeight = doc.internal.pageSize.height || 210;
-      const primaryColor = [30, 64, 175];
-      const secondaryColor = [71, 85, 105];
+      const primaryColor: [number, number, number] = [30, 64, 175];
+      const secondaryColor: [number, number, number] = [71, 85, 105];
       
       // --- HEADER ---
       doc.setFillColor(...primaryColor);
@@ -188,13 +190,13 @@ export const ReportService = {
           status,            // 4: Status
           valorOriginalFmt,  // 5: Valor Original (Previsto)
           valorPagoFmt,      // 6: Valor Pago (Efetivado)
-          observacao         // 7: Observação a Pagar (Cliente)
+          observacao         // 7: Cliente / Favorecido
         ];
       });
 
       autoTable(doc, {
           startY: yPos,
-          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Observação a Pagar']],
+          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
@@ -220,15 +222,15 @@ export const ReportService = {
               4: { cellWidth: 18, halign: 'center' }, // Status
               5: { cellWidth: 22, halign: 'right' },  // Valor Orig
               6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }, // Valor Pago
-              7: { cellWidth: 'auto' }                // Observação (Cliente)
+              7: { cellWidth: 'auto' }                // Cliente
           },
           didParseCell: (data: any) => {
               // Colorir Status (Index 4)
               if (data.section === 'body' && data.column.index === 4) {
                   const txt = String(data.cell.raw).toLowerCase();
-                  if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74];
+                  if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74] as [number, number, number];
                   else if (txt === 'pendente' || txt === 'agendado') {
-                      data.cell.styles.textColor = [234, 88, 12];
+                      data.cell.styles.textColor = [234, 88, 12] as [number, number, number];
                       data.cell.styles.fontStyle = 'bold';
                   }
               }
@@ -237,7 +239,7 @@ export const ReportService = {
                   const statusRow = data.row.raw[4]; // Coluna Status é indice 4 agora
                   const statusTxt = String(statusRow).toLowerCase();
                   if (statusTxt === 'pendente' || statusTxt === 'agendado') {
-                      data.cell.styles.textColor = [234, 88, 12]; // Orange
+                      data.cell.styles.textColor = [234, 88, 12] as [number, number, number]; // Orange
                       data.cell.styles.fontStyle = 'bold';
                   }
               }
