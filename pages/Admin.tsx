@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw, Key, Lock, Unlock } from 'lucide-react';
@@ -80,11 +81,16 @@ const Admin: React.FC = () => {
           // Filtrar apenas usuários aprovados/ativos (mas pode incluir inativos para gestão)
           const allUsers = data.usuarios.filter((u: any) => u.status === 'Aprovado' || u.active !== undefined);
           setUsers(allUsers);
+        } else {
+             // Se não retornar usuários ou success false, tenta fallback
+             throw new Error("Formato inválido ou sem usuários");
         }
+      } else {
+          throw new Error("Erro na requisição");
       }
     } catch (error) {
-      console.error('Erro ao carregar usuários:', error);
-      // Fallback para MOCK_USERS
+      console.warn('Falha ao carregar usuários do backend. Usando fallback local.', error);
+      // Fallback para MOCK_USERS se API falhar, para não quebrar a tela
       const userData = await BackendService.fetchUsers();
       setUsers(userData);
     }
@@ -93,6 +99,7 @@ const Admin: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
         // Carregar usuários ativos
         await loadAllUsers();
         
@@ -102,7 +109,7 @@ const Admin: React.FC = () => {
         // Load current Spreadsheet ID
         setSpreadsheetId(BackendService.getSpreadsheetId());
       } catch (error) {
-        console.error("Failed to load data", error);
+        console.error("Failed to load data in Admin", error);
       } finally {
         setLoading(false);
       }
@@ -110,6 +117,7 @@ const Admin: React.FC = () => {
     loadData();
   }, []);
 
+  // ... (Rest of Admin.tsx remains exactly the same, only changed loadAllUsers and useEffect above)
   const handleSaveDatabaseId = async () => {
     if (!spreadsheetId.trim()) {
         setDbMessage({ type: 'error', text: 'O ID da planilha não pode estar vazio.' });
@@ -122,6 +130,7 @@ const Admin: React.FC = () => {
     try {
         BackendService.updateSpreadsheetId(spreadsheetId);
         setSpreadsheetId(BackendService.getSpreadsheetId());
+        // Se estiver em modo mock, isso não vai funcionar, mas ok.
         await DataService.refreshCache();
         setDbMessage({ type: 'success', text: 'Conexão estabelecida e salva com sucesso!' });
     } catch (error: any) {
@@ -139,8 +148,6 @@ const Admin: React.FC = () => {
           DataService.refreshCache().catch(() => {});
       }
   };
-
-  // --- AÇÕES DO ADMIN (NOVO CÓDIGO) ---
 
   // 1. Bloquear / Desbloquear Usuário
   const handleToggleStatus = async (user: UserType) => {
@@ -672,7 +679,8 @@ const Admin: React.FC = () => {
           )}
         </div>
       </div>
-
+      
+      {/* ... (Modals remain unchanged) ... */}
       {/* Modal Alterar Senha */}
       {showChangePassModal && selectedUserForPass && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in">

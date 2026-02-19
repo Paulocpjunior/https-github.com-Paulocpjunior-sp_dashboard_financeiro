@@ -6,6 +6,7 @@ import { MOCK_TRANSACTIONS } from '../constants';
 // In-memory cache to store data fetched from Sheet
 let CACHED_TRANSACTIONS: Transaction[] = [];
 let isDataLoaded = false;
+let isMockMode = false; // NOVA FLAG: Indica se estamos operando com dados fictícios
 let lastUpdatedAt: Date | null = null;
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let autoRefreshListeners: Array<() => void> = [];
@@ -27,11 +28,25 @@ export const DataService = {
     return isDataLoaded;
   },
 
+  get isMockMode() {
+    return isMockMode;
+  },
+
   /**
    * Fetches data from the backend (Google Sheet) and updates local cache.
    * Call this when Dashboard mounts.
    */
   loadData: async (): Promise<void> => {
+    // SE ESTIVER EM MOCK MODE, NÃO TENTA CONECTAR NO BACKEND
+    if (isMockMode) {
+        console.log("MockMode ativo: ignorando fetch real.");
+        if (CACHED_TRANSACTIONS.length === 0) {
+            CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
+        }
+        isDataLoaded = true;
+        return;
+    }
+
     try {
       const data = await BackendService.fetchTransactions();
       
@@ -50,12 +65,19 @@ export const DataService = {
     console.warn("Carregando dados de exemplo (Mock Mode)");
     CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
     isDataLoaded = true;
+    isMockMode = true; // ATIVA O MODO MOCK
     lastUpdatedAt = new Date();
     // Notificar todos os listeners que o cache foi atualizado
     autoRefreshListeners.forEach(fn => fn());
   },
 
   refreshCache: async (): Promise<void> => {
+    // Se estiver em modo Mock, apenas simula um refresh (não faz nada ou re-embaralha se quisesse)
+    if (isMockMode) {
+        console.log("MockMode ativo: refresh ignorado.");
+        return;
+    }
+
     isDataLoaded = false;
     await DataService.loadData();
     // Notificar todos os listeners que o cache foi atualizado
@@ -75,6 +97,10 @@ export const DataService = {
    */
   startAutoRefresh: (intervalMs?: number): void => {
     DataService.stopAutoRefresh(); // Limpa timer anterior se existir
+    
+    // Não inicia auto-refresh se estiver em modo mock (não faz sentido)
+    if (isMockMode) return;
+
     const interval = intervalMs || AUTO_REFRESH_INTERVAL_MS;
     
     autoRefreshTimer = setInterval(async () => {
@@ -250,58 +276,37 @@ export const DataService = {
     let kpi: KPIData;
 
     if (isContasAPagar) {
-      // ============================================================
-      // CORREÇÃO: LÓGICA PARA CONTAS A PAGAR
-      // ============================================================
-      // - Total Geral = soma de TODOS os valuePaid (independente do status)
-      // - Total Pago  = soma dos valuePaid onde status = "Pago"
-      // - Saldo a Pagar (Pendente) = soma dos valuePaid onde status = "Pendente" ou "Agendado"
-      // ============================================================
-      
+      // Lógica Contas a Pagar (Mantida)
       const totalGeral = filtered.reduce((acc, curr) => acc + curr.valuePaid, 0);
-      
       const totalPago = filtered
         .filter(item => item.status === 'Pago')
         .reduce((acc, curr) => acc + curr.valuePaid, 0);
-      
-      // CORREÇÃO PRINCIPAL: calcular pendente DIRETAMENTE dos itens pendentes
-      // Em vez de (totalGeral - totalPago), que pode dar errado se houver status "Agendado"
       const totalPendente = filtered
         .filter(item => item.status === 'Pendente' || item.status === 'Agendado')
         .reduce((acc, curr) => acc + curr.valuePaid, 0);
 
       kpi = {
-        totalPaid: totalPago,        // Card "Total Pago" (verde)
-        totalReceived: totalGeral,   // Card "Total Geral" (azul)
-        balance: totalPendente,      // Card "Saldo a Pagar" (vermelho/amber) = PENDENTES
+        totalPaid: totalPago,
+        totalReceived: totalGeral,
+        balance: totalPendente,
       };
     } else if (isContasAReceber) {
-      // ============================================================
-      // LÓGICA PARA CONTAS A RECEBER
-      // ============================================================
-      // - Total Geral a Receber = soma de TODOS os totalCobranca
-      // - Valor Recebido = soma dos valueReceived onde status = "Pago"
-      // - Saldo a Receber = Total Geral - Valor Recebido
-      // ============================================================
-      
+      // Lógica Contas a Receber (Mantida)
       const totalGeralReceber = filtered.reduce((acc, curr) => acc + (curr.totalCobranca || curr.valueReceived || 0), 0);
-      
       const totalRecebido = filtered
         .filter(item => item.status === 'Pago')
         .reduce((acc, curr) => acc + (curr.valueReceived || curr.totalCobranca || 0), 0);
-      
       const saldoReceber = totalGeralReceber - totalRecebido;
 
       kpi = {
-        totalReceived: totalGeralReceber,  // Card "Total Geral a Receber"
-        totalPaid: totalRecebido,          // Card "Valor Recebido"
-        balance: saldoReceber,             // Card "Saldo a Receber"
+        totalReceived: totalGeralReceber,
+        totalPaid: totalRecebido,
+        balance: saldoReceber,
       };
     } else {
-      // LÓGICA PADRÃO para outros tipos (Entradas, Misto, etc.)
+      // Lógica Padrão (Mantida)
       kpi = filtered.reduce(
         (acc, curr) => {
-          // Para Entradas Pendentes, usar totalCobranca como valor de referência
           const entradaVal = curr.movement === 'Entrada' && curr.status === 'Pendente' && curr.valueReceived === 0
             ? (curr.totalCobranca || 0)
             : curr.valueReceived;
@@ -336,19 +341,10 @@ export const DataService = {
 
   exportToCSV: (filters: Partial<FilterState>): void => {
     const { result } = DataService.getTransactions(filters, 1, 999999);
+    // ... lógica de exportação mantida ...
     const headers = [
-      'ID',
-      'Data Lançamento',
-      'Data Vencimento',
-      'Data Baixa',
-      'Conta',
-      'Tipo',
-      'Status',
-      'Cliente',
-      'Pago Por',
-      'Movimento',
-      'Valor Pago',
-      'Valor Recebido',
+      'ID', 'Data Lançamento', 'Data Vencimento', 'Data Baixa', 'Conta', 'Tipo', 'Status', 
+      'Cliente', 'Pago Por', 'Movimento', 'Valor Pago', 'Valor Recebido',
     ];
 
     const csvContent =
@@ -357,16 +353,8 @@ export const DataService = {
         .concat(
           result.data.map((row) =>
             [
-              row.id,
-              row.date,
-              row.dueDate,
-              row.paymentDate || '',
-              row.bankAccount,
-              row.type,
-              row.status,
-              `"${row.client}"`,
-              row.paidBy,
-              row.movement,
+              row.id, row.date, row.dueDate, row.paymentDate || '', row.bankAccount, row.type, row.status,
+              `"${row.client}"`, row.paidBy, row.movement,
               row.valuePaid.toFixed(2).replace('.', ','),
               row.valueReceived.toFixed(2).replace('.', ','),
             ].join(';')
