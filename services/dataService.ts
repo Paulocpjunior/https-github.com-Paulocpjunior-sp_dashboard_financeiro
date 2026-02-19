@@ -3,18 +3,23 @@ import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { BackendService } from './backendService';
 import { MOCK_TRANSACTIONS } from '../constants';
 
-// In-memory cache to store data fetched from Sheet
+// In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
 let isDataLoaded = false;
-let isMockMode = false; // NOVA FLAG: Indica se estamos operando com dados fictícios
+let isMockMode = false;
 let lastUpdatedAt: Date | null = null;
+
+// Controle de Concorrência (Evita requisições simultâneas/loops)
+let currentLoadPromise: Promise<void> | null = null;
+
+// Timer para Auto-Refresh
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let autoRefreshListeners: Array<() => void> = [];
 
-// Intervalo padrão de auto-refresh: 1 minuto (60000ms)
-const AUTO_REFRESH_INTERVAL_MS = 1 * 60 * 1000;
+// Constante de Refresh (2 minutos para evitar excesso de requisições)
+const AUTO_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
-// Função para normalizar texto (remove acentos)
+// Normalização de texto auxiliar
 const normalizeText = (text: string) => {
   return text
     .toLowerCase()
@@ -33,110 +38,111 @@ export const DataService = {
   },
 
   /**
-   * Fetches data from the backend (Google Sheet) and updates local cache.
-   * Call this when Dashboard mounts.
+   * Carrega os dados.
+   * BLINDADO: Se já estiver carregando, retorna a promessa em andamento.
+   * Se já estiver carregado e não for refresh forçado, retorna imediatamente.
    */
-  loadData: async (): Promise<void> => {
-    // SE ESTIVER EM MOCK MODE, NÃO TENTA CONECTAR NO BACKEND
+  loadData: async (forceRefresh = false): Promise<void> => {
+    // 1. Loop Breaker: Se já carregou e não é refresh forçado, retorna.
+    if (isDataLoaded && !forceRefresh) {
+        return;
+    }
+
+    // 2. Concurrency Lock: Se já existe uma requisição em andamento, espera por ela.
+    if (currentLoadPromise) {
+        console.log("[DataService] Requisição já em andamento. Aguardando...");
+        return currentLoadPromise;
+    }
+
+    // 3. Mock Mode Check
     if (isMockMode) {
-        console.log("MockMode ativo: ignorando fetch real.");
         if (CACHED_TRANSACTIONS.length === 0) {
             CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
         }
         isDataLoaded = true;
+        lastUpdatedAt = new Date();
         return;
     }
 
-    try {
-      const data = await BackendService.fetchTransactions();
-      
-      // Store data directly. BackendService now ensures sorting (Desc) and format.
-      CACHED_TRANSACTIONS = data;
+    // 4. Inicia nova requisição e guarda a promessa
+    currentLoadPromise = (async () => {
+        try {
+            console.log("[DataService] Iniciando fetch de transações...");
+            const data = await BackendService.fetchTransactions();
+            
+            if (!data || !Array.isArray(data)) {
+                throw new Error("Formato de dados inválido recebido do backend.");
+            }
 
-      isDataLoaded = true;
-      lastUpdatedAt = new Date();
-    } catch (error) {
-      console.error("Failed to load transactions", error);
-      throw error;
-    }
+            CACHED_TRANSACTIONS = data;
+            isDataLoaded = true;
+            lastUpdatedAt = new Date();
+            console.log(`[DataService] Sucesso. ${data.length} registros carregados.`);
+        } catch (error) {
+            console.error("[DataService] Erro fatal no carregamento:", error);
+            isDataLoaded = false;
+            // Repassa o erro para a UI tratar (ex: mostrar mensagem de erro),
+            // mas garante que o estado de "carregando" seja limpo no finally.
+            throw error;
+        } finally {
+            // Libera o lock para permitir novas tentativas futuras (ex: clique no botão "Tentar Novamente")
+            currentLoadPromise = null;
+        }
+    })();
+
+    return currentLoadPromise;
   },
 
+  /**
+   * Ativa modo de demonstração com dados locais.
+   */
   loadMockData: (): void => {
-    console.warn("Carregando dados de exemplo (Mock Mode)");
+    console.warn("[DataService] Ativando Modo Mock");
     CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
     isDataLoaded = true;
-    isMockMode = true; // ATIVA O MODO MOCK
+    isMockMode = true;
     lastUpdatedAt = new Date();
-    // Notificar todos os listeners que o cache foi atualizado
-    autoRefreshListeners.forEach(fn => fn());
+    DataService.notifyListeners();
   },
 
+  /**
+   * Força uma atualização dos dados.
+   */
   refreshCache: async (): Promise<void> => {
-    // Se estiver em modo Mock, apenas simula um refresh (não faz nada ou re-embaralha se quisesse)
-    if (isMockMode) {
-        console.log("MockMode ativo: refresh ignorado.");
-        return;
+    if (isMockMode) return;
+    try {
+        await DataService.loadData(true);
+        DataService.notifyListeners();
+    } catch (e) {
+        console.error("[DataService] Falha ao recarregar cache:", e);
     }
-
-    isDataLoaded = false;
-    await DataService.loadData();
-    // Notificar todos os listeners que o cache foi atualizado
-    autoRefreshListeners.forEach(fn => fn());
   },
 
-  /**
-   * Retorna a data/hora da última atualização dos dados.
-   */
-  getLastUpdatedAt: (): Date | null => {
-    return lastUpdatedAt;
-  },
+  getLastUpdatedAt: (): Date | null => lastUpdatedAt,
 
-  /**
-   * Inicia o auto-refresh periódico. Se já estiver ativo, reinicia o timer.
-   * @param intervalMs Intervalo em milissegundos (padrão: AUTO_REFRESH_INTERVAL_MS)
-   */
-  startAutoRefresh: (intervalMs?: number): void => {
-    DataService.stopAutoRefresh(); // Limpa timer anterior se existir
-    
-    // Não inicia auto-refresh se estiver em modo mock (não faz sentido)
+  // --- Auto Refresh Logic ---
+
+  startAutoRefresh: (intervalMs = AUTO_REFRESH_INTERVAL_MS): void => {
+    DataService.stopAutoRefresh();
     if (isMockMode) return;
 
-    const interval = intervalMs || AUTO_REFRESH_INTERVAL_MS;
-    
     autoRefreshTimer = setInterval(async () => {
-      try {
-        console.log(`[AutoRefresh] Atualizando dados... (${new Date().toLocaleTimeString('pt-BR')})`);
-        await DataService.refreshCache();
-      } catch (error) {
-        console.error('[AutoRefresh] Erro ao atualizar:', error);
-      }
-    }, interval);
-    
-    console.log(`[AutoRefresh] Ativado a cada ${interval / 1000}s`);
+        console.log('[DataService] Auto-refresh executando...');
+        try {
+            await DataService.refreshCache();
+        } catch (e) {
+            console.error('[DataService] Erro silencioso no auto-refresh:', e);
+        }
+    }, intervalMs);
   },
 
-  /**
-   * Para o auto-refresh periódico.
-   */
   stopAutoRefresh: (): void => {
     if (autoRefreshTimer) {
-      clearInterval(autoRefreshTimer);
-      autoRefreshTimer = null;
-      console.log('[AutoRefresh] Desativado');
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
     }
   },
 
-  /**
-   * Verifica se o auto-refresh está ativo.
-   */
-  isAutoRefreshActive: (): boolean => {
-    return autoRefreshTimer !== null;
-  },
-
-  /**
-   * Registra um listener que será chamado sempre que o cache for atualizado.
-   * Retorna uma função de cleanup para remover o listener.
-   */
   onRefresh: (callback: () => void): (() => void) => {
     autoRefreshListeners.push(callback);
     return () => {
@@ -144,192 +150,146 @@ export const DataService = {
     };
   },
 
-  /**
-   * Extracts unique values from a specific column to populate filter dropdowns dynamically.
-   */
+  notifyListeners: () => {
+      autoRefreshListeners.forEach(fn => fn());
+  },
+
+  // --- Data Access & Filtering ---
+
   getUniqueValues: (field: keyof Transaction): string[] => {
     if (!isDataLoaded) return [];
-    const values = new Set(CACHED_TRANSACTIONS.map(t => String(t[field]).trim()).filter(Boolean));
+    const values = new Set(CACHED_TRANSACTIONS.map(t => String(t[field] || '').trim()).filter(Boolean));
     return Array.from(values).sort();
   },
 
-  /**
-   * Calcula estatísticas globais específicas para o Header:
-   * - Entradas: Contas a Receber em Aberto (Pendente/Agendado)
-   * - Saídas: Contas a Pagar em Aberto (Pendente/Agendado)
-   * - Saldo: Saldo Realizado (Caixa atual)
-   */
   getGlobalStats: (): KPIData => {
     if (!isDataLoaded) return { totalPaid: 0, totalReceived: 0, balance: 0 };
     
-    let pendingReceivables = 0; // Entradas Globais (Em Aberto)
-    let pendingPayables = 0;    // Saídas Globais (Em Aberto)
-    let actualBalance = 0;      // Saldo Acumulado (Realizado)
+    let pendingReceivables = 0;
+    let pendingPayables = 0;
+    let actualBalance = 0;
 
     CACHED_TRANSACTIONS.forEach(t => {
         const statusLower = (t.status || '').toLowerCase();
-        const isPaid = statusLower === 'pago';
-        const isPending = statusLower === 'pendente' || statusLower === 'agendado';
+        const isPaid = statusLower === 'pago' || statusLower === 'recebido' || statusLower === 'sim' || statusLower === 'ok';
+        const isPending = !isPaid;
 
-        // 1. Saldo Acumulado (Cash on Hand) -> SOMENTE PAGOS
-        // Este é o dinheiro que realmente existe na conta hoje.
         if (isPaid) {
+            // Saldo Realizado = Recebido - Pago
             actualBalance += (t.valueReceived - t.valuePaid);
         }
 
-        // 2. Filtros Solicitados para Entradas/Saídas Globais (EM ABERTO)
         if (isPending) {
-            
-            // Entradas Globais: "Contas a Receber" e "Saldo a Receber em aberto"
-            if (t.movement === 'Entrada' || t.valueReceived > 0) {
-                pendingReceivables += t.valueReceived;
+            // Entradas Pendentes
+            if (t.movement === 'Entrada' || (t.valueReceived > 0 && t.valuePaid === 0)) {
+                // Se tiver TotalCobrança, usa. Senão valueReceived.
+                const val = (t.totalCobranca && t.totalCobranca > 0) ? t.totalCobranca : t.valueReceived;
+                pendingReceivables += val;
             }
-
-            // Saídas Globais: "Contas a Pagar" e "Pendente/A Pagar"
-            if (t.movement === 'Saída' || t.valuePaid > 0) {
+            // Saídas Pendentes
+            if (t.movement === 'Saída' || (t.valuePaid > 0 && t.valueReceived === 0)) {
                 pendingPayables += t.valuePaid;
             }
         }
     });
 
     return {
-        totalReceived: pendingReceivables, // Reflete "A Receber em Aberto"
-        totalPaid: pendingPayables,       // Reflete "A Pagar em Aberto"
-        balance: actualBalance            // Reflete "Saldo em Caixa"
+        totalReceived: pendingReceivables, // A Receber
+        totalPaid: pendingPayables,       // A Pagar
+        balance: actualBalance            // Saldo em Caixa
     };
   },
 
-  /**
-   * Filters the locally cached data.
-   * This remains synchronous for high-performance UI filtering.
-   */
   getTransactions: (
     filters: Partial<FilterState>,
     page: number = 1,
     pageSize: number = 20
   ): { result: PaginatedResult<Transaction>; kpi: KPIData } => {
     
-    // 1. Filter Data
-    let filtered = CACHED_TRANSACTIONS.filter((item) => {
-      let matches = true;
+    let filtered = CACHED_TRANSACTIONS;
 
-      // ID Filter
-      if (filters.id && !item.id.toLowerCase().includes(filters.id.toLowerCase())) matches = false;
+    // Apply Filters only if data exists
+    if (filtered.length > 0) {
+        filtered = filtered.filter((item) => {
+          let matches = true;
 
-      // Lançamento Date Filter
-      if (filters.startDate && item.date < filters.startDate) matches = false;
-      if (filters.endDate && item.date > filters.endDate) matches = false;
+          if (filters.id && !item.id.toLowerCase().includes(filters.id.toLowerCase())) matches = false;
+          
+          // Date Filtering
+          if (filters.startDate && item.date < filters.startDate) matches = false;
+          if (filters.endDate && item.date > filters.endDate) matches = false;
 
-      // Due Date Filter (Vencimento)
-      if (filters.dueDateStart && item.dueDate < filters.dueDateStart) matches = false;
-      if (filters.dueDateEnd && item.dueDate > filters.dueDateEnd) matches = false;
+          // Due Date (Vencimento)
+          if (filters.dueDateStart && item.dueDate < filters.dueDateStart) matches = false;
+          if (filters.dueDateEnd && item.dueDate > filters.dueDateEnd) matches = false;
 
-      // Payment Date Filter (Data Pagamento)
-      // Aplica-se apenas se a transação tem data de pagamento definida
-      if (filters.paymentDateStart && (!item.paymentDate || item.paymentDate < filters.paymentDateStart)) matches = false;
-      if (filters.paymentDateEnd && (!item.paymentDate || item.paymentDate > filters.paymentDateEnd)) matches = false;
+          // Payment Date
+          if (filters.paymentDateStart && (!item.paymentDate || item.paymentDate < filters.paymentDateStart)) matches = false;
+          if (filters.paymentDateEnd && (!item.paymentDate || item.paymentDate > filters.paymentDateEnd)) matches = false;
 
-      // Receipt Date Filter (Data Recebimento)
-      // Na prática, usa o mesmo campo 'paymentDate' (Data Baixa), mas a UI separa por contexto
-      if (filters.receiptDateStart && (!item.paymentDate || item.paymentDate < filters.receiptDateStart)) matches = false;
-      if (filters.receiptDateEnd && (!item.paymentDate || item.paymentDate > filters.receiptDateEnd)) matches = false;
-      
-      // Strict filtering for dropdowns
-      if (filters.bankAccount && item.bankAccount !== filters.bankAccount) matches = false;
-      if (filters.type && item.type !== filters.type) matches = false;
-      if (filters.status && item.status !== filters.status) matches = false;
-      if (filters.movement && item.movement !== filters.movement) matches = false;
-      if (filters.paidBy && item.paidBy !== filters.paidBy) matches = false;
-      
-      // Partial match for Client (allows typing)
-      if (filters.client) {
-        if (!item.client.toLowerCase().includes(filters.client.toLowerCase())) matches = false;
-      }
+          // Receipt Date
+          if (filters.receiptDateStart && (!item.paymentDate || item.paymentDate < filters.receiptDateStart)) matches = false;
+          if (filters.receiptDateEnd && (!item.paymentDate || item.paymentDate > filters.receiptDateEnd)) matches = false;
+          
+          if (filters.bankAccount && item.bankAccount !== filters.bankAccount) matches = false;
+          if (filters.type && item.type !== filters.type) matches = false;
+          if (filters.status && item.status !== filters.status) matches = false;
+          if (filters.movement && item.movement !== filters.movement) matches = false;
+          if (filters.paidBy && item.paidBy !== filters.paidBy) matches = false;
+          
+          if (filters.client && !item.client.toLowerCase().includes(filters.client.toLowerCase())) matches = false;
 
-      // Global Search
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        // Optimize: check common fields first
-        if (
-            !item.client.toLowerCase().includes(searchLower) &&
-            !item.bankAccount.toLowerCase().includes(searchLower) &&
-            !item.type.toLowerCase().includes(searchLower)
-        ) {
-             // Fallback to full string check
-             const rowString = Object.values(item).join(' ').toLowerCase();
-             if (!rowString.includes(searchLower)) matches = false;
-        }
-      }
+          if (filters.search) {
+            const searchLower = filters.search.toLowerCase();
+            const rowString = Object.values(item).join(' ').toLowerCase();
+            if (!rowString.includes(searchLower)) matches = false;
+          }
 
-      return matches;
-    });
+          return matches;
+        });
+    }
 
-    // 2. Detecta se é modo "Contas a Pagar" ou "Contas a Receber"
+    // Determine Logic Context (Payables vs Receivables vs General)
     const normalizedType = normalizeText(filters.type || '');
-    const isContasAPagar = normalizedType.includes('saida') || 
-                          normalizedType.includes('pagar') ||
-                          normalizedType.includes('contas a pagar');
-    const isContasAReceber = normalizedType.includes('entrada') || 
-                          normalizedType.includes('receber');
+    const isContasAPagar = normalizedType.includes('saida') || normalizedType.includes('pagar') || filters.movement === 'Saída';
+    const isContasAReceber = normalizedType.includes('entrada') || normalizedType.includes('receber') || filters.movement === 'Entrada';
 
-    // 3. Calculate KPIs based on filter type
     let kpi: KPIData;
 
     if (isContasAPagar) {
-      // Lógica Contas a Pagar (Mantida)
+      // KPI Contexto Saída: Total Pago vs Total Pendente
       const totalGeral = filtered.reduce((acc, curr) => acc + curr.valuePaid, 0);
-      const totalPago = filtered
-        .filter(item => item.status === 'Pago')
-        .reduce((acc, curr) => acc + curr.valuePaid, 0);
-      const totalPendente = filtered
-        .filter(item => item.status === 'Pendente' || item.status === 'Agendado')
-        .reduce((acc, curr) => acc + curr.valuePaid, 0);
+      const totalPago = filtered.filter(i => i.status === 'Pago' || (i.status as string) === 'Recebido').reduce((acc, curr) => acc + curr.valuePaid, 0);
+      const totalPendente = totalGeral - totalPago;
 
-      kpi = {
-        totalPaid: totalPago,
-        totalReceived: totalGeral,
-        balance: totalPendente,
-      };
+      kpi = { totalPaid: totalPago, totalReceived: totalGeral, balance: totalPendente }; 
     } else if (isContasAReceber) {
-      // Lógica Contas a Receber (Mantida)
+      // KPI Contexto Entrada: Total Recebido vs Total Pendente
       const totalGeralReceber = filtered.reduce((acc, curr) => acc + (curr.totalCobranca || curr.valueReceived || 0), 0);
-      const totalRecebido = filtered
-        .filter(item => item.status === 'Pago')
-        .reduce((acc, curr) => acc + (curr.valueReceived || curr.totalCobranca || 0), 0);
+      const totalRecebido = filtered.filter(i => i.status === 'Pago' || (i.status as string) === 'Recebido').reduce((acc, curr) => acc + (curr.valueReceived || 0), 0);
       const saldoReceber = totalGeralReceber - totalRecebido;
 
-      kpi = {
-        totalReceived: totalGeralReceber,
-        totalPaid: totalRecebido,
-        balance: saldoReceber,
-      };
+      kpi = { totalReceived: totalGeralReceber, totalPaid: totalRecebido, balance: saldoReceber };
     } else {
-      // Lógica Padrão (Mantida)
+      // KPI Geral (Entradas vs Saídas)
       kpi = filtered.reduce(
-        (acc, curr) => {
-          const entradaVal = curr.movement === 'Entrada' && curr.status === 'Pendente' && curr.valueReceived === 0
-            ? (curr.totalCobranca || 0)
-            : curr.valueReceived;
-          return {
+        (acc, curr) => ({
             totalPaid: acc.totalPaid + curr.valuePaid,
-            totalReceived: acc.totalReceived + entradaVal,
-            balance: acc.balance + (entradaVal - curr.valuePaid),
-          };
-        },
+            totalReceived: acc.totalReceived + curr.valueReceived,
+            balance: acc.balance + (curr.valueReceived - curr.valuePaid),
+        }),
         { totalPaid: 0, totalReceived: 0, balance: 0 }
       );
     }
 
-    // 4. Paginate
     const total = filtered.length;
     const totalPages = Math.ceil(total / pageSize);
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    const data = filtered.slice(start, end);
-
+    
     return {
       result: {
-        data,
+        data: filtered.slice(start, end),
         total,
         page,
         pageSize,
@@ -341,31 +301,24 @@ export const DataService = {
 
   exportToCSV: (filters: Partial<FilterState>): void => {
     const { result } = DataService.getTransactions(filters, 1, 999999);
-    // ... lógica de exportação mantida ...
     const headers = [
-      'ID', 'Data Lançamento', 'Data Vencimento', 'Data Baixa', 'Conta', 'Tipo', 'Status', 
-      'Cliente', 'Pago Por', 'Movimento', 'Valor Pago', 'Valor Recebido',
+      'ID', 'Data', 'Vencimento', 'Pagamento', 'Conta', 'Tipo', 'Status', 
+      'Cliente', 'Movimento', 'Valor Pago', 'Valor Recebido'
     ];
 
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(';')]
-        .concat(
-          result.data.map((row) =>
-            [
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(';')]
+        .concat(result.data.map(row => [
               row.id, row.date, row.dueDate, row.paymentDate || '', row.bankAccount, row.type, row.status,
-              `"${row.client}"`, row.paidBy, row.movement,
+              `"${row.client}"`, row.movement,
               row.valuePaid.toFixed(2).replace('.', ','),
               row.valueReceived.toFixed(2).replace('.', ','),
             ].join(';')
-          )
-        )
-        .join('\n');
+        )).join('\n');
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `cashflow_export_${new Date().toISOString()}.csv`);
+    link.setAttribute('download', `export_${new Date().toISOString()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
