@@ -10,7 +10,7 @@ import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, Re
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
-type SortField = 'date' | 'dueDate' | 'paymentDate' | 'valorOriginal' | 'valorPago' | 'status' | 'client';
+type SortField = 'date' | 'dueDate' | 'paymentDate' | 'valorOriginal' | 'valorPago' | 'status' | 'client' | 'cpfCnpj';
 type SortDirection = 'asc' | 'desc';
 
 // Interface estendida localmente para detalhar Pendente vs Pago
@@ -242,6 +242,10 @@ const Reports: React.FC = () => {
         case 'client':
           valA = (a.client || '').toLowerCase();
           valB = (b.client || '').toLowerCase();
+          break;
+        case 'cpfCnpj':
+          valA = (a.cpfCnpj || '').toLowerCase();
+          valB = (b.cpfCnpj || '').toLowerCase();
           break;
         default:
           valA = a.date || '';
@@ -534,6 +538,7 @@ const Reports: React.FC = () => {
                             <option value="dueDate">Data Vencimento</option>
                             <option value="paymentDate">Data Pagamento/Baixa</option>
                             <option value="client">Cliente / Favorecido</option>
+                            <option value="cpfCnpj">Nº Cliente (CPF/CNPJ)</option>
                             <option value="valorOriginal">Valor (Original)</option>
                          </select>
                     </div>

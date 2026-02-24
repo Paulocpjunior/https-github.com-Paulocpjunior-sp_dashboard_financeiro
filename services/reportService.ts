@@ -143,7 +143,8 @@ export const ReportService = {
           'valorOriginal': 'Valor Original',
           'valorPago': 'Valor Pago',
           'status': 'Status',
-          'client': 'Cliente / Observação'
+          'client': 'Cliente / Observação',
+          'cpfCnpj': 'Nº Cliente (CPF/CNPJ)'
         };
         const sortDirLabel = filters.sortDirection === 'desc' ? 'Decrescente' : 'Crescente';
         infoText += `Ordenado por: ${sortFieldLabels[filters.sortField] || filters.sortField} (${sortDirLabel})`;
@@ -175,6 +176,8 @@ export const ReportService = {
 
         // Observação a Pagar = Cliente / Favorecido
         const observacao = safeStr(t.client);
+        
+        const numeroCliente = safeStr(t.cpfCnpj);
         
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
@@ -215,13 +218,14 @@ export const ReportService = {
           status,            // 4: Status
           valorOriginalFmt,  // 5: Valor Original (Previsto)
           valorPagoFmt,      // 6: Valor Pago (Efetivado)
-          observacao         // 7: Cliente / Favorecido
+          observacao,        // 7: Cliente / Favorecido
+          numeroCliente      // 8: Nº Cliente
         ];
       });
 
       autoTable(doc, {
           startY: yPos,
-          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido']],
+          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido', 'Nº Cliente']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
@@ -247,7 +251,8 @@ export const ReportService = {
               4: { cellWidth: 18, halign: 'center' }, // Status
               5: { cellWidth: 22, halign: 'right' },  // Valor Orig
               6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }, // Valor Pago
-              7: { cellWidth: 'auto' }                // Cliente
+              7: { cellWidth: 'auto' },               // Cliente
+              8: { cellWidth: 25, halign: 'center' }  // Nº Cliente
           },
           didParseCell: (data: any) => {
               // Colorir Status (Index 4)
