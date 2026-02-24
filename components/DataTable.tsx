@@ -19,7 +19,7 @@ interface DataTableProps {
   onDelete?: (id: string) => void;
 }
 
-type SortField = 'client' | 'dueDate' | 'receiptDate' | 'none';
+type SortField = 'client' | 'dueDate' | 'receiptDate' | 'cpfCnpj' | 'none';
 type SortDirection = 'asc' | 'desc';
 
 // --- VALIDAÇÕES E MÁSCARAS ---
@@ -114,17 +114,25 @@ const DataTable: React.FC<DataTableProps> = ({
   
   // Novo Estado: Token para Exportação (Persistente)
   const [exportToken, setExportToken] = useState(() => {
-      if (typeof window !== 'undefined') {
-          return localStorage.getItem('boleto_cloud_token') || '';
+      try {
+          if (typeof window !== 'undefined') {
+              return localStorage.getItem('boleto_cloud_token') || '';
+          }
+      } catch (e) {
+          console.error('Error accessing localStorage:', e);
       }
       return '';
   });
 
   // Mapa de Documentos Persistente (Cliente -> CPF/CNPJ)
   const [clientDocs, setClientDocs] = useState<Record<string, string>>(() => {
-      if (typeof window !== 'undefined') {
-          const saved = localStorage.getItem('boleto_client_docs');
-          return saved ? JSON.parse(saved) : {};
+      try {
+          if (typeof window !== 'undefined') {
+              const saved = localStorage.getItem('boleto_client_docs');
+              return saved ? JSON.parse(saved) : {};
+          }
+      } catch (e) {
+          console.error('Error accessing localStorage:', e);
       }
       return {};
   });
@@ -151,14 +159,22 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const handleTokenChange = (val: string) => {
       setExportToken(val);
-      localStorage.setItem('boleto_cloud_token', val);
+      try {
+          localStorage.setItem('boleto_cloud_token', val);
+      } catch (e) {
+          console.error('Error saving to localStorage:', e);
+      }
   };
 
   // Atualiza o documento de um cliente específico e salva no localStorage
   const handleClientDocChange = (clientName: string, docValue: string) => {
       const newDocs = { ...clientDocs, [clientName]: docValue };
       setClientDocs(newDocs);
-      localStorage.setItem('boleto_client_docs', JSON.stringify(newDocs));
+      try {
+          localStorage.setItem('boleto_client_docs', JSON.stringify(newDocs));
+      } catch (e) {
+          console.error('Error saving to localStorage:', e);
+      }
       
       // Resetar status de validação ao editar para forçar nova verificação
       setValidationStatus(prev => ({ 
@@ -581,6 +597,11 @@ const DataTable: React.FC<DataTableProps> = ({
           const recB = new Date(b.paymentDate || '1970-01-01').getTime();
           comparison = recA - recB;
           break;
+        case 'cpfCnpj':
+          const docA = (a.cpfCnpj || '').toLowerCase();
+          const docB = (b.cpfCnpj || '').toLowerCase();
+          comparison = docA.localeCompare(docB, 'pt-BR');
+          break;
       }
 
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -747,6 +768,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
+                    <SortableHeader field="cpfCnpj" label="N.Cliente" className="text-left" />
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
@@ -783,6 +805,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
+                    <SortableHeader field="cpfCnpj" label="N.Cliente" className="text-left" />
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Honor.</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Extras</th>
@@ -823,6 +846,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
+                    <SortableHeader field="cpfCnpj" label="N.Cliente" className="text-left" />
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
                   </>
@@ -871,6 +895,9 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]" title={row.description || row.client || '-'}>
                             {row.description || row.client || '-'}
                           </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
+                            {row.cpfCnpj || '-'}
+                          </td>
                           <td className="px-2 py-2 whitespace-nowrap">
                             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
                               ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
@@ -914,6 +941,9 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px]" title={row.client || '-'}>
                             {row.client || '-'}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
+                            {row.cpfCnpj || '-'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center
@@ -966,6 +996,9 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]">
                             {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
+                            {row.cpfCnpj || '-'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap">
                             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium inline-flex items-center

@@ -262,7 +262,7 @@ export const BackendService = {
         valorRecebido: getColIdx(['valor recebido'], 31),
         saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
         docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber', 'pago - receber', 'status receber', 'recebido?'], 35), 
-        cpfCnpj: getColIdx(['cpf', 'cnpj', 'documento', 'cprf'], -1), // Tenta localizar coluna de CPF/CNPJ
+        cpfCnpj: getColIdx(['n. cliente', 'nº cliente', 'numero cliente', 'n. da empresa', 'nº da empresa', 'numero da empresa', 'n. empresa', 'cliente id', 'cpf', 'cnpj', 'documento', 'cprf'], 24), // Coluna Y (0-indexed = 24)
         submissionId: 39,
       };
 

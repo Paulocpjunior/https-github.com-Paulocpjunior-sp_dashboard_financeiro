@@ -1,6 +1,6 @@
 
 
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Transaction, KPIData, User } from '../types';
 
@@ -144,7 +144,7 @@ export const ReportService = {
           'valorPago': 'Valor Pago',
           'status': 'Status',
           'client': 'Cliente / Observação',
-          'cpfCnpj': 'Nº Cliente (CPF/CNPJ)'
+          'cpfCnpj': 'N.Cliente'
         };
         const sortDirLabel = filters.sortDirection === 'desc' ? 'Decrescente' : 'Crescente';
         infoText += `Ordenado por: ${sortFieldLabels[filters.sortField] || filters.sortField} (${sortDirLabel})`;
@@ -219,13 +219,13 @@ export const ReportService = {
           valorOriginalFmt,  // 5: Valor Original (Previsto)
           valorPagoFmt,      // 6: Valor Pago (Efetivado)
           observacao,        // 7: Cliente / Favorecido
-          numeroCliente      // 8: Nº Cliente
+          numeroCliente      // 8: N.Cliente
         ];
       });
 
       autoTable(doc, {
           startY: yPos,
-          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido', 'Nº Cliente']],
+          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido', 'N.Cliente']],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
@@ -252,7 +252,7 @@ export const ReportService = {
               5: { cellWidth: 22, halign: 'right' },  // Valor Orig
               6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }, // Valor Pago
               7: { cellWidth: 'auto' },               // Cliente
-              8: { cellWidth: 25, halign: 'center' }  // Nº Cliente
+              8: { cellWidth: 25, halign: 'center' }  // N.Cliente
           },
           didParseCell: (data: any) => {
               // Colorir Status (Index 4)

@@ -84,42 +84,52 @@ export const AuthService = {
 
   // Logout
   logout: (): void => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    console.log('[AuthService] Logout realizado');
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      console.log('[AuthService] Logout realizado');
+    } catch (e) {
+      console.error('[AuthService] Erro ao remover do localStorage:', e);
+    }
   },
 
   // Verificar se está autenticado
   isAuthenticated: (): boolean => {
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!stored) return false;
-    
     try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!stored) return false;
+      
       const authState: AuthState = JSON.parse(stored);
       return authState.isAuthenticated && authState.user !== null;
-    } catch {
+    } catch (e) {
+      console.error('[AuthService] Erro ao acessar localStorage:', e);
       return false;
     }
   },
 
   // Obter usuário atual
   getCurrentUser: (): User | null => {
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!stored) return null;
-    
     try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!stored) return null;
+      
       const authState: AuthState = JSON.parse(stored);
       return authState.user;
-    } catch {
+    } catch (e) {
+      console.error('[AuthService] Erro ao obter usuário do localStorage:', e);
       return null;
     }
   },
 
   // Atualizar dados do usuário no localStorage
   updateCurrentUser: (user: User): void => {
-    const authState: AuthState = {
-      user: user,
-      isAuthenticated: true,
-    };
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+    try {
+      const authState: AuthState = {
+        user: user,
+        isAuthenticated: true,
+      };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
+    } catch (e) {
+      console.error('[AuthService] Erro ao salvar no localStorage:', e);
+    }
   },
 };

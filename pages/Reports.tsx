@@ -6,7 +6,7 @@ import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
-import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUpAZ, ArrowDownAZ, Users, Search } from 'lucide-react';
+import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -343,6 +343,16 @@ const Reports: React.FC = () => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr || dateStr === '1970-01-01') return '-';
+    try {
+        const date = new Date(dateStr);
+        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+        const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+        return adjustedDate.toLocaleDateString('pt-BR');
+    } catch (e) { return '-'; }
+  };
+
   // --- ERROR FALLBACK UI (Mesma do Dashboard) ---
   if (initError) {
     return (
@@ -538,7 +548,7 @@ const Reports: React.FC = () => {
                             <option value="dueDate">Data Vencimento</option>
                             <option value="paymentDate">Data Pagamento/Baixa</option>
                             <option value="client">Cliente / Favorecido</option>
-                            <option value="cpfCnpj">Nº Cliente (CPF/CNPJ)</option>
+                            <option value="cpfCnpj">N.Cliente</option>
                             <option value="valorOriginal">Valor (Original)</option>
                          </select>
                     </div>
@@ -549,13 +559,13 @@ const Reports: React.FC = () => {
                               onClick={() => setSortDirection('asc')} 
                               className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-2 ${sortDirection === 'asc' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                             >
-                                <ArrowUpAZ className="h-4 w-4" /> Crescente
+                                <ArrowUp className="h-4 w-4" /> Crescente
                             </button>
                             <button 
                               onClick={() => setSortDirection('desc')} 
                               className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors flex items-center justify-center gap-2 ${sortDirection === 'desc' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                             >
-                                <ArrowDownAZ className="h-4 w-4" /> Decrescente
+                                <ArrowDown className="h-4 w-4" /> Decrescente
                             </button>
                          </div>
                     </div>
@@ -679,6 +689,48 @@ const Reports: React.FC = () => {
                                 </>
                             )}
                         </button>
+                    </div>
+
+                    {/* TABELA DE PRÉVIA */}
+                    <div className="mt-8">
+                       <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Prévia dos Dados (Primeiros 50 registros)
+                       </h3>
+                       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-[10px]">
+                             <thead className="bg-slate-50 dark:bg-slate-800">
+                                <tr>
+                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Data</th>
+                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Venc.</th>
+                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Cliente</th>
+                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">N.Cliente</th>
+                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Status</th>
+                                   <th className="px-3 py-2 text-right font-medium text-slate-500 uppercase">Valor</th>
+                                </tr>
+                             </thead>
+                             <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
+                                {filteredData.slice(0, 50).map((row) => (
+                                   <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                      <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400">{formatDate(row.date)}</td>
+                                      <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium">{formatDate(row.dueDate)}</td>
+                                      <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[150px]">{row.client || '-'}</td>
+                                      <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-slate-500">{row.cpfCnpj || '-'}</td>
+                                      <td className="px-3 py-2 whitespace-nowrap">
+                                         <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
+                                            row.status === 'Pago' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                         }`}>
+                                            {row.status}
+                                         </span>
+                                      </td>
+                                      <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-slate-700 dark:text-slate-300">
+                                         {formatCurrency(row.valuePaid || row.totalCobranca || 0)}
+                                      </td>
+                                   </tr>
+                                ))}
+                             </tbody>
+                          </table>
+                       </div>
                     </div>
                   </div>
                 )}
