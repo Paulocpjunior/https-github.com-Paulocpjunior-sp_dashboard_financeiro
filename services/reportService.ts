@@ -210,7 +210,7 @@ export const ReportService = {
         
         const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
 
-        return [
+        const row = [
           dataLanc,          // 0: Data
           dataVenc,          // 1: Vencimento
           dataBaixa,         // 2: Data Baixa
@@ -219,13 +219,21 @@ export const ReportService = {
           valorOriginalFmt,  // 5: Valor Original (Previsto)
           valorPagoFmt,      // 6: Valor Pago (Efetivado)
           observacao,        // 7: Cliente / Favorecido
-          numeroCliente      // 8: N.Cliente
         ];
+
+        if (filters.movement === 'Entrada') {
+          row.push(numeroCliente); // 8: N.Cliente
+        }
+
+        return row;
       });
 
       autoTable(doc, {
           startY: yPos,
-          head: [['Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido', 'N.Cliente']],
+          head: [[
+            'Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido',
+            ...(filters.movement === 'Entrada' ? ['N.Cliente'] : [])
+          ]],
           body: tableBody,
           theme: 'striped',
           headStyles: { 
@@ -252,7 +260,7 @@ export const ReportService = {
               5: { cellWidth: 22, halign: 'right' },  // Valor Orig
               6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }, // Valor Pago
               7: { cellWidth: 'auto' },               // Cliente
-              8: { cellWidth: 25, halign: 'center' }  // N.Cliente
+              ...(filters.movement === 'Entrada' ? { 8: { cellWidth: 25, halign: 'center' } } : {})
           },
           didParseCell: (data: any) => {
               // Colorir Status (Index 4)
