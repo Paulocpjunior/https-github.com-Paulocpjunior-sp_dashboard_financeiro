@@ -704,7 +704,7 @@ const Reports: React.FC = () => {
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Data</th>
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Venc.</th>
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Cliente</th>
-                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">N.Cliente</th>
+                                   {reportMode === 'receivables' && <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">N.Cliente</th>}
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Status</th>
                                    <th className="px-3 py-2 text-right font-medium text-slate-500 uppercase">Valor</th>
                                 </tr>
@@ -715,7 +715,7 @@ const Reports: React.FC = () => {
                                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400">{formatDate(row.date)}</td>
                                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium">{formatDate(row.dueDate)}</td>
                                       <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[150px]">{row.client || '-'}</td>
-                                      <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-slate-500">{row.cpfCnpj || '-'}</td>
+                                      {reportMode === 'receivables' && <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-slate-500">{row.cpfCnpj || '-'}</td>}
                                       <td className="px-3 py-2 whitespace-nowrap">
                                          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
                                             row.status === 'Pago' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
