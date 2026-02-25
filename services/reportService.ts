@@ -223,19 +223,28 @@ export const ReportService = {
           observacao,        // 7: Cliente / Favorecido
         ];
 
-        if (filters.movement === 'Entrada') {
+        const isEntrada = filters.movement === 'Entrada' || (filters.types && filters.types.includes('Entrada de Caixa / Contas a Receber'));
+        const isSaida = filters.movement === 'Saída' || (filters.types && filters.types.includes('Saída de Caixa / Contas a Pagar'));
+
+        if (isEntrada) {
           row.push(numeroCliente); // 8: N.Cliente
+        }
+        if (isSaida) {
           row.push(observacaoAPagar); // 9: Observação - A Pagar
         }
 
         return row;
       });
 
+      const isEntradaHeader = filters.movement === 'Entrada' || (filters.types && filters.types.includes('Entrada de Caixa / Contas a Receber'));
+      const isSaidaHeader = filters.movement === 'Saída' || (filters.types && filters.types.includes('Saída de Caixa / Contas a Pagar'));
+
       autoTable(doc, {
           startY: yPos,
           head: [[
             'Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido',
-            ...(filters.movement === 'Entrada' ? ['N.Cliente', 'Observação - A Pagar'] : [])
+            ...(isEntradaHeader ? ['N.Cliente'] : []),
+            ...(isSaidaHeader ? ['Observação - A Pagar'] : [])
           ]],
           body: tableBody,
           theme: 'striped',
