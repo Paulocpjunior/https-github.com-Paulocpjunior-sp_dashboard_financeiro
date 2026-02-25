@@ -32,6 +32,7 @@ export interface Transaction {
   totalCobranca?: number;
   paymentMethod?: string;
   cpfCnpj?: string; // Novo campo vindo do Jotform/Planilha
+  observacaoAPagar?: string; // Coluna R da Planilha
 }
 
 export interface FilterState {

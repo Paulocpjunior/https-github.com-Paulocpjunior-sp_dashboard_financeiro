@@ -262,10 +262,12 @@ export const BackendService = {
         valorRecebido: getColIdx(['valor recebido'], 31),
         saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
         docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber', 'pago - receber', 'status receber', 'recebido?'], 35), 
-        cpfCnpj: getColIdx(['n. cliente', 'nº cliente', 'numero cliente', 'n. da empresa', 'nº da empresa', 'numero da empresa', 'n. empresa', 'cliente id', 'cpf', 'cnpj', 'documento', 'cprf'], 24), // Coluna Y (0-indexed = 24)
+        cpfCnpj: getColIdx(['n.cliente', 'n cliente', 'n. da empresa', 'n da empresa', 'nº cliente', 'nº da empresa', 'numero cliente', 'número cliente'], 24), // Busca por nome ou fallback para Coluna Y (24)
+        observacaoAPagar: getColIdx(['observação - a pagar', 'observacao - a pagar', 'observação a pagar', 'observacao a pagar'], 17), // Coluna R (17)
         submissionId: 39,
       };
 
+      console.log('[BackendService] Header Row:', headerRow);
       console.log('[BackendService] Mapeamento de Colunas Detectado:', {
           docPagoReceber: COL.docPagoReceber,
           dueDateCandidates: COL.dueDateCandidates,
@@ -418,6 +420,7 @@ export const BackendService = {
           valorExtra: parseCurrency(get(COL.valorExtras)),
           totalCobranca: parseCurrency(rawTotalCobranca),
           cpfCnpj: cleanString(get(COL.cpfCnpj)), // Captura CPF/CNPJ da planilha
+          observacaoAPagar: cleanString(get(COL.observacaoAPagar)), // Captura Observação - A Pagar da planilha
         } as Transaction;
       });
 

@@ -210,6 +210,8 @@ export const ReportService = {
         
         const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
 
+        const observacaoAPagar = safeStr(t.observacaoAPagar);
+
         const row = [
           dataLanc,          // 0: Data
           dataVenc,          // 1: Vencimento
@@ -223,6 +225,7 @@ export const ReportService = {
 
         if (filters.movement === 'Entrada') {
           row.push(numeroCliente); // 8: N.Cliente
+          row.push(observacaoAPagar); // 9: Observação - A Pagar
         }
 
         return row;
@@ -232,7 +235,7 @@ export const ReportService = {
           startY: yPos,
           head: [[
             'Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido',
-            ...(filters.movement === 'Entrada' ? ['N.Cliente'] : [])
+            ...(filters.movement === 'Entrada' ? ['N.Cliente', 'Observação - A Pagar'] : [])
           ]],
           body: tableBody,
           theme: 'striped',
