@@ -257,7 +257,7 @@ export const BackendService = {
         valorRecebido: getColIdx(['valor recebido'], 31),
         saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
         docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber', 'pago - receber', 'status receber', 'recebido?'], 35), 
-        cpfCnpj: getColIdx(['cpf / cnpj', 'cpf/cnpj', 'cpf', 'cnpj', 'n.cliente', 'n cliente', 'n. da empresa', 'n da empresa', 'nº cliente', 'nº da empresa', 'numero cliente', 'número cliente'], 38), // Busca por nome ou fallback para Coluna AM (38)
+        cpfCnpj: getColIdx(['cpf / cnpj', 'cpf/cnpj', 'cpf', 'cnpj'], 38), // Busca por nome ou fallback para Coluna AM (38)
         observacaoAPagar: getColIdx(['observação - a pagar', 'observacao - a pagar', 'observação a pagar', 'observacao a pagar'], 17), // Coluna R (17)
         submissionId: 39,
       };
