@@ -74,6 +74,14 @@ export const DataService = {
                 throw new Error("Formato de dados inválido recebido do backend.");
             }
 
+            // Apply exclusions
+            const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
+            data.forEach(t => {
+              if (excludedIds.includes(t.id)) {
+                t.isExcluded = true;
+              }
+            });
+
             CACHED_TRANSACTIONS = data;
             isDataLoaded = true;
             lastUpdatedAt = new Date();
@@ -98,10 +106,34 @@ export const DataService = {
    */
   loadMockData: (): void => {
     console.warn("[DataService] Ativando Modo Mock");
+    const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
+    MOCK_TRANSACTIONS.forEach(t => {
+      if (excludedIds.includes(t.id)) {
+        t.isExcluded = true;
+      }
+    });
     CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
     isDataLoaded = true;
     isMockMode = true;
     lastUpdatedAt = new Date();
+    DataService.notifyListeners();
+  },
+
+  toggleExclusion: (id: string): void => {
+    const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
+    const index = excludedIds.indexOf(id);
+    if (index > -1) {
+      excludedIds.splice(index, 1);
+    } else {
+      excludedIds.push(id);
+    }
+    localStorage.setItem('excluded_transactions', JSON.stringify(excludedIds));
+    
+    const transaction = CACHED_TRANSACTIONS.find(t => t.id === id);
+    if (transaction) {
+      transaction.isExcluded = !transaction.isExcluded;
+    }
+    
     DataService.notifyListeners();
   },
 
@@ -207,6 +239,9 @@ export const DataService = {
   ): { result: PaginatedResult<Transaction>; kpi: KPIData } => {
     
     let filtered = CACHED_TRANSACTIONS;
+
+    // Filter out excluded transactions first
+    filtered = filtered.filter(item => !item.isExcluded);
 
     // Apply Filters only if data exists
     if (filtered.length > 0) {
