@@ -311,7 +311,7 @@ const DataTable: React.FC<DataTableProps> = ({
 
   // 1. Identificar todos os dados pendentes disponíveis (não apenas da página atual)
   const pendingReceivablesData = useMemo(() => {
-    const source = allData.length > 0 ? allData : data;
+    const source = (allData && allData.length > 0) ? allData : data;
     return source.filter(row => 
       (row.status === 'Pendente' || row.status === 'Agendado')
     );
@@ -332,19 +332,22 @@ const DataTable: React.FC<DataTableProps> = ({
 
   // 3. Inicializar seleção quando o modal abre ou dados mudam
   useEffect(() => {
-    if (showExportModal) {
-        // Inicializa apenas uma vez por abertura de modal para evitar sobrescrever a ação do usuário
-        if (!hasInitializedExport.current && availableExportClients.length > 0) {
-            setSelectedExportClients(availableExportClients); // Selecionar todos por padrão
-            hasInitializedExport.current = true;
+    if (!showExportModal) {
+        // Resetar quando fecha, mas apenas se necessário para evitar loops
+        if (hasInitializedExport.current || selectedExportClients.length > 0 || exportSearchTerm !== '' || exportStep !== 1 || Object.keys(validationStatus).length > 0) {
+            hasInitializedExport.current = false;
+            setSelectedExportClients([]);
+            setExportSearchTerm('');
+            setExportStep(1);
+            setValidationStatus({});
         }
-    } else {
-        // Resetar quando fecha
-        hasInitializedExport.current = false;
-        setSelectedExportClients([]);
-        setExportSearchTerm('');
-        setExportStep(1); // Volta para passo 1
-        setValidationStatus({});
+        return;
+    }
+
+    // Modal está aberto
+    if (!hasInitializedExport.current && availableExportClients.length > 0) {
+        setSelectedExportClients(availableExportClients); // Selecionar todos por padrão
+        hasInitializedExport.current = true;
     }
   }, [showExportModal, availableExportClients]);
 
@@ -355,24 +358,15 @@ const DataTable: React.FC<DataTableProps> = ({
           let changed = false;
           
           selectedExportClients.forEach(client => {
-              // Buscar transação deste cliente para pegar o CPF/CNPJ da planilha
-              // Usa pendingReceivablesData para achar o dado mais recente disponível para este cliente
               const clientTrx = pendingReceivablesData.find(t => t.client === client);
               const sheetDoc = clientTrx?.cpfCnpj;
 
-              // Prioridade:
-              // 1. Planilha (se existir e for válido)
-              // 2. Cache Local (já carregado em newDocs)
-              // 3. Extração do Nome
-              
               if (sheetDoc && cleanDigits(sheetDoc).length >= 11) {
-                   // Se a planilha tem o dado, prioriza sobre o cache para garantir que atualizações do Jotform reflitam aqui
                    if (newDocs[client] !== sheetDoc) {
                        newDocs[client] = sheetDoc;
                        changed = true;
                    }
               } else if (!newDocs[client]) {
-                  // Se não tem na planilha nem no cache, tenta extrair
                   const extracted = extractCpfCnpj(client);
                   if (extracted) {
                       newDocs[client] = extracted;
@@ -385,7 +379,7 @@ const DataTable: React.FC<DataTableProps> = ({
               setClientDocs(newDocs);
           }
       }
-  }, [exportStep, showExportModal, selectedExportClients, pendingReceivablesData]);
+  }, [exportStep, showExportModal, selectedExportClients, pendingReceivablesData]); // clientDocs removido das dependências (já não estava, mas reforçando estabilidade)
 
   const toggleExportClient = (client: string) => {
     setSelectedExportClients(prev => 
@@ -433,56 +427,56 @@ const DataTable: React.FC<DataTableProps> = ({
       setExportStep(2);
   };
 
-  // 4. Função Final de Exportação (Gera CSV)
-  const handleGenerateCSV = () => {
-    // Validação Final: Verificar se há documentos inválidos
-    const invalidClients = selectedExportClients.filter(client => {
-        const status = validationStatus[client]?.status;
-        const doc = clientDocs[client] || '';
-        // Considera inválido se foi marcado como inválido OU se está vazio
-        return status === 'invalid' || !doc;
-    });
+    // 4. Função Final de Exportação (Gera CSV)
+    const handleGenerateCSV = () => {
+      // Validação Final: Verificar se há documentos inválidos
+      const invalidClients = selectedExportClients.filter(client => {
+          const status = validationStatus[client]?.status;
+          const doc = clientDocs[client] || '';
+          return status === 'invalid' || !doc;
+      });
 
-    if (invalidClients.length > 0) {
-        const msg = `Atenção: Existem ${invalidClients.length} clientes com documentos inválidos ou vazios.\n\n` +
-                    `Exemplos: ${invalidClients.slice(0, 3).join(', ')}...\n\n` +
-                    `O arquivo pode ser rejeitado pelo banco. Deseja gerar mesmo assim?`;
-        if (!confirm(msg)) return;
-    }
+      if (invalidClients.length > 0) {
+          const msg = `Atenção: Existem ${invalidClients.length} clientes com documentos inválidos ou vazios.\n\n` +
+                      `Exemplos: ${invalidClients.slice(0, 3).join(', ')}...\n\n` +
+                      `O arquivo pode ser rejeitado pelo banco. Deseja gerar mesmo assim?`;
+          if (!confirm(msg)) return;
+      }
 
-    if (!exportToken) {
-        if (!confirm('O Token da Conta Bancária está vazio. O arquivo pode ser rejeitado. Deseja continuar mesmo assim?')) {
-            return;
-        }
-    }
+      if (!exportToken) {
+          if (!confirm('O Token da Conta Bancária está vazio. O arquivo pode ser rejeitado. Deseja continuar mesmo assim?')) {
+              return;
+          }
+      }
 
-    // Filtrar dados baseados nos clientes selecionados
-    const dataToExport = pendingReceivablesData.filter(row => 
-      selectedExportClients.includes(row.client)
-    );
+      // Filtrar dados baseados nos clientes selecionados e no filtro atual (allData)
+      const sourceData = (allData && allData.length > 0) ? allData : data;
+      const dataToExport = sourceData.filter(row => 
+        selectedExportClients.includes(row.client)
+      );
 
-    // Formato CSV Específico Solicitado (Layout Boleto)
-    const headers = [
-      'TOKEN_CONTA_BANCARIA',
-      'CPRF_PAGADOR',
-      'VALOR',
-      'VENCIMENTO',
-      'NOSSO_NUMERO',
-      'DOCUMENTO',
-      'MULTA',
-      'JUROS',
-      'DIAS_PARA_ENCARGOS',
-      'DESCONTO',
-      'DIAS_PARA_DESCONTO',
-      'TIPO_VALOR_DESCONTO',
-      'DESCONTO2',
-      'DIAS_PARA_DESCONTO2',
-      'TIPO_VALOR_DESCONTO2',
-      'DESCONTO3',
-      'DIAS_PARA_DESCONTO3',
-      'TIPO_VALOR_DESCONTO3',
-      'INFORMACAO_PAGADOR'
-    ];
+      // Formato CSV Específico Solicitado (Layout Boleto)
+      const headers = [
+        'TOKEN_CONTA_BANCARIA',
+        'CPRF_PAGADOR',
+        'VALOR',
+        'VENCIMENTO',
+        'NOSSO_NUMERO',
+        'DOCUMENTO',
+        'MULTA',
+        'JUROS',
+        'DIAS_PARA_ENCARGOS',
+        'DESCONTO',
+        'DIAS_PARA_DESCONTO',
+        'TIPO_VALOR_DESCONTO',
+        'DESCONTO2',
+        'DIAS_PARA_DESCONTO2',
+        'TIPO_VALOR_DESCONTO2',
+        'DESCONTO3',
+        'DIAS_PARA_DESCONTO3',
+        'TIPO_VALOR_DESCONTO3',
+        'INFORMACAO_PAGADOR'
+      ];
 
     // FIX: Alterado para formato DD/MM/YYYY (Padrão Brasileiro para Boleto)
     const formatDateCSV = (dateStr: string) => {
@@ -524,8 +518,8 @@ const DataTable: React.FC<DataTableProps> = ({
         const infoPagador = `"${(row.client || '').replace(/"/g, '""')}"`;
         
         // USA O DOCUMENTO DEFINIDO NO PASSO 2 (ou extraído/cacheado)
-        // Se estiver vazio no input, vai vazio pro CSV (usuário deve preencher)
-        const cpfCnpj = clientDocs[row.client] || '';
+        // Se estiver vazio no input, tenta usar o da planilha diretamente
+        const cpfCnpj = cleanDigits(clientDocs[row.client] || row.cpfCnpj || '');
 
         // Mapeamento para as 19 colunas esperadas
         return [
@@ -691,7 +685,7 @@ const DataTable: React.FC<DataTableProps> = ({
 
   // Contar pendentes para mostrar no botão
   const pendentesCount = useMemo(() => {
-    const dataToCount = allData.length > 0 ? allData : data;
+    const dataToCount = (allData && allData.length > 0) ? allData : data;
     return dataToCount.filter(row => row.status === 'Pendente' || row.status === 'Agendado').length;
   }, [data, allData]);
 

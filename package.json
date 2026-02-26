@@ -10,20 +10,22 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@google/genai": "0.14.1",
+    "@remix-run/router": "1.15.3",
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "3.8.2",
+    "lucide-react": "0.344.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "@google/genai": "0.14.1",
-    "react-router-dom": "6.22.3",
     "react-router": "6.22.3",
-    "@remix-run/router": "1.15.3",
-    "recharts": "2.12.3",
-    "lucide-react": "0.344.0",
-    "jspdf": "2.5.1",
-    "jspdf-autotable": "3.8.2"
+    "react-router-dom": "6.22.3",
+    "recharts": "2.12.3"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.2.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

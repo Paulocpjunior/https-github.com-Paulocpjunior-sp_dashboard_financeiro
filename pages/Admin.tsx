@@ -5,7 +5,7 @@ import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw,
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
-import { MOCK_USERS } from '../constants';
+import { MOCK_USERS, APPS_SCRIPT_URL } from '../constants';
 
 interface PendingUser {
   id: string;
@@ -18,9 +18,6 @@ interface PendingUser {
   status: string;
   role: string;
 }
-
-// URL do Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYbEYkx0hGgXGx1B6_2yFJ1qbnA8KH2prmV_0cohnMn_5wcyrA3fImFnxN1jhyIImYyg/exec';
 
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);

@@ -1,5 +1,14 @@
 import { Transaction, User } from './types';
 
+// URL do Apps Script (Fonte de Verdade)
+export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1hCtCHpomiGpyLujr0SNdfL4AYXg0rUG_N0-s8e4B5hwOxjKa7rGsR1D2/exec';
+
+// URLs Alternativas (Fallbacks caso o principal falhe ou seja de outra versão)
+export const ALT_APPS_SCRIPT_URLS = [
+  'https://script.google.com/macros/s/AKfycby7FBRbU_z7Hs1nHo71_5Lqs4qnN4_863Sc9Zwa78Q91ERKNXgkzMftCs9ivdSpFN1img/exec',
+  'https://script.google.com/macros/s/AKfycbwYbEYkx0hGgXGx1B6_2yFJ1qbnA8KH2prmV_0cohnMn_5wcyrA3fImFnxN1jhyIImYyg/exec'
+];
+
 // HASHES DE SENHAS CONHECIDAS (SHA-256)
 // Senha: "admin"
 export const PASS_HASH_ADMIN = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918';

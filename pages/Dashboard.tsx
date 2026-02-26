@@ -40,6 +40,7 @@ const Dashboard: React.FC = () => {
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Transaction[]>([]);
+  const [allFilteredData, setAllFilteredData] = useState<Transaction[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
@@ -112,7 +113,9 @@ const Dashboard: React.FC = () => {
 
         // Initial fetch
         const { result, kpi: newKpi } = DataService.getTransactions(initialFilters, page);
+        const { result: allResult } = DataService.getTransactions(initialFilters, 1, 999999);
         setData(result.data);
+        setAllFilteredData(allResult.data);
         setTotalPages(result.totalPages);
         setKpi(newKpi);
       } catch (e: any) {
@@ -175,7 +178,9 @@ const Dashboard: React.FC = () => {
       
       // Recarregar dados com filtros atuais
       const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
+      const { result: allResult } = DataService.getTransactions(filters, 1, 999999);
       setData(result.data);
+      setAllFilteredData(allResult.data);
       setTotalPages(result.totalPages);
       setKpi(newKpi);
 
@@ -199,7 +204,9 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!isLoading && !initError) {
       const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
+      const { result: allResult } = DataService.getTransactions(filters, 1, 999999);
       setData(result.data);
+      setAllFilteredData(allResult.data);
       setTotalPages(result.totalPages);
       setKpi(newKpi);
     }
@@ -989,6 +996,7 @@ const Dashboard: React.FC = () => {
            <div className="lg:col-span-3">
               <DataTable
                 data={data}
+                allData={allFilteredData}
                 page={page}
                 totalPages={totalPages}
                 onPageChange={setPage}

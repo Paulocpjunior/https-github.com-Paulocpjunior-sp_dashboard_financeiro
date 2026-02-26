@@ -1,8 +1,6 @@
 
 import { User } from '../types';
-
-// URL do Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby7FBRbU_z7Hs1nHo71_5Lqs4qnN4_863Sc9Zwa78Q91ERKNXgkzMftCs9ivdSpFN1img/exec';
+import { APPS_SCRIPT_URL, ALT_APPS_SCRIPT_URLS } from '../constants';
 
 const AUTH_STORAGE_KEY = 'sp_contabil_auth';
 
@@ -20,35 +18,55 @@ interface LoginResult {
 // Função para fazer login via Apps Script usando GET (evita CORS)
 const loginViaAPI = async (username: string, password: string): Promise<LoginResult> => {
   const usernameClean = username.toLowerCase().trim();
+  const urlsToTry = [APPS_SCRIPT_URL, ...ALT_APPS_SCRIPT_URLS];
   
-  try {
-    // Usar GET com parâmetros na URL (funciona sem CORS)
-    const params = new URLSearchParams({
-      action: 'loginGet',
-      username: usernameClean,
-      password: password,
-    });
-    
-    const url = `${APPS_SCRIPT_URL}?${params.toString()}`;
-    console.log('[AuthService] Fazendo login via GET...');
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      redirect: 'follow',
-    });
+  let lastError = null;
 
-    if (!response.ok) {
-      throw new Error('Erro na resposta do servidor');
+  for (const baseUrl of urlsToTry) {
+    try {
+      const params = new URLSearchParams({
+        action: 'loginGet',
+        username: usernameClean,
+        password: password,
+      });
+      
+      const url = `${baseUrl}?${params.toString()}`;
+      console.log(`[AuthService] Tentando login em: ${baseUrl.substring(0, 45)}...`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
+        console.warn(`[AuthService] Falha na URL ${baseUrl.substring(0, 30)}: Status ${response.status}`);
+        continue;
+      }
+
+      const text = await response.text();
+      try {
+        const result = JSON.parse(text);
+        if (result && (result.success || result.user)) {
+          console.log('[AuthService] Login bem sucedido na URL:', baseUrl.substring(0, 45));
+          return result;
+        }
+        // Se retornou success: false, mas é um JSON válido, respeitamos o erro do servidor
+        if (result && result.success === false) {
+           console.warn('[AuthService] Servidor negou login:', result.message);
+           return result;
+        }
+      } catch (e) {
+        console.warn(`[AuthService] Resposta não é JSON na URL ${baseUrl.substring(0, 30)}`);
+        continue;
+      }
+      
+    } catch (error) {
+      console.error(`[AuthService] Erro na URL ${baseUrl.substring(0, 30)}:`, error);
+      lastError = error;
     }
-
-    const result = await response.json();
-    console.log('[AuthService] Resposta:', result);
-    return result;
-    
-  } catch (error) {
-    console.error('[AuthService] Erro no login:', error);
-    return { success: false, message: 'Erro de conexão. Tente novamente.' };
   }
+  
+  return { success: false, message: 'Erro de conexão com todos os servidores de autenticação. Verifique sua internet.' };
 };
 
 export const AuthService = {

@@ -303,15 +303,20 @@ export const DataService = {
     const { result } = DataService.getTransactions(filters, 1, 999999);
     const headers = [
       'ID', 'Data', 'Vencimento', 'Pagamento', 'Conta', 'Tipo', 'Status', 
-      'Cliente', 'Movimento', 'Valor Pago', 'Valor Recebido'
+      'Cliente', 'CPF / CNPJ', 'Movimento', 'Valor Pago', 'Valor Recebido',
+      'Honorários', 'Extras', 'Total Cobrança', 'Observação - A Pagar'
     ];
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(';')]
         .concat(result.data.map(row => [
               row.id, row.date, row.dueDate, row.paymentDate || '', row.bankAccount, row.type, row.status,
-              `"${row.client}"`, row.movement,
+              `"${row.client}"`, `"${row.cpfCnpj || ''}"`, row.movement,
               row.valuePaid.toFixed(2).replace('.', ','),
               row.valueReceived.toFixed(2).replace('.', ','),
+              (row.honorarios || 0).toFixed(2).replace('.', ','),
+              (row.valorExtra || 0).toFixed(2).replace('.', ','),
+              (row.totalCobranca || 0).toFixed(2).replace('.', ','),
+              `"${(row.observacaoAPagar || '').replace(/"/g, '""')}"`
             ].join(';')
         )).join('\n');
 

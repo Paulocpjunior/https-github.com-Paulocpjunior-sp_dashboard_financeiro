@@ -1,6 +1,6 @@
 
 import { Transaction, User } from '../types';
-import { MOCK_USERS } from '../constants';
+import { MOCK_USERS, APPS_SCRIPT_URL } from '../constants';
 
 // =========================================================================================
 // CONFIGURAÇÃO DO BANCO DE DADOS (GOOGLE SHEETS)
@@ -10,11 +10,6 @@ const DEFAULT_GID = '1276925607';
 
 const STORAGE_KEY_DB_SOURCE = 'cashflow_db_source_id';
 const STORAGE_KEY_DB_GID = 'cashflow_db_gid';
-
-// =========================================================================================
-// URL DO GOOGLE APPS SCRIPT
-// =========================================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1hCtCHpomiGpyLujr0SNdfL4AYXg0rUG_N0-s8e4B5hwOxjKa7rGsR1D2/exec';
 
 // Interface para dados de registro
 interface RegisterUserData {
@@ -262,7 +257,7 @@ export const BackendService = {
         valorRecebido: getColIdx(['valor recebido'], 31),
         saldoMes: getColIdx(['saldo mês', 'saldo mes'], 32),
         docPagoReceber: getColIdx(['doc.pago - receber', 'doc.pago receber', 'pago - receber', 'status receber', 'recebido?'], 35), 
-        cpfCnpj: getColIdx(['n.cliente', 'n cliente', 'n. da empresa', 'n da empresa', 'nº cliente', 'nº da empresa', 'numero cliente', 'número cliente'], 24), // Busca por nome ou fallback para Coluna Y (24)
+        cpfCnpj: getColIdx(['cpf / cnpj', 'cpf/cnpj', 'cpf', 'cnpj', 'n.cliente', 'n cliente', 'n. da empresa', 'n da empresa', 'nº cliente', 'nº da empresa', 'numero cliente', 'número cliente'], 38), // Busca por nome ou fallback para Coluna AM (38)
         observacaoAPagar: getColIdx(['observação - a pagar', 'observacao - a pagar', 'observação a pagar', 'observacao a pagar'], 17), // Coluna R (17)
         submissionId: 39,
       };
