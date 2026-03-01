@@ -396,8 +396,10 @@ const Dashboard: React.FC = () => {
   };
   
   const handleDeleteTransaction = (id: string) => {
-    console.log(`Exclusão confirmada para: ${id}`);
-    alert('Exclusão simulada com sucesso!');
+    if (window.confirm('Tem certeza que deseja excluir esta transação? Ela será removida dos cálculos e da visualização principal.')) {
+      DataService.toggleExclusion(id);
+      // O DataService notificará os ouvintes, o que disparará o recarregamento no Dashboard via useEffect
+    }
   };
 
   const handleWhatsAppShare = () => {

@@ -487,10 +487,11 @@ const DataTable: React.FC<DataTableProps> = ({
 
     const formatValueCSV = (val: number | string | undefined) => {
       const num = Number(val || 0);
-      // Alterado para substituir ponto por vírgula (Formato BR)
-      // Ex: 1.00 -> 1,00
-      // Isso previne que sistemas legados leiam 1.00 como 100
-      return num.toFixed(2).replace('.', ',');
+      // Formato Brasileiro: 1.234,56
+      return new Intl.NumberFormat('pt-BR', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      }).format(num);
     };
 
     const getDescricao = (row: Transaction) => {
@@ -766,6 +767,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Ações</th>
                   </>
                 )}
 
@@ -807,6 +809,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Recebido</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">Saldo</th>
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Método</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Ações</th>
                   </>
                 )}
 
@@ -843,6 +846,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <SortableHeader field="cpfCnpj" label="N.Cliente" className="text-left" />
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Ações</th>
                   </>
                 )}
               </tr>
@@ -905,6 +909,15 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
                             {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-center">
+                            <button 
+                              onClick={() => onDelete && onDelete(row.id)}
+                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
+                              title="Excluir"
+                            >
+                              <Ban className="h-4 w-4" />
+                            </button>
                           </td>
                         </>
                       )}
@@ -974,6 +987,15 @@ const DataTable: React.FC<DataTableProps> = ({
                               {row.paymentMethod || 'Pix'}
                             </span>
                           </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-center">
+                            <button 
+                              onClick={() => onDelete && onDelete(row.id)}
+                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
+                              title="Excluir"
+                            >
+                              <Ban className="h-4 w-4" />
+                            </button>
+                          </td>
                         </>
                       )}
 
@@ -1014,6 +1036,15 @@ const DataTable: React.FC<DataTableProps> = ({
                                 {formatCurrency(row.totalCobranca || row.valueReceived)}
                               </span>
                             )}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-center">
+                            <button 
+                              onClick={() => onDelete && onDelete(row.id)}
+                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
+                              title="Excluir"
+                            >
+                              <Ban className="h-4 w-4" />
+                            </button>
                           </td>
                         </>
                       )}
