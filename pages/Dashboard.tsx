@@ -4,6 +4,9 @@ import Layout from '../components/Layout';
 import KpiCard from '../components/KpiCard';
 import DataTable from '../components/DataTable';
 import AIAssistant from '../components/AIAssistant';
+import { AgingReport } from '../components/AgingReport';
+import { AlertsBanner } from '../components/AlertsBanner';
+import { ClientProfile } from '../components/ClientProfile';
 import { DataService } from '../services/dataService';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
@@ -65,6 +68,7 @@ const Dashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60); // segundos até próximo refresh
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
 
   // Detecta se está no modo "Contas a Pagar" (Saída) ou "Receber" (Entrada)
   const normalizedType = normalizeText(filters.type || '');
@@ -417,6 +421,18 @@ const Dashboard: React.FC = () => {
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };
 
+  const handleAlertClick = (newFilters: Partial<FilterState>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+    setPage(1);
+    setIsFilterMenuOpen(true);
+  };
+
+  const handleBucketClick = (dueDateStart?: string, dueDateEnd?: string) => {
+    setFilters(prev => ({ ...prev, dueDateStart, dueDateEnd }));
+    setPage(1);
+    setIsFilterMenuOpen(true);
+  };
+
   // Prepare chart data
   const chartData = useMemo(() => {
     if (isContasAPagar) {
@@ -629,6 +645,19 @@ const Dashboard: React.FC = () => {
                 A Receber (Aberto)
             </button>
         </div>
+
+        <AlertsBanner 
+          transactions={allFilteredData} 
+          onAlertClick={handleAlertClick} 
+        />
+
+        {(isContasAPagar || isContasAReceber) && (
+          <AgingReport 
+            transactions={allFilteredData} 
+            mode={isContasAPagar ? 'payables' : 'receivables'} 
+            onBucketClick={handleBucketClick} 
+          />
+        )}
 
         {/* Filters Panel - REDESENHADO */}
         {isFilterMenuOpen && (
@@ -1010,12 +1039,24 @@ const Dashboard: React.FC = () => {
                 onIdFilterChange={(val) => handleFilterChange('id', val)}
                 isLoading={isLoading}
                 selectedType={filters.type}
+                onClientClick={(name) => setSelectedClient(name)}
               />
            </div>
         </div>
 
+        {selectedClient && (
+          <ClientProfile 
+            clientName={selectedClient} 
+            transactions={allFilteredData} 
+            onClose={() => setSelectedClient(null)} 
+          />
+        )}
+
         <div className="print:hidden">
-            <AIAssistant onFiltersUpdate={handleAIUpdate} />
+            <AIAssistant 
+              onApplyFilters={handleAIUpdate} 
+              transactions={allFilteredData}
+            />
         </div>
 
       </div>

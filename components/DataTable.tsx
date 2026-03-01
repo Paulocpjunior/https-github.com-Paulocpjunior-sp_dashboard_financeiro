@@ -17,6 +17,7 @@ interface DataTableProps {
   selectedType?: string;
   allData?: Transaction[];
   onDelete?: (id: string) => void;
+  onClientClick?: (clientName: string) => void;
 }
 
 type SortField = 'client' | 'dueDate' | 'receiptDate' | 'cpfCnpj' | 'none';
@@ -101,7 +102,8 @@ const DataTable: React.FC<DataTableProps> = ({
     isLoading = false,
     selectedType = '',
     allData = [],
-    onDelete
+    onDelete,
+    onClientClick
 }) => {
   const [sortField, setSortField] = useState<SortField>('none');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -890,7 +892,11 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td className="px-2 py-2 whitespace-nowrap">
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300">Saída</span>
                           </td>
-                          <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]" title={row.description || row.client || '-'}>
+                          <td 
+                            className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline" 
+                            title={row.description || row.client || '-'}
+                            onClick={() => onClientClick && onClientClick(row.client)}
+                          >
                             {row.description || row.client || '-'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
@@ -946,7 +952,11 @@ const DataTable: React.FC<DataTableProps> = ({
                               <span className="text-slate-400 text-[10px]">-</span>
                             )}
                           </td>
-                          <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px]" title={row.client || '-'}>
+                          <td 
+                            className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline" 
+                            title={row.client || '-'}
+                            onClick={() => onClientClick && onClientClick(row.client)}
+                          >
                             {row.client || '-'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
@@ -1010,7 +1020,10 @@ const DataTable: React.FC<DataTableProps> = ({
                               {isRowSaida ? 'Saída' : 'Entrada'}
                             </span>
                           </td>
-                          <td className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px]">
+                          <td 
+                            className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                            onClick={() => onClientClick && onClientClick(row.client)}
+                          >
                             {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">

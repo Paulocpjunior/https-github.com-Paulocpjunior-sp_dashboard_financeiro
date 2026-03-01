@@ -6,7 +6,29 @@ import { FilterState } from "../types";
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
+let lastCallTime = 0;
+const RATE_LIMIT_MS = 1500;
+
+const waitRateLimit = async () => {
+  const now = Date.now();
+  const diff = now - lastCallTime;
+  if (diff < RATE_LIMIT_MS) {
+    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_MS - diff));
+  }
+  lastCallTime = Date.now();
+};
+
 export const GeminiService = {
+  /**
+   * Detects the intent of the user query.
+   */
+  detectMode: async (query: string): Promise<'filter' | 'analysis' | 'forecast'> => {
+    const q = query.toLowerCase();
+    if (q.includes('previsão') || q.includes('projetar') || q.includes('forecast') || q.includes('futuro')) return 'forecast';
+    if (q.includes('quem') || q.includes('qual') || q.includes('análise') || q.includes('resumo') || q.includes('por que') || q.includes('como')) return 'analysis';
+    return 'filter';
+  },
+
   /**
    * Interprets a natural language query and returns structured filter data.
    */
@@ -18,8 +40,10 @@ export const GeminiService = {
       };
     }
 
+    await waitRateLimit();
+
     try {
-      const modelId = "gemini-3-flash-preview"; // Using a fast model for UI responsiveness
+      const modelId = "gemini-3-flash-preview";
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
       
@@ -108,4 +132,82 @@ export const GeminiService = {
       return { filters: {}, explanation: "Erro ao conectar com a inteligência artificial." };
     }
   },
+
+  /**
+   * Analyzes financial data and returns a text response.
+   */
+  analyzeData: async (query: string, transactions: any[]): Promise<string> => {
+    if (!apiKey) return "Chave de API não configurada.";
+    await waitRateLimit();
+
+    try {
+      const summary = {
+        totalEntradas: transactions.filter(t => t.movement === 'Entrada').reduce((acc, t) => acc + (t.valueReceived || 0), 0),
+        totalSaidas: transactions.filter(t => t.movement === 'Saída').reduce((acc, t) => acc + (t.valuePaid || 0), 0),
+        pendentesReceber: transactions.filter(t => t.movement === 'Entrada' && t.status !== 'Pago').reduce((acc, t) => acc + (t.totalCobranca || 0), 0),
+        pendentesPagar: transactions.filter(t => t.movement === 'Saída' && t.status !== 'Pago').reduce((acc, t) => acc + (t.valuePaid || 0), 0),
+        vencidos: transactions.filter(t => t.status !== 'Pago' && t.dueDate < new Date().toISOString().split('T')[0]).length,
+        topClientesPendentes: Object.entries(
+          transactions.filter(t => t.movement === 'Entrada' && t.status !== 'Pago')
+            .reduce((acc, t) => {
+              acc[t.client] = (acc[t.client] || 0) + (t.totalCobranca || 0);
+              return acc;
+            }, {} as Record<string, number>)
+        ).sort((a, b) => (b[1] as number) - (a[1] as number)).slice(0, 10),
+        saldoPorBanco: transactions.reduce((acc, t) => {
+          const val = t.movement === 'Entrada' ? (t.valueReceived || 0) : -(t.valuePaid || 0);
+          acc[t.bankAccount] = (acc[t.bankAccount] || 0) + val;
+          return acc;
+        }, {} as Record<string, number>)
+      };
+
+      const systemInstruction = `
+        Você é um analista financeiro sênior. 
+        Analise os dados fornecidos e responda à pergunta do usuário de forma clara, profissional e baseada em dados.
+        Use Markdown para formatar tabelas ou listas se necessário.
+        Dados atuais: ${JSON.stringify(summary)}
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: query,
+        config: { systemInstruction }
+      });
+
+      return response.text || "Não foi possível realizar a análise.";
+    } catch (error) {
+      console.error("Gemini Analysis Error:", error);
+      return "Erro ao processar análise de dados.";
+    }
+  },
+
+  /**
+   * Forecasts cash flow for the next 30 days.
+   */
+  forecastCashFlow: async (transactions: any[]): Promise<string> => {
+    if (!apiKey) return "Chave de API não configurada.";
+    await waitRateLimit();
+
+    try {
+      const futureTransactions = transactions.filter(t => t.dueDate >= new Date().toISOString().split('T')[0]);
+      
+      const systemInstruction = `
+        Você é um especialista em projeção de fluxo de caixa.
+        Com base nas transações futuras fornecidas, projete o fluxo de caixa para os próximos 30 dias.
+        Identifique possíveis gargalos (dias com saldo negativo) e dê recomendações.
+        Transações Futuras: ${JSON.stringify(futureTransactions.slice(0, 50))}
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: "Gere uma projeção de fluxo de caixa para os próximos 30 dias.",
+        config: { systemInstruction }
+      });
+
+      return response.text || "Não foi possível gerar a previsão.";
+    } catch (error) {
+      console.error("Gemini Forecast Error:", error);
+      return "Erro ao gerar previsão de caixa.";
+    }
+  }
 };
