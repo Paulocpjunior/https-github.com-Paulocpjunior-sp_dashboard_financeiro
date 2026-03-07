@@ -341,18 +341,17 @@ export const BackendService = {
         let entradaStatus = '';
         if (movement === 'Entrada') {
             const ajVal = get(COL.docPagoReceber);
-            const rawAF = Math.abs(parseCurrency(rawValorRecebido));
             const normalizedAj = ajVal ? ajVal.toLowerCase().trim() : '';
-
-            // Se Doc.Pago - Receber (AJ) for SIM, força status PAGO
-            // Verifica variações como "sim", "pago", "ok"
+            const saldoMes = Math.abs(parseCurrency(get(COL.saldoMes)));
             if (normalizedAj === 'sim' || normalizedAj === 's' || normalizeStatus(ajVal) === 'Pago') {
                 entradaStatus = 'Pago';
             } 
-            // Se houver valor recebido (AF) preenchido, considera PAGO
-            else if (rawAF > 0) {
+            else if (saldoMes > 0) {
+                entradaStatus = 'Pendente';
+            }
+            else if (valCobranca > 0 && valReceived >= valCobranca) {
                 entradaStatus = 'Pago';
-            } 
+            }
             else {
                 entradaStatus = 'Pendente';
             }
@@ -367,6 +366,12 @@ export const BackendService = {
                 valReceived = valCobranca;
             }
             // Se Pendente, valReceived fica 0
+        }
+
+        // CORREÇÃO: Para Pendente com AF pré-preenchido (previsão), zerar valReceived
+        // O valor real a receber fica em totalCobranca para cálculo correto dos KPIs
+        if (movement === 'Entrada' && entradaStatus === 'Pendente' && valCobranca > 0) {
+            valReceived = 0;
         }
 
         // LÓGICA DE DATAS (CORREÇÃO DE VENCIMENTO)

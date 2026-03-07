@@ -1,5 +1,7 @@
 import { Transaction, User } from './types';
 
+export const DATA_SOURCE: 'sheets' | 'firebase' = 'sheets';
+
 // URL do Apps Script (Fonte de Verdade)
 export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1hCtCHpomiGpyLujr0SNdfL4AYXg0rUG_N0-s8e4B5hwOxjKa7rGsR1D2/exec';
 

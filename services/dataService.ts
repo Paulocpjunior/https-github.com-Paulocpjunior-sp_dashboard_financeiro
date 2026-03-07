@@ -1,7 +1,8 @@
 
 import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { BackendService } from './backendService';
-import { MOCK_TRANSACTIONS } from '../constants';
+import { FirebaseService } from './firebaseService';
+import { MOCK_TRANSACTIONS, DATA_SOURCE } from '../constants';
 
 // In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
@@ -68,7 +69,7 @@ export const DataService = {
     currentLoadPromise = (async () => {
         try {
             console.log("[DataService] Iniciando fetch de transações...");
-            const data = await BackendService.fetchTransactions();
+            const data = DATA_SOURCE === 'firebase' ? await FirebaseService.fetchTransactions() : await BackendService.fetchTransactions();
             
             if (!data || !Array.isArray(data)) {
                 throw new Error("Formato de dados inválido recebido do backend.");

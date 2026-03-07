@@ -12,6 +12,7 @@
   "dependencies": {
     "@google/genai": "0.14.1",
     "@remix-run/router": "1.15.3",
+    "firebase": "^12.10.0",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
     "lucide-react": "0.344.0",

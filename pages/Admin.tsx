@@ -7,6 +7,8 @@ import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 import { MOCK_USERS, APPS_SCRIPT_URL } from '../constants';
 
+import { MigrationPanel } from '../components/MigrationPanel';
+
 interface PendingUser {
   id: string;
   rowIndex: number;
@@ -594,6 +596,9 @@ const Admin: React.FC = () => {
                 </div>
             )}
         </div>
+
+        {/* Migration Panel */}
+        <MigrationPanel />
 
         {/* User Management Table */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
