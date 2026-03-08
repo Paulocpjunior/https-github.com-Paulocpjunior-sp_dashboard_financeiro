@@ -670,7 +670,7 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const getColSpan = () => {
     if (isContasAPagar) return 8;
-    if (isContasAReceber) return 11;
+    if (isContasAReceber) return 12;
     return 6;
   };
 
@@ -765,7 +765,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
-                    <SortableHeader field="cpfCnpj" label="N.Cliente" className="text-left" />
+                    <SortableHeader field="cpfCnpj" label="CPF/CNPJ" className="text-left" />
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
@@ -803,7 +803,8 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
-                    <SortableHeader field="cpfCnpj" label="N.Cliente" className="text-left" />
+                    <SortableHeader field="client" label="N.Cliente" className="text-center" />
+                    <SortableHeader field="cpfCnpj" label="CPF/CNPJ" className="text-left" />
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Honor.</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Extras</th>
@@ -845,7 +846,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
-                    <SortableHeader field="cpfCnpj" label="N.Cliente" className="text-left" />
+                    <SortableHeader field="cpfCnpj" label="CPF/CNPJ" className="text-left" />
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Ações</th>
@@ -871,7 +872,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   </td>
                 </tr>
               ) : (
-                sortedData.map((row) => {
+                sortedData.map((row, rowIndex) => {
                   const rowType = normalizeText(row.type || '');
                   const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
                   const isPending = row.status === 'Pendente' || row.status === 'Agendado';
@@ -958,6 +959,9 @@ const DataTable: React.FC<DataTableProps> = ({
                             onClick={() => onClientClick && onClientClick(row.client)}
                           >
                             {row.client || '-'}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap text-center text-xs font-bold text-blue-600 dark:text-blue-400">
+                            {rowIndex + 1}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                             {row.cpfCnpj || '-'}

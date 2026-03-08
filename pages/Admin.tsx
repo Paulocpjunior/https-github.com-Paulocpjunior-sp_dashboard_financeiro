@@ -7,7 +7,7 @@ import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 import { MOCK_USERS, APPS_SCRIPT_URL } from '../constants';
 
-import { MigrationPanel } from '../components/MigrationPanel';
+// MigrationPanel removed - migration complete
 
 interface PendingUser {
   id: string;
@@ -533,7 +533,7 @@ const Admin: React.FC = () => {
                     </div>
                     <div>
                         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Fonte de Dados</h2>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Conexão com Google Sheets</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Conexão com Firebase</p>
                     </div>
                 </div>
             </div>
@@ -596,9 +596,6 @@ const Admin: React.FC = () => {
                 </div>
             )}
         </div>
-
-        {/* Migration Panel */}
-        <MigrationPanel />
 
         {/* User Management Table */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">

@@ -479,7 +479,7 @@ const Dashboard: React.FC = () => {
         <div className="h-[80vh] flex flex-col items-center justify-center">
           <Loader2 className="h-10 w-10 text-blue-600 animate-spin mb-4" />
           <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Acessando Banco de Dados...</h2>
-          <p className="text-slate-500 dark:text-slate-500 mt-2">Sincronizando com Google Sheets</p>
+          <p className="text-slate-500 dark:text-slate-500 mt-2">Conectando ao Firebase</p>
         </div>
       </Layout>
     );
