@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw, Key, Lock, Unlock } from 'lucide-react';
@@ -6,6 +5,8 @@ import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 import { MOCK_USERS, APPS_SCRIPT_URL } from '../constants';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase'; // ajuste o caminho se o seu firebase.ts estiver em outro lugar
 
 // MigrationPanel removed - migration complete
 
@@ -79,34 +80,31 @@ const Admin: React.FC = () => {
     }
   };
 
-  // Carregar todos os usuários do Apps Script
+  // ✅ CORREÇÃO: Carregar usuários diretamente do Firestore
   const loadAllUsers = async () => {
     // Se estiver em modo Mock, usa MOCK_USERS diretamente
     if (DataService.isMockMode) {
-        setUsers(MOCK_USERS);
-        return;
+      setUsers(MOCK_USERS);
+      return;
     }
 
     try {
-      const response = await fetch(APPS_SCRIPT_URL + '?action=usuarios');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.usuarios) {
-          // Filtrar apenas usuários aprovados/ativos (mas pode incluir inativos para gestão)
-          const allUsers = data.usuarios.filter((u: any) => u.status === 'Aprovado' || u.active !== undefined);
-          setUsers(allUsers);
-        } else {
-             // Se não retornar usuários ou success false, tenta fallback
-             throw new Error("Formato inválido ou sem usuários");
-        }
+      // Lê diretamente da coleção 'users' no Firestore
+      const snapshot = await getDocs(collection(db, 'users'));
+      const firestoreUsers: UserType[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as UserType[];
+
+      if (firestoreUsers.length > 0) {
+        setUsers(firestoreUsers);
       } else {
-          throw new Error("Erro na requisição");
+        console.warn('Nenhum usuário encontrado no Firestore.');
+        setUsers([]);
       }
     } catch (error) {
-      console.warn('Falha ao carregar usuários do backend. Usando fallback local.', error);
-      // Fallback para MOCK_USERS se API falhar, para não quebrar a tela
-      const userData = await BackendService.fetchUsers();
-      setUsers(userData);
+      console.error('Erro ao carregar usuários do Firestore:', error);
+      setUsers([]);
     }
   };
 
