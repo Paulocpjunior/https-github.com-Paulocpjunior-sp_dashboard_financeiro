@@ -5,8 +5,9 @@ import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 import { MOCK_USERS, APPS_SCRIPT_URL } from '../constants';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase'; // ajuste o caminho se o seu firebase.ts estiver em outro lugar
+// Firebase - ajuste o caminho abaixo se necessário (procure o arquivo que tem initializeApp + export const db)
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
+import { db } from '../firebase';
 
 // MigrationPanel removed - migration complete
 
@@ -48,6 +49,10 @@ const Admin: React.FC = () => {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserMessage, setCreateUserMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
+  // Estado do painel de Sincronização
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
   // Modal de Alteração de Senha (Admin)
   const [showChangePassModal, setShowChangePassModal] = useState(false);
   const [selectedUserForPass, setSelectedUserForPass] = useState<UserType | null>(null);
@@ -80,31 +85,19 @@ const Admin: React.FC = () => {
     }
   };
 
-  // ✅ CORREÇÃO: Carregar usuários diretamente do Firestore
+  // ✅ CORRIGIDO: Carregar usuários diretamente do Firestore (ignora mock/Apps Script)
   const loadAllUsers = async () => {
-    // Se estiver em modo Mock, usa MOCK_USERS diretamente
-    if (DataService.isMockMode) {
-      setUsers(MOCK_USERS);
-      return;
-    }
-
     try {
-      // Lê diretamente da coleção 'users' no Firestore
       const snapshot = await getDocs(collection(db, 'users'));
-      const firestoreUsers: UserType[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as UserType[];
-
-      if (firestoreUsers.length > 0) {
-        setUsers(firestoreUsers);
-      } else {
-        console.warn('Nenhum usuário encontrado no Firestore.');
-        setUsers([]);
-      }
+      const firestoreUsers: UserType[] = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...(docSnap.data() as Omit<UserType, 'id'>),
+      }));
+      setUsers(firestoreUsers);
     } catch (error) {
       console.error('Erro ao carregar usuários do Firestore:', error);
-      setUsers([]);
+      // Só usa MOCK_USERS se o Firestore falhar completamente
+      setUsers(MOCK_USERS);
     }
   };
 
@@ -159,6 +152,35 @@ const Admin: React.FC = () => {
           setDbMessage({ type: 'success', text: 'Configuração restaurada para o padrão.' });
           DataService.refreshCache().catch(() => {});
       }
+  };
+
+  // ✅ Sincronizar planilha → Firebase
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const response = await fetch(APPS_SCRIPT_URL + '?action=syncFirebase');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSyncMessage({ type: 'success', text: `✅ Sincronização concluída! ${data.updated ?? ''} registros atualizados no Firebase.` });
+        } else {
+          throw new Error(data.message || 'Erro desconhecido');
+        }
+      } else {
+        throw new Error('Erro na requisição ao Apps Script');
+      }
+    } catch (error: any) {
+      // Fallback no-cors (Apps Script pode redirecionar)
+      try {
+        await fetch(APPS_SCRIPT_URL + '?action=syncFirebase', { mode: 'no-cors' });
+        setSyncMessage({ type: 'success', text: '✅ Sincronização solicitada! Aguarde alguns instantes e atualize os dados.' });
+      } catch {
+        setSyncMessage({ type: 'error', text: 'Erro ao sincronizar: ' + (error.message || 'Verifique a conexão.') });
+      }
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // 1. Bloquear / Desbloquear Usuário
@@ -593,6 +615,52 @@ const Admin: React.FC = () => {
                     <span className="font-medium">{dbMessage.text}</span>
                 </div>
             )}
+        </div>
+
+        {/* ✅ Painel de Sincronização Planilha → Firebase */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 animate-in slide-in-from-bottom-2">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-orange-600 dark:text-orange-400">
+              <RefreshCw className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white">Sincronizar Planilha → Firebase</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Atualiza status de pagamentos baixados no Contas a Pagar</p>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4">
+            <p className="text-sm text-amber-700 dark:text-amber-300 flex gap-2 items-start">
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <span>
+                Use quando o <strong>Contas a Pagar</strong> não refletir os pagamentos baixados via JotForm.
+                Lê todos os dados da planilha e atualiza o Firebase (status, data de pagamento, valores).
+              </span>
+            </p>
+          </div>
+
+          <button
+            onClick={handleSyncNow}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors disabled:opacity-60 shadow-sm"
+          >
+            {isSyncing ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Sincronizando...</>
+            ) : (
+              <><RefreshCw className="h-4 w-4" /> Sincronizar Agora</>
+            )}
+          </button>
+
+          {syncMessage && (
+            <div className={`mt-4 p-3 rounded-lg text-sm flex items-center gap-2 animate-in fade-in ${
+              syncMessage.type === 'success'
+                ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border border-green-200 dark:border-green-800'
+                : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 border border-red-200 dark:border-red-800'
+            }`}>
+              {syncMessage.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+              <span>{syncMessage.text}</span>
+            </div>
+          )}
         </div>
 
         {/* User Management Table */}
