@@ -2,6 +2,8 @@ import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { BackendService } from './backendService';
 import { FirebaseService } from './firebaseService';
 import { MOCK_TRANSACTIONS, DATA_SOURCE } from '../constants';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { db } from './firebaseConfig';
 
 // In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
@@ -18,6 +20,9 @@ let autoRefreshListeners: Array<() => void> = [];
 
 // Constante de Refresh (2 minutos para evitar excesso de requisições)
 const AUTO_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
+
+// Unsubscribe do listener Firebase em tempo real
+let firebaseUnsubscribe: (() => void) | null = null;
 
 // Normalização de texto auxiliar
 const normalizeText = (text: string) => {
@@ -333,6 +338,81 @@ export const DataService = {
     if (autoRefreshTimer) {
         clearInterval(autoRefreshTimer);
         autoRefreshTimer = null;
+    }
+  },
+
+  /**
+   * Inicia listener em tempo real do Firebase (onSnapshot).
+   * Qualquer alteração no Firestore atualiza o cache automaticamente e notifica a UI.
+   */
+  subscribeToFirebaseChanges: (): (() => void) => {
+    if (isMockMode || DATA_SOURCE !== 'firebase') return () => {};
+
+    // Evita múltiplos listeners simultâneos
+    if (firebaseUnsubscribe) {
+      firebaseUnsubscribe();
+      firebaseUnsubscribe = null;
+    }
+
+    console.log('[DataService] Iniciando listener em tempo real do Firebase...');
+
+    const q = query(collection(db, 'transactions'), orderBy('date', 'desc'));
+
+    firebaseUnsubscribe = onSnapshot(q, (snapshot) => {
+      if (!isDataLoaded) return; // Aguarda carregamento inicial
+
+      console.log(`[DataService] Firebase onSnapshot: ${snapshot.size} docs, ${snapshot.docChanges().length} alterações`);
+
+      const data: Transaction[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Transaction[];
+
+      // Aplica normalizações (mesmo pipeline do loadData)
+      let excludedIds: string[] = [];
+      try { excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]'); } catch(e) { /* Safari private mode */ }
+
+      data.forEach(t => {
+        try {
+          if (excludedIds.includes(t.id)) t.isExcluded = true;
+          if (t.status != null) {
+            const sLower = String(t.status).toLowerCase().trim();
+            if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) t.status = 'Pago';
+            else if (sLower === 'pago') t.status = 'Pago';
+            else if (['pendente', 'nao', 'não', 'n', 'aberto', 'em aberto', ''].includes(sLower)) t.status = 'Pendente';
+            else if (['agendado', 'programado'].includes(sLower)) t.status = 'Agendado';
+          } else { t.status = 'Pendente'; }
+          if (t.status === 'Pendente' && t.paymentDate) t.paymentDate = '';
+          if (t.movement) {
+            const mLower = String(t.movement).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+            if (['entrada', 'receita', 'credito'].includes(mLower)) t.movement = 'Entrada';
+            else if (['saida', 'despesa', 'debito'].includes(mLower)) t.movement = 'Saída';
+          }
+          if (t.description) t.description = normalizeDescription(t.description);
+          if (t.client) { const n = normalizeDescription(t.client); if (n !== t.client) t.client = n; }
+          if (t.observacaoAPagar) t.observacaoAPagar = normalizeDescription(t.observacaoAPagar);
+        } catch (e) { /* ignore */ }
+      });
+
+      CACHED_TRANSACTIONS = data;
+      lastUpdatedAt = new Date();
+      DataService.notifyListeners();
+    }, (error) => {
+      console.error('[DataService] Erro no listener Firebase:', error);
+    });
+
+    return () => {
+      if (firebaseUnsubscribe) {
+        firebaseUnsubscribe();
+        firebaseUnsubscribe = null;
+      }
+    };
+  },
+
+  stopFirebaseListener: (): void => {
+    if (firebaseUnsubscribe) {
+      firebaseUnsubscribe();
+      firebaseUnsubscribe = null;
     }
   },
 
