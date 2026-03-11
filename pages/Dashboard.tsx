@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import KpiCard from '../components/KpiCard';
@@ -63,6 +62,12 @@ const Dashboard: React.FC = () => {
   // Loading States
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState('');
+
+  // Refs para manter filtros/página atuais acessíveis no callback do onRefresh
+  const filtersRef = useRef(filters);
+  const pageRef = useRef(page);
+  filtersRef.current = filters;
+  pageRef.current = page;
 
   // Refresh States
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -149,6 +154,16 @@ const Dashboard: React.FC = () => {
         clients: DataService.getUniqueValues('client'),
         paidBys: DataService.getUniqueValues('paidBy'),
       });
+
+      // ★ FIX: Também atualizar tabela e KPIs com os dados mais recentes do cache
+      const currentFilters = filtersRef.current;
+      const currentPage = pageRef.current;
+      const { result, kpi: newKpi } = DataService.getTransactions(currentFilters, currentPage);
+      const { result: allResult } = DataService.getTransactions(currentFilters, 1, 999999);
+      setData(result.data);
+      setAllFilteredData(allResult.data);
+      setTotalPages(result.totalPages);
+      setKpi(newKpi);
     });
 
     // Iniciar auto-refresh
@@ -403,6 +418,24 @@ const Dashboard: React.FC = () => {
     if (window.confirm('Tem certeza que deseja excluir esta transação? Ela será removida dos cálculos e da visualização principal.')) {
       DataService.toggleExclusion(id);
       // O DataService notificará os ouvintes, o que disparará o recarregamento no Dashboard via useEffect
+    }
+  };
+
+  const handleMarkAsPaid = async (id: string) => {
+    if (window.confirm('Confirmar baixa? Isso marcará a transação como PAGA com a data de hoje e atualizará o Firebase.')) {
+      try {
+        await DataService.markAsPaid(id);
+        // Recarrega dados imediatamente para refletir o status "Pago" na tabela
+        const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
+        const { result: allResult } = DataService.getTransactions(filters, 1, 999999);
+        setData(result.data);
+        setAllFilteredData(allResult.data);
+        setTotalPages(result.totalPages);
+        setKpi(newKpi);
+      } catch (err) {
+        console.error('Erro ao dar baixa:', err);
+        alert('Erro ao dar baixa. Tente novamente.');
+      }
     }
   };
 
@@ -1032,6 +1065,7 @@ const Dashboard: React.FC = () => {
                 totalPages={totalPages}
                 onPageChange={setPage}
                 onDelete={handleDeleteTransaction}
+                onMarkAsPaid={handleMarkAsPaid}
                 clientFilterValue={filters.client}
                 onClientFilterChange={(val) => handleFilterChange('client', val)}
                 clientOptions={options.clients}
