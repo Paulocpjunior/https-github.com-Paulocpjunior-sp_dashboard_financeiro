@@ -1,5 +1,4 @@
-
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Transaction, FilterState, KPIData } from '../types';
 import { DataService } from '../services/dataService';
 
@@ -38,6 +37,10 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  // ✅ FIX: Armazena os filtros e página atuais para re-aplicar quando o Firebase atualizar
+  const currentFiltersRef = useRef<Partial<FilterState>>({});
+  const currentPageRef = useRef<number>(1);
+
   const options = useMemo(() => ({
     bankAccounts: DataService.getUniqueValues('bankAccount'),
     types: DataService.getUniqueValues('type'),
@@ -48,6 +51,9 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
   }), [allTransactions]);
 
   const applyFilters = useCallback((filters: Partial<FilterState>, page: number) => {
+    // ✅ FIX: Salva os filtros atuais para o listener de tempo real poder re-aplicá-los
+    currentFiltersRef.current = filters;
+    currentPageRef.current = page;
     try {
       const { result, kpi: newKpi } = DataService.getTransactions(filters, page, 20);
       setTransactions(result.data);
@@ -82,14 +88,14 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await DataService.refreshCache();
       setLastUpdated(DataService.getLastUpdatedAt());
-      // Re-apply current filters would be handled by the component using this context
-      // but we can trigger a refresh of the current view here if we stored filters in state
+      // ✅ FIX: Re-aplica os filtros atuais após o refresh
+      applyFilters(currentFiltersRef.current, currentPageRef.current);
     } catch (err: any) {
       console.error("Refresh error:", err);
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [applyFilters]);
 
   const loadMockData = useCallback(() => {
     DataService.loadMockData();
@@ -97,14 +103,28 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
     applyFilters({}, 1);
   }, [applyFilters]);
 
-  // Listen for DataService updates (auto-refresh)
+  // ✅ FIX PRINCIPAL: Listener em tempo real do Firebase (onSnapshot)
+  // Quando qualquer colaboradora alterar um lançamento, a UI atualiza automaticamente
+  useEffect(() => {
+    // Inicia o listener somente após o carregamento inicial
+    if (isLoading) return;
+
+    const unsubscribeFirebase = DataService.subscribeToFirebaseChanges();
+
+    return () => {
+      unsubscribeFirebase();
+    };
+  }, [isLoading]);
+
+  // ✅ FIX: onRefresh agora re-aplica filtros para atualizar a tabela na tela
   useEffect(() => {
     const unsubscribe = DataService.onRefresh(() => {
       setLastUpdated(DataService.getLastUpdatedAt());
-      // When data refreshes, we might want to notify the UI
+      // Re-aplica os filtros atuais para que a tabela seja atualizada
+      applyFilters(currentFiltersRef.current, currentPageRef.current);
     });
     return unsubscribe;
-  }, []);
+  }, [applyFilters]);
 
   const value = {
     transactions,
