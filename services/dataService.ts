@@ -1,4 +1,3 @@
-
 import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { BackendService } from './backendService';
 import { FirebaseService } from './firebaseService';
@@ -26,6 +25,96 @@ const normalizeText = (text: string) => {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+};
+
+// Mapa de correção de nomes de movimentação/descrição
+// Chave: nome errado (como está no Firebase/Planilha)
+// Valor: nome correto (como deve aparecer no sistema)
+const DESCRIPTION_NORMALIZATION_MAP: Record<string, string> = {
+  // Dare (antiga Desafio) — Google Translate traduz "Dare" → "Desafio"
+  'desafio': 'Dare',
+  'dare': 'Dare',
+  'desafio sp': 'Dare',
+  'dare sp': 'Dare',
+  'ousar': 'Dare',          // outra tradução de "dare"
+  'atrever': 'Dare',        // outra tradução de "dare"
+
+  // Net Eunice — Google Translate traduz "Net" → "Rede"/"Tecelã de rede"/"Tela"
+  'tecela de rede eunice': 'Net Eunice',     // "Tecelã" sem acentos = "tecela"
+  'tecelã de rede eunice': 'Net Eunice',     // variante acentuada
+  'tacela de rede eunice': 'Net Eunice',     // variante com "a"
+  'tacelã de rede eunice': 'Net Eunice',     // variante acentuada com "a"
+  'tecelan de rede eunice': 'Net Eunice',
+  'tacelan de rede eunice': 'Net Eunice',
+  'tecela eunice': 'Net Eunice',
+  'tecelã eunice': 'Net Eunice',
+  'tacelã eunice': 'Net Eunice',
+  'tacela eunice': 'Net Eunice',
+  'tacelan eunice': 'Net Eunice',
+  'tecelan eunice': 'Net Eunice',
+  'rede eunice': 'Net Eunice',
+  'net eunice': 'Net Eunice',
+  'tecelã de rede': 'Net Eunice',
+  'tecela de rede': 'Net Eunice',
+  'tacelã de rede': 'Net Eunice',
+  'tacela de rede': 'Net Eunice',
+  'tela eunice': 'Net Eunice',
+  'tela de rede eunice': 'Net Eunice',
+
+  // Net Itapeti — Google Translate traduz "Net" → "Líquido"/"Rede"
+  'liquido itapeti': 'Net Itapeti',
+  'líquido itapeti': 'Net Itapeti',
+  'liquida itapeti': 'Net Itapeti',
+  'net itapeti liquido': 'Net Itapeti',
+  'net itapeti': 'Net Itapeti',
+  'itapeti liquido': 'Net Itapeti',
+  'itapeti líquido': 'Net Itapeti',
+  'net itapeti liq': 'Net Itapeti',
+  'itapeti liq': 'Net Itapeti',
+  'rede itapeti': 'Net Itapeti',
+  'tela itapeti': 'Net Itapeti',
+
+  // Imposto a pagar cliente
+  'imposto a pagar cliente': 'Imposto a Pagar Cliente',
+  'imposto pagar cliente': 'Imposto a Pagar Cliente',
+  'imposto cliente': 'Imposto a Pagar Cliente',
+  'imp a pagar cliente': 'Imposto a Pagar Cliente',
+  'imposto a pagar': 'Imposto a Pagar Cliente',
+  'taxa a pagar cliente': 'Imposto a Pagar Cliente',
+};
+
+// Keywords de fallback para quando o match exato/prefix não pega
+const KEYWORD_FALLBACK_MAP: [string[], string][] = [
+  [['eunice', 'rede'], 'Net Eunice'],     // qualquer combo de "eunice" + "rede" ou "tecelã"
+  [['eunice', 'tecela'], 'Net Eunice'],
+  [['eunice', 'tacela'], 'Net Eunice'],
+  [['eunice', 'tela'], 'Net Eunice'],
+  [['itapeti', 'liquido'], 'Net Itapeti'],
+  [['itapeti', 'rede'], 'Net Itapeti'],
+  [['itapeti', 'tela'], 'Net Itapeti'],
+];
+
+const normalizeDescription = (desc: string): string => {
+  try {
+    if (!desc || typeof desc !== 'string') return desc || '';
+    const key = desc.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    
+    // 1. Exact match or prefix match against the map
+    for (const [wrong, correct] of Object.entries(DESCRIPTION_NORMALIZATION_MAP)) {
+      const wrongNorm = wrong.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (key === wrongNorm) return correct;
+      if (key.startsWith(wrongNorm)) return correct;
+    }
+    
+    // 2. Keyword-based fallback: se o texto contém TODAS as keywords do grupo, normaliza
+    for (const [keywords, correct] of KEYWORD_FALLBACK_MAP) {
+      if (keywords.every(kw => key.includes(kw))) return correct;
+    }
+    
+    return desc;
+  } catch (e) {
+    return desc || '';
+  }
 };
 
 export const DataService = {
@@ -75,11 +164,59 @@ export const DataService = {
                 throw new Error("Formato de dados inválido recebido do backend.");
             }
 
-            // Apply exclusions
-            const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
+            // Apply exclusions + description normalization
+            let excludedIds: string[] = [];
+            try { excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]'); } catch(e) { /* Safari private mode */ }
             data.forEach(t => {
-              if (excludedIds.includes(t.id)) {
-                t.isExcluded = true;
+              try {
+                if (excludedIds.includes(t.id)) {
+                  t.isExcluded = true;
+                }
+                // ★ Normalizar status: "Sim", "Recebido", "Quitado", "OK", "Liquidado" → "Pago"
+                if (t.status != null) {
+                  const sLower = String(t.status).toLowerCase().trim();
+                  if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) {
+                    t.status = 'Pago';
+                  } else if (sLower === 'pago') {
+                    t.status = 'Pago';
+                  } else if (['pendente', 'nao', 'não', 'n', 'aberto', 'em aberto', ''].includes(sLower)) {
+                    t.status = 'Pendente';
+                  } else if (['agendado', 'programado'].includes(sLower)) {
+                    t.status = 'Agendado';
+                  }
+                } else {
+                  t.status = 'Pendente';
+                }
+                // Sanitize: Pendente entries should NOT have paymentDate
+                if (t.status === 'Pendente' && t.paymentDate) {
+                  t.paymentDate = '';
+                }
+                // ★ FIX: Normalizar campo movement (Saida→Saída, entrada→Entrada)
+                if (t.movement) {
+                  const mLower = String(t.movement).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                  if (mLower === 'entrada' || mLower === 'receita' || mLower === 'credito') {
+                    t.movement = 'Entrada';
+                  } else if (mLower === 'saida' || mLower === 'despesa' || mLower === 'debito') {
+                    t.movement = 'Saída';
+                  }
+                }
+                // Normalizar nomes de movimentação/descrição incorretos
+                if (t.description && typeof t.description === 'string') {
+                  t.description = normalizeDescription(t.description);
+                }
+                // Também normalizar o campo client quando for uma saída (favorecido)
+                if (t.client && typeof t.client === 'string') {
+                  const clientNorm = normalizeDescription(t.client);
+                  if (clientNorm !== t.client) {
+                    t.client = clientNorm;
+                  }
+                }
+                // Normalizar observacaoAPagar (pode ter nomes traduzidos também)
+                if (t.observacaoAPagar && typeof t.observacaoAPagar === 'string') {
+                  t.observacaoAPagar = normalizeDescription(t.observacaoAPagar);
+                }
+              } catch (normErr) {
+                console.warn('[DataService] Erro ao normalizar transação:', t.id, normErr);
               }
             });
 
@@ -139,6 +276,29 @@ export const DataService = {
   },
 
   /**
+   * Marca uma transação como paga (Dar Baixa) — atualiza Firebase e o cache local.
+   */
+  markAsPaid: async (id: string): Promise<void> => {
+    const today = new Date().toISOString().slice(0, 10);
+    const updates: Partial<Transaction> = {
+      status: 'Pago',
+      paymentDate: today,
+    };
+
+    // Atualiza no Firebase
+    await FirebaseService.updateTransaction(id, updates);
+
+    // Atualiza o cache local imediatamente para refletir na UI
+    const transaction = CACHED_TRANSACTIONS.find(t => t.id === id);
+    if (transaction) {
+      transaction.status = 'Pago';
+      transaction.paymentDate = today;
+    }
+
+    DataService.notifyListeners();
+  },
+
+  /**
    * Força uma atualização dos dados.
    */
   refreshCache: async (): Promise<void> => {
@@ -191,7 +351,16 @@ export const DataService = {
 
   getUniqueValues: (field: keyof Transaction): string[] => {
     if (!isDataLoaded) return [];
-    const values = new Set(CACHED_TRANSACTIONS.map(t => String(t[field] || '').trim()).filter(Boolean));
+    const normalizeStatusVal = (s: string): string => {
+      const v = s.toLowerCase().trim();
+      if (["recebido","quitado","sim","ok","liquidado","pago"].includes(v)) return 'Pago';
+      if (v === "agendado") return 'Agendado';
+      if (["pendente","nao","não","aberto"].includes(v)) return 'Pendente';
+      return s.trim();
+    };
+    const rawValues = CACHED_TRANSACTIONS.map(t => String(t[field] || '').trim()).filter(Boolean);
+    const normalized = field === 'status' ? rawValues.map(normalizeStatusVal) : rawValues;
+    const values = new Set(normalized);
     return Array.from(values).sort();
   },
 
@@ -269,7 +438,17 @@ export const DataService = {
           
           if (filters.bankAccount && item.bankAccount !== filters.bankAccount) matches = false;
           if (filters.type && item.type !== filters.type) matches = false;
-          if (filters.status && item.status !== filters.status) matches = false;
+          if (filters.status) {
+            // Normaliza aliases: Recebido/Quitado/Sim/OK → Pago
+            const normalizeItemStatus = (s: string): string => {
+              const v = (s || '').toLowerCase().trim();
+              if (v === 'recebido' || v === 'quitado' || v === 'sim' || v === 'ok' || v === 'liquidado') return 'Pago';
+              if (v === 'pago') return 'Pago';
+              if (v === 'agendado') return 'Agendado';
+              return 'Pendente';
+            };
+            if (normalizeItemStatus(item.status) !== filters.status) matches = false;
+          }
           if (filters.movement && item.movement !== filters.movement) matches = false;
           if (filters.paidBy && item.paidBy !== filters.paidBy) matches = false;
           
