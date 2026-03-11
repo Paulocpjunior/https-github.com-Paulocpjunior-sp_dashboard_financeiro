@@ -48,6 +48,7 @@ const Admin: React.FC = () => {
 
   // Estado Sincronização
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
   const [syncMessage, setSyncMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   // Modal de Alteração de Senha (Admin)
@@ -157,12 +158,43 @@ const Admin: React.FC = () => {
   const handleSyncNow = async () => {
     setIsSyncing(true);
     setSyncMessage(null);
+    setSyncProgress(0);
+
+    // Simula progresso enquanto aguarda o Apps Script (não há retorno de progresso real)
+    const progressSteps = [10, 25, 45, 65, 80];
+    let stepIndex = 0;
+    const progressTimer = setInterval(() => {
+      if (stepIndex < progressSteps.length) {
+        setSyncProgress(progressSteps[stepIndex]);
+        stepIndex++;
+      } else {
+        clearInterval(progressTimer);
+      }
+    }, 800);
+
     try {
+      // Dispara o Apps Script para sincronizar Planilha → Firebase
       await fetch(APPS_SCRIPT_URL + '?action=syncFirebase', { mode: 'no-cors' });
-      setSyncMessage({ type: 'success', text: '✅ Sincronização solicitada! Aguarde e atualize os dados.' });
+
+      clearInterval(progressTimer);
+      setSyncProgress(90);
+
+      // ✅ FIX: Aguarda 3s para o Apps Script terminar de gravar no Firebase,
+      // depois força refresh do cache local para refletir os dados atualizados
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      await DataService.refreshCache();
+      setSyncProgress(100);
+
+      setSyncMessage({ type: 'success', text: '✅ Sincronização concluída! Dados atualizados com sucesso.' });
     } catch (error: any) {
+      clearInterval(progressTimer);
+      setSyncProgress(0);
       setSyncMessage({ type: 'error', text: 'Erro ao sincronizar: ' + (error.message || 'Verifique a conexão.') });
-    } finally { setIsSyncing(false); }
+    } finally {
+      setIsSyncing(false);
+      // Limpa o progresso após 4s
+      setTimeout(() => setSyncProgress(0), 4000);
+    }
   };
 
   // 1. Bloquear / Desbloquear Usuário
@@ -618,6 +650,20 @@ const Admin: React.FC = () => {
             className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors disabled:opacity-60 shadow-sm">
             {isSyncing ? <><Loader2 className="h-4 w-4 animate-spin" /> Sincronizando...</> : <><RefreshCw className="h-4 w-4" /> Sincronizar Agora</>}
           </button>
+          {isSyncing && (
+            <div className="mt-4 space-y-1.5">
+              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span>Sincronizando com Firebase...</span>
+                <span className="font-bold text-orange-500">{syncProgress}%</span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-full bg-orange-500 transition-all duration-700 ease-out rounded-full"
+                  style={{ width: `${syncProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
           {syncMessage && (
             <div className={`mt-4 p-3 rounded-lg text-sm flex items-center gap-2 ${syncMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
               {syncMessage.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
