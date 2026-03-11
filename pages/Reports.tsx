@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/Layout';
 import { DataService } from '../services/dataService';
@@ -10,7 +9,7 @@ import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, Re
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
-type SortField = 'date' | 'dueDate' | 'paymentDate' | 'valorOriginal' | 'valorPago' | 'status' | 'client' | 'cpfCnpj';
+type SortField = 'date' | 'dueDate' | 'paymentDate' | 'valorOriginal' | 'valorPago' | 'status' | 'client' | 'clientNumber';
 type SortDirection = 'asc' | 'desc';
 
 // Interface estendida localmente para detalhar Pendente vs Pago
@@ -63,8 +62,9 @@ const Reports: React.FC = () => {
         setLoading(true);
         setInitError(''); // Reset error
 
-        // Se os dados já estiverem carregados (seja real ou mock), usa o que tem.
+        // Se os dados já estiverem carregados, força refresh para garantir normalização atualizada
         if (DataService.isDataLoaded) {
+             await DataService.refreshCache();
              const { result } = DataService.getTransactions({}, 1, 99999);
              setAllTransactions(result.data);
         } else {
@@ -81,13 +81,23 @@ const Reports: React.FC = () => {
       }
     };
     load();
+
+    // Listener para atualizar quando dados mudam (ex: após dar baixa no Dashboard)
+    const unsubscribe = DataService.onRefresh(() => {
+      if (DataService.isDataLoaded) {
+        const { result } = DataService.getTransactions({}, 1, 99999);
+        setAllTransactions(result.data);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Compute available types dynamically
   const availableTypes = useMemo(() => {
     const mandatoryTypes = [
       'Entrada de Caixa / Contas a Receber', 
-      'Saida de Caixa / Contas a Pagar'
+      'Saída de Caixa / Contas a Pagar'
     ];
     
     const typesFromData = Array.from(new Set(allTransactions.map(t => t.type).filter(Boolean)));
@@ -106,6 +116,14 @@ const Reports: React.FC = () => {
   const availableClients = useMemo(() => {
     const clients = new Set(allTransactions.map(t => t.client).filter(Boolean));
     return Array.from(clients).sort();
+  }, [allTransactions]);
+
+  // ★ FIX: Compute available bank accounts from data (não usar constantes hardcoded)
+  const availableBanks = useMemo(() => {
+    const banksFromData = Array.from(new Set(allTransactions.map(t => t.bankAccount).filter(Boolean)));
+    // Combinar com constantes para garantir que apareçam opções mesmo sem dados
+    const combined = new Set([...BANK_ACCOUNTS, ...banksFromData]);
+    return Array.from(combined).sort();
   }, [allTransactions]);
 
   const handleModeChange = (mode: ReportMode) => {
@@ -175,9 +193,11 @@ const Reports: React.FC = () => {
       });
     }
 
-    // 2. Movement Filtering
+    // 2. Movement Filtering (normalizado para tratar acentuação: Saída/Saida)
     if (selectedMovement) {
-      result = result.filter(t => t.movement === selectedMovement);
+      const normalizeMovement = (m: string) => (m || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      const targetMovement = normalizeMovement(selectedMovement);
+      result = result.filter(t => normalizeMovement(t.movement) === targetMovement);
     }
 
     // 3. Type Filtering
@@ -185,14 +205,22 @@ const Reports: React.FC = () => {
       result = result.filter(t => selectedTypes.includes(t.type));
     }
 
-    // 4. Status Filtering
+    // 4. Status Filtering (★ FIX: normalizar antes de comparar)
     if (selectedStatus) {
-      result = result.filter(t => t.status === selectedStatus);
+      const normalizeStatus = (s: string): string => {
+        const v = (s || '').toLowerCase().trim();
+        if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's', 'pago'].includes(v)) return 'Pago';
+        if (['agendado', 'programado'].includes(v)) return 'Agendado';
+        return 'Pendente';
+      };
+      result = result.filter(t => normalizeStatus(t.status) === selectedStatus);
     }
 
-    // 5. Bank Filtering
+    // 5. Bank Filtering (★ FIX: case-insensitive e accent-insensitive)
     if (selectedBank) {
-      result = result.filter(t => t.bankAccount === selectedBank);
+      const normalizeBank = (b: string) => (b || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      const targetBank = normalizeBank(selectedBank);
+      result = result.filter(t => normalizeBank(t.bankAccount) === targetBank);
     }
 
     // 6. Client Filtering (NOVO)
@@ -243,9 +271,9 @@ const Reports: React.FC = () => {
           valA = (a.client || '').toLowerCase();
           valB = (b.client || '').toLowerCase();
           break;
-        case 'cpfCnpj':
-          valA = (a.cpfCnpj || '').toLowerCase();
-          valB = (b.cpfCnpj || '').toLowerCase();
+        case 'clientNumber':
+          valA = a.clientNumber || 0;
+          valB = b.clientNumber || 0;
           break;
         default:
           valA = a.date || '';
@@ -317,25 +345,40 @@ const Reports: React.FC = () => {
         'paymentDate': 'Data de Pagamento/Baixa'
     };
 
+    // ★ FIX: Capturar snapshot dos dados ANTES do setTimeout para evitar dados stale
+    const snapshotData = [...filteredData];
+    const snapshotKpi = { ...kpi };
+    const snapshotFilters = {
+        startDate, 
+        endDate, 
+        types: [...selectedTypes], 
+        status: selectedStatus, 
+        bankAccount: selectedBank,
+        movement: selectedMovement,
+        client: selectedClient,
+        dateContext: dateLabelMap[dateFilterType],
+        sortField,
+        sortDirection
+    };
+
     setTimeout(() => {
-      ReportService.generatePDF(
-        filteredData, 
-        kpi, 
-        { 
-            startDate, 
-            endDate, 
-            types: selectedTypes, 
-            status: selectedStatus, 
-            bankAccount: selectedBank,
-            movement: selectedMovement,
-            client: selectedClient, // Passando Cliente
-            dateContext: dateLabelMap[dateFilterType],
-            sortField,
-            sortDirection
-        },
-        AuthService.getCurrentUser()
-      );
-      setGenerating(false);
+      try {
+        if (snapshotData.length === 0) {
+          alert('Nenhum registro encontrado com os filtros aplicados. Ajuste os filtros e tente novamente.');
+          return;
+        }
+        ReportService.generatePDF(
+          snapshotData, 
+          snapshotKpi, 
+          snapshotFilters,
+          AuthService.getCurrentUser()
+        );
+      } catch (err) {
+        console.error('Erro ao gerar PDF:', err);
+        alert('Erro ao gerar o relatório PDF. Verifique os filtros e tente novamente.');
+      } finally {
+        setGenerating(false);
+      }
     }, 500);
   };
 
@@ -488,7 +531,7 @@ const Reports: React.FC = () => {
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><Landmark className="h-4 w-4" /> Conta Bancária</label>
                              <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)}>
                                 <option value="">Todas</option>
-                                {BANK_ACCOUNTS.map(b => <option key={b} value={b}>{b}</option>)}
+                                {availableBanks.map(b => <option key={b} value={b}>{b}</option>)}
                              </select>
                         </div>
                         <div>
@@ -551,7 +594,7 @@ const Reports: React.FC = () => {
                             <option value="dueDate">Data Vencimento</option>
                             <option value="paymentDate">Data Pagamento/Baixa</option>
                             <option value="client">Cliente / Favorecido</option>
-                            {isEntrada && <option value="cpfCnpj">N.Cliente</option>}
+                            {isEntrada && <option value="clientNumber">N.Cliente</option>}
                             <option value="valorOriginal">Valor (Original)</option>
                          </select>
                     </div>
@@ -719,7 +762,7 @@ const Reports: React.FC = () => {
                                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400">{formatDate(row.date)}</td>
                                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium">{formatDate(row.dueDate)}</td>
                                       <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[150px]">{row.client || '-'}</td>
-                                      {isEntrada && <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-slate-500">{row.cpfCnpj || '-'}</td>}
+                                      {isEntrada && <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-slate-500">{row.clientNumber ?? '-'}</td>}
                                       {isSaida && <td className="px-3 py-2 text-slate-500 dark:text-slate-500 truncate max-w-[150px]">{row.observacaoAPagar || '-'}</td>}
                                       <td className="px-3 py-2 whitespace-nowrap">
                                          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
