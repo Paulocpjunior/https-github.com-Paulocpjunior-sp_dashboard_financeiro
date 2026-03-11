@@ -68,15 +68,16 @@ const Admin: React.FC = () => {
     }
 
     try {
-      const response = await fetch(APPS_SCRIPT_URL + '?action=pendentes');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.usuarios) {
-          setPendingUsers(data.usuarios);
-        }
-      }
+      // Busca usuários pendentes de aprovação direto do Firestore (evita CORS do Apps Script)
+      const { collection, getDocs, where, query } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      const q = query(collection(db, 'users'), where('active', '==', false));
+      const snapshot = await getDocs(q);
+      const pendentes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPendingUsers(pendentes as any[]);
     } catch (error) {
       console.error('Erro ao carregar pendentes:', error);
+      setPendingUsers([]);
     } finally {
       setLoadingPending(false);
     }
@@ -157,20 +158,10 @@ const Admin: React.FC = () => {
     setIsSyncing(true);
     setSyncMessage(null);
     try {
-      const response = await fetch(APPS_SCRIPT_URL + '?action=syncFirebase');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setSyncMessage({ type: 'success', text: `✅ Sincronização concluída! ${data.updated ?? ''} registros atualizados no Firebase.` });
-        } else { throw new Error(data.message || 'Erro desconhecido'); }
-      } else { throw new Error('Erro na requisição'); }
+      await fetch(APPS_SCRIPT_URL + '?action=syncFirebase', { mode: 'no-cors' });
+      setSyncMessage({ type: 'success', text: '✅ Sincronização solicitada! Aguarde e atualize os dados.' });
     } catch (error: any) {
-      try {
-        await fetch(APPS_SCRIPT_URL + '?action=syncFirebase', { mode: 'no-cors' });
-        setSyncMessage({ type: 'success', text: '✅ Sincronização solicitada! Aguarde e atualize os dados.' });
-      } catch {
-        setSyncMessage({ type: 'error', text: 'Erro ao sincronizar: ' + (error.message || 'Verifique a conexão.') });
-      }
+      setSyncMessage({ type: 'error', text: 'Erro ao sincronizar: ' + (error.message || 'Verifique a conexão.') });
     } finally { setIsSyncing(false); }
   };
 
