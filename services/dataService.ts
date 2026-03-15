@@ -32,6 +32,30 @@ const normalizeText = (text: string) => {
     .replace(/[\u0300-\u036f]/g, '');
 };
 
+// FIX: Normalizar datas para formato YYYY-MM-DD (ISO)
+const normalizeDate = (dateStr: string | undefined | null): string => {
+  if (!dateStr || typeof dateStr !== 'string') return '';
+  const clean = dateStr.trim().split(' ')[0];
+  if (!clean) return '';
+  const isoRegex = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+  const isoMatch = clean.match(isoRegex);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  }
+  const ptBrRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/;
+  const ptMatch = clean.match(ptBrRegex);
+  if (ptMatch) {
+    let year = ptMatch[3];
+    if (year.length === 2) year = '20' + year;
+    return `${year}-${ptMatch[2].padStart(2, '0')}-${ptMatch[1].padStart(2, '0')}`;
+  }
+  try {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) { return d.toISOString().slice(0, 10); }
+  } catch (_) {}
+  return '';
+};
+
 // Mapa de correção de nomes de movimentação/descrição
 // Chave: nome errado (como está no Firebase/Planilha)
 // Valor: nome correto (como deve aparecer no sistema)
@@ -196,6 +220,13 @@ export const DataService = {
                 if (t.status === 'Pendente' && t.paymentDate) {
                   t.paymentDate = '';
                 }
+                // FIX: Normalizar datas DD/MM/YYYY -> YYYY-MM-DD (ISO)
+                t.date = normalizeDate(t.date) || t.date;
+                t.dueDate = normalizeDate(t.dueDate) || t.dueDate;
+                if (t.paymentDate) {
+                  t.paymentDate = normalizeDate(t.paymentDate) || t.paymentDate;
+                }
+
                 // ★ FIX: Normalizar campo movement (Saida→Saída, entrada→Entrada)
                 if (t.movement) {
                   const mLower = String(t.movement).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -383,6 +414,11 @@ export const DataService = {
             else if (['agendado', 'programado'].includes(sLower)) t.status = 'Agendado';
           } else { t.status = 'Pendente'; }
           if (t.status === 'Pendente' && t.paymentDate) t.paymentDate = '';
+          // FIX: Normalizar datas DD/MM/YYYY -> YYYY-MM-DD (ISO)
+          t.date = normalizeDate(t.date) || t.date;
+          t.dueDate = normalizeDate(t.dueDate) || t.dueDate;
+          if (t.paymentDate) { t.paymentDate = normalizeDate(t.paymentDate) || t.paymentDate; }
+
           if (t.movement) {
             const mLower = String(t.movement).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
             if (['entrada', 'receita', 'credito'].includes(mLower)) t.movement = 'Entrada';
