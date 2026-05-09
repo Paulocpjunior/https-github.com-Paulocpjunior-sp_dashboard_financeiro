@@ -327,7 +327,7 @@ const Login: React.FC = () => {
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-white">Recuperar Senha</h2>
                 <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
-                  Informe seu usuário para resetar sua senha.
+                  Informe seu usuário ou e-mail para resetar sua senha.
                 </p>
              </div>
 
@@ -348,7 +348,7 @@ const Login: React.FC = () => {
              ) : (
                <form onSubmit={handleForgotSubmit}>
                  <div className="mb-6">
-                    <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">Usuário Cadastrado</label>
+                    <label className="block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-2">Usuário ou E-mail Cadastrado</label>
                     <div className="relative group">
                       <div className="absolute left-[15px] top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-royal-600 transition-colors">
                         <User className="h-4 w-4" />
@@ -358,7 +358,7 @@ const Login: React.FC = () => {
                         value={forgotUsername}
                         onChange={(e) => setForgotUsername(e.target.value)}
                         className="w-full py-3.5 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
-                        placeholder="Ex: admin"
+                        placeholder="Ex: admin ou email@empresa.com"
                         required
                         disabled={forgotStatus === 'loading'}
                       />

@@ -10,6 +10,9 @@ export interface User {
   email?: string;
   lastAccess?: string;
   passwordHash?: string; // Armazena o hash SHA-256 da senha, nunca o texto plano
+  authUid?: string;
+  authEmail?: string;
+  authProvider?: string;
 }
 
 export interface Transaction {
@@ -19,7 +22,7 @@ export interface Transaction {
   paymentDate?: string; // Data de Baixa/Pagamento/Recebimento efetivo (YYYY-MM-DD)
   bankAccount: string;
   type: string;
-  description: string; // Coluna F da Planilha (Movimentação Original)
+  description: string; // Movimentação original
   status: 'Pago' | 'Pendente' | 'Agendado';
   client: string; // Name/Creditor
   paidBy: string;
@@ -31,8 +34,9 @@ export interface Transaction {
   valorExtra?: number;
   totalCobranca?: number;
   paymentMethod?: string;
-  cpfCnpj?: string; // Novo campo vindo do Jotform/Planilha
-  observacaoAPagar?: string; // Coluna R da Planilha
+  cpfCnpj?: string; // Campo vindo do Jotform/Firebase
+  clientNumber?: number | string;
+  observacaoAPagar?: string; // Observação do contas a pagar
   isExcluded?: boolean; // Marcação de exclusão lógica
 }
 

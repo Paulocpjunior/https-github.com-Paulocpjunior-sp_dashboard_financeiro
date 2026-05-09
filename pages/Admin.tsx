@@ -4,30 +4,19 @@ import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw,
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
-import { MOCK_USERS, APPS_SCRIPT_URL } from '../constants';
+import { PendingUserRecord } from '../services/userAdminService';
+import { firebaseConfig } from '../services/firebaseConfig';
 
 // MigrationPanel removed - migration complete
 
-interface PendingUser {
-  id: string;
-  rowIndex: number;
-  timestamp: string;
-  name: string;
-  email: string;
-  phone: string;
-  username: string;
-  status: string;
-  role: string;
-}
-
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
-  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<PendingUserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingPending, setLoadingPending] = useState(false);
   
   // Database Config State
-  const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [firebaseProjectId, setFirebaseProjectId] = useState('');
   const [isSavingDb, setIsSavingDb] = useState(false);
   const [dbMessage, setDbMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
@@ -57,7 +46,7 @@ const Admin: React.FC = () => {
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [isSavingPass, setIsSavingPass] = useState(false);
 
-  // Carregar usuários pendentes do Apps Script
+  // Carregar usuários pendentes do Firestore
   const loadPendingUsers = async () => {
     setLoadingPending(true);
     
@@ -69,13 +58,8 @@ const Admin: React.FC = () => {
     }
 
     try {
-      // Busca usuários pendentes de aprovação direto do Firestore (evita CORS do Apps Script)
-      const { collection, getDocs, where, query } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-      const q = query(collection(db, 'users'), where('active', '==', false));
-      const snapshot = await getDocs(q);
-      const pendentes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPendingUsers(pendentes as any[]);
+      const pendentes = await BackendService.fetchPendingUsers();
+      setPendingUsers(pendentes);
     } catch (error) {
       console.error('Erro ao carregar pendentes:', error);
       setPendingUsers([]);
@@ -87,17 +71,10 @@ const Admin: React.FC = () => {
   // ✅ CORRIGIDO: Carrega usuários direto do Firestore
   const loadAllUsers = async () => {
     try {
-      const { collection, getDocs } = await import('firebase/firestore');
-      const { db } = await import('../firebase');
-      const snapshot = await getDocs(collection(db, 'users'));
-      const firestoreUsers: UserType[] = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...(docSnap.data() as Omit<UserType, 'id'>),
-      }));
-      setUsers(firestoreUsers);
+      setUsers(await BackendService.fetchUsers());
     } catch (error) {
       console.error('Erro ao carregar usuários do Firestore:', error);
-      setUsers(MOCK_USERS);
+      setUsers([]);
     }
   };
 
@@ -111,8 +88,7 @@ const Admin: React.FC = () => {
         // Carregar usuários pendentes
         await loadPendingUsers();
         
-        // Load current Spreadsheet ID
-        setSpreadsheetId(BackendService.getSpreadsheetId());
+        setFirebaseProjectId(firebaseConfig.projectId);
       } catch (error) {
         console.error("Failed to load data in Admin", error);
       } finally {
@@ -124,8 +100,8 @@ const Admin: React.FC = () => {
 
   // ... (Rest of Admin.tsx logic for modals and updates remains the same)
   const handleSaveDatabaseId = async () => {
-    if (!spreadsheetId.trim()) {
-        setDbMessage({ type: 'error', text: 'O ID da planilha não pode estar vazio.' });
+    if (!firebaseProjectId.trim()) {
+        setDbMessage({ type: 'error', text: 'Projeto Firebase não configurado.' });
         return;
     }
 
@@ -133,34 +109,29 @@ const Admin: React.FC = () => {
     setDbMessage(null);
     
     try {
-        BackendService.updateSpreadsheetId(spreadsheetId);
-        setSpreadsheetId(BackendService.getSpreadsheetId());
-        // Se estiver em modo mock, isso não vai funcionar, mas ok.
         await DataService.refreshCache();
-        setDbMessage({ type: 'success', text: 'Conexão estabelecida e salva com sucesso!' });
+        setDbMessage({ type: 'success', text: 'Conexão com Firebase validada com sucesso!' });
     } catch (error: any) {
-        setDbMessage({ type: 'error', text: 'ID salvo, mas a conexão falhou: ' + (error.message || 'Verifique as permissões da planilha.') });
+        setDbMessage({ type: 'error', text: 'Falha ao validar Firebase: ' + (error.message || 'Verifique as permissões do Firestore.') });
     } finally {
         setIsSavingDb(false);
     }
   };
 
   const handleRestoreDefault = () => {
-      if (confirm('Tem certeza? Isso irá restaurar o ID original da planilha de demonstração.')) {
-          BackendService.resetSpreadsheetId();
-          setSpreadsheetId(BackendService.getSpreadsheetId());
-          setDbMessage({ type: 'success', text: 'Configuração restaurada para o padrão.' });
+      if (confirm('Revalidar a conexão com o Firebase oficial?')) {
+          setFirebaseProjectId(firebaseConfig.projectId);
+          setDbMessage({ type: 'success', text: 'Projeto Firebase oficial carregado.' });
           DataService.refreshCache().catch(() => {});
       }
   };
 
-  // ✅ Sincronizar planilha → Firebase
+  // Atualizar dados do Firebase
   const handleSyncNow = async () => {
     setIsSyncing(true);
     setSyncMessage(null);
     setSyncProgress(0);
 
-    // Simula progresso enquanto aguarda o Apps Script (não há retorno de progresso real)
     const progressSteps = [10, 25, 45, 65, 80];
     let stepIndex = 0;
     const progressTimer = setInterval(() => {
@@ -173,19 +144,13 @@ const Admin: React.FC = () => {
     }, 800);
 
     try {
-      // Dispara o Apps Script para sincronizar Planilha → Firebase
-      await fetch(APPS_SCRIPT_URL + '?action=syncFirebase', { mode: 'no-cors' });
-
       clearInterval(progressTimer);
       setSyncProgress(90);
 
-      // ✅ FIX: Aguarda 3s para o Apps Script terminar de gravar no Firebase,
-      // depois força refresh do cache local para refletir os dados atualizados
-      await new Promise(resolve => setTimeout(resolve, 3000));
       await DataService.refreshCache();
       setSyncProgress(100);
 
-      setSyncMessage({ type: 'success', text: '✅ Sincronização concluída! Dados atualizados com sucesso.' });
+      setSyncMessage({ type: 'success', text: '✅ Dados do Firebase atualizados com sucesso.' });
     } catch (error: any) {
       clearInterval(progressTimer);
       setSyncProgress(0);
@@ -231,7 +196,8 @@ const Admin: React.FC = () => {
   // 3. Salvar Nova Senha
   const handleSavePassword = async () => {
     if (!selectedUserForPass) return;
-    if (newAdminPassword.length < 6) {
+    const isFirebaseAuthUser = Boolean(selectedUserForPass.authEmail || selectedUserForPass.authUid);
+    if (!isFirebaseAuthUser && newAdminPassword.length < 6) {
       alert('A senha deve ter no mínimo 6 caracteres.');
       return;
     }
@@ -240,7 +206,7 @@ const Admin: React.FC = () => {
     try {
       const result = await BackendService.adminChangePassword(selectedUserForPass.username, newAdminPassword);
       if (result.success) {
-        alert('Senha alterada com sucesso!');
+        alert(result.message || (isFirebaseAuthUser ? 'Link de recuperação enviado!' : 'Senha alterada com sucesso!'));
         setShowChangePassModal(false);
         setNewAdminPassword('');
         setSelectedUserForPass(null);
@@ -248,9 +214,7 @@ const Admin: React.FC = () => {
         alert('Erro ao alterar senha: ' + result.message);
       }
     } catch (error) {
-       // Em caso de fallback/erro de rede, assumimos sucesso para UX
-       alert('Solicitação de troca de senha enviada com sucesso!');
-       setShowChangePassModal(false);
+       alert('Erro ao alterar senha. Verifique sua conexão e permissões no Firebase.');
     } finally {
       setIsSavingPass(false);
     }
@@ -279,7 +243,6 @@ const Admin: React.FC = () => {
     setIsCreatingUser(true);
 
     const payload = {
-      action: 'register',
       name: newUserForm.name,
       email: newUserForm.email,
       phone: newUserForm.phone,
@@ -289,15 +252,7 @@ const Admin: React.FC = () => {
     };
 
     try {
-      // Tentar com fetch normal primeiro
-      const response = await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        redirect: 'follow',
-      });
-
-      const result = await response.json();
+      const result = await BackendService.registerUser(payload);
 
       if (result.success) {
         setCreateUserMessage({ type: 'success', text: result.message });
@@ -319,61 +274,18 @@ const Admin: React.FC = () => {
         setCreateUserMessage({ type: 'error', text: result.message });
       }
     } catch (error: any) {
-      console.log('Tentando modo no-cors...');
-      
-      // Fallback: usar no-cors (não retorna resposta, mas envia os dados)
-      try {
-        await fetch(APPS_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        
-        // Assumir sucesso e mostrar mensagem
-        setCreateUserMessage({ type: 'success', text: 'Cadastro enviado! Aguarde a aprovação.' });
-        setTimeout(() => {
-          setShowNewUserModal(false);
-          setNewUserForm({
-            name: '',
-            email: '',
-            phone: '',
-            username: '',
-            password: '',
-            confirmPassword: '',
-            role: 'operacional'
-          });
-          setCreateUserMessage(null);
-          loadPendingUsers();
-        }, 2000);
-      } catch (noCorsError) {
-        setCreateUserMessage({ type: 'error', text: 'Erro de conexão. Tente novamente.' });
-      }
+      setCreateUserMessage({ type: 'error', text: 'Erro de conexão. Verifique sua conexão e permissões no Firebase.' });
     } finally {
       setIsCreatingUser(false);
     }
   };
 
   // Aprovar usuário pendente
-  const handleApproveUser = async (user: PendingUser) => {
+  const handleApproveUser = async (user: PendingUserRecord) => {
     if (!confirm(`Aprovar o usuário "${user.name}"?`)) return;
 
-    const payload = {
-      action: 'approve',
-      username: user.username,
-      email: user.email,
-      name: user.name,
-    };
-
     try {
-      const response = await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        redirect: 'follow',
-      });
-
-      const result = await response.json();
+      const result = await BackendService.approvePendingUser(user.email, user.name, user.username);
       
       if (result.success) {
         alert('Usuário aprovado com sucesso!');
@@ -383,46 +295,17 @@ const Admin: React.FC = () => {
         alert('Erro: ' + result.message);
       }
     } catch (error) {
-      // Fallback com no-cors
-      try {
-        await fetch(APPS_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        
-        alert('Usuário aprovado com sucesso!');
-        loadPendingUsers();
-        loadAllUsers();
-      } catch (noCorsError) {
-        alert('Erro ao aprovar usuário. Tente novamente.');
-      }
+      alert('Erro ao aprovar usuário. Verifique sua conexão e permissões no Firebase.');
     }
   };
 
   // Rejeitar usuário pendente
-  const handleRejectUser = async (user: PendingUser) => {
+  const handleRejectUser = async (user: PendingUserRecord) => {
     const reason = prompt(`Motivo da rejeição para "${user.name}" (opcional):`);
     if (reason === null) return;
 
-    const payload = {
-      action: 'reject',
-      username: user.username,
-      email: user.email,
-      name: user.name,
-      reason: reason,
-    };
-
     try {
-      const response = await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        redirect: 'follow',
-      });
-
-      const result = await response.json();
+      const result = await BackendService.rejectPendingUser(user.email, user.name, user.username, reason);
       
       if (result.success) {
         alert('Usuário rejeitado.');
@@ -431,20 +314,7 @@ const Admin: React.FC = () => {
         alert('Erro: ' + result.message);
       }
     } catch (error) {
-      // Fallback com no-cors
-      try {
-        await fetch(APPS_SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        
-        alert('Usuário rejeitado.');
-        loadPendingUsers();
-      } catch (noCorsError) {
-        alert('Erro ao rejeitar usuário. Tente novamente.');
-      }
+      alert('Erro ao rejeitar usuário. Verifique sua conexão e permissões no Firebase.');
     }
   };
 
@@ -576,22 +446,22 @@ const Admin: React.FC = () => {
                 <p className="text-sm text-slate-600 dark:text-slate-300 flex gap-2 items-start">
                     <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                     <span>
-                        Configure o <strong>Spreadsheet ID</strong> da planilha pública que alimenta o dashboard. 
-                        A planilha deve ter o compartilhamento definido como <em>"Qualquer pessoa com o link pode ver"</em>.
+                        O dashboard usa o <strong>Firebase Firestore</strong> como banco oficial.
+                        Use esta área para validar a conexão e recarregar os dados em cache.
                     </span>
                 </p>
             </div>
 
             <div className="flex flex-col gap-4">
                 <div>
-                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Spreadsheet ID / Link Completo</label>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Firebase Project ID</label>
                     <div className="flex flex-col sm:flex-row gap-2">
                         <input 
                             type="text" 
-                            value={spreadsheetId}
-                            onChange={(e) => setSpreadsheetId(e.target.value)}
+                            value={firebaseProjectId}
+                            readOnly
                             className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 font-mono"
-                            placeholder="Cole o link completo ou o ID da planilha..."
+                            placeholder="Projeto Firebase configurado..."
                         />
                         <button 
                             onClick={handleSaveDatabaseId}
@@ -601,18 +471,18 @@ const Admin: React.FC = () => {
                             {isSavingDb ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span>Testando...</span>
+                                    <span>Validando...</span>
                                 </>
                             ) : (
                                 <>
                                     <Save className="h-4 w-4" />
-                                    <span>Salvar ID</span>
+                                    <span>Validar</span>
                                 </>
                             )}
                         </button>
                         <button 
                             onClick={handleRestoreDefault}
-                            title="Restaurar ID Padrão"
+                            title="Recarregar projeto oficial"
                             className="px-3 py-2.5 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-600"
                         >
                             <RotateCcw className="h-4 w-4" />
@@ -631,29 +501,29 @@ const Admin: React.FC = () => {
             )}
         </div>
 
-        {/* ✅ Painel de Sincronização */}
+        {/* Painel de Atualização */}
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-orange-600"><RefreshCw className="h-5 w-5" /></div>
             <div>
-              <h2 className="text-lg font-bold text-slate-800 dark:text-white">Sincronizar Planilha → Firebase</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Atualiza status de pagamentos baixados no Contas a Pagar</p>
+              <h2 className="text-lg font-bold text-slate-800 dark:text-white">Atualizar Dados do Firebase</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Recarrega os lançamentos diretamente do Firestore</p>
             </div>
           </div>
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4">
             <p className="text-sm text-amber-700 dark:text-amber-300 flex gap-2 items-start">
               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-              <span>Use quando o <strong>Contas a Pagar</strong> não refletir os pagamentos baixados via JotForm. Lê todos os dados da planilha e atualiza o Firebase (status, data de pagamento, valores).</span>
+              <span>Use quando o <strong>dashboard</strong> não refletir alterações recentes. Os dados são lidos diretamente do Firebase.</span>
             </p>
           </div>
           <button onClick={handleSyncNow} disabled={isSyncing}
             className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors disabled:opacity-60 shadow-sm">
-            {isSyncing ? <><Loader2 className="h-4 w-4 animate-spin" /> Sincronizando...</> : <><RefreshCw className="h-4 w-4" /> Sincronizar Agora</>}
+            {isSyncing ? <><Loader2 className="h-4 w-4 animate-spin" /> Atualizando...</> : <><RefreshCw className="h-4 w-4" /> Atualizar Agora</>}
           </button>
           {isSyncing && (
             <div className="mt-4 space-y-1.5">
               <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                <span>Sincronizando com Firebase...</span>
+                <span>Atualizando cache local...</span>
                 <span className="font-bold text-orange-500">{syncProgress}%</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -780,7 +650,9 @@ const Admin: React.FC = () => {
                       <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                    </div>
                    <div>
-                       <h2 className="text-lg font-bold text-slate-800 dark:text-white">Alterar Senha</h2>
+                       <h2 className="text-lg font-bold text-slate-800 dark:text-white">
+                         {selectedUserForPass.authEmail || selectedUserForPass.authUid ? 'Recuperar Senha' : 'Alterar Senha'}
+                       </h2>
                        <p className="text-xs text-slate-500 dark:text-slate-400">Usuário: <span className="font-semibold text-royal-600 dark:text-royal-400">{selectedUserForPass.username}</span></p>
                    </div>
                 </div>
@@ -792,21 +664,37 @@ const Admin: React.FC = () => {
                 </button>
              </div>
              <div className="p-6">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                   Nova Senha de Acesso
-                </label>
-                <div className="relative">
-                   <input
-                      type="text"
-                      value={newAdminPassword}
-                      onChange={(e) => setNewAdminPassword(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono"
-                      placeholder="Mínimo 6 caracteres"
-                   />
-                </div>
-                <p className="text-xs text-slate-500 mt-2">
-                   Esta ação substitui a senha atual imediatamente.
-                </p>
+                {selectedUserForPass.authEmail || selectedUserForPass.authUid ? (
+                  <>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                       Recuperação por E-mail
+                    </label>
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+                      Enviaremos um link de recuperação para o e-mail de autenticação cadastrado.
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                       A senha não será alterada diretamente no painel.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                       Nova Senha de Acesso
+                    </label>
+                    <div className="relative">
+                       <input
+                          type="text"
+                          value={newAdminPassword}
+                          onChange={(e) => setNewAdminPassword(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono"
+                          placeholder="Mínimo 6 caracteres"
+                       />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                       Esta ação substitui a senha atual imediatamente.
+                    </p>
+                  </>
+                )}
              </div>
              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl">
                  <button
@@ -817,7 +705,7 @@ const Admin: React.FC = () => {
                  </button>
                  <button
                     onClick={handleSavePassword}
-                    disabled={isSavingPass || newAdminPassword.length < 6}
+                    disabled={isSavingPass || (!(selectedUserForPass.authEmail || selectedUserForPass.authUid) && newAdminPassword.length < 6)}
                     className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                  >
                     {isSavingPass ? (
@@ -828,7 +716,7 @@ const Admin: React.FC = () => {
                     ) : (
                        <>
                           <Save className="h-4 w-4" />
-                          Salvar Senha
+                          {selectedUserForPass.authEmail || selectedUserForPass.authUid ? 'Enviar Link' : 'Salvar Senha'}
                        </>
                     )}
                  </button>

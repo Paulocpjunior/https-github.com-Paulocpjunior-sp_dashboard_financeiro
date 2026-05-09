@@ -21,7 +21,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleLogout = () => {
     try {
-      console.log('Logging out...');
       AuthService.logout();
       navigate('/login');
     } catch (e) {
@@ -158,7 +157,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   key={item.path}
                   type="button"
                   onClick={() => {
-                    console.log('Navigating to:', item.path);
                     navigate(item.path);
                     setIsSidebarOpen(false);
                   }}

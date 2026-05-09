@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { FinancialDataProvider } from './contexts/FinancialDataContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Reports from './pages/Reports';
-import Admin from './pages/Admin';
+
+const Login = React.lazy(() => import('./pages/Login'));
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Reports = React.lazy(() => import('./pages/Reports'));
+const Admin = React.lazy(() => import('./pages/Admin'));
 
 const App: React.FC = () => {
   return (
-    <FinancialDataProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <Suspense fallback={null}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
@@ -39,8 +39,8 @@ const App: React.FC = () => {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-    </FinancialDataProvider>
+      </Suspense>
+    </BrowserRouter>
   );
 };
 
