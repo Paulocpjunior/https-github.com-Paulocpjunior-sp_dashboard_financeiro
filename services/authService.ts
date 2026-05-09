@@ -1,7 +1,7 @@
 import { User } from '../types';
-import { APPS_SCRIPT_URL, ALT_APPS_SCRIPT_URLS } from '../constants';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth, db } from '../firebase';
 
 const AUTH_STORAGE_KEY = 'sp_contabil_auth';
 
@@ -16,6 +16,11 @@ interface LoginResult {
   message?: string;
 }
 
+const sanitizeUser = (user: User): User => {
+  const { passwordHash, ...safeUser } = user;
+  return safeUser as User;
+};
+
 const hashPassword = async (password: string): Promise<string> => {
   const msgBuffer = new TextEncoder().encode(password);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -23,65 +28,123 @@ const hashPassword = async (password: string): Promise<string> => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-const loginViaAPI = async (username: string, password: string): Promise<LoginResult> => {
-  const urlsToTry = [APPS_SCRIPT_URL, ...ALT_APPS_SCRIPT_URLS];
-  for (const baseUrl of urlsToTry) {
-    try {
-      const params = new URLSearchParams({ action: 'loginGet', username, password });
-      const response = await fetch(`${baseUrl}?${params.toString()}`, { method: 'GET', redirect: 'follow' });
-      if (!response.ok) continue;
-      const result = JSON.parse(await response.text());
-      if (result?.success && result?.user) return result;
-      if (result?.success === false) return result;
-    } catch { continue; }
+const normalizeLogin = (value: string): string => value.toLowerCase().trim();
+
+const findUserDoc = async (login: string) => {
+  const loginClean = normalizeLogin(login);
+
+  const byUsername = query(collection(db, 'users'), where('username', '==', loginClean));
+  const usernameSnapshot = await getDocs(byUsername);
+  if (!usernameSnapshot.empty) return usernameSnapshot.docs[0];
+
+  const byEmail = query(collection(db, 'users'), where('email', '==', loginClean));
+  const emailSnapshot = await getDocs(byEmail);
+  if (!emailSnapshot.empty) return emailSnapshot.docs[0];
+
+  const byIdSnapshot = await getDoc(doc(db, 'users', loginClean));
+  return byIdSnapshot.exists() ? byIdSnapshot : null;
+};
+
+const buildUserFromFirestore = (id: string, data: any): User => ({
+  id,
+  username: data.username || id,
+  name: data.name || data.displayName || data.username || id,
+  role: (data.role || 'operacional').toLowerCase().trim() as any,
+  active: data.active !== false,
+  email: data.email || '',
+});
+
+const loginWithFirebaseAuth = async (email: string, password: string): Promise<boolean> => {
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    return true;
+  } catch {
+    return false;
   }
-  return { success: false, message: 'API indisponível' };
+};
+
+const loginViaFirebaseAuthEmail = async (email: string, password: string): Promise<LoginResult> => {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, normalizeLogin(email), password);
+    const docSnap = await getDoc(doc(db, 'users', userCredential.user.uid));
+
+    if (!docSnap.exists()) {
+      await signOut(auth).catch(() => {});
+      return { success: false, message: 'Perfil de usuário não encontrado.' };
+    }
+
+    const data = docSnap.data();
+    if (data.active === false) {
+      await signOut(auth).catch(() => {});
+      return { success: false, message: 'Usuário inativo.' };
+    }
+
+    return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
+  } catch {
+    return { success: false, message: 'Senha incorreta.' };
+  }
+};
+
+const loginViaUsernameIndex = async (username: string, password: string): Promise<LoginResult | null> => {
+  try {
+    const indexSnap = await getDoc(doc(db, 'loginIndex', normalizeLogin(username)));
+    if (!indexSnap.exists()) return null;
+
+    const data = indexSnap.data();
+    const authEmail = data.authEmail || data.email;
+    if (!authEmail) {
+      return { success: false, message: 'Usuário sem credencial de login configurada.' };
+    }
+
+    return loginViaFirebaseAuthEmail(authEmail, password);
+  } catch (error) {
+    console.error('[AuthService] Erro loginIndex:', error);
+    return null;
+  }
 };
 
 const loginViaFirestore = async (username: string, password: string): Promise<LoginResult> => {
   try {
-    const usernameClean = username.toLowerCase().trim();
+    const usernameClean = normalizeLogin(username);
     const passwordHash = await hashPassword(password);
 
-    console.log('[AuthService] Buscando usuário no Firestore:', usernameClean);
-
-    const q = query(collection(db, 'users'), where('username', '==', usernameClean));
-    const snapshot = await getDocs(q);
-
-    console.log('[AuthService] Documentos encontrados:', snapshot.size);
-
-    if (snapshot.empty) {
+    const docSnap = await findUserDoc(usernameClean);
+    if (!docSnap) {
       return { success: false, message: 'Usuário não encontrado.' };
     }
 
-    const docSnap = snapshot.docs[0];
     const data = docSnap.data();
 
-    if (!data.active) {
+    if (data.active === false) {
       return { success: false, message: 'Usuário inativo.' };
     }
 
     const storedHash = (data.passwordHash || '').toLowerCase().trim();
     const computedHash = passwordHash.toLowerCase().trim();
 
-    console.log('[AuthService] Hash computado:', computedHash.substring(0, 10) + '...');
-    console.log('[AuthService] Hash armazenado:', storedHash.substring(0, 10) + '...');
+    if (data.email && await loginWithFirebaseAuth(data.email, password)) {
+      return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
+    }
 
-    if (storedHash !== computedHash) {
+    if (storedHash) {
+      if (storedHash !== computedHash) {
+        return { success: false, message: 'Senha incorreta.' };
+      }
+
+      return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
+    }
+
+    if (!data.email) {
+      return { success: false, message: 'Usuário sem credencial de login configurada. Solicite ao administrador a troca de senha.' };
+    }
+
+    try {
+      await signInWithEmailAndPassword(auth, data.email, password);
+    } catch {
       return { success: false, message: 'Senha incorreta.' };
     }
 
-    const user: User = {
-      id: docSnap.id,
-      username: data.username,
-      name: data.name,
-      role: (data.role || 'operacional').toLowerCase().trim() as any,
-      active: data.active,
-      email: data.email || '',
-      passwordHash: storedHash,
-    };
-
-    return { success: true, user };
+    return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
   } catch (error) {
     console.error('[AuthService] Erro Firestore:', error);
     return { success: false, message: 'Erro ao conectar com o banco de dados.' };
@@ -90,31 +153,43 @@ const loginViaFirestore = async (username: string, password: string): Promise<Lo
 
 export const AuthService = {
   login: async (username: string, password: string): Promise<LoginResult> => {
-    const usernameClean = username.toLowerCase().trim();
-    console.log('[AuthService] Tentando login:', usernameClean);
+    const usernameClean = normalizeLogin(username);
 
-    const apiResult = await loginViaAPI(usernameClean, password);
-    if (apiResult.success && apiResult.user) {
-      const normalizedUser: User = {
-        ...apiResult.user,
-        role: (apiResult.user.role || 'operacional').toLowerCase().trim() as any,
-      };
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: normalizedUser, isAuthenticated: true }));
-      return { success: true, user: normalizedUser };
+    if (usernameClean.includes('@')) {
+      const authResult = await loginViaFirebaseAuthEmail(usernameClean, password);
+      if (authResult.success && authResult.user) {
+        const safeUser = sanitizeUser(authResult.user);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: safeUser, isAuthenticated: true }));
+        return { success: true, user: safeUser };
+      }
+      return authResult;
     }
 
-    console.log('[AuthService] Apps Script falhou, tentando Firestore...');
+    const indexedResult = await loginViaUsernameIndex(usernameClean, password);
+    if (indexedResult) {
+      if (indexedResult.success && indexedResult.user) {
+        const safeUser = sanitizeUser(indexedResult.user);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: safeUser, isAuthenticated: true }));
+        return { success: true, user: safeUser };
+      }
+      return indexedResult;
+    }
+
     const fsResult = await loginViaFirestore(usernameClean, password);
     if (fsResult.success && fsResult.user) {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: fsResult.user, isAuthenticated: true }));
-      return { success: true, user: fsResult.user };
+      const safeUser = sanitizeUser(fsResult.user);
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: safeUser, isAuthenticated: true }));
+      return { success: true, user: safeUser };
     }
 
     return { success: false, message: fsResult.message || 'Credenciais inválidas.' };
   },
 
   logout: (): void => {
-    try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch {}
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      void signOut(auth).catch(() => {});
+    } catch {}
   },
 
   isAuthenticated: (): boolean => {
@@ -137,7 +212,7 @@ export const AuthService = {
 
   updateCurrentUser: (user: User): void => {
     try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user, isAuthenticated: true }));
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user: sanitizeUser(user), isAuthenticated: true }));
     } catch {}
   },
 };

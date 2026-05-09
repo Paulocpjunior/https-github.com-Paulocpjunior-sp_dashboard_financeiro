@@ -216,7 +216,7 @@ export const ReportService = {
           dataLanc,          // 0: Data
           dataVenc,          // 1: Vencimento
           dataBaixa,         // 2: Data Baixa
-          movimentacaoDesc,  // 3: Movimentação (COLUNA F da Planilha)
+          movimentacaoDesc,  // 3: Movimentação
           status,            // 4: Status
           valorOriginalFmt,  // 5: Valor Original (Previsto)
           valorPagoFmt,      // 6: Valor Pago (Efetivado)

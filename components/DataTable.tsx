@@ -17,6 +17,7 @@ interface DataTableProps {
   selectedType?: string;
   allData?: Transaction[];
   onDelete?: (id: string) => void;
+  onMarkAsPaid?: (id: string) => void;
   onClientClick?: (clientName: string) => void;
 }
 
@@ -521,7 +522,7 @@ const DataTable: React.FC<DataTableProps> = ({
         const infoPagador = `"${(row.client || '').replace(/"/g, '""')}"`;
         
         // USA O DOCUMENTO DEFINIDO NO PASSO 2 (ou extraído/cacheado)
-        // Se estiver vazio no input, tenta usar o da planilha diretamente
+        // Se estiver vazio no input, tenta usar o documento salvo no Firebase
         const cpfCnpj = cleanDigits(clientDocs[row.client] || row.cpfCnpj || '');
 
         // Mapeamento para as 19 colunas esperadas
@@ -1239,7 +1240,7 @@ const DataTable: React.FC<DataTableProps> = ({
                          <div className="text-sm text-blue-800 dark:text-blue-200">
                              <strong>Validação de Documentos:</strong>
                              <ul className="list-disc pl-4 mt-1 text-xs opacity-90 space-y-0.5">
-                                <li><strong>Origem:</strong> Jotform/Planilha (Prioritário).</li>
+                                <li><strong>Origem:</strong> Jotform/Firebase (Prioritário).</li>
                                 <li><strong>CPF:</strong> Validação matemática dos dígitos.</li>
                                 <li><strong>CNPJ:</strong> Consulta automática na Receita Federal (BrasilAPI).</li>
                              </ul>

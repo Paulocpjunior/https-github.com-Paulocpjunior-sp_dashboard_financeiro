@@ -1,7 +1,6 @@
 import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
-import { BackendService } from './backendService';
 import { FirebaseService } from './firebaseService';
-import { MOCK_TRANSACTIONS, DATA_SOURCE } from '../constants';
+import { MOCK_TRANSACTIONS } from '../constants';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
@@ -57,7 +56,7 @@ const normalizeDate = (dateStr: string | undefined | null): string => {
 };
 
 // Mapa de correção de nomes de movimentação/descrição
-// Chave: nome errado (como está no Firebase/Planilha)
+// Chave: nome errado (como está no Firebase)
 // Valor: nome correto (como deve aparecer no sistema)
 const DESCRIPTION_NORMALIZATION_MAP: Record<string, string> = {
   // Dare (antiga Desafio) — Google Translate traduz "Dare" → "Desafio"
@@ -187,7 +186,7 @@ export const DataService = {
     currentLoadPromise = (async () => {
         try {
             console.log("[DataService] Iniciando fetch de transações...");
-            const data = DATA_SOURCE === 'firebase' ? await FirebaseService.fetchTransactions() : await BackendService.fetchTransactions();
+            const data = await FirebaseService.fetchTransactions();
             
             if (!data || !Array.isArray(data)) {
                 throw new Error("Formato de dados inválido recebido do backend.");
@@ -377,7 +376,7 @@ export const DataService = {
    * Qualquer alteração no Firestore atualiza o cache automaticamente e notifica a UI.
    */
   subscribeToFirebaseChanges: (): (() => void) => {
-    if (isMockMode || DATA_SOURCE !== 'firebase') return () => {};
+    if (isMockMode) return () => {};
 
     // Evita múltiplos listeners simultâneos
     if (firebaseUnsubscribe) {

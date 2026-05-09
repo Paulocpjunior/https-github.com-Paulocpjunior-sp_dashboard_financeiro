@@ -526,7 +526,7 @@ const Dashboard: React.FC = () => {
             <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2">Falha na Conexão</h2>
             <p className="text-red-500 dark:text-red-400/80 mb-4">{initError}</p>
             <p className="text-sm text-slate-500 mb-6">
-              Verifique se a aplicação está publicada corretamente e se o ID da planilha é válido.
+              Verifique se a aplicação está publicada corretamente e se a configuração do Firebase e as permissões do Firestore estão válidas.
             </p>
             <div className="flex gap-3 justify-center">
                 <button 

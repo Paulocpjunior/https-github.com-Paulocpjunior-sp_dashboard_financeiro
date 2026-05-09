@@ -405,7 +405,7 @@ const Reports: React.FC = () => {
             <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2">Falha ao Carregar Relatórios</h2>
             <p className="text-red-500 dark:text-red-400/80 mb-4">{initError}</p>
             <p className="text-sm text-slate-500 mb-6">
-              Não foi possível sincronizar com a planilha. Você pode tentar novamente ou visualizar dados de exemplo.
+              Não foi possível carregar os dados do Firebase. Você pode tentar novamente ou visualizar dados de exemplo.
             </p>
             <div className="flex gap-3 justify-center">
                 <button 
