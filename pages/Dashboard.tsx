@@ -11,6 +11,7 @@ import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { logger } from '../utils/logger';
+import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -115,8 +116,8 @@ const Dashboard: React.FC = () => {
         
         const initialFilters = {
           ...INITIAL_FILTERS,
-          startDate: start.toISOString().split('T')[0],
-          endDate: end.toISOString().split('T')[0]
+          startDate: toLocalISODate(start),
+          endDate: toLocalISODate(end)
         };
         
         setFilters(initialFilters);
@@ -283,8 +284,8 @@ const Dashboard: React.FC = () => {
     
     setFilters({
       ...INITIAL_FILTERS,
-      startDate: start.toISOString().split('T')[0],
-      endDate: end.toISOString().split('T')[0]
+      startDate: toLocalISODate(start),
+      endDate: toLocalISODate(end)
     });
     setActivePeriod('thisMonth');
     setPage(1);
@@ -293,8 +294,8 @@ const Dashboard: React.FC = () => {
   const applyViewMode = (mode: 'general' | 'payables' | 'receivables') => {
       const now = new Date();
       // Padrão: Mês atual
-      const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+      const start = toLocalISODate(new Date(now.getFullYear(), now.getMonth(), 1));
+      const end = toLocalISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
       
       setActivePeriod('thisMonth');
 
@@ -366,8 +367,8 @@ const Dashboard: React.FC = () => {
         return;
     }
 
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
+    const startStr = toLocalISODate(start);
+    const endStr = toLocalISODate(end);
 
     setActivePeriod(type);
 
@@ -394,9 +395,7 @@ const Dashboard: React.FC = () => {
 
   // Função para formatar data para exibição
   const formatDateDisplay = (dateStr: string) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr + 'T00:00:00');
-    return date.toLocaleDateString('pt-BR');
+    return formatISODateBR(dateStr);
   };
 
   // Texto do período selecionado
@@ -442,10 +441,11 @@ const Dashboard: React.FC = () => {
 
   const handleWhatsAppShare = () => {
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    const periodLabel = getPeriodText() === 'Selecione um período' ? 'Todos os períodos' : getPeriodText();
     
     const message = `📊 *Resumo Financeiro - CashFlow Pro*%0A` +
       `--------------------------------%0A` +
-      `🗓 Período: ${filters.startDate ? new Date(filters.startDate).toLocaleDateString('pt-BR') : 'Início'} a ${filters.endDate ? new Date(filters.endDate).toLocaleDateString('pt-BR') : 'Hoje'}%0A` +
+      `🗓 Período: ${periodLabel}%0A` +
       `✅ Entradas: ${formatBRL(kpi.totalReceived)}%0A` +
       `🔻 Saídas: ${formatBRL(kpi.totalPaid)}%0A` +
       `💰 *Saldo: ${formatBRL(kpi.balance)}*%0A` +
@@ -474,7 +474,7 @@ const Dashboard: React.FC = () => {
       
       data.forEach(t => {
         const dateToUse = t.dueDate || t.date;
-        const d = new Date(dateToUse).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const d = formatISODateBR(dateToUse, { day: '2-digit', month: '2-digit' });
         
         if (!grouped[d]) grouped[d] = { date: d, Pago: 0, Pendente: 0 };
         
@@ -497,7 +497,7 @@ const Dashboard: React.FC = () => {
       const grouped: Record<string, { date: string; Entradas: number; Saidas: number }> = {};
       
       data.forEach(t => {
-        const d = new Date(t.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        const d = formatISODateBR(t.date, { day: '2-digit', month: '2-digit' });
         if (!grouped[d]) grouped[d] = { date: d, Entradas: 0, Saidas: 0 };
         if (t.movement === 'Entrada') grouped[d].Entradas += t.valueReceived;
         else grouped[d].Saidas += t.valuePaid;

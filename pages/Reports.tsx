@@ -7,6 +7,7 @@ import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 import { logger } from '../utils/logger';
+import { formatISODateBR } from '../utils/dateUtils';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -388,13 +389,7 @@ const Reports: React.FC = () => {
   };
 
   const formatDate = (dateStr: string | undefined) => {
-    if (!dateStr || dateStr === '1970-01-01') return '-';
-    try {
-        const date = new Date(dateStr);
-        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-        const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
-        return adjustedDate.toLocaleDateString('pt-BR');
-    } catch (e) { return '-'; }
+    return formatISODateBR(dateStr) || '-';
   };
 
   // --- ERROR FALLBACK UI (Mesma do Dashboard) ---
