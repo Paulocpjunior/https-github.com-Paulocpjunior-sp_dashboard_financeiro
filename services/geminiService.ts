@@ -1,14 +1,26 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { logger } from '../utils/logger';
 import { FilterState } from "../types";
 
-// Note: In a production React app, we usually proxy this through a backend to hide the key.
-// This browser build keeps the key configurable through the deployment environment.
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+const CLIENT_AI_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_CLIENT_AI === 'true';
+const CLIENT_AI_KEY = CLIENT_AI_ENABLED ? String(import.meta.env.VITE_GEMINI_API_KEY || '') : '';
+const AI_UNAVAILABLE_MESSAGE = 'IA financeira desativada neste ambiente por segurança. Configure um backend seguro para habilitar esta função em produção.';
 
 let lastCallTime = 0;
 const RATE_LIMIT_MS = 1500;
+let aiClientPromise: Promise<{ ai: any; Type: any }> | null = null;
+
+const getAIClient = async () => {
+  if (!CLIENT_AI_KEY) return null;
+
+  if (!aiClientPromise) {
+    aiClientPromise = import('@google/genai').then(({ GoogleGenAI, Type }) => ({
+      ai: new GoogleGenAI({ apiKey: CLIENT_AI_KEY }),
+      Type,
+    }));
+  }
+
+  return aiClientPromise;
+};
 
 const waitRateLimit = async () => {
   const now = Date.now();
@@ -20,6 +32,8 @@ const waitRateLimit = async () => {
 };
 
 export const GeminiService = {
+  isAvailable: (): boolean => Boolean(CLIENT_AI_KEY),
+
   /**
    * Detects the intent of the user query.
    */
@@ -34,10 +48,11 @@ export const GeminiService = {
    * Interprets a natural language query and returns structured filter data.
    */
   interpretQuery: async (query: string): Promise<{ filters: Partial<FilterState>; explanation: string }> => {
-    if (!apiKey) {
+    const client = await getAIClient();
+    if (!client) {
       return {
         filters: {},
-        explanation: "Chave de API não configurada. Por favor, adicione sua chave da API Gemini para usar a IA.",
+        explanation: AI_UNAVAILABLE_MESSAGE,
       };
     }
 
@@ -89,30 +104,30 @@ export const GeminiService = {
         2. "explanation": A short, concise sentence in Portuguese explaining what filters were applied (e.g., "Filtrando contas a pagar de Outubro").
       `;
 
-      const response = await ai.models.generateContent({
+      const response = await client.ai.models.generateContent({
         model: modelId,
         contents: query,
         config: {
           systemInstruction: systemInstruction,
           responseMimeType: "application/json",
           responseSchema: {
-            type: Type.OBJECT,
+            type: client.Type.OBJECT,
             properties: {
               filters: {
-                type: Type.OBJECT,
+                type: client.Type.OBJECT,
                 properties: {
-                  startDate: { type: Type.STRING, nullable: true },
-                  endDate: { type: Type.STRING, nullable: true },
-                  bankAccount: { type: Type.STRING, nullable: true },
-                  type: { type: Type.STRING, nullable: true },
-                  status: { type: Type.STRING, nullable: true },
-                  client: { type: Type.STRING, nullable: true },
-                  paidBy: { type: Type.STRING, nullable: true },
-                  movement: { type: Type.STRING, nullable: true },
-                  search: { type: Type.STRING, nullable: true },
+                  startDate: { type: client.Type.STRING, nullable: true },
+                  endDate: { type: client.Type.STRING, nullable: true },
+                  bankAccount: { type: client.Type.STRING, nullable: true },
+                  type: { type: client.Type.STRING, nullable: true },
+                  status: { type: client.Type.STRING, nullable: true },
+                  client: { type: client.Type.STRING, nullable: true },
+                  paidBy: { type: client.Type.STRING, nullable: true },
+                  movement: { type: client.Type.STRING, nullable: true },
+                  search: { type: client.Type.STRING, nullable: true },
                 },
               },
-              explanation: { type: Type.STRING },
+              explanation: { type: client.Type.STRING },
             },
           }
         },
@@ -138,7 +153,8 @@ export const GeminiService = {
    * Analyzes financial data and returns a text response.
    */
   analyzeData: async (query: string, transactions: any[]): Promise<string> => {
-    if (!apiKey) return "Chave de API não configurada.";
+    const client = await getAIClient();
+    if (!client) return AI_UNAVAILABLE_MESSAGE;
     await waitRateLimit();
 
     try {
@@ -169,7 +185,7 @@ export const GeminiService = {
         Dados atuais: ${JSON.stringify(summary)}
       `;
 
-      const response = await ai.models.generateContent({
+      const response = await client.ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: query,
         config: { systemInstruction }
@@ -186,7 +202,8 @@ export const GeminiService = {
    * Forecasts cash flow for the next 30 days.
    */
   forecastCashFlow: async (transactions: any[]): Promise<string> => {
-    if (!apiKey) return "Chave de API não configurada.";
+    const client = await getAIClient();
+    if (!client) return AI_UNAVAILABLE_MESSAGE;
     await waitRateLimit();
 
     try {
@@ -199,7 +216,7 @@ export const GeminiService = {
         Transações Futuras: ${JSON.stringify(futureTransactions.slice(0, 50))}
       `;
 
-      const response = await ai.models.generateContent({
+      const response = await client.ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: "Gere uma projeção de fluxo de caixa para os próximos 30 dias.",
         config: { systemInstruction }

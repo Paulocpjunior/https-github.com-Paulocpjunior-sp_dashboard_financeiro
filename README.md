@@ -109,6 +109,13 @@ Resumo:
 
 Veja detalhes em `FIREBASE_SECURITY.md`.
 
+## Variaveis e Chaves
+
+- Arquivos `.env` e `.env.local` nao devem ser commitados.
+- Variaveis `VITE_*` entram no bundle do navegador, entao nao devem receber segredos de producao.
+- A IA financeira fica desativada no cliente por padrao. Para producao, use um backend/proxy seguro para chamadas de IA.
+- O token de exportacao bancaria nao e mais salvo no navegador; ele vale apenas para a exportacao atual.
+
 ## Logs de Diagnostico
 
 Em producao, os logs tecnicos do navegador ficam silenciosos por padrao.
