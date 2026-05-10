@@ -150,6 +150,10 @@ export const UserAdminService = {
 
     const snapshot = await getDocs(collection(db, 'users'));
     return snapshot.docs
+      .filter((docSnap) => {
+        const status = String(docSnap.data().status || '').toLowerCase().trim();
+        return status !== 'pending' && status !== 'pendente' && status !== 'aguardando' && status !== 'rejected';
+      })
       .map((docSnap) => sanitizeUser(docSnap.id, docSnap.data()))
       .sort((a, b) => a.username.localeCompare(b.username, 'pt-BR'));
   },
