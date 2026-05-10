@@ -14,7 +14,9 @@ const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUserRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingPending, setLoadingPending] = useState(false);
+  const [activeUserAction, setActiveUserAction] = useState<string | null>(null);
   
   // Database Config State
   const [firebaseProjectId, setFirebaseProjectId] = useState('');
@@ -71,11 +73,14 @@ const Admin: React.FC = () => {
 
   // ✅ CORRIGIDO: Carrega usuários direto do Firestore
   const loadAllUsers = async () => {
+    setLoadingUsers(true);
     try {
       setUsers(await BackendService.fetchUsers());
     } catch (error) {
       logger.error('Erro ao carregar usuários do Firestore:', error);
       setUsers([]);
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
@@ -170,6 +175,8 @@ const Admin: React.FC = () => {
     
     if (!confirm(`Tem certeza que deseja ${actionName.toUpperCase()} o usuário "${user.username}"?`)) return;
 
+    setActiveUserAction(`toggle:${user.id}`);
+
     // Atualização Otimista
     setUsers(prev => prev.map(u => u.id === user.id ? { ...u, active: newStatus } : u));
 
@@ -183,7 +190,10 @@ const Admin: React.FC = () => {
         alert(`Usuário ${newStatus ? 'desbloqueado' : 'bloqueado'} com sucesso!`);
       }
     } catch (error) {
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, active: !newStatus } : u));
       alert('Erro de conexão ao atualizar status.');
+    } finally {
+      setActiveUserAction(null);
     }
   };
 
@@ -285,18 +295,20 @@ const Admin: React.FC = () => {
   const handleApproveUser = async (user: PendingUserRecord) => {
     if (!confirm(`Aprovar o usuário "${user.name}"?`)) return;
 
+    setActiveUserAction(`approve:${user.id}`);
     try {
       const result = await BackendService.approvePendingUser(user.email, user.name, user.username);
       
       if (result.success) {
         alert('Usuário aprovado com sucesso!');
-        loadPendingUsers();
-        loadAllUsers();
+        await Promise.all([loadPendingUsers(), loadAllUsers()]);
       } else {
         alert('Erro: ' + result.message);
       }
     } catch (error) {
       alert('Erro ao aprovar usuário. Verifique sua conexão e permissões no Firebase.');
+    } finally {
+      setActiveUserAction(null);
     }
   };
 
@@ -305,17 +317,20 @@ const Admin: React.FC = () => {
     const reason = prompt(`Motivo da rejeição para "${user.name}" (opcional):`);
     if (reason === null) return;
 
+    setActiveUserAction(`reject:${user.id}`);
     try {
       const result = await BackendService.rejectPendingUser(user.email, user.name, user.username, reason);
       
       if (result.success) {
         alert('Usuário rejeitado.');
-        loadPendingUsers();
+        await Promise.all([loadPendingUsers(), loadAllUsers()]);
       } else {
         alert('Erro: ' + result.message);
       }
     } catch (error) {
       alert('Erro ao rejeitar usuário. Verifique sua conexão e permissões no Firebase.');
+    } finally {
+      setActiveUserAction(null);
     }
   };
 
@@ -410,17 +425,19 @@ const Admin: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleApproveUser(user)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                      disabled={activeUserAction !== null}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                     >
-                      <CheckCircle className="h-4 w-4" />
-                      Aprovar
+                      {activeUserAction === `approve:${user.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                      {activeUserAction === `approve:${user.id}` ? 'Aprovando...' : 'Aprovar'}
                     </button>
                     <button
                       onClick={() => handleRejectUser(user)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                      disabled={activeUserAction !== null}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
                     >
-                      <XCircle className="h-4 w-4" />
-                      Rejeitar
+                      {activeUserAction === `reject:${user.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                      {activeUserAction === `reject:${user.id}` ? 'Rejeitando...' : 'Rejeitar'}
                     </button>
                   </div>
                 </div>
@@ -549,13 +566,14 @@ const Admin: React.FC = () => {
              <h3 className="font-bold text-slate-800 dark:text-white">Usuários do Sistema</h3>
              <div className="flex items-center gap-2">
                <span className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded">Total: {users.length}</span>
-               <button
-                 onClick={loadAllUsers}
-                 className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                 title="Atualizar lista"
-               >
-                 <RefreshCw className="h-4 w-4 text-slate-400" />
-               </button>
+	               <button
+	                 onClick={loadAllUsers}
+	                 disabled={loadingUsers}
+	                 className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+	                 title="Atualizar lista"
+	               >
+	                 <RefreshCw className={`h-4 w-4 text-slate-400 ${loadingUsers ? 'animate-spin' : ''}`} />
+	               </button>
              </div>
           </div>
           
@@ -602,30 +620,44 @@ const Admin: React.FC = () => {
                         </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                            <button 
-                                onClick={() => handleToggleStatus(user)}
-                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 ${
-                                user.active 
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-red-100 hover:text-red-800 dark:hover:bg-red-900/40 dark:hover:text-red-300 group' 
-                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-green-100 hover:text-green-800 dark:hover:bg-green-900/40 dark:hover:text-green-300 group'
-                            }`}>
-                                {user.active ? (
-                                <>
-                                    <span className="flex items-center group-hover:hidden"><Unlock className="w-3 h-3 mr-1" /> Ativo</span>
-                                    <span className="hidden group-hover:flex items-center"><Lock className="w-3 h-3 mr-1" /> Bloquear?</span>
-                                </>
-                                ) : (
-                                <>
-                                    <span className="flex items-center group-hover:hidden"><Lock className="w-3 h-3 mr-1" /> Bloqueado</span>
-                                    <span className="hidden group-hover:flex items-center"><Unlock className="w-3 h-3 mr-1" /> Desbloquear?</span>
-                                </>
-                                )}
-                            </button>
+	                            <button
+	                                onClick={() => handleToggleStatus(user)}
+	                                disabled={activeUserAction !== null}
+	                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 ${
+	                                user.active
+	                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 hover:bg-red-100 hover:text-red-800 dark:hover:bg-red-900/40 dark:hover:text-red-300 group'
+	                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 hover:bg-green-100 hover:text-green-800 dark:hover:bg-green-900/40 dark:hover:text-green-300 group'
+	                            }`}>
+	                                {user.active ? (
+	                                <>
+	                                    {activeUserAction === `toggle:${user.id}` ? (
+	                                      <span className="flex items-center"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Salvando...</span>
+	                                    ) : (
+	                                      <>
+	                                        <span className="flex items-center group-hover:hidden"><Unlock className="w-3 h-3 mr-1" /> Ativo</span>
+	                                        <span className="hidden group-hover:flex items-center"><Lock className="w-3 h-3 mr-1" /> Bloquear?</span>
+	                                      </>
+	                                    )}
+	                                </>
+	                                ) : (
+	                                <>
+	                                    {activeUserAction === `toggle:${user.id}` ? (
+	                                      <span className="flex items-center"><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Salvando...</span>
+	                                    ) : (
+	                                      <>
+	                                        <span className="flex items-center group-hover:hidden"><Lock className="w-3 h-3 mr-1" /> Bloqueado</span>
+	                                        <span className="hidden group-hover:flex items-center"><Unlock className="w-3 h-3 mr-1" /> Desbloquear?</span>
+	                                      </>
+	                                    )}
+	                                </>
+	                                )}
+	                            </button>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button 
-                                onClick={() => handleOpenChangePass(user)}
-                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-xs font-semibold"
+	                            <button
+	                                onClick={() => handleOpenChangePass(user)}
+	                                disabled={activeUserAction !== null}
+	                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-xs font-semibold"
                             >
                                 <Key className="h-3 w-3" />
                                 Alterar Senha
@@ -709,11 +741,11 @@ const Admin: React.FC = () => {
                     disabled={isSavingPass || (!(selectedUserForPass.authEmail || selectedUserForPass.authUid) && newAdminPassword.length < 6)}
                     className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                  >
-                    {isSavingPass ? (
-                       <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Salvando...
-                       </>
+	                    {isSavingPass ? (
+	                       <>
+	                          <Loader2 className="h-4 w-4 animate-spin" />
+	                          {selectedUserForPass.authEmail || selectedUserForPass.authUid ? 'Enviando...' : 'Salvando...'}
+	                       </>
                     ) : (
                        <>
                           <Save className="h-4 w-4" />
