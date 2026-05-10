@@ -27,8 +27,14 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Olá! Sou seu assistente CashFlow Pro. Como posso ajudar com suas finanças hoje?' }
+  const isAIAvailable = GeminiService.isAvailable();
+  const [messages, setMessages] = useState<Message[]>(() => [
+    {
+      role: 'assistant',
+      content: isAIAvailable
+        ? 'Olá! Sou seu assistente CashFlow Pro. Como posso ajudar com suas finanças hoje?'
+        : 'IA financeira desativada neste ambiente por segurança. Os filtros manuais seguem disponíveis normalmente.',
+    },
   ]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -90,8 +96,10 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
               <div>
                 <h3 className="text-white font-bold text-sm">IA Financeira</h3>
                 <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-                  <span className="text-[10px] text-blue-100 font-medium">Online e pronta</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isAIAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-amber-300'}`}></span>
+                  <span className="text-[10px] text-blue-100 font-medium">
+                    {isAIAvailable ? 'Online e pronta' : 'Configuração segura pendente'}
+                  </span>
                 </div>
               </div>
             </div>

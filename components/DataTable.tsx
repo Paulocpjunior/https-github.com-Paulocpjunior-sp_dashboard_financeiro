@@ -117,17 +117,8 @@ const DataTable: React.FC<DataTableProps> = ({
   const [selectedExportClients, setSelectedExportClients] = useState<string[]>([]);
   const [exportSearchTerm, setExportSearchTerm] = useState('');
   
-  // Novo Estado: Token para Exportação (Persistente)
-  const [exportToken, setExportToken] = useState(() => {
-      try {
-          if (typeof window !== 'undefined') {
-              return localStorage.getItem('boleto_cloud_token') || '';
-          }
-      } catch (e) {
-          logger.error('Error accessing localStorage:', e);
-      }
-      return '';
-  });
+  // Token sensível usado apenas na exportação atual. Não persistir no navegador.
+  const [exportToken, setExportToken] = useState('');
 
   // Mapa de Documentos Persistente (Cliente -> CPF/CNPJ)
   const [clientDocs, setClientDocs] = useState<Record<string, string>>(() => {
@@ -148,6 +139,14 @@ const DataTable: React.FC<DataTableProps> = ({
   // Ref para controlar inicialização e evitar loop de re-seleção
   const hasInitializedExport = useRef(false);
 
+  useEffect(() => {
+      try {
+          localStorage.removeItem('boleto_cloud_token');
+      } catch (e) {
+          logger.error('Error clearing legacy boleto token:', e);
+      }
+  }, []);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       if (sortDirection === 'asc') {
@@ -164,11 +163,6 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const handleTokenChange = (val: string) => {
       setExportToken(val);
-      try {
-          localStorage.setItem('boleto_cloud_token', val);
-      } catch (e) {
-          logger.error('Error saving to localStorage:', e);
-      }
   };
 
   // Atualiza o documento de um cliente específico e salva no localStorage
@@ -1136,7 +1130,9 @@ const DataTable: React.FC<DataTableProps> = ({
                          <div className="flex-1">
                              <label className="block text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Token da Conta Bancária (Boleto Cloud)</label>
                              <input 
-                                type="text" 
+                                type="password"
+                                autoComplete="off"
+                                spellCheck={false}
                                 placeholder="Insira o token de integração da conta..." 
                                 value={exportToken}
                                 onChange={(e) => handleTokenChange(e.target.value)}
