@@ -91,6 +91,7 @@ Depois do deploy, validar:
 
 - Usuarios entram por username ou e-mail.
 - O login usa Firebase Auth e o indice `loginIndex/{username}` para manter compatibilidade com login por nome de usuario.
+- O login legado por hash salvo no Firestore nao e mais aceito.
 - Novos cadastros entram como `operacional`, `active: false` e `status: pending`.
 - O administrador aprova ou rejeita usuarios no painel Admin.
 - Recuperacao de senha usa Firebase Auth. Usuarios com e-mails tecnicos internos precisam ter e-mail real vinculado para receber reset.

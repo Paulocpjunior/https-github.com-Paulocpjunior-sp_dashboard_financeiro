@@ -9,7 +9,6 @@ export interface User {
   active: boolean;
   email?: string;
   lastAccess?: string;
-  passwordHash?: string; // Armazena o hash SHA-256 da senha, nunca o texto plano
   authUid?: string;
   authEmail?: string;
   authProvider?: string;

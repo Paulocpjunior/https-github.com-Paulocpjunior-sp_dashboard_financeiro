@@ -17,17 +17,7 @@ interface LoginResult {
   message?: string;
 }
 
-const sanitizeUser = (user: User): User => {
-  const { passwordHash, ...safeUser } = user;
-  return safeUser as User;
-};
-
-const hashPassword = async (password: string): Promise<string> => {
-  const msgBuffer = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
+const sanitizeUser = (user: User): User => ({ ...user });
 
 const normalizeLogin = (value: string): string => value.toLowerCase().trim();
 
@@ -54,15 +44,6 @@ const buildUserFromFirestore = (id: string, data: any): User => ({
   active: data.active !== false,
   email: data.email || '',
 });
-
-const loginWithFirebaseAuth = async (email: string, password: string): Promise<boolean> => {
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 const loginViaFirebaseAuthEmail = async (email: string, password: string): Promise<LoginResult> => {
   try {
@@ -107,8 +88,6 @@ const loginViaUsernameIndex = async (username: string, password: string): Promis
 const loginViaFirestore = async (username: string, password: string): Promise<LoginResult> => {
   try {
     const usernameClean = normalizeLogin(username);
-    const passwordHash = await hashPassword(password);
-
     const docSnap = await findUserDoc(usernameClean);
     if (!docSnap) {
       return { success: false, message: 'Usuário não encontrado.' };
@@ -120,32 +99,13 @@ const loginViaFirestore = async (username: string, password: string): Promise<Lo
       return { success: false, message: 'Usuário inativo.' };
     }
 
-    const storedHash = (data.passwordHash || '').toLowerCase().trim();
-    const computedHash = passwordHash.toLowerCase().trim();
+    const authEmail = data.authEmail || data.email;
 
-    if (data.email && await loginWithFirebaseAuth(data.email, password)) {
-      return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
+    if (!authEmail) {
+      return { success: false, message: 'Usuário sem credencial Firebase Auth configurada. Solicite ao administrador a recriação do acesso.' };
     }
 
-    if (storedHash) {
-      if (storedHash !== computedHash) {
-        return { success: false, message: 'Senha incorreta.' };
-      }
-
-      return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
-    }
-
-    if (!data.email) {
-      return { success: false, message: 'Usuário sem credencial de login configurada. Solicite ao administrador a troca de senha.' };
-    }
-
-    try {
-      await signInWithEmailAndPassword(auth, data.email, password);
-    } catch {
-      return { success: false, message: 'Senha incorreta.' };
-    }
-
-    return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
+    return loginViaFirebaseAuthEmail(authEmail, password);
   } catch (error) {
     logger.error('[AuthService] Erro Firestore:', error);
     return { success: false, message: 'Erro ao conectar com o banco de dados.' };
