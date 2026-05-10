@@ -81,6 +81,8 @@ Publicar site e regras:
 npm run deploy:all
 ```
 
+O workflow GitHub Actions de Firebase Hosting existe apenas para acionamento manual (`workflow_dispatch`). Merge ou push na `main` nao publica automaticamente.
+
 Depois do deploy, validar:
 
 - https://gen-lang-client-0888019226.web.app
