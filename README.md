@@ -135,6 +135,16 @@ npm run auth:update-recovery-emails:apply
 
 O modo apply atualiza Firebase Auth, `users/{uid}` e `loginIndex/{username}`. Antes de aplicar, ele grava backup local em `migration-backups/`.
 
+## Backup do Firestore
+
+Antes de manutencoes diretas em dados, gere um backup local das colecoes principais:
+
+```bash
+npm run backup:firestore
+```
+
+Por padrao, o backup inclui `users`, `loginIndex` e `transactions`. Os arquivos JSON e Markdown sao salvos em `migration-backups/`, que nao deve ser commitado.
+
 ## Regras de Seguranca
 
 As regras ficam em `firestore.rules`.
