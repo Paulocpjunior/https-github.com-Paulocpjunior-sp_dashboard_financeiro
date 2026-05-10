@@ -59,10 +59,7 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
       setTransactions(result.data);
       setTotalPages(result.totalPages);
       setKpi(newKpi);
-      
-      // Also get all filtered data for reports/alerts
-      const { result: allFiltered } = DataService.getTransactions(filters, 1, 999999);
-      setAllTransactions(allFiltered.data);
+      setAllTransactions(result.allData ?? result.data);
     } catch (err) {
       logger.error("Error applying filters:", err);
     }

@@ -66,6 +66,7 @@ export interface KPIData {
 
 export interface PaginatedResult<T> {
   data: T[];
+  allData?: T[];
   total: number;
   page: number;
   pageSize: number;
