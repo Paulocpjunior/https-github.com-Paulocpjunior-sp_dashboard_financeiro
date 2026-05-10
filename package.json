@@ -16,6 +16,7 @@
     "auth:update-recovery-emails:apply": "node scripts/update-recovery-emails.mjs --apply",
     "backup:firestore": "node scripts/export-firestore-data.mjs",
     "audit:transactions": "node scripts/audit-transactions-data.mjs",
+    "normalize:transactions": "node scripts/normalize-transactions-data.mjs",
     "maintenance:precheck": "node scripts/pre-maintenance-check.mjs",
     "deploy:hosting": "npm run build && firebase deploy --only hosting --project gen-lang-client-0888019226",
     "deploy:rules": "firebase deploy --only firestore:rules --project gen-lang-client-0888019226",

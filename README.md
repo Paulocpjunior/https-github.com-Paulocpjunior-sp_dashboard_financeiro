@@ -159,6 +159,28 @@ A auditoria nao altera o Firebase. Ela gera JSON e Markdown em `migration-backup
 npm run audit:transactions -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json
 ```
 
+## Normalizacao de Transacoes
+
+Para preparar um plano de correcoes seguras a partir do backup local mais recente:
+
+```bash
+npm run normalize:transactions
+```
+
+Esse comando roda em `dry-run` por padrao e nao altera o Firebase. Ele planeja apenas normalizacoes seguras: `updatedAt` ausente, datas parseaveis, aliases de status/movimentacao e valores numericos gravados como texto.
+
+Para revisar um backup especifico:
+
+```bash
+npm run normalize:transactions -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json
+```
+
+Para aplicar de forma controlada, use `--apply` somente depois de revisar o Markdown gerado. Tambem e possivel limitar por lote:
+
+```bash
+npm run normalize:transactions -- --apply --limit 100
+```
+
 ## Pre-Manutencao
 
 Antes de qualquer alteracao manual em dados, rode o pacote completo de seguranca:
