@@ -586,6 +586,7 @@ export const DataService = {
     return {
       result: {
         data: filtered.slice(start, end),
+        allData: filtered,
         total,
         page,
         pageSize,
@@ -596,7 +597,8 @@ export const DataService = {
   },
 
   exportToCSV: (filters: Partial<FilterState>): void => {
-    const { result } = DataService.getTransactions(filters, 1, 999999);
+    const { result } = DataService.getTransactions(filters);
+    const rows = result.allData ?? result.data;
     const headers = [
       'ID', 'Data', 'Vencimento', 'Pagamento', 'Conta', 'Tipo', 'Status', 
       'Cliente', 'CPF / CNPJ', 'Movimento', 'Valor Pago', 'Valor Recebido',
@@ -604,7 +606,7 @@ export const DataService = {
     ];
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(';')]
-        .concat(result.data.map(row => [
+        .concat(rows.map(row => [
               row.id, row.date, row.dueDate, row.paymentDate || '', row.bankAccount, row.type, row.status,
               `"${row.client}"`, `"${row.cpfCnpj || ''}"`, row.movement,
               row.valuePaid.toFixed(2).replace('.', ','),

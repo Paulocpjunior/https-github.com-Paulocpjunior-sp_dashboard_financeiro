@@ -67,13 +67,13 @@ const Reports: React.FC = () => {
         // Se os dados já estiverem carregados, força refresh para garantir normalização atualizada
         if (DataService.isDataLoaded) {
              await DataService.refreshCache();
-             const { result } = DataService.getTransactions({}, 1, 99999);
-             setAllTransactions(result.data);
+             const { result } = DataService.getTransactions({});
+             setAllTransactions(result.allData ?? result.data);
         } else {
              // Tenta carregar. Se falhar, vai cair no catch
              await DataService.loadData();
-             const { result } = DataService.getTransactions({}, 1, 99999);
-             setAllTransactions(result.data);
+             const { result } = DataService.getTransactions({});
+             setAllTransactions(result.allData ?? result.data);
         }
       } catch (e: any) {
         logger.error("Erro ao carregar dados em Relatórios:", e);
@@ -87,8 +87,8 @@ const Reports: React.FC = () => {
     // Listener para atualizar quando dados mudam (ex: após dar baixa no Dashboard)
     const unsubscribe = DataService.onRefresh(() => {
       if (DataService.isDataLoaded) {
-        const { result } = DataService.getTransactions({}, 1, 99999);
-        setAllTransactions(result.data);
+        const { result } = DataService.getTransactions({});
+        setAllTransactions(result.allData ?? result.data);
       }
     });
 

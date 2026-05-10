@@ -90,6 +90,14 @@ const Dashboard: React.FC = () => {
                           normalizedType.includes('servico') ||
                           filters.movement === 'Entrada';
 
+  const applyTransactionResult = useCallback((filtersToApply: Partial<FilterState>, pageToApply: number) => {
+    const { result, kpi: newKpi } = DataService.getTransactions(filtersToApply, pageToApply);
+    setData(result.data);
+    setAllFilteredData(result.allData ?? result.data);
+    setTotalPages(result.totalPages);
+    setKpi(newKpi);
+  }, []);
+
   // Initial Data Load
   useEffect(() => {
     const load = async () => {
@@ -123,12 +131,7 @@ const Dashboard: React.FC = () => {
         setFilters(initialFilters);
 
         // Initial fetch
-        const { result, kpi: newKpi } = DataService.getTransactions(initialFilters, page);
-        const { result: allResult } = DataService.getTransactions(initialFilters, 1, 999999);
-        setData(result.data);
-        setAllFilteredData(allResult.data);
-        setTotalPages(result.totalPages);
-        setKpi(newKpi);
+        applyTransactionResult(initialFilters, 1);
       } catch (e: any) {
         setInitError(e.message || 'Erro ao conectar com o Banco de Dados Oficial.');
       } finally {
@@ -136,7 +139,7 @@ const Dashboard: React.FC = () => {
       }
     };
     load();
-  }, []);
+  }, [applyTransactionResult]);
 
   // Auto-refresh: Ativar timer de 1 minuto ao montar, parar ao desmontar
   useEffect(() => {
@@ -160,12 +163,7 @@ const Dashboard: React.FC = () => {
       // ★ FIX: Também atualizar tabela e KPIs com os dados mais recentes do cache
       const currentFilters = filtersRef.current;
       const currentPage = pageRef.current;
-      const { result, kpi: newKpi } = DataService.getTransactions(currentFilters, currentPage);
-      const { result: allResult } = DataService.getTransactions(currentFilters, 1, 999999);
-      setData(result.data);
-      setAllFilteredData(allResult.data);
-      setTotalPages(result.totalPages);
-      setKpi(newKpi);
+      applyTransactionResult(currentFilters, currentPage);
     });
 
     // Iniciar auto-refresh
@@ -175,7 +173,7 @@ const Dashboard: React.FC = () => {
       unsubscribe();
       DataService.stopAutoRefresh();
     };
-  }, [isLoading, initError]);
+  }, [isLoading, initError, applyTransactionResult]);
 
   // Countdown visual: atualiza a cada segundo
   useEffect(() => {
@@ -198,12 +196,7 @@ const Dashboard: React.FC = () => {
       setRefreshCountdown(60);
       
       // Recarregar dados com filtros atuais
-      const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
-      const { result: allResult } = DataService.getTransactions(filters, 1, 999999);
-      setData(result.data);
-      setAllFilteredData(allResult.data);
-      setTotalPages(result.totalPages);
-      setKpi(newKpi);
+      applyTransactionResult(filters, page);
 
       // Atualizar opções de filtro
       setOptions({
@@ -219,19 +212,14 @@ const Dashboard: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [filters, page, isRefreshing]);
+  }, [filters, page, isRefreshing, applyTransactionResult]);
 
   // Handle Filter Changes
   useEffect(() => {
     if (!isLoading && !initError) {
-      const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
-      const { result: allResult } = DataService.getTransactions(filters, 1, 999999);
-      setData(result.data);
-      setAllFilteredData(allResult.data);
-      setTotalPages(result.totalPages);
-      setKpi(newKpi);
+      applyTransactionResult(filters, page);
     }
-  }, [filters, page, isLoading, initError]);
+  }, [filters, page, isLoading, initError, applyTransactionResult]);
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => {
@@ -426,12 +414,7 @@ const Dashboard: React.FC = () => {
       try {
         await DataService.markAsPaid(id);
         // Recarrega dados imediatamente para refletir o status "Pago" na tabela
-        const { result, kpi: newKpi } = DataService.getTransactions(filters, page);
-        const { result: allResult } = DataService.getTransactions(filters, 1, 999999);
-        setData(result.data);
-        setAllFilteredData(allResult.data);
-        setTotalPages(result.totalPages);
-        setKpi(newKpi);
+        applyTransactionResult(filters, page);
       } catch (err) {
         logger.error('Erro ao dar baixa:', err);
         alert('Erro ao dar baixa. Tente novamente.');
