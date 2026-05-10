@@ -186,6 +186,8 @@ export const DataService = {
 
     // 4. Inicia nova requisição e guarda a promessa
     currentLoadPromise = (async () => {
+        const wasDataLoaded = isDataLoaded;
+
         try {
             logger.info("[DataService] Iniciando fetch de transações...");
             const data = await FirebaseService.fetchTransactions();
@@ -263,7 +265,7 @@ export const DataService = {
             logger.info(`[DataService] Sucesso. ${data.length} registros carregados.`);
         } catch (error) {
             logger.error("[DataService] Erro fatal no carregamento:", error);
-            isDataLoaded = false;
+            isDataLoaded = wasDataLoaded;
             // Repassa o erro para a UI tratar (ex: mostrar mensagem de erro),
             // mas garante que o estado de "carregando" seja limpo no finally.
             throw error;
