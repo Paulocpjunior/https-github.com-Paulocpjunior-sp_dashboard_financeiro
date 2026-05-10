@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
 import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
 import { logger } from '../utils/logger';
+import { toLocalISODate } from '../utils/dateUtils';
 
 interface DataTableProps {
   data: Transaction[];
@@ -561,7 +562,7 @@ const DataTable: React.FC<DataTableProps> = ({
     
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = toLocalISODate();
     link.setAttribute('href', url);
     link.setAttribute('download', `boletos_importacao_${hoje}.csv`);
     link.style.visibility = 'hidden';

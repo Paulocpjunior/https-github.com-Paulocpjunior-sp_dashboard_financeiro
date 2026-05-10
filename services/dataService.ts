@@ -4,6 +4,7 @@ import { MOCK_TRANSACTIONS } from '../constants';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { logger } from '../utils/logger';
+import { toLocalISODate } from '../utils/dateUtils';
 
 // In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
@@ -315,7 +316,7 @@ export const DataService = {
    * Marca uma transação como paga (Dar Baixa) — atualiza Firebase e o cache local.
    */
   markAsPaid: async (id: string): Promise<void> => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toLocalISODate();
     const updates: Partial<Transaction> = {
       status: 'Pago',
       paymentDate: today,
