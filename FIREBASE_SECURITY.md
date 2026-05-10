@@ -43,8 +43,14 @@ Para manter login por username apos a migracao, cada usuario deve ter um documen
 
 ## Publicacao
 
-Quando a migracao dos administradores para Firebase Auth estiver confirmada:
+Quando a migracao dos administradores para Firebase Auth estiver confirmada, valide primeiro:
 
 ```bash
-firebase deploy --only firestore:rules
+npm run deploy:rules:dry-run
+```
+
+Depois publique no projeto oficial:
+
+```bash
+npm run deploy:rules
 ```
