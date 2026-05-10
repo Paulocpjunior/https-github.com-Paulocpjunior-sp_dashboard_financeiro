@@ -108,6 +108,22 @@ Resumo:
 
 Veja detalhes em `FIREBASE_SECURITY.md`.
 
+## Logs de Diagnostico
+
+Em producao, os logs tecnicos do navegador ficam silenciosos por padrao.
+
+Para diagnosticar algum problema pontual no navegador, habilite temporariamente:
+
+```js
+localStorage.setItem('sp_debug_logs', 'true')
+```
+
+Para desligar:
+
+```js
+localStorage.removeItem('sp_debug_logs')
+```
+
 ## Ordem Recomendada Para Manutencao
 
 1. Fazer backup geral antes da mudanca.

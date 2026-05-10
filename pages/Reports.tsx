@@ -6,6 +6,7 @@ import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
 import { Transaction, KPIData } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
+import { logger } from '../utils/logger';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -74,7 +75,7 @@ const Reports: React.FC = () => {
              setAllTransactions(result.data);
         }
       } catch (e: any) {
-        console.error("Erro ao carregar dados em Relatórios:", e);
+        logger.error("Erro ao carregar dados em Relatórios:", e);
         setInitError(e.message || 'Falha na conexão com os dados.');
       } finally {
         setLoading(false);
@@ -374,7 +375,7 @@ const Reports: React.FC = () => {
           AuthService.getCurrentUser()
         );
       } catch (err) {
-        console.error('Erro ao gerar PDF:', err);
+        logger.error('Erro ao gerar PDF:', err);
         alert('Erro ao gerar o relatório PDF. Verifique os filtros e tente novamente.');
       } finally {
         setGenerating(false);

@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { logger } from '../utils/logger';
 import { FilterState } from "../types";
 
 // Note: In a production React app, we usually proxy this through a backend to hide the key.
@@ -128,7 +129,7 @@ export const GeminiService = {
       return { filters: {}, explanation: "Não foi possível entender a consulta." };
 
     } catch (error) {
-      console.error("Gemini API Error:", error);
+      logger.error("Gemini API Error:", error);
       return { filters: {}, explanation: "Erro ao conectar com a inteligência artificial." };
     }
   },
@@ -176,7 +177,7 @@ export const GeminiService = {
 
       return response.text || "Não foi possível realizar a análise.";
     } catch (error) {
-      console.error("Gemini Analysis Error:", error);
+      logger.error("Gemini Analysis Error:", error);
       return "Erro ao processar análise de dados.";
     }
   },
@@ -206,7 +207,7 @@ export const GeminiService = {
 
       return response.text || "Não foi possível gerar a previsão.";
     } catch (error) {
-      console.error("Gemini Forecast Error:", error);
+      logger.error("Gemini Forecast Error:", error);
       return "Erro ao gerar previsão de caixa.";
     }
   }

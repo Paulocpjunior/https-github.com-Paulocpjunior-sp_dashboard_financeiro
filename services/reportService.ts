@@ -3,6 +3,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Transaction, KPIData, User } from '../types';
+import { logger } from '../utils/logger';
 
 export const ReportService = {
   
@@ -310,7 +311,7 @@ export const ReportService = {
       doc.save(fileName);
 
     } catch (error: any) {
-      console.error("Erro ao gerar PDF:", error);
+      logger.error("Erro ao gerar PDF:", error);
       alert("Erro ao gerar PDF: " + error.message);
     }
   }

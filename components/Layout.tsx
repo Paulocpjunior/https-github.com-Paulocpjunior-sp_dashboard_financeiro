@@ -5,6 +5,7 @@ import { AuthService } from '../services/authService';
 import { DataService } from '../services/dataService';
 import { KPIData } from '../types';
 import { ThemeToggle } from './ThemeToggle';
+import { logger } from '../utils/logger';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,7 +25,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       AuthService.logout();
       navigate('/login');
     } catch (e) {
-      console.error('Logout error:', e);
+      logger.error('Logout error:', e);
       window.location.href = '#/login';
     }
   };

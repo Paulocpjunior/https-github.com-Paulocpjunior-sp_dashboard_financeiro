@@ -1,6 +1,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { FilterState } from '../types';
+import { logger } from '../utils/logger';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -47,7 +48,7 @@ export const useFilters = () => {
       try {
         setSavedFilters(JSON.parse(stored));
       } catch (e) {
-        console.error("Error parsing saved filters", e);
+        logger.error("Error parsing saved filters", e);
       }
     }
   }, []);

@@ -5,6 +5,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, firebaseConfig } from './firebaseConfig';
 import { User, UserRole } from '../types';
 import { AuthService } from './authService';
+import { logger } from '../utils/logger';
 
 export interface UserFormData {
   name: string;
@@ -291,7 +292,7 @@ export const UserAdminService = {
       const authEmail = resetTarget.authEmail || resetTarget.email || '';
       return sendResetForAuthEmail(authEmail);
     } catch (error: any) {
-      console.error('[UserAdminService] Erro ao enviar recuperação de senha:', error);
+      logger.error('[UserAdminService] Erro ao enviar recuperação de senha:', error);
       return { success: false, message: 'Não foi possível enviar a recuperação de senha.' };
     }
   },

@@ -6,6 +6,7 @@ import { DataService } from '../services/dataService';
 import { User as UserType } from '../types';
 import { PendingUserRecord } from '../services/userAdminService';
 import { firebaseConfig } from '../services/firebaseConfig';
+import { logger } from '../utils/logger';
 
 // MigrationPanel removed - migration complete
 
@@ -61,7 +62,7 @@ const Admin: React.FC = () => {
       const pendentes = await BackendService.fetchPendingUsers();
       setPendingUsers(pendentes);
     } catch (error) {
-      console.error('Erro ao carregar pendentes:', error);
+      logger.error('Erro ao carregar pendentes:', error);
       setPendingUsers([]);
     } finally {
       setLoadingPending(false);
@@ -73,7 +74,7 @@ const Admin: React.FC = () => {
     try {
       setUsers(await BackendService.fetchUsers());
     } catch (error) {
-      console.error('Erro ao carregar usuários do Firestore:', error);
+      logger.error('Erro ao carregar usuários do Firestore:', error);
       setUsers([]);
     }
   };
@@ -90,7 +91,7 @@ const Admin: React.FC = () => {
         
         setFirebaseProjectId(firebaseConfig.projectId);
       } catch (error) {
-        console.error("Failed to load data in Admin", error);
+        logger.error("Failed to load data in Admin", error);
       } finally {
         setLoading(false);
       }

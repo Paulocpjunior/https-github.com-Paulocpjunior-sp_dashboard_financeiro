@@ -3,6 +3,7 @@ import { FirebaseService } from './firebaseService';
 import { MOCK_TRANSACTIONS } from '../constants';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseConfig';
+import { logger } from '../utils/logger';
 
 // In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
@@ -168,7 +169,7 @@ export const DataService = {
 
     // 2. Concurrency Lock: Se já existe uma requisição em andamento, espera por ela.
     if (currentLoadPromise) {
-        console.log("[DataService] Requisição já em andamento. Aguardando...");
+        logger.info("[DataService] Requisição já em andamento. Aguardando...");
         return currentLoadPromise;
     }
 
@@ -185,7 +186,7 @@ export const DataService = {
     // 4. Inicia nova requisição e guarda a promessa
     currentLoadPromise = (async () => {
         try {
-            console.log("[DataService] Iniciando fetch de transações...");
+            logger.info("[DataService] Iniciando fetch de transações...");
             const data = await FirebaseService.fetchTransactions();
             
             if (!data || !Array.isArray(data)) {
@@ -251,16 +252,16 @@ export const DataService = {
                   t.observacaoAPagar = normalizeDescription(t.observacaoAPagar);
                 }
               } catch (normErr) {
-                console.warn('[DataService] Erro ao normalizar transação:', t.id, normErr);
+                logger.warn('[DataService] Erro ao normalizar transação:', t.id, normErr);
               }
             });
 
             CACHED_TRANSACTIONS = data;
             isDataLoaded = true;
             lastUpdatedAt = new Date();
-            console.log(`[DataService] Sucesso. ${data.length} registros carregados.`);
+            logger.info(`[DataService] Sucesso. ${data.length} registros carregados.`);
         } catch (error) {
-            console.error("[DataService] Erro fatal no carregamento:", error);
+            logger.error("[DataService] Erro fatal no carregamento:", error);
             isDataLoaded = false;
             // Repassa o erro para a UI tratar (ex: mostrar mensagem de erro),
             // mas garante que o estado de "carregando" seja limpo no finally.
@@ -278,7 +279,7 @@ export const DataService = {
    * Ativa modo de demonstração com dados locais.
    */
   loadMockData: (): void => {
-    console.warn("[DataService] Ativando Modo Mock");
+    logger.warn("[DataService] Ativando Modo Mock");
     const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
     MOCK_TRANSACTIONS.forEach(t => {
       if (excludedIds.includes(t.id)) {
@@ -342,7 +343,7 @@ export const DataService = {
         await DataService.loadData(true);
         DataService.notifyListeners();
     } catch (e) {
-        console.error("[DataService] Falha ao recarregar cache:", e);
+        logger.error("[DataService] Falha ao recarregar cache:", e);
     }
   },
 
@@ -355,11 +356,11 @@ export const DataService = {
     if (isMockMode) return;
 
     autoRefreshTimer = setInterval(async () => {
-        console.log('[DataService] Auto-refresh executando...');
+        logger.info('[DataService] Auto-refresh executando...');
         try {
             await DataService.refreshCache();
         } catch (e) {
-            console.error('[DataService] Erro silencioso no auto-refresh:', e);
+            logger.error('[DataService] Erro silencioso no auto-refresh:', e);
         }
     }, intervalMs);
   },
@@ -384,14 +385,14 @@ export const DataService = {
       firebaseUnsubscribe = null;
     }
 
-    console.log('[DataService] Iniciando listener em tempo real do Firebase...');
+    logger.info('[DataService] Iniciando listener em tempo real do Firebase...');
 
     const q = query(collection(db, 'transactions'), orderBy('date', 'desc'));
 
     firebaseUnsubscribe = onSnapshot(q, (snapshot) => {
       if (!isDataLoaded) return; // Aguarda carregamento inicial
 
-      console.log(`[DataService] Firebase onSnapshot: ${snapshot.size} docs, ${snapshot.docChanges().length} alterações`);
+      logger.info(`[DataService] Firebase onSnapshot: ${snapshot.size} docs, ${snapshot.docChanges().length} alterações`);
 
       const data: Transaction[] = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -433,7 +434,7 @@ export const DataService = {
       lastUpdatedAt = new Date();
       DataService.notifyListeners();
     }, (error) => {
-      console.error('[DataService] Erro no listener Firebase:', error);
+      logger.error('[DataService] Erro no listener Firebase:', error);
     });
 
     return () => {
