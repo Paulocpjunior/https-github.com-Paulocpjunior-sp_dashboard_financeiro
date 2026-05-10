@@ -37,6 +37,8 @@ export interface Transaction {
   clientNumber?: number | string;
   observacaoAPagar?: string; // Observação do contas a pagar
   isExcluded?: boolean; // Marcação de exclusão lógica
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface FilterState {

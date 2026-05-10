@@ -192,6 +192,12 @@ Para desligar:
 localStorage.removeItem('sp_debug_logs')
 ```
 
+## Performance Firestore
+
+O carregamento inicial ainda busca a base financeira oficial completa para preservar filtros, relatorios e KPIs sem mudanca visual. Depois disso, o auto-refresh evita baixar todas as transacoes a cada ciclo: primeiro consulta um fingerprint leve da colecao (`count` + ultimo `updatedAt`) e so faz nova leitura completa quando ha mudanca detectada ou apos uma reconferencia programada.
+
+As alteracoes feitas pelo app em `transactions` gravam `updatedAt` automaticamente para que essa checagem detecte baixas e novos lancamentos sem varrer a colecao inteira.
+
 ## Ordem Recomendada Para Manutencao
 
 1. Fazer backup geral antes da mudanca.
