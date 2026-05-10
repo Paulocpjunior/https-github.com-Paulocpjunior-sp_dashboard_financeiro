@@ -96,6 +96,28 @@ Depois do deploy, validar:
 - O administrador aprova ou rejeita usuarios no painel Admin.
 - Recuperacao de senha usa Firebase Auth. Usuarios com e-mails tecnicos internos precisam ter e-mail real vinculado para receber reset.
 
+## Auditoria Auth/Firestore
+
+Para auditar perfis, vinculos com Firebase Auth, indice de login e campos legados:
+
+```bash
+npm run audit:auth
+```
+
+Para cruzar tambem com contas reais do Firebase Auth:
+
+```bash
+npm run audit:auth:with-export
+```
+
+Os relatorios JSON e Markdown sao salvos em `migration-backups/`, que nao deve ser commitado. O export temporario do Firebase Auth e removido automaticamente porque pode conter hashes sensiveis.
+
+Apos revisar o relatorio, os campos legados de senha podem ser removidos com backup local automatico:
+
+```bash
+npm run audit:auth:cleanup
+```
+
 ## Regras de Seguranca
 
 As regras ficam em `firestore.rules`.
