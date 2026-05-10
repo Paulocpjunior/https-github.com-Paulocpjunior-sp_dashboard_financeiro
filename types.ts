@@ -72,19 +72,3 @@ export interface PaginatedResult<T> {
   pageSize: number;
   totalPages: number;
 }
-
-// Google Apps Script Types
-declare global {
-  interface Window {
-    google?: {
-      script: {
-        run: {
-          withSuccessHandler: (callback: (data: any) => void) => {
-            withFailureHandler: (callback: (error: Error) => void) => any;
-          };
-          [key: string]: any;
-        };
-      };
-    };
-  }
-}

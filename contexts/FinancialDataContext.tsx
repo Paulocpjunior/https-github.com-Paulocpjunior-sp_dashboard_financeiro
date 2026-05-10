@@ -23,7 +23,6 @@ interface FinancialDataContextType {
   loadData: () => Promise<void>;
   refreshData: () => Promise<void>;
   applyFilters: (filters: Partial<FilterState>, page: number) => void;
-  loadMockData: () => void;
 }
 
 const FinancialDataContext = createContext<FinancialDataContextType | undefined>(undefined);
@@ -98,12 +97,6 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [applyFilters]);
 
-  const loadMockData = useCallback(() => {
-    DataService.loadMockData();
-    setLastUpdated(DataService.getLastUpdatedAt());
-    applyFilters({}, 1);
-  }, [applyFilters]);
-
   // ✅ FIX PRINCIPAL: Listener em tempo real do Firebase (onSnapshot)
   // Quando qualquer colaboradora alterar um lançamento, a UI atualiza automaticamente
   useEffect(() => {
@@ -140,7 +133,6 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
     loadData,
     refreshData,
     applyFilters,
-    loadMockData,
   };
 
   return (

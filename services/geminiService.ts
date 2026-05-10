@@ -3,7 +3,7 @@ import { logger } from '../utils/logger';
 import { FilterState } from "../types";
 
 // Note: In a production React app, we usually proxy this through a backend to hide the key.
-// For this standalone demo, we use the env variable directly as requested.
+// This browser build keeps the key configurable through the deployment environment.
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 

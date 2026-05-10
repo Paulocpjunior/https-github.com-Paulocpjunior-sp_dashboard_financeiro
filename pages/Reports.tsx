@@ -70,7 +70,7 @@ const Reports: React.FC = () => {
              const { result } = DataService.getTransactions({}, 1, 99999);
              setAllTransactions(result.data);
         } else {
-             // Tenta carregar. Se falhar e não for mock, vai cair no catch
+             // Tenta carregar. Se falhar, vai cair no catch
              await DataService.loadData();
              const { result } = DataService.getTransactions({}, 1, 99999);
              setAllTransactions(result.data);
@@ -401,26 +401,14 @@ const Reports: React.FC = () => {
             <h2 className="text-lg font-bold text-red-600 dark:text-red-400 mb-2">Falha ao Carregar Relatórios</h2>
             <p className="text-red-500 dark:text-red-400/80 mb-4">{initError}</p>
             <p className="text-sm text-slate-500 mb-6">
-              Não foi possível carregar os dados do Firebase. Você pode tentar novamente ou visualizar dados de exemplo.
+              Não foi possível carregar os dados do Firebase. Verifique a conexão e tente novamente.
             </p>
-            <div className="flex gap-3 justify-center">
+            <div className="flex justify-center">
                 <button 
                     onClick={() => window.location.reload()} 
                     className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all font-medium"
                 >
                   Tentar Novamente
-                </button>
-                <button
-                    onClick={() => {
-                        DataService.loadMockData();
-                        setInitError('');
-                        setLoading(false);
-                        const { result } = DataService.getTransactions({}, 1, 99999);
-                        setAllTransactions(result.data);
-                    }}
-                    className="px-6 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-all font-medium"
-                >
-                    Entrar com Dados de Exemplo
                 </button>
             </div>
           </div>

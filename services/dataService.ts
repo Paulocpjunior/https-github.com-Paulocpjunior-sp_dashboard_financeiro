@@ -1,6 +1,5 @@
 import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { FirebaseService } from './firebaseService';
-import { MOCK_TRANSACTIONS } from '../constants';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { logger } from '../utils/logger';
@@ -9,7 +8,6 @@ import { toLocalISODate } from '../utils/dateUtils';
 // In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
 let isDataLoaded = false;
-let isMockMode = false;
 let lastUpdatedAt: Date | null = null;
 
 // Controle de Concorrência (Evita requisições simultâneas/loops)
@@ -153,10 +151,6 @@ export const DataService = {
     return isDataLoaded;
   },
 
-  get isMockMode() {
-    return isMockMode;
-  },
-
   /**
    * Carrega os dados.
    * BLINDADO: Se já estiver carregando, retorna a promessa em andamento.
@@ -174,17 +168,7 @@ export const DataService = {
         return currentLoadPromise;
     }
 
-    // 3. Mock Mode Check
-    if (isMockMode) {
-        if (CACHED_TRANSACTIONS.length === 0) {
-            CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
-        }
-        isDataLoaded = true;
-        lastUpdatedAt = new Date();
-        return;
-    }
-
-    // 4. Inicia nova requisição e guarda a promessa
+    // 3. Inicia nova requisição e guarda a promessa
     currentLoadPromise = (async () => {
         const wasDataLoaded = isDataLoaded;
 
@@ -278,24 +262,6 @@ export const DataService = {
     return currentLoadPromise;
   },
 
-  /**
-   * Ativa modo de demonstração com dados locais.
-   */
-  loadMockData: (): void => {
-    logger.warn("[DataService] Ativando Modo Mock");
-    const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
-    MOCK_TRANSACTIONS.forEach(t => {
-      if (excludedIds.includes(t.id)) {
-        t.isExcluded = true;
-      }
-    });
-    CACHED_TRANSACTIONS = MOCK_TRANSACTIONS;
-    isDataLoaded = true;
-    isMockMode = true;
-    lastUpdatedAt = new Date();
-    DataService.notifyListeners();
-  },
-
   toggleExclusion: (id: string): void => {
     const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
     const index = excludedIds.indexOf(id);
@@ -341,7 +307,6 @@ export const DataService = {
    * Força uma atualização dos dados.
    */
   refreshCache: async (): Promise<void> => {
-    if (isMockMode) return;
     try {
         await DataService.loadData(true);
         DataService.notifyListeners();
@@ -356,7 +321,6 @@ export const DataService = {
 
   startAutoRefresh: (intervalMs = AUTO_REFRESH_INTERVAL_MS): void => {
     DataService.stopAutoRefresh();
-    if (isMockMode) return;
 
     autoRefreshTimer = setInterval(async () => {
         logger.info('[DataService] Auto-refresh executando...');
@@ -380,8 +344,6 @@ export const DataService = {
    * Qualquer alteração no Firestore atualiza o cache automaticamente e notifica a UI.
    */
   subscribeToFirebaseChanges: (): (() => void) => {
-    if (isMockMode) return () => {};
-
     // Evita múltiplos listeners simultâneos
     if (firebaseUnsubscribe) {
       firebaseUnsubscribe();
