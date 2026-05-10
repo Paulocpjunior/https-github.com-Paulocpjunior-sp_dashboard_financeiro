@@ -120,6 +120,21 @@ Apos revisar o relatorio, os campos legados de senha podem ser removidos com bac
 npm run audit:auth:cleanup
 ```
 
+Para atualizar e-mails tecnicos de recuperacao, copie o modelo e preencha e-mails reais:
+
+```bash
+cp scripts/recovery-email-map.example.json migration-backups/recovery-email-map.json
+npm run auth:update-recovery-emails
+```
+
+O comando acima faz apenas validacao e dry-run. Para aplicar, depois de revisar o relatorio gerado em `migration-backups/`:
+
+```bash
+npm run auth:update-recovery-emails:apply
+```
+
+O modo apply atualiza Firebase Auth, `users/{uid}` e `loginIndex/{username}`. Antes de aplicar, ele grava backup local em `migration-backups/`.
+
 ## Regras de Seguranca
 
 As regras ficam em `firestore.rules`.

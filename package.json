@@ -12,6 +12,8 @@
     "audit:auth": "node scripts/audit-firestore-auth.mjs",
     "audit:auth:with-export": "node scripts/audit-firestore-auth.mjs --export-auth",
     "audit:auth:cleanup": "node scripts/audit-firestore-auth.mjs --export-auth --cleanup-legacy-password-fields",
+    "auth:update-recovery-emails": "node scripts/update-recovery-emails.mjs",
+    "auth:update-recovery-emails:apply": "node scripts/update-recovery-emails.mjs --apply",
     "deploy:hosting": "npm run build && firebase deploy --only hosting --project gen-lang-client-0888019226",
     "deploy:rules": "firebase deploy --only firestore:rules --project gen-lang-client-0888019226",
     "deploy:rules:dry-run": "firebase deploy --only firestore:rules --dry-run --project gen-lang-client-0888019226",

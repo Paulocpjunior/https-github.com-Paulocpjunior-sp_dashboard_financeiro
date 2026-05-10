@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "username": "raquel",
+      "email": "raquel@empresa.com.br"
+    },
+    {
+      "username": "paulo",
+      "email": "paulo@empresa.com.br"
+    },
+    {
+      "username": "jessica",
+      "email": "jessica@empresa.com.br"
+    }
+  ]
+}
