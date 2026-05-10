@@ -110,6 +110,8 @@ Para cruzar tambem com contas reais do Firebase Auth:
 npm run audit:auth:with-export
 ```
 
+A auditoria tambem destaca contas com e-mail tecnico/local, como `@auth.spcontabil.local`, porque a recuperacao de senha do Firebase Auth precisa de um e-mail real e entregavel.
+
 Os relatorios JSON e Markdown sao salvos em `migration-backups/`, que nao deve ser commitado. O export temporario do Firebase Auth e removido automaticamente porque pode conter hashes sensiveis.
 
 Apos revisar o relatorio, os campos legados de senha podem ser removidos com backup local automatico:
