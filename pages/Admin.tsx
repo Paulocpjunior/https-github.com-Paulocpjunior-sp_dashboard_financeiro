@@ -8,8 +8,6 @@ import { PendingUserRecord } from '../services/userAdminService';
 import { firebaseConfig } from '../services/firebaseConfig';
 import { logger } from '../utils/logger';
 
-// MigrationPanel removed - migration complete
-
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUserRecord[]>([]);
@@ -52,13 +50,6 @@ const Admin: React.FC = () => {
   // Carregar usuários pendentes do Firestore
   const loadPendingUsers = async () => {
     setLoadingPending(true);
-    
-    // Se estiver em modo Mock, não tenta conectar
-    if (DataService.isMockMode) {
-        setPendingUsers([]); // Em modo mock, sem pendentes (ou poderia mockar)
-        setLoadingPending(false);
-        return;
-    }
 
     try {
       const pendentes = await BackendService.fetchPendingUsers();

@@ -10,7 +10,7 @@ Dashboard financeiro da SP Contabil, publicado no Firebase Hosting e usando Fire
 - Banco oficial: Cloud Firestore
 - Autenticacao: Firebase Auth
 
-A URL antiga do Apps Script foi preservada no codigo apenas para compatibilidade historica. O app nao usa mais Google Sheets como fonte operacional de dados.
+O app nao usa Google Sheets nem Apps Script como fonte operacional de dados. A leitura e a manutencao financeira passam pelo Firebase.
 
 ## Rodar Localmente
 
@@ -84,6 +84,7 @@ npm run deploy:all
 Depois do deploy, validar:
 
 - https://gen-lang-client-0888019226.web.app
+- https://gen-lang-client-0888019226.web.app/relatorios
 - https://gen-lang-client-0888019226.web.app/admin
 
 ## Fluxo de Usuarios

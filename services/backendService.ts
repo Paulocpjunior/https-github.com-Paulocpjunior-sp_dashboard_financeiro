@@ -1,5 +1,4 @@
 import { Transaction, User } from '../types';
-import { MOCK_USERS } from '../constants';
 import { FirebaseService } from './firebaseService';
 import { PendingUserRecord, UserAdminService, UserFormData } from './userAdminService';
 import { logger } from '../utils/logger';
@@ -21,11 +20,6 @@ const validateRegistration = (data: UserFormData): MutationResult | null => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(data.email)) {
     return { success: false, message: 'E-mail inválido.' };
-  }
-
-  const existingMockUser = MOCK_USERS.find(u => u.username.toLowerCase() === data.username.toLowerCase());
-  if (existingMockUser) {
-    return { success: false, message: 'Este nome de usuário já está em uso.' };
   }
 
   return null;
@@ -90,15 +84,5 @@ export const BackendService = {
       logger.error('[BackendService] Erro ao buscar usuários no Firestore:', error);
       return [];
     }
-  },
-
-  login: async (username: string, passwordHashInput: string) => {
-    const user = MOCK_USERS.find(u => u.username === username);
-    if (!user) return { success: false, message: 'Usuário não encontrado.' };
-    if (passwordHashInput === user.passwordHash && user.active) {
-      const { passwordHash, ...safeUser } = user;
-      return { success: true, user: safeUser as User };
-    }
-    return { success: false, message: 'Senha incorreta.' };
   },
 };
