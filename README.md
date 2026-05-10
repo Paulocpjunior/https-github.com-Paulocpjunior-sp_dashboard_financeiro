@@ -145,6 +145,16 @@ npm run backup:firestore
 
 Por padrao, o backup inclui `users`, `loginIndex` e `transactions`. Os arquivos JSON e Markdown sao salvos em `migration-backups/`, que nao deve ser commitado.
 
+## Pre-Manutencao
+
+Antes de qualquer alteracao manual em dados, rode o pacote completo de seguranca:
+
+```bash
+npm run maintenance:precheck
+```
+
+Esse comando cria um backup local do codigo, exporta Firestore e roda a auditoria Auth/Firestore. O resumo fica em `migration-backups/pre-maintenance-*.md`.
+
 ## Regras de Seguranca
 
 As regras ficam em `firestore.rules`.
