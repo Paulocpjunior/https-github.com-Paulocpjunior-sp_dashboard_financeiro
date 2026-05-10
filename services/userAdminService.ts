@@ -53,13 +53,6 @@ const adminRequiredResult = (): MutationResult => ({
   message: 'Ação permitida apenas para administradores.',
 });
 
-const hashPassword = async (password: string): Promise<string> => {
-  const msgBuffer = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
 const createAuthAccount = async (email: string, password: string, displayName: string) => {
   const secondaryApp = initializeApp(firebaseConfig, `user-provisioning-${Date.now()}-${Math.random()}`);
   const secondaryAuth = getAuth(secondaryApp);
@@ -267,7 +260,7 @@ export const UserAdminService = {
     return { success: true, message: active ? 'Usuário desbloqueado com sucesso.' : 'Usuário bloqueado com sucesso.' };
   },
 
-  changePassword: async (username: string, newPassword: string): Promise<MutationResult> => {
+  changePassword: async (username: string, _newPassword: string): Promise<MutationResult> => {
     if (!isCurrentUserAdmin()) return adminRequiredResult();
 
     const userDoc = await findUserDocByUsername(username);
@@ -278,14 +271,7 @@ export const UserAdminService = {
       return sendResetForAuthEmail(data.authEmail || data.email || '');
     }
 
-    const passwordHash = await hashPassword(newPassword);
-    await updateDoc(userDoc.ref, {
-      passwordHash,
-      passwordUpdatedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    return { success: true, message: 'Senha alterada com sucesso.' };
+    return { success: false, message: 'Usuário sem Firebase Auth vinculado. Recrie ou migre o acesso antes de alterar a senha.' };
   },
 
   requestPasswordReset: async (identifier: string): Promise<MutationResult> => {

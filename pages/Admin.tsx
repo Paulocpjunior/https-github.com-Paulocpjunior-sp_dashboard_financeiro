@@ -199,8 +199,8 @@ const Admin: React.FC = () => {
   const handleSavePassword = async () => {
     if (!selectedUserForPass) return;
     const isFirebaseAuthUser = Boolean(selectedUserForPass.authEmail || selectedUserForPass.authUid);
-    if (!isFirebaseAuthUser && newAdminPassword.length < 6) {
-      alert('A senha deve ter no mínimo 6 caracteres.');
+    if (!isFirebaseAuthUser) {
+      alert('Este usuário ainda não tem credencial Firebase Auth vinculada. Recrie ou migre o acesso antes de recuperar senha.');
       return;
     }
 
@@ -675,7 +675,7 @@ const Admin: React.FC = () => {
                    </div>
                    <div>
                        <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-                         {selectedUserForPass.authEmail || selectedUserForPass.authUid ? 'Recuperar Senha' : 'Alterar Senha'}
+                         {selectedUserForPass.authEmail || selectedUserForPass.authUid ? 'Recuperar Senha' : 'Acesso não migrado'}
                        </h2>
                        <p className="text-xs text-slate-500 dark:text-slate-400">Usuário: <span className="font-semibold text-royal-600 dark:text-royal-400">{selectedUserForPass.username}</span></p>
                    </div>
@@ -703,19 +703,13 @@ const Admin: React.FC = () => {
                 ) : (
                   <>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                       Nova Senha de Acesso
+                       Credencial Firebase Auth ausente
                     </label>
-                    <div className="relative">
-                       <input
-                          type="text"
-                          value={newAdminPassword}
-                          onChange={(e) => setNewAdminPassword(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono"
-                          placeholder="Mínimo 6 caracteres"
-                       />
+                    <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-800 dark:text-red-200">
+                      Este usuário não possui vínculo com Firebase Auth.
                     </div>
                     <p className="text-xs text-slate-500 mt-2">
-                       Esta ação substitui a senha atual imediatamente.
+                       Recrie ou migre o acesso antes de enviar recuperação de senha.
                     </p>
                   </>
                 )}
@@ -729,7 +723,7 @@ const Admin: React.FC = () => {
                  </button>
                  <button
                     onClick={handleSavePassword}
-                    disabled={isSavingPass || (!(selectedUserForPass.authEmail || selectedUserForPass.authUid) && newAdminPassword.length < 6)}
+                    disabled={isSavingPass || !(selectedUserForPass.authEmail || selectedUserForPass.authUid)}
                     className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                  >
 	                    {isSavingPass ? (
@@ -740,7 +734,7 @@ const Admin: React.FC = () => {
                     ) : (
                        <>
                           <Save className="h-4 w-4" />
-                          {selectedUserForPass.authEmail || selectedUserForPass.authUid ? 'Enviar Link' : 'Salvar Senha'}
+                          {selectedUserForPass.authEmail || selectedUserForPass.authUid ? 'Enviar Link' : 'Indisponível'}
                        </>
                     )}
                  </button>

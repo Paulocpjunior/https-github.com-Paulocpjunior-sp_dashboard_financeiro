@@ -23,7 +23,7 @@ Confirme que os administradores acessam via Firebase Auth e que existe um docume
 }
 ```
 
-Contas que usam apenas `passwordHash` no Firestore conseguem entrar no modo legado do app, mas nao possuem `request.auth` nas regras do Firebase. Ao publicar regras restritas, essas contas precisam ser migradas para Firebase Auth ou passar por uma Cloud Function de autenticacao.
+O login legado por hash no Firestore foi removido. Contas sem Firebase Auth vinculado nao conseguem autenticar nem acessar transacoes; recrie ou migre esses acessos antes de liberar usuarios.
 
 Novos usuarios criados pelo painel Admin ou pelo primeiro acesso ja devem receber:
 
@@ -43,7 +43,7 @@ Para manter login por username apos a migracao, cada usuario deve ter um documen
 
 ## Publicacao
 
-Quando a migracao dos administradores para Firebase Auth estiver confirmada, valide primeiro:
+Antes de publicar alteracoes nas regras, valide primeiro:
 
 ```bash
 npm run deploy:rules:dry-run
