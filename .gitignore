@@ -16,6 +16,8 @@ dist-ssr
 *.local
 .firebase/
 migration-backups/
+recovery-email-map*.json
+!scripts/recovery-email-map.example.json
 
 # Editor directories and files
 .vscode/*
