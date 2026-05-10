@@ -1,5 +1,6 @@
 import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { FirebaseService } from './firebaseService';
+import type { TransactionsFingerprint } from './firebaseService';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { logger } from '../utils/logger';
@@ -9,6 +10,8 @@ import { toLocalISODate } from '../utils/dateUtils';
 let CACHED_TRANSACTIONS: Transaction[] = [];
 let isDataLoaded = false;
 let lastUpdatedAt: Date | null = null;
+let lastFullRefreshAt = 0;
+let lastRemoteFingerprint: TransactionsFingerprint | null = null;
 
 // Controle de Concorrência (Evita requisições simultâneas/loops)
 let currentLoadPromise: Promise<void> | null = null;
@@ -19,6 +22,7 @@ let autoRefreshListeners: Array<() => void> = [];
 
 // Constante de Refresh (2 minutos para evitar excesso de requisições)
 const AUTO_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
+const AUTO_REFRESH_FULL_RECHECK_MS = 10 * 60 * 1000;
 
 // Unsubscribe do listener Firebase em tempo real
 let firebaseUnsubscribe: (() => void) | null = null;
@@ -145,6 +149,22 @@ const normalizeDescription = (desc: string): string => {
   }
 };
 
+const buildLocalFingerprint = (transactions: Transaction[]): TransactionsFingerprint => {
+  const latestUpdatedAt = transactions.reduce((latest, transaction) => {
+    const updatedAt = transaction.updatedAt || '';
+    return updatedAt > latest ? updatedAt : latest;
+  }, '');
+
+  return {
+    count: transactions.length,
+    latestUpdatedAt,
+  };
+};
+
+const fingerprintsMatch = (left: TransactionsFingerprint | null, right: TransactionsFingerprint | null): boolean => {
+  return Boolean(left && right && left.count === right.count && left.latestUpdatedAt === right.latestUpdatedAt);
+};
+
 export const DataService = {
   
   get isDataLoaded() {
@@ -246,6 +266,8 @@ export const DataService = {
             CACHED_TRANSACTIONS = data;
             isDataLoaded = true;
             lastUpdatedAt = new Date();
+            lastFullRefreshAt = Date.now();
+            lastRemoteFingerprint = buildLocalFingerprint(data);
             logger.info(`[DataService] Sucesso. ${data.length} registros carregados.`);
         } catch (error) {
             logger.error("[DataService] Erro fatal no carregamento:", error);
@@ -315,6 +337,36 @@ export const DataService = {
     }
   },
 
+  refreshCacheIfChanged: async (): Promise<void> => {
+    try {
+        if (!isDataLoaded || !lastRemoteFingerprint) {
+          await DataService.refreshCache();
+          return;
+        }
+
+        if (Date.now() - lastFullRefreshAt >= AUTO_REFRESH_FULL_RECHECK_MS) {
+          logger.info('[DataService] Auto-refresh fará reconferência completa programada.');
+          await DataService.refreshCache();
+          return;
+        }
+
+        const remoteFingerprint = await FirebaseService.fetchTransactionsFingerprint();
+        if (!fingerprintsMatch(lastRemoteFingerprint, remoteFingerprint)) {
+          logger.info('[DataService] Mudança detectada no Firestore. Recarregando cache completo...');
+          await DataService.refreshCache();
+          return;
+        }
+
+        lastUpdatedAt = new Date();
+        logger.info('[DataService] Auto-refresh sem mudanças no Firestore. Cache mantido.');
+        DataService.notifyListeners();
+    } catch (e) {
+        logger.warn('[DataService] Fingerprint do Firestore falhou. Usando refresh completo como fallback.', e);
+        await DataService.loadData(true);
+        DataService.notifyListeners();
+    }
+  },
+
   getLastUpdatedAt: (): Date | null => lastUpdatedAt,
 
   // --- Auto Refresh Logic ---
@@ -325,7 +377,7 @@ export const DataService = {
     autoRefreshTimer = setInterval(async () => {
         logger.info('[DataService] Auto-refresh executando...');
         try {
-            await DataService.refreshCache();
+            await DataService.refreshCacheIfChanged();
         } catch (e) {
             logger.error('[DataService] Erro silencioso no auto-refresh:', e);
         }

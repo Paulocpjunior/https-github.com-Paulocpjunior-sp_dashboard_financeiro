@@ -64,9 +64,9 @@ const Reports: React.FC = () => {
         setLoading(true);
         setInitError(''); // Reset error
 
-        // Se os dados já estiverem carregados, força refresh para garantir normalização atualizada
+        // Se os dados já estiverem carregados, evita recarregar tudo quando o Firestore não mudou.
         if (DataService.isDataLoaded) {
-             await DataService.refreshCache();
+             await DataService.refreshCacheIfChanged();
              const { result } = DataService.getTransactions({});
              setAllTransactions(result.allData ?? result.data);
         } else {

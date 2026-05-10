@@ -11,6 +11,7 @@ import {
   getDocs,
   getDocsFromCache,
   getDocsFromServer,
+  getCountFromServer,
   QueryConstraint
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
@@ -19,6 +20,11 @@ import { logger } from '../utils/logger';
 
 const FIRESTORE_FETCH_TIMEOUT_MS = 15000;
 const FIRESTORE_TIMEOUT_MESSAGE = 'O Firebase demorou mais de 15 segundos para responder. Verifique a conexão e tente novamente.';
+
+export interface TransactionsFingerprint {
+  count: number;
+  latestUpdatedAt: string;
+}
 
 const withTimeout = async <T,>(
   operation: Promise<T>,
@@ -159,10 +165,35 @@ export const FirebaseService = {
   },
 
   /**
+   * Consulta leve para detectar se a coleção mudou antes de baixar todos os documentos.
+   */
+  fetchTransactionsFingerprint: async (timeoutMs = FIRESTORE_FETCH_TIMEOUT_MS): Promise<TransactionsFingerprint> => {
+    const transactionsRef = collection(db, 'transactions');
+    const latestUpdateQuery = query(transactionsRef, orderBy('updatedAt', 'desc'), limit(1));
+
+    const [countSnapshot, latestUpdateSnapshot] = await Promise.all([
+      withTimeout(getCountFromServer(transactionsRef), timeoutMs),
+      withTimeout(getDocsFromServer(latestUpdateQuery), timeoutMs),
+    ]);
+
+    const latestUpdatedAt = latestUpdateSnapshot.docs[0]?.data().updatedAt;
+
+    return {
+      count: countSnapshot.data().count,
+      latestUpdatedAt: typeof latestUpdatedAt === 'string' ? latestUpdatedAt : '',
+    };
+  },
+
+  /**
    * Cria uma nova transação.
    */
   createTransaction: async (transaction: Omit<Transaction, 'id'>) => {
-    return addDoc(collection(db, 'transactions'), transaction);
+    const now = new Date().toISOString();
+    return addDoc(collection(db, 'transactions'), {
+      ...transaction,
+      createdAt: transaction.createdAt || now,
+      updatedAt: transaction.updatedAt || now,
+    });
   },
 
   /**
@@ -170,6 +201,9 @@ export const FirebaseService = {
    */
   updateTransaction: async (id: string, updates: Partial<Transaction>) => {
     const transactionRef = doc(db, 'transactions', id);
-    return updateDoc(transactionRef, updates);
+    return updateDoc(transactionRef, {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    });
   }
 };
