@@ -203,7 +203,7 @@ export const ReportService = {
 
         // Valor Pago = Se Pendente é 0, se Pago é o valor total
         let valorPagoRaw = 0;
-        if (status.toLowerCase() === 'pago' || status.toLowerCase() === 'recebido') {
+        if (status.toLowerCase() === 'pago' || status.toLowerCase() === 'paga' || status.toLowerCase() === 'recebido') {
             valorPagoRaw = isEntry ? valRec : valPaid; // Se pago, usa o valor efetivamente pago/recebido
         } else {
             valorPagoRaw = 0; // Se pendente, valor pago é 0
@@ -279,7 +279,7 @@ export const ReportService = {
               // Colorir Status (Index 4)
               if (data.section === 'body' && data.column.index === 4) {
                   const txt = String(data.cell.raw).toLowerCase();
-                  if (txt === 'pago') data.cell.styles.textColor = [22, 163, 74] as [number, number, number];
+                  if (txt === 'pago' || txt === 'paga') data.cell.styles.textColor = [22, 163, 74] as [number, number, number];
                   else if (txt === 'pendente' || txt === 'agendado') {
                       data.cell.styles.textColor = [234, 88, 12] as [number, number, number];
                       data.cell.styles.fontStyle = 'bold';

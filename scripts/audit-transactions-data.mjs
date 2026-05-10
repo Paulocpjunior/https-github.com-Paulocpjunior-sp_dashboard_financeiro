@@ -17,6 +17,7 @@ Options:
   --collection <name>   Collection name inside the backup. Default: ${DEFAULT_COLLECTION}
   --max-examples <n>    Max examples stored per finding code. Default: ${DEFAULT_MAX_EXAMPLES}
   --fail-on <severity>  Exit 1 when findings exist at or above severity: low, medium, high, critical.
+  --include-excluded    Include records marked isExcluded=true. Default: skip them because the app hides them.
   --help                Show this help.
 
 This script reads a local Firestore backup and does not modify Firebase.
@@ -63,6 +64,7 @@ const parseArgs = (argv) => {
     collection: DEFAULT_COLLECTION,
     maxExamples: DEFAULT_MAX_EXAMPLES,
     failOn: '',
+    includeExcluded: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -72,6 +74,7 @@ const parseArgs = (argv) => {
     else if (arg === '--collection') args.collection = argv[++index];
     else if (arg === '--max-examples') args.maxExamples = Number(argv[++index]);
     else if (arg === '--fail-on') args.failOn = String(argv[++index] || '').toLowerCase();
+    else if (arg === '--include-excluded') args.includeExcluded = true;
     else if (arg === '--help' || arg === '-h') {
       console.log(usage.trim());
       process.exit(0);
@@ -178,7 +181,7 @@ const canonicalStatus = (value) => {
   if (['pago'].includes(normalized)) return { canonical: 'Pago', alias: false };
   if (['pendente'].includes(normalized)) return { canonical: 'Pendente', alias: false };
   if (['agendado'].includes(normalized)) return { canonical: 'Agendado', alias: false };
-  if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(normalized)) return { canonical: 'Pago', alias: true };
+  if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(normalized)) return { canonical: 'Pago', alias: true };
   if (['nao', 'n', 'aberto', 'em aberto'].includes(normalized)) return { canonical: 'Pendente', alias: true };
   if (['programado'].includes(normalized)) return { canonical: 'Agendado', alias: true };
   return { canonical: '', alias: false };
@@ -204,8 +207,11 @@ const createReport = ({ inputPath, collectionName, maxExamples, transactionCount
   generatedAt: new Date().toISOString(),
   inputPath,
   collection: collectionName,
+  includeExcluded: false,
   counts: {
     transactions: transactionCount,
+    documentsAudited: 0,
+    excludedSkipped: 0,
     findings: 0,
     critical: 0,
     high: 0,
@@ -471,7 +477,9 @@ const buildMarkdown = (report) => {
     `Generated at: ${report.generatedAt}`,
     `Input: ${report.inputPath}`,
     `Collection: ${report.collection}`,
-    `Transactions audited: ${report.counts.transactions}`,
+    `Transactions in backup: ${report.counts.transactions}`,
+    `Transactions audited: ${report.counts.documentsAudited}`,
+    `Excluded skipped: ${report.counts.excludedSkipped}`,
     `Findings: ${report.counts.findings}`,
     '',
     '## Severity',
@@ -526,9 +534,18 @@ const main = () => {
     maxExamples: args.maxExamples,
     transactionCount: documents.length,
   });
+  report.includeExcluded = args.includeExcluded;
   const seenDataIds = new Map();
 
-  for (const document of documents) auditDocument(report, document, seenDataIds);
+  for (const document of documents) {
+    if (!args.includeExcluded && document.data?.isExcluded === true) {
+      report.counts.excludedSkipped += 1;
+      continue;
+    }
+
+    report.counts.documentsAudited += 1;
+    auditDocument(report, document, seenDataIds);
+  }
 
   report.nextActions = buildNextActions(report);
 
@@ -541,6 +558,8 @@ const main = () => {
   console.log(`JSON report: ${outPath}`);
   console.log(`Markdown report: ${markdownPath}`);
   console.log(`Transactions: ${report.counts.transactions}`);
+  console.log(`Documents audited: ${report.counts.documentsAudited}`);
+  console.log(`Excluded skipped: ${report.counts.excludedSkipped}`);
   console.log(`Findings: ${report.counts.findings}`);
   console.log(`Critical: ${report.counts.critical}`);
   console.log(`High: ${report.counts.high}`);

@@ -252,6 +252,7 @@ const buildMarkdown = (report) => {
   const criticalOrHigh = report.findings.filter((finding) => ['critical', 'high'].includes(finding.severity));
   const cleanupCandidates = report.cleanupCandidates.legacyPasswordFieldUserIds;
   const recoveryEmailRisks = report.recoveryEmail.risks;
+  const archivedTechnicalEmails = report.recoveryEmail.archivedTechnicalEmails || [];
 
   return [
     `# Firestore Auth Audit`,
@@ -286,6 +287,14 @@ const buildMarkdown = (report) => {
     recoveryEmailRisks.length
       ? recoveryEmailRisks
           .map((risk) => `- users/${risk.userId} (${risk.username}): authEmail ${risk.authEmail} is not deliverable for password reset.`)
+          .join('\n')
+      : '- None.',
+    ``,
+    `## Archived Technical Emails`,
+    ``,
+    archivedTechnicalEmails.length
+      ? archivedTechnicalEmails
+          .map((item) => `- users/${item.userId} (${item.username}): inactive profile using archived authEmail ${item.authEmail}.`)
           .join('\n')
       : '- None.',
     ``,
@@ -325,6 +334,7 @@ const main = async () => {
   const passwordHashUserIds = [];
   const legacyPasswordFieldDocs = [];
   const recoveryEmailRisks = [];
+  const archivedTechnicalEmails = [];
   const summarizedUsers = [];
 
   for (const doc of userDocs) {
@@ -334,6 +344,8 @@ const main = async () => {
     const authEmail = normalize(data.authEmail || data.email);
     const profileEmail = normalize(data.email);
     const active = data.active === true;
+    const authAccount = authExport && authUid ? authExport.byUid.get(authUid) : null;
+    const authAccountDisabled = authAccount?.disabled === true;
     const subject = `users/${doc.id}`;
     const hasPasswordHash = hasOwn(data, 'passwordHash');
     const hasPasswordUpdatedAt = hasOwn(data, 'passwordUpdatedAt');
@@ -376,28 +388,41 @@ const main = async () => {
     }
 
     if (authEmail && isTechnicalEmail(authEmail, args.technicalEmailSuffixes)) {
-      recoveryEmailStatus = 'technical_auth_email';
-      recoveryEmailRisks.push({
-        userId: doc.id,
-        username: data.username || '',
-        active,
-        authEmail,
-        profileEmail,
-        reason: 'Firebase Auth password reset is sent to authEmail, but this address is technical/local.',
-      });
-      addFinding(
-        findings,
-        active ? 'high' : 'medium',
-        'TECHNICAL_AUTH_EMAIL',
-        subject,
-        'Firebase Auth email is technical/local and cannot receive password reset emails.',
-        {
+      if (active) {
+        recoveryEmailStatus = 'technical_auth_email';
+        recoveryEmailRisks.push({
+          userId: doc.id,
           username: data.username || '',
           active,
           authEmail,
           profileEmail,
-        },
-      );
+          reason: 'Firebase Auth password reset is sent to authEmail, but this address is technical/local.',
+        });
+        addFinding(
+          findings,
+          'high',
+          'TECHNICAL_AUTH_EMAIL',
+          subject,
+          'Firebase Auth email is technical/local and cannot receive password reset emails.',
+          {
+            username: data.username || '',
+            active,
+            authEmail,
+            profileEmail,
+          },
+        );
+      } else {
+        recoveryEmailStatus = authAccountDisabled ? 'archived_disabled_technical_auth_email' : 'inactive_technical_auth_email';
+        archivedTechnicalEmails.push({
+          userId: doc.id,
+          username: data.username || '',
+          active,
+          authEmail,
+          profileEmail,
+          authDisabled: authAccountDisabled,
+          reason: 'Inactive profile keeps a technical/archive authEmail only for historical consistency.',
+        });
+      }
     }
 
     if (authUid && doc.id !== authUid) {
@@ -448,8 +473,7 @@ const main = async () => {
     }
 
     if (authExport && authUid) {
-      const account = authExport.byUid.get(authUid);
-      if (!account) {
+      if (!authAccount) {
         authStatus = 'uid_missing_in_auth';
         addFinding(
           findings,
@@ -461,7 +485,7 @@ const main = async () => {
         );
       } else {
         authStatus = 'found';
-        const accountEmail = normalize(account.email);
+        const accountEmail = normalize(authAccount.email);
         if (authEmail && accountEmail && accountEmail !== authEmail) {
           authStatus = 'email_mismatch';
           addFinding(findings, 'high', 'AUTH_EMAIL_MISMATCH', subject, 'Firebase Auth account email does not match profile authEmail/email.', {
@@ -472,7 +496,7 @@ const main = async () => {
           });
         }
 
-        if (account.disabled === true && active) {
+        if (authAccount.disabled === true && active) {
           authStatus = 'disabled_auth_active_profile';
           addFinding(findings, 'high', 'ACTIVE_PROFILE_DISABLED_AUTH_ACCOUNT', subject, 'Firestore profile is active but Firebase Auth account is disabled.', {
             username: data.username || '',
@@ -563,6 +587,7 @@ const main = async () => {
       loginIndex: loginIndexDocs.length,
       authUsersChecked: authExport ? authExport.users.length : 0,
       recoveryEmailRisks: recoveryEmailRisks.length,
+      archivedTechnicalEmails: archivedTechnicalEmails.length,
       findings: findings.length,
       bySeverity,
     },
@@ -573,6 +598,7 @@ const main = async () => {
     recoveryEmail: {
       technicalEmailSuffixes: args.technicalEmailSuffixes,
       risks: recoveryEmailRisks,
+      archivedTechnicalEmails,
     },
     findings,
     users: summarizedUsers,

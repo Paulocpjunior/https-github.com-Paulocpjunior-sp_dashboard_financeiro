@@ -211,7 +211,7 @@ export const DataService = {
                 // ★ Normalizar status: "Sim", "Recebido", "Quitado", "OK", "Liquidado" → "Pago"
                 if (t.status != null) {
                   const sLower = String(t.status).toLowerCase().trim();
-                  if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) {
+                  if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) {
                     t.status = 'Pago';
                   } else if (sLower === 'pago') {
                     t.status = 'Pago';
@@ -425,7 +425,7 @@ export const DataService = {
           if (excludedIds.includes(t.id)) t.isExcluded = true;
           if (t.status != null) {
             const sLower = String(t.status).toLowerCase().trim();
-            if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) t.status = 'Pago';
+            if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) t.status = 'Pago';
             else if (sLower === 'pago') t.status = 'Pago';
             else if (['pendente', 'nao', 'não', 'n', 'aberto', 'em aberto', ''].includes(sLower)) t.status = 'Pendente';
             else if (['agendado', 'programado'].includes(sLower)) t.status = 'Agendado';
@@ -486,7 +486,7 @@ export const DataService = {
     if (!isDataLoaded) return [];
     const normalizeStatusVal = (s: string): string => {
       const v = s.toLowerCase().trim();
-      if (["recebido","quitado","sim","ok","liquidado","pago"].includes(v)) return 'Pago';
+      if (["paga","recebido","quitado","sim","ok","liquidado","pago"].includes(v)) return 'Pago';
       if (v === "agendado") return 'Agendado';
       if (["pendente","nao","não","aberto"].includes(v)) return 'Pendente';
       return s.trim();
@@ -506,7 +506,7 @@ export const DataService = {
 
     CACHED_TRANSACTIONS.forEach(t => {
         const statusLower = (t.status || '').toLowerCase();
-        const isPaid = statusLower === 'pago' || statusLower === 'recebido' || statusLower === 'sim' || statusLower === 'ok';
+        const isPaid = statusLower === 'pago' || statusLower === 'paga' || statusLower === 'recebido' || statusLower === 'sim' || statusLower === 'ok';
         const isPending = !isPaid;
 
         if (isPaid) {
@@ -575,7 +575,7 @@ export const DataService = {
             // Normaliza aliases: Recebido/Quitado/Sim/OK → Pago
             const normalizeItemStatus = (s: string): string => {
               const v = (s || '').toLowerCase().trim();
-              if (v === 'recebido' || v === 'quitado' || v === 'sim' || v === 'ok' || v === 'liquidado') return 'Pago';
+              if (v === 'paga' || v === 'recebido' || v === 'quitado' || v === 'sim' || v === 'ok' || v === 'liquidado') return 'Pago';
               if (v === 'pago') return 'Pago';
               if (v === 'agendado') return 'Agendado';
               return 'Pendente';
