@@ -9,7 +9,8 @@ const DEFAULT_DATABASE = '(default)';
 const REPORT_DIR = 'migration-backups';
 const DEFAULT_COLLECTION = 'transactions';
 const DEFAULT_MAX_EXAMPLES = 50;
-const DEFAULT_ONLY = ['updatedAt', 'dates', 'status', 'movement', 'money'];
+const DEFAULT_ONLY = ['updatedAt', 'dates', 'status', 'movement', 'money', 'totals'];
+const OPTIONAL_GROUPS = ['paymentDates', 'directions', 'business', 'recommended', 'totalComponents'];
 
 const usage = `
 Usage:
@@ -20,9 +21,10 @@ Options:
   --out <path>          JSON report path. Default: migration-backups/transaction-normalization-plan-<timestamp>.json
   --project <id>        Firebase project id for --apply. Default: ${DEFAULT_PROJECT_ID}
   --collection <name>   Collection name inside the backup. Default: ${DEFAULT_COLLECTION}
-  --only <list>         Comma-separated groups: updatedAt,dates,status,movement,money. Default: ${DEFAULT_ONLY.join(',')}
+  --only <list>         Comma-separated groups: updatedAt,dates,status,movement,money,totals,paymentDates,directions,business,recommended,totalComponents. Default: ${DEFAULT_ONLY.join(',')}
   --limit <n>           Limit number of documents processed. Useful for staged apply.
   --max-examples <n>    Max examples stored per field. Default: ${DEFAULT_MAX_EXAMPLES}
+  --include-excluded    Include records marked isExcluded=true. Default: skip them because the app hides them.
   --apply               Apply planned changes to Firestore. Without this flag the script is dry-run only.
   --help                Show this help.
 
@@ -32,6 +34,12 @@ The script only performs safe normalization:
 - supported status aliases -> Pago/Pendente/Agendado
 - supported movement aliases -> Entrada/Saida
 - parseable money text in numeric fields -> number
+- missing receivable/payable totals when existing money fields provide a safe derived total
+- status/paymentDate consistency when --only paymentDates is used
+- duplicated bidirectional values when --only directions is used
+- missing business fields from existing local fields, or explicit "não informado" placeholders
+- missing recommended fields with explicit "não informado" placeholders
+- small receivable component mismatches when totalCobranca safely matches valueReceived
 `;
 
 const parseArgs = (argv) => {
@@ -43,6 +51,7 @@ const parseArgs = (argv) => {
     only: [...DEFAULT_ONLY],
     limit: 0,
     maxExamples: DEFAULT_MAX_EXAMPLES,
+    includeExcluded: false,
     apply: false,
   };
 
@@ -55,6 +64,7 @@ const parseArgs = (argv) => {
     else if (arg === '--only') args.only = String(argv[++index] || '').split(',').map((item) => item.trim()).filter(Boolean);
     else if (arg === '--limit') args.limit = Number(argv[++index]);
     else if (arg === '--max-examples') args.maxExamples = Number(argv[++index]);
+    else if (arg === '--include-excluded') args.includeExcluded = true;
     else if (arg === '--apply') args.apply = true;
     else if (arg === '--help' || arg === '-h') {
       console.log(usage.trim());
@@ -64,10 +74,10 @@ const parseArgs = (argv) => {
     }
   }
 
-  const allowedGroups = new Set(DEFAULT_ONLY);
+  const allowedGroups = new Set([...DEFAULT_ONLY, ...OPTIONAL_GROUPS]);
   for (const group of args.only) {
     if (!allowedGroups.has(group)) {
-      throw new Error(`Unknown --only group: ${group}. Allowed: ${DEFAULT_ONLY.join(', ')}`);
+      throw new Error(`Unknown --only group: ${group}. Allowed: ${[...DEFAULT_ONLY, ...OPTIONAL_GROUPS].join(', ')}`);
     }
   }
 
@@ -155,7 +165,7 @@ const normalizeStatus = (value) => {
   if (normalized === 'pago') return 'Pago';
   if (normalized === 'pendente') return 'Pendente';
   if (normalized === 'agendado') return 'Agendado';
-  if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(normalized)) return 'Pago';
+  if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(normalized)) return 'Pago';
   if (['nao', 'n', 'aberto', 'em aberto'].includes(normalized)) return 'Pendente';
   if (normalized === 'programado') return 'Agendado';
   return '';
@@ -179,6 +189,24 @@ const parseMoneyText = (value) => {
 
   return { valid: true, value: parsed, changed: parsed !== value };
 };
+
+const parseMoneyValue = (value) => {
+  const parsed = parseMoneyText(value);
+  if (!parsed.valid) return Number.NaN;
+  if (parsed.value === undefined || parsed.value === null || parsed.value === '') return 0;
+  return Number(parsed.value);
+};
+
+const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const canonicalMovementKey = (value) => {
+  const normalized = normalizeKey(value);
+  if (normalized === 'entrada' || normalized === 'receita' || normalized === 'credito') return 'Entrada';
+  if (normalized === 'saida' || normalized === 'despesa' || normalized === 'debito') return 'Saida';
+  return '';
+};
+
+const firstClean = (...values) => values.map(clean).find(Boolean) || '';
 
 const firestoreValue = (value) => {
   if (value === null) return { nullValue: null };
@@ -239,6 +267,7 @@ const createReport = ({ inputPath, outPath, args, transactionCount }) => ({
   counts: {
     transactions: transactionCount,
     documentsInspected: 0,
+    excludedSkipped: 0,
     documentsWithChanges: 0,
     fieldChanges: 0,
     appliedDocuments: 0,
@@ -297,6 +326,116 @@ const buildChangesForDocument = (document, only) => {
     }
   }
 
+  if (onlySet.has('totals')) {
+    const movement = canonicalMovementKey(data.movement);
+    const valuePaid = parseMoneyValue(data.valuePaid);
+    const valueReceived = parseMoneyValue(data.valueReceived);
+    const totalCobranca = parseMoneyValue(data.totalCobranca);
+    const honorarios = parseMoneyValue(data.honorarios);
+    const valorExtra = parseMoneyValue(data.valorExtra);
+
+    if ([valuePaid, valueReceived, totalCobranca, honorarios, valorExtra].every(Number.isFinite)) {
+      const expectedTotal = roundMoney(honorarios + valorExtra);
+      if (movement === 'Entrada' && valueReceived === 0 && totalCobranca === 0 && expectedTotal > 0) {
+        addChange(changes, 'totalCobranca', data.totalCobranca, expectedTotal);
+      }
+      if (movement === 'Entrada' && totalCobranca < 0 && expectedTotal > 0) {
+        addChange(changes, 'totalCobranca', data.totalCobranca, expectedTotal);
+      }
+      if (
+        movement === 'Entrada'
+        && valueReceived > 0
+        && totalCobranca > 0
+        && expectedTotal > 0
+        && Math.abs(roundMoney(valueReceived) - expectedTotal) <= 0.01
+        && Math.abs(roundMoney(totalCobranca) - expectedTotal) > 0.01
+      ) {
+        addChange(changes, 'totalCobranca', data.totalCobranca, expectedTotal);
+      }
+      if (movement === 'Saida' && valuePaid === 0 && valueReceived === 0) {
+        const payableFallback = totalCobranca > 0 ? totalCobranca : expectedTotal;
+        if (payableFallback > 0) addChange(changes, 'valuePaid', data.valuePaid, payableFallback);
+      }
+    }
+  }
+
+  if (onlySet.has('totalComponents')) {
+    const movement = canonicalMovementKey(data.movement);
+    const normalizedStatus = normalizeStatus(data.status);
+    const valueReceived = parseMoneyValue(data.valueReceived);
+    const totalCobranca = parseMoneyValue(data.totalCobranca);
+    const honorarios = parseMoneyValue(data.honorarios);
+    const valorExtra = parseMoneyValue(data.valorExtra);
+
+    if ([valueReceived, totalCobranca, honorarios, valorExtra].every(Number.isFinite)) {
+      const expectedTotal = roundMoney(honorarios + valorExtra);
+      const difference = roundMoney(totalCobranca - expectedTotal);
+      const receivedMatchesTotal = Math.abs(roundMoney(valueReceived) - roundMoney(totalCobranca)) <= 0.01;
+      const smallDifference = Math.abs(difference) <= 5;
+
+      if (
+        movement === 'Entrada'
+        && normalizedStatus === 'Pago'
+        && receivedMatchesTotal
+        && totalCobranca > 0
+        && expectedTotal > 0
+        && Math.abs(difference) > 0.01
+        && smallDifference
+      ) {
+        if (difference < 0 && valorExtra === 0) {
+          addChange(changes, 'honorarios', data.honorarios, totalCobranca);
+        } else {
+          const adjustedExtra = roundMoney(totalCobranca - honorarios);
+          if (adjustedExtra >= 0) addChange(changes, 'valorExtra', data.valorExtra, adjustedExtra);
+        }
+      }
+    }
+  }
+
+  if (onlySet.has('paymentDates')) {
+    const normalizedStatus = normalizeStatus(data.status);
+    if (normalizedStatus === 'Pago' && !clean(data.paymentDate)) {
+      const normalizedPaymentDate = isValidIsoDate(data.date) ? data.date : normalizeDate(data.date);
+      if (normalizedPaymentDate) addChange(changes, 'paymentDate', data.paymentDate, normalizedPaymentDate);
+    }
+
+    if ((normalizedStatus === 'Pendente' || normalizedStatus === 'Agendado') && clean(data.paymentDate)) {
+      addChange(changes, 'paymentDate', data.paymentDate, '');
+    }
+  }
+
+  if (onlySet.has('directions')) {
+    const movement = canonicalMovementKey(data.movement);
+    const valuePaid = parseMoneyValue(data.valuePaid);
+    const valueReceived = parseMoneyValue(data.valueReceived);
+
+    if (Number.isFinite(valuePaid) && Number.isFinite(valueReceived) && valuePaid > 0 && valueReceived > 0) {
+      if (movement === 'Entrada') addChange(changes, 'valuePaid', data.valuePaid, 0);
+      if (movement === 'Saida') addChange(changes, 'valueReceived', data.valueReceived, 0);
+    }
+  }
+
+  if (onlySet.has('business')) {
+    const movement = canonicalMovementKey(data.movement);
+
+    if (!clean(data.client)) {
+      const fallbackClient = movement === 'Saida'
+        ? firstClean(data.observacaoAPagar, data.description, data.paidBy, 'Favorecido não informado')
+        : firstClean(data.description, 'Cliente não informado');
+      addChange(changes, 'client', data.client, fallbackClient);
+    }
+
+    if (!clean(data.bankAccount)) {
+      addChange(changes, 'bankAccount', data.bankAccount, 'Conta não informada');
+    }
+  }
+
+  if (onlySet.has('recommended')) {
+    if (!clean(data.paidBy)) {
+      addChange(changes, 'paidBy', data.paidBy, 'Não informado');
+    }
+  }
+
   return changes;
 };
 
@@ -310,6 +449,7 @@ const buildMarkdown = (report) => {
     `Collection: ${report.collection}`,
     `Transactions in backup: ${report.counts.transactions}`,
     `Documents inspected: ${report.counts.documentsInspected}`,
+    `Excluded skipped: ${report.counts.excludedSkipped}`,
     `Documents with planned changes: ${report.counts.documentsWithChanges}`,
     `Field changes: ${report.counts.fieldChanges}`,
     `Applied documents: ${report.counts.appliedDocuments}`,
@@ -371,6 +511,11 @@ const main = async () => {
   for (const document of documents.slice(0, limit)) {
     report.counts.documentsInspected += 1;
 
+    if (!args.includeExcluded && document.data?.isExcluded === true) {
+      report.counts.excludedSkipped += 1;
+      continue;
+    }
+
     const changes = buildChangesForDocument(document, args.only);
     const fields = Object.keys(changes);
     if (fields.length === 0) continue;
@@ -415,6 +560,7 @@ const main = async () => {
   console.log(`JSON report: ${outPath}`);
   console.log(`Markdown report: ${outPath.replace(/\.json$/i, '.md')}`);
   console.log(`Documents inspected: ${report.counts.documentsInspected}`);
+  console.log(`Excluded skipped: ${report.counts.excludedSkipped}`);
   console.log(`Documents with changes: ${report.counts.documentsWithChanges}`);
   console.log(`Field changes: ${report.counts.fieldChanges}`);
   console.log(`Applied documents: ${report.counts.appliedDocuments}`);

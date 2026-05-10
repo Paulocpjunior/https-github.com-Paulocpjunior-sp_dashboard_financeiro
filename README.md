@@ -110,7 +110,7 @@ Para cruzar tambem com contas reais do Firebase Auth:
 npm run audit:auth:with-export
 ```
 
-A auditoria tambem destaca contas com e-mail tecnico/local, como `@auth.spcontabil.local`, porque a recuperacao de senha do Firebase Auth precisa de um e-mail real e entregavel.
+A auditoria destaca contas ativas com e-mail tecnico/local, como `@auth.spcontabil.local`, porque a recuperacao de senha do Firebase Auth precisa de um e-mail real e entregavel. Contas inativas/bloqueadas com Firebase Auth desabilitado sao tratadas como e-mails tecnicos arquivados e nao entram como risco operacional.
 
 Os relatorios JSON e Markdown sao salvos em `migration-backups/`, que nao deve ser commitado. O export temporario do Firebase Auth e removido automaticamente porque pode conter hashes sensiveis.
 
@@ -134,6 +134,26 @@ npm run auth:update-recovery-emails:apply
 ```
 
 O modo apply atualiza Firebase Auth, `users/{uid}` e `loginIndex/{username}`. Antes de aplicar, ele grava backup local em `migration-backups/`.
+
+Para bloquear usuarios que nao devem mais acessar o sistema, sem apagar historico:
+
+```bash
+npm run deactivate:users -- --username usuario --reason no_longer_part_of_team
+```
+
+Esse comando faz `dry-run` por padrao. Para aplicar depois de revisar o relatorio:
+
+```bash
+npm run deactivate:users -- --username usuario --reason no_longer_part_of_team --apply
+```
+
+Para transferir um e-mail real entre contas Firebase Auth, preservando a conta de origem como bloqueada/arquivada:
+
+```bash
+npm run transfer:auth-email -- --from-username usuario.origem --to-username usuario.destino --email email@dominio.com.br
+```
+
+Use `--apply` somente depois de revisar o dry-run. O comando atualiza Firebase Auth, `users/{uid}` e `loginIndex/{username}`, e grava backup local antes da aplicacao.
 
 ## Backup do Firestore
 
@@ -159,6 +179,12 @@ A auditoria nao altera o Firebase. Ela gera JSON e Markdown em `migration-backup
 npm run audit:transactions -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json
 ```
 
+Registros marcados com `isExcluded=true` sao ignorados por padrao porque o app tambem os oculta. Para auditar tudo, inclusive quarentena:
+
+```bash
+npm run audit:transactions -- --include-excluded
+```
+
 ## Normalizacao de Transacoes
 
 Para preparar um plano de correcoes seguras a partir do backup local mais recente:
@@ -167,7 +193,7 @@ Para preparar um plano de correcoes seguras a partir do backup local mais recent
 npm run normalize:transactions
 ```
 
-Esse comando roda em `dry-run` por padrao e nao altera o Firebase. Ele planeja apenas normalizacoes seguras: `updatedAt` ausente, datas parseaveis, aliases de status/movimentacao e valores numericos gravados como texto.
+Esse comando roda em `dry-run` por padrao e nao altera o Firebase. Ele planeja apenas normalizacoes seguras: `updatedAt` ausente, datas parseaveis, aliases de status/movimentacao, valores numericos gravados como texto, totais derivados seguros e ajustes pequenos de componentes quando `totalCobranca` bate com `valueReceived`.
 
 Para revisar um backup especifico:
 
@@ -180,6 +206,24 @@ Para aplicar de forma controlada, use `--apply` somente depois de revisar o Mark
 ```bash
 npm run normalize:transactions -- --apply --limit 100
 ```
+
+Tambem e possivel executar grupos especificos:
+
+```bash
+npm run normalize:transactions -- --only paymentDates
+npm run normalize:transactions -- --only directions
+npm run normalize:transactions -- --only business
+npm run normalize:transactions -- --only recommended
+npm run normalize:transactions -- --only totalComponents
+```
+
+Para colocar em quarentena logica transacoes irrecuperaveis, sem excluir documentos:
+
+```bash
+npm run quarantine:transactions
+```
+
+Esse comando tambem roda em `dry-run` por padrao. Em `--apply`, ele marca os documentos com `isExcluded=true`, `exclusionReason`, `excludedAt` e `updatedAt`.
 
 ## Pre-Manutencao
 

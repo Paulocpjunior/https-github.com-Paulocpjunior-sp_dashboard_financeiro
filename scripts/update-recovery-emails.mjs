@@ -242,6 +242,9 @@ const validateEmail = (email, technicalEmailSuffixes) => {
 const updateAuthEmail = async (projectId, token, uid, email) =>
   requestJson(`https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:update`, token, {
     method: 'POST',
+    headers: {
+      'X-Goog-User-Project': projectId,
+    },
     body: JSON.stringify({
       localId: uid,
       email,
@@ -470,10 +473,11 @@ const main = async () => {
           token,
           {
             uid: change.authUid,
+            authEmail: change.newEmail,
             email: change.newEmail,
             updatedAt: now,
           },
-          ['uid', 'email', 'updatedAt'],
+          ['uid', 'authEmail', 'email', 'updatedAt'],
         );
       }
 
