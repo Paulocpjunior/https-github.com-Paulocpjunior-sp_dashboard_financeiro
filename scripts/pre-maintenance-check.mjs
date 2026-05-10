@@ -20,6 +20,8 @@ Options:
   --skip-code-backup      Do not create the local code archive.
   --skip-firestore        Do not export Firestore data.
   --skip-auth-audit       Do not run Firebase Auth/Firestore audit.
+  --skip-transaction-audit
+                          Do not audit transaction data quality from the Firestore backup.
   --help                  Show this help.
 
 This command is read-only for Firebase. It creates local backups/reports before data maintenance.
@@ -33,6 +35,7 @@ const parseArgs = (argv) => {
     skipCodeBackup: false,
     skipFirestore: false,
     skipAuthAudit: false,
+    skipTransactionAudit: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -43,6 +46,7 @@ const parseArgs = (argv) => {
     else if (arg === '--skip-code-backup') args.skipCodeBackup = true;
     else if (arg === '--skip-firestore') args.skipFirestore = true;
     else if (arg === '--skip-auth-audit') args.skipAuthAudit = true;
+    else if (arg === '--skip-transaction-audit') args.skipTransactionAudit = true;
     else if (arg === '--help' || arg === '-h') {
       console.log(usage.trim());
       process.exit(0);
@@ -104,6 +108,7 @@ const buildMarkdown = (report) => {
     `- Code backup: ${report.outputs.codeBackup || 'skipped'}`,
     `- Firestore backup: ${report.outputs.firestoreBackup || 'skipped'}`,
     `- Auth audit: ${report.outputs.authAudit || 'skipped'}`,
+    `- Transaction audit: ${report.outputs.transactionAudit || 'skipped'}`,
     '',
     '## Steps',
     '',
@@ -126,6 +131,7 @@ const main = () => {
   const backupRoot = resolve(args.backupRoot);
   const firestoreBackupPath = resolve(`${REPORT_DIR}/firestore-data-backup-${stamp}-pre-maintenance.json`);
   const authAuditPath = resolve(`${REPORT_DIR}/firestore-auth-audit-${stamp}-pre-maintenance.json`);
+  const transactionAuditPath = resolve(`${REPORT_DIR}/transaction-data-audit-${stamp}-pre-maintenance.json`);
   const codeBackupPath = resolve(backupRoot, `${CODE_BACKUP_BASENAME}-backup-${stamp}-pre-maintenance.tar.gz`);
 
   const report = {
@@ -143,7 +149,7 @@ const main = () => {
   const pushStep = (name, result, outputKey, outputPath) => {
     report.steps.push({ name, ...result });
     if (result.status === 'passed' && outputKey) report.outputs[outputKey] = outputPath;
-    if (result.status !== 'passed') report.status = 'failed';
+    if (result.status === 'failed') report.status = 'failed';
     writeJson(reportPath, report);
     writeFileSync(markdownPath, buildMarkdown(report));
   };
@@ -187,6 +193,23 @@ const main = () => {
     );
   } else if (args.skipFirestore) {
     pushStep('firestore backup', { status: 'skipped', startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), command: '', stdout: '', stderr: '' });
+  }
+
+  if (!args.skipTransactionAudit && !args.skipFirestore && report.status === 'passed') {
+    pushStep(
+      'transaction data audit',
+      runCommand(process.execPath, [
+        'scripts/audit-transactions-data.mjs',
+        '--input',
+        firestoreBackupPath,
+        '--out',
+        transactionAuditPath,
+      ]),
+      'transactionAudit',
+      transactionAuditPath,
+    );
+  } else if (args.skipTransactionAudit || args.skipFirestore) {
+    pushStep('transaction data audit', { status: 'skipped', startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), command: '', stdout: '', stderr: '' });
   }
 
   if (!args.skipAuthAudit && report.status === 'passed') {

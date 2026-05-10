@@ -145,6 +145,20 @@ npm run backup:firestore
 
 Por padrao, o backup inclui `users`, `loginIndex` e `transactions`. Os arquivos JSON e Markdown sao salvos em `migration-backups/`, que nao deve ser commitado.
 
+## Auditoria de Transacoes
+
+Para verificar qualidade dos lancamentos a partir do backup local mais recente:
+
+```bash
+npm run audit:transactions
+```
+
+A auditoria nao altera o Firebase. Ela gera JSON e Markdown em `migration-backups/` com inconsistencias de datas, status, movimentacao, valores, ids e campos usados pelo refresh leve do Firestore. Para auditar um backup especifico:
+
+```bash
+npm run audit:transactions -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json
+```
+
 ## Pre-Manutencao
 
 Antes de qualquer alteracao manual em dados, rode o pacote completo de seguranca:
@@ -153,7 +167,7 @@ Antes de qualquer alteracao manual em dados, rode o pacote completo de seguranca
 npm run maintenance:precheck
 ```
 
-Esse comando cria um backup local do codigo, exporta Firestore e roda a auditoria Auth/Firestore. O resumo fica em `migration-backups/pre-maintenance-*.md`.
+Esse comando cria um backup local do codigo, exporta Firestore, roda a auditoria de transacoes e roda a auditoria Auth/Firestore. O resumo fica em `migration-backups/pre-maintenance-*.md`.
 
 ## Regras de Seguranca
 
