@@ -2,6 +2,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { AuthService } from '../services/authService';
+import { logger } from '../utils/logger';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -22,7 +23,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles }) => {
     const allowedRoles = roles.map(r => r.toLowerCase().trim());
     
     if (!allowedRoles.includes(userRole)) {
-      console.warn(`[ProtectedRoute] Acesso negado. Role usuário: ${userRole}, Permitidos: ${allowedRoles.join(', ')}`);
+      logger.warn(`[ProtectedRoute] Acesso negado. Role usuário: ${userRole}, Permitidos: ${allowedRoles.join(', ')}`);
       return <Navigate to="/" replace />; // Redirect unauthorized access to home
     }
   }

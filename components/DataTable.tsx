@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
 import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
+import { logger } from '../utils/logger';
 
 interface DataTableProps {
   data: Transaction[];
@@ -122,7 +123,7 @@ const DataTable: React.FC<DataTableProps> = ({
               return localStorage.getItem('boleto_cloud_token') || '';
           }
       } catch (e) {
-          console.error('Error accessing localStorage:', e);
+          logger.error('Error accessing localStorage:', e);
       }
       return '';
   });
@@ -135,7 +136,7 @@ const DataTable: React.FC<DataTableProps> = ({
               return saved ? JSON.parse(saved) : {};
           }
       } catch (e) {
-          console.error('Error accessing localStorage:', e);
+          logger.error('Error accessing localStorage:', e);
       }
       return {};
   });
@@ -165,7 +166,7 @@ const DataTable: React.FC<DataTableProps> = ({
       try {
           localStorage.setItem('boleto_cloud_token', val);
       } catch (e) {
-          console.error('Error saving to localStorage:', e);
+          logger.error('Error saving to localStorage:', e);
       }
   };
 
@@ -176,7 +177,7 @@ const DataTable: React.FC<DataTableProps> = ({
       try {
           localStorage.setItem('boleto_client_docs', JSON.stringify(newDocs));
       } catch (e) {
-          console.error('Error saving to localStorage:', e);
+          logger.error('Error saving to localStorage:', e);
       }
       
       // Resetar status de validação ao editar para forçar nova verificação

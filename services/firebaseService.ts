@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { Transaction, FilterState, KPIData } from '../types';
+import { logger } from '../utils/logger';
 
 export const FirebaseService = {
   /**
@@ -58,7 +59,7 @@ export const FirebaseService = {
         total: snapshot.size // Aproximação do total filtrado
       });
     }, (error) => {
-      console.error("Erro no listener de transações:", error);
+      logger.error("Erro no listener de transações:", error);
     });
   },
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Transaction, FilterState, KPIData } from '../types';
 import { DataService } from '../services/dataService';
+import { logger } from '../utils/logger';
 
 interface FinancialDataContextType {
   transactions: Transaction[];
@@ -64,7 +65,7 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
       const { result: allFiltered } = DataService.getTransactions(filters, 1, 999999);
       setAllTransactions(allFiltered.data);
     } catch (err) {
-      console.error("Error applying filters:", err);
+      logger.error("Error applying filters:", err);
     }
   }, []);
 
@@ -91,7 +92,7 @@ export const FinancialDataProvider: React.FC<{ children: React.ReactNode }> = ({
       // ✅ FIX: Re-aplica os filtros atuais após o refresh
       applyFilters(currentFiltersRef.current, currentPageRef.current);
     } catch (err: any) {
-      console.error("Refresh error:", err);
+      logger.error("Refresh error:", err);
     } finally {
       setIsRefreshing(false);
     }

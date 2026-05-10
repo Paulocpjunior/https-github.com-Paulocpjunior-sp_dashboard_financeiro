@@ -10,6 +10,7 @@ import { DataService } from '../services/dataService';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
+import { logger } from '../utils/logger';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -213,7 +214,7 @@ const Dashboard: React.FC = () => {
         paidBys: DataService.getUniqueValues('paidBy'),
       });
     } catch (e) {
-      console.error('Erro no refresh manual:', e);
+      logger.error('Erro no refresh manual:', e);
     } finally {
       setIsRefreshing(false);
     }
@@ -433,7 +434,7 @@ const Dashboard: React.FC = () => {
         setTotalPages(result.totalPages);
         setKpi(newKpi);
       } catch (err) {
-        console.error('Erro ao dar baixa:', err);
+        logger.error('Erro ao dar baixa:', err);
         alert('Erro ao dar baixa. Tente novamente.');
       }
     }

@@ -2,6 +2,7 @@ import { Transaction, User } from '../types';
 import { MOCK_USERS } from '../constants';
 import { FirebaseService } from './firebaseService';
 import { PendingUserRecord, UserAdminService, UserFormData } from './userAdminService';
+import { logger } from '../utils/logger';
 
 interface MutationResult {
   success: boolean;
@@ -50,7 +51,7 @@ export const BackendService = {
 
       return UserAdminService.createPendingUser(data);
     } catch (error: any) {
-      console.error('[BackendService] Erro no registro Firebase:', error);
+      logger.error('[BackendService] Erro no registro Firebase:', error);
       return { success: false, message: error.message || 'Erro ao processar cadastro.' };
     }
   },
@@ -86,7 +87,7 @@ export const BackendService = {
     try {
       return await UserAdminService.fetchAllUsers();
     } catch (error) {
-      console.error('[BackendService] Erro ao buscar usuários no Firestore:', error);
+      logger.error('[BackendService] Erro ao buscar usuários no Firestore:', error);
       return [];
     }
   },

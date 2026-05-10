@@ -7,6 +7,7 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import { User } from '../types';
+import { logger } from '../utils/logger';
 
 export const FirebaseAuthService = {
   /**
@@ -18,7 +19,7 @@ export const FirebaseAuthService = {
       const firebaseUser = userCredential.user;
       return FirebaseAuthService.getUserProfile(firebaseUser.uid);
     } catch (error: any) {
-      console.error("Erro no login Firebase:", error);
+      logger.error("Erro no login Firebase:", error);
       throw new Error(error.message || "Falha na autenticação.");
     }
   },
@@ -58,7 +59,7 @@ export const FirebaseAuthService = {
       }
       return null;
     } catch (error) {
-      console.error("Erro ao buscar perfil do usuário:", error);
+      logger.error("Erro ao buscar perfil do usuário:", error);
       return null;
     }
   },

@@ -2,6 +2,7 @@ import { User } from '../types';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
+import { logger } from '../utils/logger';
 
 const AUTH_STORAGE_KEY = 'sp_contabil_auth';
 
@@ -98,7 +99,7 @@ const loginViaUsernameIndex = async (username: string, password: string): Promis
 
     return loginViaFirebaseAuthEmail(authEmail, password);
   } catch (error) {
-    console.error('[AuthService] Erro loginIndex:', error);
+    logger.error('[AuthService] Erro loginIndex:', error);
     return null;
   }
 };
@@ -146,7 +147,7 @@ const loginViaFirestore = async (username: string, password: string): Promise<Lo
 
     return { success: true, user: buildUserFromFirestore(docSnap.id, data) };
   } catch (error) {
-    console.error('[AuthService] Erro Firestore:', error);
+    logger.error('[AuthService] Erro Firestore:', error);
     return { success: false, message: 'Erro ao conectar com o banco de dados.' };
   }
 };
