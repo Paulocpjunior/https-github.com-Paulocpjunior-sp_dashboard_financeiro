@@ -145,7 +145,7 @@ export const ReportService = {
           'valorPago': 'Valor Pago',
           'status': 'Status',
           'client': 'Cliente / Observação',
-          'cpfCnpj': 'N.Cliente'
+          'clientNumber': 'N.Cliente'
         };
         const sortDirLabel = filters.sortDirection === 'desc' ? 'Decrescente' : 'Crescente';
         infoText += `Ordenado por: ${sortFieldLabels[filters.sortField] || filters.sortField} (${sortDirLabel})`;
@@ -178,7 +178,7 @@ export const ReportService = {
         // Observação a Pagar = Cliente / Favorecido
         const observacao = safeStr(t.client);
         
-        const numeroCliente = safeStr(t.cpfCnpj);
+        const numeroCliente = safeStr(t.clientNumber);
         
         const valRec = safeNum(t.valueReceived);
         const valPaid = safeNum(t.valuePaid);
