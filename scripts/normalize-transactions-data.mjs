@@ -199,6 +199,17 @@ const parseMoneyValue = (value) => {
 
 const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
+const getExtraAmount = (data) => {
+  if (hasOwn(data, 'valorExtra')) return parseMoneyValue(data.valorExtra);
+  return parseMoneyValue(data.extras);
+};
+
+const shouldBackfillValorExtra = (data) => {
+  if (hasOwn(data, 'valorExtra')) return false;
+  const legacyExtra = parseMoneyValue(data.extras);
+  return Number.isFinite(legacyExtra) && Math.abs(legacyExtra) >= 0.01;
+};
+
 const canonicalMovementKey = (value) => {
   const normalized = normalizeKey(value);
   if (normalized === 'entrada' || normalized === 'receita' || normalized === 'credito') return 'Entrada';
@@ -320,7 +331,7 @@ const buildChangesForDocument = (document, only) => {
   }
 
   if (onlySet.has('money')) {
-    for (const field of ['valuePaid', 'valueReceived', 'honorarios', 'valorExtra', 'totalCobranca']) {
+    for (const field of ['valuePaid', 'valueReceived', 'honorarios', 'valorExtra', 'extras', 'totalCobranca']) {
       const parsed = parseMoneyText(data[field]);
       if (parsed.valid && parsed.changed) addChange(changes, field, data[field], parsed.value);
     }
@@ -332,7 +343,7 @@ const buildChangesForDocument = (document, only) => {
     const valueReceived = parseMoneyValue(data.valueReceived);
     const totalCobranca = parseMoneyValue(data.totalCobranca);
     const honorarios = parseMoneyValue(data.honorarios);
-    const valorExtra = parseMoneyValue(data.valorExtra);
+    const valorExtra = getExtraAmount(data);
 
     if ([valuePaid, valueReceived, totalCobranca, honorarios, valorExtra].every(Number.isFinite)) {
       const expectedTotal = roundMoney(honorarios + valorExtra);
@@ -365,13 +376,46 @@ const buildChangesForDocument = (document, only) => {
     const valueReceived = parseMoneyValue(data.valueReceived);
     const totalCobranca = parseMoneyValue(data.totalCobranca);
     const honorarios = parseMoneyValue(data.honorarios);
-    const valorExtra = parseMoneyValue(data.valorExtra);
+    const valorExtra = getExtraAmount(data);
+    const valorOriginal = parseMoneyValue(data.valorOriginal);
 
-    if ([valueReceived, totalCobranca, honorarios, valorExtra].every(Number.isFinite)) {
+    if (shouldBackfillValorExtra(data)) {
+      addChange(changes, 'valorExtra', data.valorExtra, valorExtra);
+    }
+
+    if ([valueReceived, totalCobranca, honorarios, valorExtra, valorOriginal].every(Number.isFinite)) {
       const expectedTotal = roundMoney(honorarios + valorExtra);
       const difference = roundMoney(totalCobranca - expectedTotal);
       const receivedMatchesTotal = Math.abs(roundMoney(valueReceived) - roundMoney(totalCobranca)) <= 0.01;
+      const receivedMatchesExpected = Math.abs(roundMoney(valueReceived) - expectedTotal) <= 0.01;
+      const originalMatchesExpected = Math.abs(roundMoney(valorOriginal) - expectedTotal) <= 0.01;
+      const totalLooksLikeBase = Math.abs(roundMoney(totalCobranca) - roundMoney(honorarios)) <= 0.01;
       const smallDifference = Math.abs(difference) <= 5;
+
+      if (
+        movement === 'Entrada'
+        && valorExtra > 0
+        && totalCobranca > 0
+        && expectedTotal > 0
+        && totalLooksLikeBase
+        && Math.abs(difference) > 0.01
+        && (originalMatchesExpected || receivedMatchesExpected)
+      ) {
+        addChange(changes, 'totalCobranca', data.totalCobranca, expectedTotal);
+      }
+
+      if (
+        movement === 'Entrada'
+        && normalizedStatus === 'Pago'
+        && valueReceived > 0
+        && totalCobranca > 0
+        && expectedTotal > 0
+        && Math.abs(difference) > 0.01
+        && originalMatchesExpected
+        && receivedMatchesExpected
+      ) {
+        addChange(changes, 'totalCobranca', data.totalCobranca, expectedTotal);
+      }
 
       if (
         movement === 'Entrada'

@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import { VersionUpdateNotice } from './components/VersionUpdateNotice';
 
 const Login = React.lazy(() => import('./pages/Login'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -10,6 +11,7 @@ const Admin = React.lazy(() => import('./pages/Admin'));
 const App: React.FC = () => {
   return (
     <BrowserRouter>
+      <VersionUpdateNotice />
       <Suspense fallback={null}>
         <Routes>
           <Route path="/login" element={<Login />} />

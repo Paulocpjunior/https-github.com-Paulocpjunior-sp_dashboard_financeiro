@@ -22,23 +22,45 @@ export interface Transaction {
   bankAccount: string;
   type: string;
   description: string; // Movimentação original
-  status: 'Pago' | 'Pendente' | 'Agendado';
+  status: 'Pago' | 'Pendente' | 'Agendado' | 'Paga' | 'Recebido' | 'Vencida';
   client: string; // Name/Creditor
   paidBy: string;
   movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
   valuePaid: number;
   valueReceived: number;
+  valorOriginal?: number | string;
   // Campos específicos para 'Entrada de Caixa / Contas a Receber'
   honorarios?: number;
   valorExtra?: number;
   totalCobranca?: number;
   paymentMethod?: string;
+  method?: string;
+  source?: string;
+  wixInvoiceNumber?: string;
+  wixEntityId?: string;
   cpfCnpj?: string; // Campo vindo do Jotform/Firebase
   clientNumber?: number | string;
   observacaoAPagar?: string; // Observação do contas a pagar
   isExcluded?: boolean; // Marcação de exclusão lógica
+  exclusionReason?: string;
+  excludedAt?: string;
+  excludedBy?: string;
+  excludedByName?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface ClientRegistryEntry {
+  id: string;
+  key: string;
+  keyType: 'cpf' | 'cnpj' | 'name' | string;
+  cpfCnpjDigits?: string;
+  client?: string;
+  clientNormalized?: string;
+  clientNumber?: string;
+  clientNumberNormalized?: string;
+  status?: 'ready' | 'conflict' | 'missing_client_number' | string;
+  confidence?: 'high' | 'medium' | string;
 }
 
 export interface FilterState {

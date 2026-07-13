@@ -1,17 +1,28 @@
-import { FilterState, KPIData, PaginatedResult, Transaction } from '../types';
+import { ClientRegistryEntry, FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { FirebaseService } from './firebaseService';
-import type { TransactionsFingerprint } from './firebaseService';
+import type { TransactionRangeField, TransactionsFingerprint } from './firebaseService';
+import { AuthService } from './authService';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
+import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+
+type LoadedRange = {
+  field: TransactionRangeField;
+  startDate: string;
+  endDate: string;
+};
 
 // In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
+let CACHED_CLIENT_REGISTRY: ClientRegistryEntry[] = [];
 let isDataLoaded = false;
 let lastUpdatedAt: Date | null = null;
 let lastFullRefreshAt = 0;
 let lastRemoteFingerprint: TransactionsFingerprint | null = null;
+let isClientRegistryAvailable = false;
+let lastLoadedRange: LoadedRange | null = null;
 
 // Controle de Concorrência (Evita requisições simultâneas/loops)
 let currentLoadPromise: Promise<void> | null = null;
@@ -57,6 +68,35 @@ const normalizeDate = (dateStr: string | undefined | null): string => {
     if (!isNaN(d.getTime())) { return d.toISOString().slice(0, 10); }
   } catch (_) {}
   return '';
+};
+
+const normalizeWixInvoiceTransaction = (transaction: Transaction): void => {
+  if (!isWixInvoice(transaction)) return;
+
+  const amount = getOriginalAmount(transaction);
+  const typeKey = normalizeText(transaction.type || '');
+  const isFaturaWix = Boolean(transaction.wixInvoiceNumber)
+    || normalizeText(transaction.id || '').startsWith('wix-inv-')
+    || normalizeText(transaction.description || '').includes('fatura wix')
+    || normalizeText(transaction.client || '').includes('fatura wix');
+
+  transaction.source = transaction.source || 'wix';
+  transaction.movement = 'Entrada';
+  if (isFaturaWix || typeKey.includes('saida') || typeKey.includes('pagar') || !transaction.type) {
+    transaction.type = 'Entrada de Caixa / Contas a Receber';
+  }
+  if (!transaction.description && transaction.wixInvoiceNumber) {
+    transaction.description = `Fatura Wix #${transaction.wixInvoiceNumber}`;
+  }
+  if (amount > 0 && parseMoneyValue(transaction.valorOriginal) <= 0) {
+    transaction.valorOriginal = amount;
+  }
+  if (isPaidStatus(transaction.status) && amount > 0 && parseMoneyValue(transaction.valueReceived) <= 0) {
+    transaction.valueReceived = amount;
+  }
+  if (parseMoneyValue(transaction.valuePaid) > 0) {
+    transaction.valuePaid = 0;
+  }
 };
 
 // Mapa de correção de nomes de movimentação/descrição
@@ -149,6 +189,90 @@ const normalizeDescription = (desc: string): string => {
   }
 };
 
+const cleanDigits = (value: string): string => value.replace(/\D/g, '');
+
+const normalizeClientKey = (value: string | undefined): string => {
+  return normalizeText(value || '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const getClientNumberValue = (transaction: Transaction): string => {
+  const raw = transaction.clientNumber;
+  if (raw === null || raw === undefined) return '';
+  const value = String(raw).trim();
+  return value && value !== '-' ? value : '';
+};
+
+const CLIENT_NUMBER_CONFLICT = '__CLIENT_NUMBER_CONFLICT__';
+
+const isUsableRegistryName = (value: string | undefined): boolean => {
+  const normalized = normalizeClientKey(value);
+  if (!normalized) return false;
+  if (normalized.includes('@')) return false;
+  return ![
+    'cliente nao informado',
+    'nao informado',
+    'favorecido nao informado',
+    'outros',
+    '1 outros',
+  ].includes(normalized);
+};
+
+const getRegistryClientNumberValue = (entry: ClientRegistryEntry): string => {
+  const raw = entry.clientNumber;
+  if (raw === null || raw === undefined) return '';
+  const value = String(raw).trim();
+  return value && value !== '-' ? value : '';
+};
+
+const fillMissingClientNumbers = (
+  transactions: Transaction[],
+  registry: ClientRegistryEntry[] = [],
+  options: { allowTransactionFallback?: boolean } = {}
+): void => {
+  const byCpfCnpj = new Map<string, string>();
+  const byClient = new Map<string, string>();
+  const register = (map: Map<string, string>, key: string, value: string) => {
+    if (!key || !value) return;
+    const current = map.get(key);
+    if (current === CLIENT_NUMBER_CONFLICT) return;
+    if (current && current !== value) {
+      map.set(key, CLIENT_NUMBER_CONFLICT);
+      return;
+    }
+    if (!current) map.set(key, value);
+  };
+
+  registry.forEach((entry) => {
+    if (entry.status !== 'ready') return;
+    const clientNumber = getRegistryClientNumberValue(entry);
+    if (!clientNumber) return;
+    register(byCpfCnpj, cleanDigits(String(entry.cpfCnpjDigits || '')), clientNumber);
+    if (isUsableRegistryName(entry.clientNormalized || entry.client)) {
+      register(byClient, normalizeClientKey(entry.clientNormalized || entry.client), clientNumber);
+    }
+  });
+
+  if (options.allowTransactionFallback) {
+    transactions.forEach((transaction) => {
+      const clientNumber = getClientNumberValue(transaction);
+      if (!clientNumber) return;
+      register(byCpfCnpj, cleanDigits(String(transaction.cpfCnpj || '')), clientNumber);
+      register(byClient, normalizeClientKey(transaction.client || transaction.description), clientNumber);
+    });
+  }
+
+  transactions.forEach((transaction) => {
+    if (getClientNumberValue(transaction)) return;
+    const byDocument = byCpfCnpj.get(cleanDigits(String(transaction.cpfCnpj || '')));
+    const byName = byClient.get(normalizeClientKey(transaction.client || transaction.description));
+    const resolved = [byDocument, byName].find((value) => value && value !== CLIENT_NUMBER_CONFLICT) || '';
+    if (resolved) transaction.clientNumber = resolved;
+  });
+};
+
 const buildLocalFingerprint = (transactions: Transaction[]): TransactionsFingerprint => {
   const latestUpdatedAt = transactions.reduce((latest, transaction) => {
     const updatedAt = transaction.updatedAt || '';
@@ -163,6 +287,144 @@ const buildLocalFingerprint = (transactions: Transaction[]): TransactionsFingerp
 
 const fingerprintsMatch = (left: TransactionsFingerprint | null, right: TransactionsFingerprint | null): boolean => {
   return Boolean(left && right && left.count === right.count && left.latestUpdatedAt === right.latestUpdatedAt);
+};
+
+const getCurrentMonthRange = (): LoadedRange => {
+  const now = new Date();
+  return {
+    field: 'date',
+    startDate: toLocalISODate(new Date(now.getFullYear(), now.getMonth(), 1)),
+    endDate: toLocalISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+};
+
+const resolveRangeFromFilters = (filters: Partial<FilterState>): LoadedRange => {
+  if (filters.dueDateStart || filters.dueDateEnd) {
+    return {
+      field: 'dueDate',
+      startDate: filters.dueDateStart || '1900-01-01',
+      endDate: filters.dueDateEnd || '2100-12-31',
+    };
+  }
+
+  if (filters.paymentDateStart || filters.paymentDateEnd || filters.receiptDateStart || filters.receiptDateEnd) {
+    return {
+      field: 'paymentDate',
+      startDate: filters.paymentDateStart || filters.receiptDateStart || '1900-01-01',
+      endDate: filters.paymentDateEnd || filters.receiptDateEnd || '2100-12-31',
+    };
+  }
+
+  if (filters.startDate || filters.endDate) {
+    return {
+      field: 'date',
+      startDate: filters.startDate || '1900-01-01',
+      endDate: filters.endDate || '2100-12-31',
+    };
+  }
+
+  return getCurrentMonthRange();
+};
+
+const loadedRangesMatch = (left: LoadedRange | null, right: LoadedRange | null): boolean => {
+  return Boolean(left && right && left.field === right.field && left.startDate === right.startDate && left.endDate === right.endDate);
+};
+
+const filtersFromRange = (range: LoadedRange): Partial<FilterState> => {
+  if (range.field === 'dueDate') {
+    return { dueDateStart: range.startDate, dueDateEnd: range.endDate };
+  }
+
+  if (range.field === 'paymentDate') {
+    return { paymentDateStart: range.startDate, paymentDateEnd: range.endDate };
+  }
+
+  return { startDate: range.startDate, endDate: range.endDate };
+};
+
+const normalizeAndCacheTransactions = (
+  data: Transaction[],
+  clientRegistryResult: { entries: ClientRegistryEntry[]; available: boolean },
+  loadedRange: LoadedRange | null
+): void => {
+  let excludedIds: string[] = [];
+  try { excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]'); } catch(e) { /* Safari private mode */ }
+
+  data.forEach(t => {
+    try {
+      if (excludedIds.includes(t.id)) {
+        t.isExcluded = true;
+      }
+      if (t.status != null) {
+        const sLower = String(t.status).toLowerCase().trim();
+        if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) {
+          t.status = 'Pago';
+        } else if (sLower === 'pago') {
+          t.status = 'Pago';
+        } else if (['pendente', 'nao', 'não', 'n', 'aberto', 'em aberto', ''].includes(sLower)) {
+          t.status = 'Pendente';
+        } else if (['agendado', 'programado'].includes(sLower)) {
+          t.status = 'Agendado';
+        }
+      } else {
+        t.status = 'Pendente';
+      }
+      if (t.status === 'Pendente' && t.paymentDate) {
+        t.paymentDate = '';
+      }
+      t.date = normalizeDate(t.date) || t.date;
+      t.dueDate = normalizeDate(t.dueDate) || t.dueDate;
+      if (t.paymentDate) {
+        t.paymentDate = normalizeDate(t.paymentDate) || t.paymentDate;
+      }
+
+      if (t.movement) {
+        const mLower = String(t.movement).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        if (mLower === 'entrada' || mLower === 'receita' || mLower === 'credito') {
+          t.movement = 'Entrada';
+        } else if (mLower === 'saida' || mLower === 'despesa' || mLower === 'debito') {
+          t.movement = 'Saída';
+        }
+      }
+      if (t.description && typeof t.description === 'string') {
+        t.description = normalizeDescription(t.description);
+      }
+      if (t.client && typeof t.client === 'string') {
+        const clientNorm = normalizeDescription(t.client);
+        if (clientNorm !== t.client) {
+          t.client = clientNorm;
+        }
+      }
+      if (t.observacaoAPagar && typeof t.observacaoAPagar === 'string') {
+        t.observacaoAPagar = normalizeDescription(t.observacaoAPagar);
+      }
+      normalizeWixInvoiceTransaction(t);
+    } catch (normErr) {
+      logger.warn('[DataService] Erro ao normalizar transação:', t.id, normErr);
+    }
+  });
+
+  CACHED_CLIENT_REGISTRY = clientRegistryResult.entries;
+  isClientRegistryAvailable = clientRegistryResult.available;
+  fillMissingClientNumbers(data, CACHED_CLIENT_REGISTRY, {
+    allowTransactionFallback: !isClientRegistryAvailable,
+  });
+
+  CACHED_TRANSACTIONS = data;
+  isDataLoaded = true;
+  lastUpdatedAt = new Date();
+  lastFullRefreshAt = Date.now();
+  lastRemoteFingerprint = buildLocalFingerprint(data);
+  lastLoadedRange = loadedRange;
+};
+
+const fetchClientRegistryResult = async (): Promise<{ entries: ClientRegistryEntry[]; available: boolean }> => {
+  return FirebaseService.fetchClientRegistry()
+    .then((entries) => ({ entries, available: true }))
+    .catch((registryError) => {
+      logger.warn('[DataService] Cadastro oficial de N.Cliente indisponivel. Usando fallback local.', registryError);
+      return { entries: [] as ClientRegistryEntry[], available: false };
+    });
 };
 
 export const DataService = {
@@ -194,80 +456,16 @@ export const DataService = {
 
         try {
             logger.info("[DataService] Iniciando fetch de transações...");
-            const data = await FirebaseService.fetchTransactions();
+            const [data, clientRegistryResult] = await Promise.all([
+              FirebaseService.fetchTransactions(),
+              fetchClientRegistryResult(),
+            ]);
             
             if (!data || !Array.isArray(data)) {
                 throw new Error("Formato de dados inválido recebido do backend.");
             }
 
-            // Apply exclusions + description normalization
-            let excludedIds: string[] = [];
-            try { excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]'); } catch(e) { /* Safari private mode */ }
-            data.forEach(t => {
-              try {
-                if (excludedIds.includes(t.id)) {
-                  t.isExcluded = true;
-                }
-                // ★ Normalizar status: "Sim", "Recebido", "Quitado", "OK", "Liquidado" → "Pago"
-                if (t.status != null) {
-                  const sLower = String(t.status).toLowerCase().trim();
-                  if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) {
-                    t.status = 'Pago';
-                  } else if (sLower === 'pago') {
-                    t.status = 'Pago';
-                  } else if (['pendente', 'nao', 'não', 'n', 'aberto', 'em aberto', ''].includes(sLower)) {
-                    t.status = 'Pendente';
-                  } else if (['agendado', 'programado'].includes(sLower)) {
-                    t.status = 'Agendado';
-                  }
-                } else {
-                  t.status = 'Pendente';
-                }
-                // Sanitize: Pendente entries should NOT have paymentDate
-                if (t.status === 'Pendente' && t.paymentDate) {
-                  t.paymentDate = '';
-                }
-                // FIX: Normalizar datas DD/MM/YYYY -> YYYY-MM-DD (ISO)
-                t.date = normalizeDate(t.date) || t.date;
-                t.dueDate = normalizeDate(t.dueDate) || t.dueDate;
-                if (t.paymentDate) {
-                  t.paymentDate = normalizeDate(t.paymentDate) || t.paymentDate;
-                }
-
-                // ★ FIX: Normalizar campo movement (Saida→Saída, entrada→Entrada)
-                if (t.movement) {
-                  const mLower = String(t.movement).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-                  if (mLower === 'entrada' || mLower === 'receita' || mLower === 'credito') {
-                    t.movement = 'Entrada';
-                  } else if (mLower === 'saida' || mLower === 'despesa' || mLower === 'debito') {
-                    t.movement = 'Saída';
-                  }
-                }
-                // Normalizar nomes de movimentação/descrição incorretos
-                if (t.description && typeof t.description === 'string') {
-                  t.description = normalizeDescription(t.description);
-                }
-                // Também normalizar o campo client quando for uma saída (favorecido)
-                if (t.client && typeof t.client === 'string') {
-                  const clientNorm = normalizeDescription(t.client);
-                  if (clientNorm !== t.client) {
-                    t.client = clientNorm;
-                  }
-                }
-                // Normalizar observacaoAPagar (pode ter nomes traduzidos também)
-                if (t.observacaoAPagar && typeof t.observacaoAPagar === 'string') {
-                  t.observacaoAPagar = normalizeDescription(t.observacaoAPagar);
-                }
-              } catch (normErr) {
-                logger.warn('[DataService] Erro ao normalizar transação:', t.id, normErr);
-              }
-            });
-
-            CACHED_TRANSACTIONS = data;
-            isDataLoaded = true;
-            lastUpdatedAt = new Date();
-            lastFullRefreshAt = Date.now();
-            lastRemoteFingerprint = buildLocalFingerprint(data);
+            normalizeAndCacheTransactions(data, clientRegistryResult, null);
             logger.info(`[DataService] Sucesso. ${data.length} registros carregados.`);
         } catch (error) {
             logger.error("[DataService] Erro fatal no carregamento:", error);
@@ -284,19 +482,77 @@ export const DataService = {
     return currentLoadPromise;
   },
 
-  toggleExclusion: (id: string): void => {
-    const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
-    const index = excludedIds.indexOf(id);
-    if (index > -1) {
-      excludedIds.splice(index, 1);
-    } else {
-      excludedIds.push(id);
+  loadDataForFilters: async (filters: Partial<FilterState>, forceRefresh = false): Promise<void> => {
+    const range = resolveRangeFromFilters(filters);
+
+    if (isDataLoaded && loadedRangesMatch(lastLoadedRange, range) && !forceRefresh) {
+      return;
     }
-    localStorage.setItem('excluded_transactions', JSON.stringify(excludedIds));
-    
+
+    if (currentLoadPromise) {
+      logger.info("[DataService] Requisição já em andamento. Aguardando...");
+      return currentLoadPromise;
+    }
+
+    currentLoadPromise = (async () => {
+      const wasDataLoaded = isDataLoaded;
+
+      try {
+        logger.info(`[DataService] Iniciando fetch por período: ${range.field} ${range.startDate} até ${range.endDate}`);
+        const [data, clientRegistryResult] = await Promise.all([
+          FirebaseService.fetchTransactionsByRange(range.field, range.startDate, range.endDate),
+          fetchClientRegistryResult(),
+        ]);
+
+        if (!data || !Array.isArray(data)) {
+          throw new Error("Formato de dados inválido recebido do backend.");
+        }
+
+        normalizeAndCacheTransactions(data, clientRegistryResult, range);
+        logger.info(`[DataService] Sucesso no período. ${data.length} registros carregados.`);
+      } catch (error) {
+        logger.error("[DataService] Erro fatal no carregamento por período:", error);
+        isDataLoaded = wasDataLoaded;
+        throw error;
+      } finally {
+        currentLoadPromise = null;
+      }
+    })();
+
+    return currentLoadPromise;
+  },
+
+  excludeTransaction: async (id: string, reason = 'Excluído pelo administrador'): Promise<void> => {
+    const currentUser = AuthService.getCurrentUser();
+    const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
+    if (!isAdmin) {
+      throw new Error('Ação permitida apenas para administradores.');
+    }
+
+    const now = new Date().toISOString();
+    const updates: Partial<Transaction> = {
+      isExcluded: true,
+      exclusionReason: reason.trim() || 'Excluído pelo administrador',
+      excludedAt: now,
+      excludedBy: currentUser?.username || currentUser?.id || '',
+      excludedByName: currentUser?.name || currentUser?.username || '',
+    };
+
+    await FirebaseService.updateTransaction(id, updates);
+
+    try {
+      const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
+      if (!excludedIds.includes(id)) {
+        excludedIds.push(id);
+        localStorage.setItem('excluded_transactions', JSON.stringify(excludedIds));
+      }
+    } catch (error) {
+      logger.warn('[DataService] Não foi possível atualizar exclusões locais.', error);
+    }
+
     const transaction = CACHED_TRANSACTIONS.find(t => t.id === id);
     if (transaction) {
-      transaction.isExcluded = !transaction.isExcluded;
+      Object.assign(transaction, updates);
     }
     
     DataService.notifyListeners();
@@ -330,7 +586,11 @@ export const DataService = {
    */
   refreshCache: async (): Promise<void> => {
     try {
-        await DataService.loadData(true);
+        if (lastLoadedRange) {
+          await DataService.loadDataForFilters(filtersFromRange(lastLoadedRange), true);
+        } else {
+          await DataService.loadData(true);
+        }
         DataService.notifyListeners();
     } catch (e) {
         logger.error("[DataService] Falha ao recarregar cache:", e);
@@ -352,7 +612,7 @@ export const DataService = {
 
         const remoteFingerprint = await FirebaseService.fetchTransactionsFingerprint();
         if (!fingerprintsMatch(lastRemoteFingerprint, remoteFingerprint)) {
-          logger.info('[DataService] Mudança detectada no Firestore. Recarregando cache completo...');
+          logger.info('[DataService] Mudança detectada no Firestore. Recarregando cache atual...');
           await DataService.refreshCache();
           return;
         }
@@ -361,8 +621,8 @@ export const DataService = {
         logger.info('[DataService] Auto-refresh sem mudanças no Firestore. Cache mantido.');
         DataService.notifyListeners();
     } catch (e) {
-        logger.warn('[DataService] Fingerprint do Firestore falhou. Usando refresh completo como fallback.', e);
-        await DataService.loadData(true);
+        logger.warn('[DataService] Fingerprint do Firestore falhou. Mantendo cache atual para evitar recarga completa pesada.', e);
+        lastUpdatedAt = new Date();
         DataService.notifyListeners();
     }
   },
@@ -444,9 +704,13 @@ export const DataService = {
           if (t.description) t.description = normalizeDescription(t.description);
           if (t.client) { const n = normalizeDescription(t.client); if (n !== t.client) t.client = n; }
           if (t.observacaoAPagar) t.observacaoAPagar = normalizeDescription(t.observacaoAPagar);
+          normalizeWixInvoiceTransaction(t);
         } catch (e) { /* ignore */ }
       });
 
+      fillMissingClientNumbers(data, CACHED_CLIENT_REGISTRY, {
+        allowTransactionFallback: !isClientRegistryAvailable,
+      });
       CACHED_TRANSACTIONS = data;
       lastUpdatedAt = new Date();
       DataService.notifyListeners();
@@ -505,25 +769,24 @@ export const DataService = {
     let actualBalance = 0;
 
     CACHED_TRANSACTIONS.forEach(t => {
-        const statusLower = (t.status || '').toLowerCase();
-        const isPaid = statusLower === 'pago' || statusLower === 'paga' || statusLower === 'recebido' || statusLower === 'sim' || statusLower === 'ok';
+        const isPaid = isPaidStatus(t.status);
         const isPending = !isPaid;
 
         if (isPaid) {
             // Saldo Realizado = Recebido - Pago
-            actualBalance += (t.valueReceived - t.valuePaid);
+            const entryPaid = isEntradaTransaction(t) ? getPaidAmount(t) : 0;
+            const payablePaid = isSaidaTransaction(t) ? getPaidAmount(t) : 0;
+            actualBalance += (entryPaid - payablePaid);
         }
 
         if (isPending) {
             // Entradas Pendentes
-            if (t.movement === 'Entrada' || (t.valueReceived > 0 && t.valuePaid === 0)) {
-                // Se tiver TotalCobrança, usa. Senão valueReceived.
-                const val = (t.totalCobranca && t.totalCobranca > 0) ? t.totalCobranca : t.valueReceived;
-                pendingReceivables += val;
+            if (isEntradaTransaction(t)) {
+                pendingReceivables += getOriginalAmount(t);
             }
             // Saídas Pendentes
-            if (t.movement === 'Saída' || (t.valuePaid > 0 && t.valueReceived === 0)) {
-                pendingPayables += t.valuePaid;
+            if (isSaidaTransaction(t)) {
+                pendingPayables += getOriginalAmount(t);
             }
         }
     });
@@ -606,15 +869,15 @@ export const DataService = {
 
     if (isContasAPagar) {
       // KPI Contexto Saída: Total Pago vs Total Pendente
-      const totalGeral = filtered.reduce((acc, curr) => acc + curr.valuePaid, 0);
-      const totalPago = filtered.filter(i => i.status === 'Pago' || (i.status as string) === 'Recebido').reduce((acc, curr) => acc + curr.valuePaid, 0);
+      const totalGeral = filtered.reduce((acc, curr) => acc + getOriginalAmount(curr), 0);
+      const totalPago = filtered.filter(i => isPaidStatus(i.status)).reduce((acc, curr) => acc + getPaidAmount(curr), 0);
       const totalPendente = totalGeral - totalPago;
 
       kpi = { totalPaid: totalPago, totalReceived: totalGeral, balance: totalPendente }; 
     } else if (isContasAReceber) {
       // KPI Contexto Entrada: Total Recebido vs Total Pendente
-      const totalGeralReceber = filtered.reduce((acc, curr) => acc + (curr.totalCobranca || curr.valueReceived || 0), 0);
-      const totalRecebido = filtered.filter(i => i.status === 'Pago' || (i.status as string) === 'Recebido').reduce((acc, curr) => acc + (curr.valueReceived || 0), 0);
+      const totalGeralReceber = filtered.reduce((acc, curr) => acc + getOriginalAmount(curr), 0);
+      const totalRecebido = filtered.filter(i => isPaidStatus(i.status)).reduce((acc, curr) => acc + getPaidAmount(curr), 0);
       const saldoReceber = totalGeralReceber - totalRecebido;
 
       kpi = { totalReceived: totalGeralReceber, totalPaid: totalRecebido, balance: saldoReceber };
@@ -622,9 +885,9 @@ export const DataService = {
       // KPI Geral (Entradas vs Saídas)
       kpi = filtered.reduce(
         (acc, curr) => ({
-            totalPaid: acc.totalPaid + curr.valuePaid,
-            totalReceived: acc.totalReceived + curr.valueReceived,
-            balance: acc.balance + (curr.valueReceived - curr.valuePaid),
+            totalPaid: acc.totalPaid + (isSaidaTransaction(curr) ? getOriginalAmount(curr) : 0),
+            totalReceived: acc.totalReceived + (isEntradaTransaction(curr) ? getOriginalAmount(curr) : 0),
+            balance: acc.balance + (isEntradaTransaction(curr) ? getOriginalAmount(curr) : 0) - (isSaidaTransaction(curr) ? getOriginalAmount(curr) : 0),
         }),
         { totalPaid: 0, totalReceived: 0, balance: 0 }
       );

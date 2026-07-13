@@ -7,6 +7,7 @@ import { AgingReport } from '../components/AgingReport';
 import { AlertsBanner } from '../components/AlertsBanner';
 import { ClientProfile } from '../components/ClientProfile';
 import { DataService } from '../services/dataService';
+import { AuthService } from '../services/authService';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
@@ -40,7 +41,21 @@ const normalizeText = (text: string) => {
     .replace(/[\u0300-\u036f]/g, '');
 };
 
+const getFilterScopeKey = (filters: Partial<FilterState>) => [
+  filters.startDate || '',
+  filters.endDate || '',
+  filters.dueDateStart || '',
+  filters.dueDateEnd || '',
+  filters.paymentDateStart || '',
+  filters.paymentDateEnd || '',
+  filters.receiptDateStart || '',
+  filters.receiptDateEnd || '',
+].join('|');
+
 const Dashboard: React.FC = () => {
+  const currentUser = AuthService.getCurrentUser();
+  const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
+
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Transaction[]>([]);
@@ -68,6 +83,7 @@ const Dashboard: React.FC = () => {
   // Refs para manter filtros/página atuais acessíveis no callback do onRefresh
   const filtersRef = useRef(filters);
   const pageRef = useRef(page);
+  const loadedScopeRef = useRef('');
   filtersRef.current = filters;
   pageRef.current = page;
 
@@ -102,7 +118,18 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        await DataService.loadData();
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        const initialFilters = {
+          ...INITIAL_FILTERS,
+          startDate: toLocalISODate(start),
+          endDate: toLocalISODate(end)
+        };
+
+        await DataService.loadDataForFilters(initialFilters);
+        loadedScopeRef.current = getFilterScopeKey(initialFilters);
         
         // Populate filter options dynamically from the loaded data
         setOptions({
@@ -116,17 +143,6 @@ const Dashboard: React.FC = () => {
 
         // Registrar timestamp da primeira carga
         setLastUpdated(DataService.getLastUpdatedAt());
-
-        // Aplicar filtro "Este Mês" por padrão
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        
-        const initialFilters = {
-          ...INITIAL_FILTERS,
-          startDate: toLocalISODate(start),
-          endDate: toLocalISODate(end)
-        };
         
         setFilters(initialFilters);
 
@@ -220,6 +236,57 @@ const Dashboard: React.FC = () => {
       applyTransactionResult(filters, page);
     }
   }, [filters, page, isLoading, initError, applyTransactionResult]);
+
+  useEffect(() => {
+    if (isLoading || initError) return;
+
+    const scopeKey = getFilterScopeKey(filters);
+    if (!scopeKey || scopeKey === loadedScopeRef.current) return;
+
+    let cancelled = false;
+    const loadSelectedScope = async () => {
+      setIsRefreshing(true);
+      try {
+        await DataService.loadDataForFilters(filters, true);
+        if (cancelled) return;
+
+        loadedScopeRef.current = scopeKey;
+        setLastUpdated(DataService.getLastUpdatedAt());
+        setOptions({
+          bankAccounts: DataService.getUniqueValues('bankAccount'),
+          types: DataService.getUniqueValues('type'),
+          statuses: DataService.getUniqueValues('status'),
+          movements: DataService.getUniqueValues('movement'),
+          clients: DataService.getUniqueValues('client'),
+          paidBys: DataService.getUniqueValues('paidBy'),
+        });
+        applyTransactionResult(filtersRef.current, pageRef.current);
+      } catch (e: any) {
+        logger.error('Erro ao carregar período selecionado:', e);
+        if (!cancelled) setInitError(e.message || 'Erro ao conectar com o Banco de Dados Oficial.');
+      } finally {
+        if (!cancelled) setIsRefreshing(false);
+      }
+    };
+
+    loadSelectedScope();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    filters.startDate,
+    filters.endDate,
+    filters.dueDateStart,
+    filters.dueDateEnd,
+    filters.paymentDateStart,
+    filters.paymentDateEnd,
+    filters.receiptDateStart,
+    filters.receiptDateEnd,
+    isLoading,
+    initError,
+    applyTransactionResult,
+  ]);
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => {
@@ -402,10 +469,25 @@ const Dashboard: React.FC = () => {
     window.print();
   };
   
-  const handleDeleteTransaction = (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta transação? Ela será removida dos cálculos e da visualização principal.')) {
-      DataService.toggleExclusion(id);
-      // O DataService notificará os ouvintes, o que disparará o recarregamento no Dashboard via useEffect
+  const handleDeleteTransaction = async (id: string) => {
+    if (!isAdmin) {
+      window.alert('Ação permitida apenas para administradores.');
+      return;
+    }
+
+    const reason = window.prompt(
+      'Motivo da exclusão do lançamento:',
+      'Excluído do Jotform / cobrança indevida'
+    );
+    if (reason === null) return;
+
+    if (window.confirm('Confirmar exclusão deste lançamento? Ele será removido dos cálculos e da visualização principal para todos os usuários.')) {
+      try {
+        await DataService.excludeTransaction(id, reason);
+      } catch (error) {
+        logger.error('Erro ao excluir transação:', error);
+        window.alert(error instanceof Error ? error.message : 'Não foi possível excluir o lançamento.');
+      }
     }
   };
 
@@ -1024,6 +1106,7 @@ const Dashboard: React.FC = () => {
                 page={page}
                 totalPages={totalPages}
                 onPageChange={setPage}
+                canDelete={isAdmin}
                 onDelete={handleDeleteTransaction}
                 onMarkAsPaid={handleMarkAsPaid}
                 clientFilterValue={filters.client}

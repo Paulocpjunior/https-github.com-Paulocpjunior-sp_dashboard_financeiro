@@ -187,6 +187,160 @@ Registros marcados com `isExcluded=true` sao ignorados por padrao porque o app t
 npm run audit:transactions -- --include-excluded
 ```
 
+## Auditoria de Integridade Financeira
+
+Para identificar riscos operacionais antes dos relatorios e baixas:
+
+```bash
+npm run audit:integrity
+```
+
+Essa auditoria nao altera o Firebase. Ela usa o backup local mais recente e gera JSON, Markdown e CSV em `migration-backups/`.
+
+Ela cruza os principais pontos que ja causaram divergencia operacional:
+
+- mesmo `submissionId` ativo em mais de um documento;
+- mesmo cliente/CNPJ, vencimento e valor com um registro pago e outro aberto;
+- baixa importada como novo lancamento pago enquanto a copia antiga continua pendente;
+- lancamento aberto com evidencia de baixa/pagamento;
+- pago sem evidencia minima de baixa;
+- contas a receber sem valor;
+- contas a pagar sem valor;
+- conflito ou ausencia de `N.Cliente`;
+- valores preenchidos simultaneamente como pagar e receber;
+- diferenca entre `totalCobranca` e `honorarios + valorExtra`.
+
+Para exportar Firestore e auditar em seguida:
+
+```bash
+npm run audit:integrity:fresh
+```
+
+Para usar em validacao automatica e falhar se houver risco alto ou critico:
+
+```bash
+npm run audit:integrity:fail-high
+```
+
+Para auditar um backup especifico:
+
+```bash
+npm run audit:integrity -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json
+```
+
+Para focar somente um periodo de vencimento:
+
+```bash
+npm run audit:integrity -- --due-from 2026-05-01 --due-to 2026-05-31
+```
+
+Para validar as regras da auditoria com casos sinteticos de duplicidade, baixa e `N.Cliente`:
+
+```bash
+npm run test:integrity
+```
+
+## Cadastro Oficial de N.Cliente
+
+Para gerar um plano da fonte oficial de `N.Cliente` a partir do backup local mais recente:
+
+```bash
+npm run registry:clients
+```
+
+Esse comando roda em `dry-run` por padrao e nao altera o Firebase. Ele cria relatorios JSON, Markdown e CSV em `migration-backups/`, separando:
+
+- cadastros prontos, quando CPF/CNPJ ou nome normalizado apontam para um unico `N.Cliente`;
+- conflitos, quando o mesmo CPF/CNPJ aparece com mais de um `N.Cliente`;
+- cadastros sem `N.Cliente`;
+- lancamentos que podem receber backfill seguro porque o cadastro esta pronto.
+
+Para revisar um backup especifico:
+
+```bash
+npm run registry:clients -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json
+```
+
+Para gravar a colecao `clientRegistry` no Firebase, depois de revisar o relatorio:
+
+```bash
+npm run registry:clients:apply
+```
+
+Para tambem preencher em `transactions` apenas os lancamentos sem `N.Cliente` e com cadastro por CPF/CNPJ sem conflito:
+
+```bash
+npm run registry:clients:backfill
+```
+
+Backfill por nome sem CPF/CNPJ fica bloqueado por padrao e deve ser usado somente em revisao assistida com `--allow-name-backfill`.
+
+Para validar a regra com casos sinteticos:
+
+```bash
+npm run test:client-registry
+```
+
+## Resolucao de Conflitos de N.Cliente
+
+Para gerar um plano de resolucao dos conflitos de `N.Cliente`:
+
+```bash
+npm run resolve:client-conflicts
+```
+
+Esse comando roda em `dry-run` por padrao e nao altera o Firebase. Ele resolve automaticamente apenas conflitos objetivos:
+
+- um unico valor com origem em `nCliente` vence quando os concorrentes nao possuem essa evidencia;
+- pares com zero extra no fim, como `138` versus `1380`, quando existe diferenca forte de ocorrencias;
+- um numero dominante com pelo menos 90% da evidencia.
+
+Por padrao, apenas grupos com CPF/CNPJ entram na resolucao automatica. Para incluir grupos antigos que so possuem nome do cliente:
+
+```bash
+npm run resolve:client-conflicts -- --include-name-only
+```
+
+Para aplicar depois da revisao do relatorio:
+
+```bash
+npm run resolve:client-conflicts:apply
+```
+
+Para validar as regras com casos sinteticos:
+
+```bash
+npm run test:client-conflicts
+```
+
+## Aplicacao Manual de N.Cliente Oficial
+
+Quando a auditoria encontrar cadastros sem `N.Cliente` e nao houver evidencia segura no historico, gere um template para preenchimento pelo cadastro oficial:
+
+```bash
+npm run client-numbers:map -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json
+```
+
+O comando cria um `.template.csv` ao lado do relatorio. Preencha apenas a coluna `clientNumber` com o codigo oficial e rode um dry-run:
+
+```bash
+npm run client-numbers:map -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json --map migration-backups/client-number-map-plan-YYYYMMDDTHHMMSSZ.template.csv
+```
+
+Depois de revisar o Markdown gerado, aplique:
+
+```bash
+npm run client-numbers:map:apply -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json --map migration-backups/client-number-map-plan-YYYYMMDDTHHMMSSZ.template.csv
+```
+
+Esse fluxo atualiza os lancamentos sem `N.Cliente` e as entradas correspondentes em `clientRegistry`, sempre por CPF/CNPJ ou nome normalizado exato. Ele nao inventa codigo e nao altera registros que ja tenham outro `N.Cliente`.
+
+Para limitar a lista a um mes ou periodo especifico:
+
+```bash
+npm run client-numbers:map -- --input migration-backups/firestore-data-backup-YYYYMMDDTHHMMSSZ.json --due-from 2026-05-01 --due-to 2026-05-31
+```
+
 ## Normalizacao de Transacoes
 
 Para preparar um plano de correcoes seguras a partir do backup local mais recente:
@@ -226,6 +380,14 @@ npm run quarantine:transactions
 ```
 
 Esse comando tambem roda em `dry-run` por padrao. Em `--apply`, ele marca os documentos com `isExcluded=true`, `exclusionReason`, `excludedAt` e `updatedAt`.
+
+Para colocar em quarentena logica apenas copias duplicadas de transacoes ativas:
+
+```bash
+npm run quarantine:duplicates
+```
+
+Esse comando tambem roda em `dry-run` por padrao. Ele agrupa por movimento, cliente/documento, vencimento, valor e detalhe do lancamento. Em contas a receber, tambem reconhece a sombra de baixa quando uma versao paga e outra pendente compartilham cliente, vencimento e valor com competencia/observacao compativel; nesses casos o documento pago fica ativo e a copia pendente entra em quarentena logica. Em contas a pagar, `observacaoAPagar` entra na chave para nao tratar despesas iguais de pessoas diferentes como duplicidade. Em `--apply`, apenas as copias excedentes recebem `isExcluded=true`; o documento mestre fica ativo.
 
 ## Pre-Manutencao
 

@@ -1,5 +1,5 @@
-import { 
-  collection, 
+import {
+  collection,
   query, 
   where, 
   onSnapshot, 
@@ -15,20 +15,23 @@ import {
   QueryConstraint
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { Transaction, FilterState, KPIData } from '../types';
+import { ClientRegistryEntry, Transaction, FilterState, KPIData } from '../types';
 import { logger } from '../utils/logger';
 
-const FIRESTORE_FETCH_TIMEOUT_MS = 15000;
-const FIRESTORE_TIMEOUT_MESSAGE = 'O Firebase demorou mais de 15 segundos para responder. Verifique a conexão e tente novamente.';
+const FIRESTORE_LIGHT_FETCH_TIMEOUT_MS = 15000;
+const FIRESTORE_FULL_FETCH_TIMEOUT_MS = 60000;
+const FIRESTORE_TIMEOUT_MESSAGE = 'O Firebase demorou mais que o esperado para responder. Verifique a conexão e tente novamente.';
 
 export interface TransactionsFingerprint {
   count: number;
   latestUpdatedAt: string;
 }
 
+export type TransactionRangeField = 'date' | 'dueDate' | 'paymentDate';
+
 const withTimeout = async <T,>(
   operation: Promise<T>,
-  timeoutMs = FIRESTORE_FETCH_TIMEOUT_MS,
+  timeoutMs = FIRESTORE_LIGHT_FETCH_TIMEOUT_MS,
   message = FIRESTORE_TIMEOUT_MESSAGE
 ): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -50,6 +53,13 @@ const mapTransactionSnapshot = (snapshot: { docs: Array<{ id: string; data: () =
     id: doc.id,
     ...doc.data()
   })) as Transaction[];
+};
+
+const mapClientRegistrySnapshot = (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }): ClientRegistryEntry[] => {
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as ClientRegistryEntry[];
 };
 
 export const FirebaseService = {
@@ -141,7 +151,7 @@ export const FirebaseService = {
   /**
    * Obtém todas as transações (usado para compatibilidade com o DataService atual)
    */
-  fetchTransactions: async (timeoutMs = FIRESTORE_FETCH_TIMEOUT_MS): Promise<Transaction[]> => {
+  fetchTransactions: async (timeoutMs = FIRESTORE_FULL_FETCH_TIMEOUT_MS): Promise<Transaction[]> => {
     const q = query(collection(db, 'transactions'), orderBy('date', 'desc'));
 
     try {
@@ -164,10 +174,46 @@ export const FirebaseService = {
     }
   },
 
+  fetchTransactionsByRange: async (
+    field: TransactionRangeField,
+    startDate: string,
+    endDate: string,
+    timeoutMs = FIRESTORE_FULL_FETCH_TIMEOUT_MS
+  ): Promise<Transaction[]> => {
+    const constraints: QueryConstraint[] = [];
+    if (startDate) constraints.push(where(field, '>=', startDate));
+    if (endDate) constraints.push(where(field, '<=', endDate));
+
+    const q = query(
+      collection(db, 'transactions'),
+      ...constraints,
+      orderBy(field, 'desc')
+    );
+
+    try {
+      const snapshot = await withTimeout(getDocsFromServer(q), timeoutMs);
+      return mapTransactionSnapshot(snapshot);
+    } catch (serverError) {
+      logger.warn(`[FirebaseService] Busca por periodo (${field}) falhou. Tentando cache local...`, serverError);
+
+      try {
+        const cachedSnapshot = await getDocsFromCache(q);
+        if (!cachedSnapshot.empty) {
+          logger.warn(`[FirebaseService] Usando ${cachedSnapshot.size} transações do cache local por periodo.`);
+          return mapTransactionSnapshot(cachedSnapshot);
+        }
+      } catch (cacheError) {
+        logger.warn('[FirebaseService] Cache local indisponível para transações por periodo.', cacheError);
+      }
+
+      throw serverError;
+    }
+  },
+
   /**
    * Consulta leve para detectar se a coleção mudou antes de baixar todos os documentos.
    */
-  fetchTransactionsFingerprint: async (timeoutMs = FIRESTORE_FETCH_TIMEOUT_MS): Promise<TransactionsFingerprint> => {
+  fetchTransactionsFingerprint: async (timeoutMs = FIRESTORE_LIGHT_FETCH_TIMEOUT_MS): Promise<TransactionsFingerprint> => {
     const transactionsRef = collection(db, 'transactions');
     const latestUpdateQuery = query(transactionsRef, orderBy('updatedAt', 'desc'), limit(1));
 
@@ -182,6 +228,19 @@ export const FirebaseService = {
       count: countSnapshot.data().count,
       latestUpdatedAt: typeof latestUpdatedAt === 'string' ? latestUpdatedAt : '',
     };
+  },
+
+  /**
+   * Obtém o cadastro oficial de N.Cliente gerado pela manutenção.
+   */
+  fetchClientRegistry: async (timeoutMs = FIRESTORE_LIGHT_FETCH_TIMEOUT_MS): Promise<ClientRegistryEntry[]> => {
+    const q = query(
+      collection(db, 'clientRegistry'),
+      where('status', '==', 'ready')
+    );
+
+    const snapshot = await withTimeout(getDocsFromServer(q), timeoutMs);
+    return mapClientRegistrySnapshot(snapshot);
   },
 
   /**

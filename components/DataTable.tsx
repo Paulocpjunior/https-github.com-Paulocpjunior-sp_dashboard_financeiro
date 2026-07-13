@@ -4,6 +4,7 @@ import { Transaction } from '../types';
 import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
+import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
 
 interface DataTableProps {
   data: Transaction[];
@@ -18,12 +19,13 @@ interface DataTableProps {
   isLoading?: boolean;
   selectedType?: string;
   allData?: Transaction[];
+  canDelete?: boolean;
   onDelete?: (id: string) => void;
   onMarkAsPaid?: (id: string) => void;
   onClientClick?: (clientName: string) => void;
 }
 
-type SortField = 'client' | 'dueDate' | 'receiptDate' | 'cpfCnpj' | 'none';
+type SortField = 'client' | 'clientNumber' | 'dueDate' | 'receiptDate' | 'cpfCnpj' | 'none';
 type SortDirection = 'asc' | 'desc';
 
 // --- VALIDAÇÕES E MÁSCARAS ---
@@ -105,6 +107,7 @@ const DataTable: React.FC<DataTableProps> = ({
     isLoading = false,
     selectedType = '',
     allData = [],
+    canDelete = false,
     onDelete,
     onClientClick
 }) => {
@@ -160,6 +163,23 @@ const DataTable: React.FC<DataTableProps> = ({
       setSortDirection('asc');
     }
   };
+
+  const canUseDelete = canDelete && Boolean(onDelete);
+
+  const renderDeleteButton = (id: string) => (
+    <button
+      onClick={() => canUseDelete && onDelete?.(id)}
+      disabled={!canUseDelete}
+      className={`p-1 transition-colors rounded-md ${
+        canUseDelete
+          ? 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+          : 'text-slate-300 dark:text-slate-700 opacity-50 cursor-not-allowed'
+      }`}
+      title={canUseDelete ? 'Excluir' : 'Apenas administradores podem excluir'}
+    >
+      <Ban className="h-4 w-4" />
+    </button>
+  );
 
   const handleTokenChange = (val: string) => {
       setExportToken(val);
@@ -289,6 +309,25 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const normalizeText = (text: string) => {
     return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  };
+
+  const getClientNumber = (row: Transaction): string => {
+    const rawValue = row.clientNumber;
+    if (rawValue === null || rawValue === undefined || rawValue === '') return '-';
+    return String(rawValue).trim() || '-';
+  };
+
+  const compareClientNumber = (a: Transaction, b: Transaction): number => {
+    const rawA = getClientNumber(a);
+    const rawB = getClientNumber(b);
+    if (rawA === '-' && rawB === '-') return 0;
+    if (rawA === '-') return 1;
+    if (rawB === '-') return -1;
+
+    const numA = Number(String(rawA).replace(/\D/g, ''));
+    const numB = Number(String(rawB).replace(/\D/g, ''));
+    if (Number.isFinite(numA) && Number.isFinite(numB)) return numA - numB;
+    return rawA.localeCompare(rawB, 'pt-BR', { numeric: true });
   };
 
   const normalizedType = normalizeText(selectedType || '');
@@ -505,7 +544,7 @@ const DataTable: React.FC<DataTableProps> = ({
     };
 
     const rows = dataToExport.map(row => {
-        const valor = formatValueCSV(row.totalCobranca || row.honorarios);
+        const valor = formatValueCSV(getOriginalAmount(row));
         const vencimento = formatDateCSV(row.dueDate);
         
         // Truncar descrição para máximo 20 caracteres (limite do layout Boleto Cloud)
@@ -580,6 +619,9 @@ const DataTable: React.FC<DataTableProps> = ({
           const clientB = (b.client || '').toLowerCase();
           comparison = clientA.localeCompare(clientB, 'pt-BR');
           break;
+        case 'clientNumber':
+          comparison = compareClientNumber(a, b);
+          break;
         case 'dueDate':
           const dateA = new Date(a.dueDate || '1970-01-01').getTime();
           const dateB = new Date(b.dueDate || '1970-01-01').getTime();
@@ -627,9 +669,7 @@ const DataTable: React.FC<DataTableProps> = ({
   // Cálculo Robusto de Dias em Atraso
   const calcDiasAtraso = (dueDate: string, status: string) => {
     // 1. Normalizar status para ignorar pagos
-    const st = (status || '').toLowerCase().trim();
-    const isPaid = st === 'pago' || st === 'recebido' || st === 'liquidado';
-    if (isPaid) return 0;
+    if (isPaidStatus(status)) return 0;
 
     // 2. Verificar se data existe
     if (!dueDate || dueDate === '1970-01-01') return 0;
@@ -658,11 +698,6 @@ const DataTable: React.FC<DataTableProps> = ({
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     return diffDays;
-  };
-
-  const calcSaldoRestante = (total: number, recebido: number) => {
-    const saldo = (total || 0) - (recebido || 0);
-    return saldo > 0 ? saldo : 0;
   };
 
   const getColSpan = () => {
@@ -800,7 +835,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
-                    <SortableHeader field="client" label="N.Cliente" className="text-center" />
+                    <SortableHeader field="clientNumber" label="N.Cliente" className="text-center" />
                     <SortableHeader field="cpfCnpj" label="CPF/CNPJ" className="text-left" />
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Honor.</th>
@@ -869,15 +904,13 @@ const DataTable: React.FC<DataTableProps> = ({
                   </td>
                 </tr>
               ) : (
-                sortedData.map((row, rowIndex) => {
-                  const rowType = normalizeText(row.type || '');
-                  const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
-                  const isPending = row.status === 'Pendente' || row.status === 'Agendado';
+                sortedData.map((row) => {
+                  const isRowSaida = isSaidaTransaction(row);
+                  const isPago = isPaidStatus(row.status);
+                  const isPending = !isPago;
                   const diasAtraso = calcDiasAtraso(row.dueDate, row.status);
-                  const saldoRestante = calcSaldoRestante(row.totalCobranca, row.valueReceived);
+                  const saldoRestante = getOutstandingAmount(row);
                   const isVencido = diasAtraso > 0;
-                  // Fix: Cast 'Recebido' since it's not in the Transaction.status type union but might come from data
-                  const isPago = row.status === 'Pago' || (row.status as string) === 'Recebido';
 
                   return (
                     <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
@@ -909,19 +942,13 @@ const DataTable: React.FC<DataTableProps> = ({
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
-                            {isPending ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                            {isPending ? formatCurrency(getOriginalAmount(row)) : 'R$ 0,00'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                            {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                            {isPago ? formatCurrency(getPaidAmount(row)) : 'R$ 0,00'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
-                            <button 
-                              onClick={() => onDelete && onDelete(row.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
-                              title="Excluir"
-                            >
-                              <Ban className="h-4 w-4" />
-                            </button>
+                            {renderDeleteButton(row.id)}
                           </td>
                         </>
                       )}
@@ -958,7 +985,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             {row.client || '-'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center text-xs font-bold text-blue-600 dark:text-blue-400">
-                            {rowIndex + 1}
+                            {getClientNumber(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                             {row.cpfCnpj || '-'}
@@ -979,10 +1006,10 @@ const DataTable: React.FC<DataTableProps> = ({
                             {formatCurrency(row.valorExtra)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-blue-600 dark:text-blue-400 font-semibold">
-                            {formatCurrency(row.totalCobranca)}
+                            {formatCurrency(getOriginalAmount(row))}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                            {formatCurrency(row.valueReceived)}
+                            {formatCurrency(getPaidAmount(row))}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right">
                             {saldoRestante > 0 ? (
@@ -999,13 +1026,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
-                            <button 
-                              onClick={() => onDelete && onDelete(row.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
-                              title="Excluir"
-                            >
-                              <Ban className="h-4 w-4" />
-                            </button>
+                            {renderDeleteButton(row.id)}
                           </td>
                         </>
                       )}
@@ -1042,23 +1063,17 @@ const DataTable: React.FC<DataTableProps> = ({
                             {isRowSaida ? (
                               <span className="text-red-600 dark:text-red-400 flex items-center justify-end gap-0.5 font-medium">
                                 <ArrowDownCircle className="h-3 w-3" />
-                                {formatCurrency(row.valuePaid)}
+                                {formatCurrency(getOriginalAmount(row))}
                               </span>
                             ) : (
                               <span className="text-green-600 dark:text-green-400 flex items-center justify-end gap-0.5 font-medium">
                                 <ArrowUpCircle className="h-3 w-3" />
-                                {formatCurrency(row.totalCobranca || row.valueReceived)}
+                                {formatCurrency(getOriginalAmount(row))}
                               </span>
                             )}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
-                            <button 
-                              onClick={() => onDelete && onDelete(row.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
-                              title="Excluir"
-                            >
-                              <Ban className="h-4 w-4" />
-                            </button>
+                            {renderDeleteButton(row.id)}
                           </td>
                         </>
                       )}

@@ -1,18 +1,87 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Layout from '../components/Layout';
 import { DataService } from '../services/dataService';
 import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
-import { Transaction, KPIData } from '../types';
+import { Transaction, KPIData, FilterState } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { formatISODateBR } from '../utils/dateUtils';
+import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
 type SortField = 'date' | 'dueDate' | 'paymentDate' | 'valorOriginal' | 'valorPago' | 'status' | 'client' | 'clientNumber';
 type SortDirection = 'asc' | 'desc';
+
+const getClientNumberSortKey = (value: unknown) => {
+  const text = String(value ?? '').trim();
+  if (!text || text === '-') return { missing: true, number: Number.POSITIVE_INFINITY, text: '' };
+
+  const digits = text.replace(/\D/g, '');
+  const parsed = digits ? Number(digits) : Number.NaN;
+
+  return {
+    missing: false,
+    number: Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY,
+    text,
+  };
+};
+
+const compareClientNumber = (a: Transaction, b: Transaction): number => {
+  const left = getClientNumberSortKey(a.clientNumber);
+  const right = getClientNumberSortKey(b.clientNumber);
+
+  if (left.missing && right.missing) return 0;
+  if (left.missing) return 1;
+  if (right.missing) return -1;
+  if (left.number !== right.number) return left.number - right.number;
+
+  return left.text.localeCompare(right.text, 'pt-BR', { numeric: true });
+};
+
+const getCurrentMonthDateRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+};
+
+const buildScopedLoadFilters = (
+  dateFilterType: DateFilterType,
+  startDate: string,
+  endDate: string
+): Partial<FilterState> => {
+  const range = startDate || endDate ? { startDate, endDate } : getCurrentMonthDateRange();
+
+  if (dateFilterType === 'dueDate') {
+    return { dueDateStart: range.startDate, dueDateEnd: range.endDate };
+  }
+
+  if (dateFilterType === 'paymentDate') {
+    return { paymentDateStart: range.startDate, paymentDateEnd: range.endDate };
+  }
+
+  return range;
+};
+
+const getScopedLoadKey = (dateFilterType: DateFilterType, startDate: string, endDate: string) => {
+  const filters = buildScopedLoadFilters(dateFilterType, startDate, endDate);
+  return [
+    dateFilterType,
+    filters.startDate || '',
+    filters.endDate || '',
+    filters.dueDateStart || '',
+    filters.dueDateEnd || '',
+    filters.paymentDateStart || '',
+    filters.paymentDateEnd || '',
+  ].join('|');
+};
 
 // Interface estendida localmente para detalhar Pendente vs Pago
 interface DetailedKPI extends KPIData {
@@ -41,6 +110,7 @@ const Reports: React.FC = () => {
   // Sort States
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const loadedScopeRef = useRef('');
   
   // Report Mode
   const [reportMode, setReportMode] = useState<ReportMode>('general');
@@ -70,8 +140,13 @@ const Reports: React.FC = () => {
              const { result } = DataService.getTransactions({});
              setAllTransactions(result.allData ?? result.data);
         } else {
-             // Tenta carregar. Se falhar, vai cair no catch
-             await DataService.loadData();
+             const initialRange = getCurrentMonthDateRange();
+             setStartDate(initialRange.startDate);
+             setEndDate(initialRange.endDate);
+             loadedScopeRef.current = getScopedLoadKey(dateFilterType, initialRange.startDate, initialRange.endDate);
+             await DataService.loadDataForFilters(
+               buildScopedLoadFilters(dateFilterType, initialRange.startDate, initialRange.endDate)
+             );
              const { result } = DataService.getTransactions({});
              setAllTransactions(result.allData ?? result.data);
         }
@@ -94,6 +169,40 @@ const Reports: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!DataService.isDataLoaded) return;
+
+    const scopeKey = getScopedLoadKey(dateFilterType, startDate, endDate);
+    if (loadedScopeRef.current === scopeKey) return;
+
+    let cancelled = false;
+
+    const loadScope = async () => {
+      try {
+        setLoading(true);
+        setInitError('');
+        await DataService.loadDataForFilters(buildScopedLoadFilters(dateFilterType, startDate, endDate), true);
+        if (cancelled) return;
+        loadedScopeRef.current = scopeKey;
+        const { result } = DataService.getTransactions({});
+        setAllTransactions(result.allData ?? result.data);
+      } catch (e: any) {
+        if (!cancelled) {
+          logger.error("Erro ao carregar período em Relatórios:", e);
+          setInitError(e.message || 'Falha na conexão com os dados.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadScope();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dateFilterType, startDate, endDate]);
 
   // Compute available types dynamically
   const availableTypes = useMemo(() => {
@@ -211,7 +320,7 @@ const Reports: React.FC = () => {
     if (selectedStatus) {
       const normalizeStatus = (s: string): string => {
         const v = (s || '').toLowerCase().trim();
-        if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's', 'pago'].includes(v)) return 'Pago';
+        if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's', 'pago', 'paga'].includes(v)) return 'Pago';
         if (['agendado', 'programado'].includes(v)) return 'Agendado';
         return 'Pendente';
       };
@@ -250,19 +359,13 @@ const Reports: React.FC = () => {
           valB = b.paymentDate || '';
           break;
         case 'valorOriginal': {
-          const isEntryA = a.movement === 'Entrada' || (a.valueReceived > 0 && a.valuePaid === 0);
-          const isEntryB = b.movement === 'Entrada' || (b.valueReceived > 0 && b.valuePaid === 0);
-          valA = isEntryA ? a.valueReceived : a.valuePaid;
-          valB = isEntryB ? b.valueReceived : b.valuePaid;
+          valA = getOriginalAmount(a);
+          valB = getOriginalAmount(b);
           break;
         }
         case 'valorPago': {
-          const isPaidA = a.status === 'Pago';
-          const isPaidB = b.status === 'Pago';
-          const isEA = a.movement === 'Entrada' || (a.valueReceived > 0 && a.valuePaid === 0);
-          const isEB = b.movement === 'Entrada' || (b.valueReceived > 0 && b.valuePaid === 0);
-          valA = isPaidA ? (isEA ? a.valueReceived : a.valuePaid) : 0;
-          valB = isPaidB ? (isEB ? b.valueReceived : b.valuePaid) : 0;
+          valA = getPaidAmount(a);
+          valB = getPaidAmount(b);
           break;
         }
         case 'status':
@@ -274,9 +377,7 @@ const Reports: React.FC = () => {
           valB = (b.client || '').toLowerCase();
           break;
         case 'clientNumber':
-          valA = a.clientNumber || 0;
-          valB = b.clientNumber || 0;
-          break;
+          return sortDirection === 'asc' ? compareClientNumber(a, b) : compareClientNumber(b, a);
         default:
           valA = a.date || '';
           valB = b.date || '';
@@ -292,23 +393,19 @@ const Reports: React.FC = () => {
     // Calculate Detailed KPIs
     const newKpi = result.reduce(
       (acc, curr) => {
-        const isPaid = curr.status === 'Pago';
-        const isPending = curr.status === 'Pendente' || curr.status === 'Agendado';
+        const isPaid = isPaidStatus(curr.status);
+        const isPending = !isPaid;
 
         // Detalhamento Saídas (Contas a Pagar)
-        if (curr.movement === 'Saída' || curr.valuePaid > 0) {
-            if (isPaid) acc.settledPayables += curr.valuePaid;
-            if (isPending) acc.pendingPayables += curr.valuePaid;
+        if (isSaidaTransaction(curr)) {
+            if (isPaid) acc.settledPayables += getPaidAmount(curr);
+            if (isPending) acc.pendingPayables += getOriginalAmount(curr);
         }
 
         // Detalhamento Entradas (Contas a Receber)
-        if (curr.movement === 'Entrada' || curr.valueReceived > 0) {
-            if (isPaid) acc.settledReceivables += curr.valueReceived;
-            if (isPending) {
-                // Se estiver pendente, preferir totalCobranca se existir, senão valueReceived
-                const val = (curr.totalCobranca && curr.totalCobranca > 0) ? curr.totalCobranca : curr.valueReceived;
-                acc.pendingReceivables += val;
-            }
+        if (isEntradaTransaction(curr)) {
+            if (isPaid) acc.settledReceivables += getPaidAmount(curr);
+            if (isPending) acc.pendingReceivables += getOriginalAmount(curr);
         }
 
         return acc;
@@ -750,13 +847,13 @@ const Reports: React.FC = () => {
                                       {isSaida && <td className="px-3 py-2 text-slate-500 dark:text-slate-500 truncate max-w-[150px]">{row.observacaoAPagar || '-'}</td>}
                                       <td className="px-3 py-2 whitespace-nowrap">
                                          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
-                                            row.status === 'Pago' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                            isPaidStatus(row.status) ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
                                          }`}>
                                             {row.status}
                                          </span>
                                       </td>
                                       <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-slate-700 dark:text-slate-300">
-                                         {formatCurrency(row.valuePaid || row.totalCobranca || 0)}
+                                         {formatCurrency(getOriginalAmount(row))}
                                       </td>
                                    </tr>
                                 ))}

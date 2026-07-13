@@ -6,7 +6,7 @@ import { dirname, resolve } from 'node:path';
 
 const DEFAULT_PROJECT_ID = 'gen-lang-client-0888019226';
 const DEFAULT_DATABASE = '(default)';
-const DEFAULT_COLLECTIONS = ['users', 'loginIndex', 'transactions'];
+const DEFAULT_COLLECTIONS = ['users', 'loginIndex', 'transactions', 'clientRegistry'];
 const REPORT_DIR = 'migration-backups';
 
 const usage = `

@@ -2,8 +2,9 @@
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Transaction, KPIData, User } from '../types';
+import { Transaction, User } from '../types';
 import { logger } from '../utils/logger';
+import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
 
 export const ReportService = {
   
@@ -25,12 +26,7 @@ export const ReportService = {
     currentUser: User | null
   ) => {
     try {
-      const safeNum = (val: any) => {
-        if (typeof val === 'number') return val;
-        if (!val) return 0;
-        const num = parseFloat(String(val).replace(/[^\d.-]/g, ''));
-        return isNaN(num) ? 0 : num;
-      };
+      const safeNum = (val: any) => parseMoneyValue(val);
 
       const safeStr = (val: any) => val ? String(val) : '';
 
@@ -99,6 +95,7 @@ export const ReportService = {
       const colGap = 85;
 
       const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNum(v));
+      const fmtNumber = (v: number) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safeNum(v));
       
       // 1. Entradas
       doc.setTextColor(22, 163, 74);
@@ -132,7 +129,15 @@ export const ReportService = {
       doc.setTextColor(80, 80, 80);
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text('Transações Detalhadas:', 14, yPos);
+      const isEntradaHeader = filters.movement === 'Entrada' || (filters.types && filters.types.includes('Entrada de Caixa / Contas a Receber'));
+      const isSaidaHeader = filters.movement === 'Saída' || (filters.types && filters.types.includes('Saída de Caixa / Contas a Pagar'));
+      const safeTransactions = Array.isArray(transactions) ? transactions : [];
+      const shouldSeparateWix = !isSaidaHeader;
+      const wixTransactions = shouldSeparateWix ? safeTransactions.filter(isWixInvoice) : [];
+      const detailTransactions = shouldSeparateWix ? safeTransactions.filter(t => !isWixInvoice(t)) : safeTransactions;
+      const compactTableHeadFontSize = 6.6;
+      const compactTableBodyFontSize = 6.3;
+      const compactTableCellPadding = 0.75;
 
       // Sort info label
       let infoText = "";
@@ -155,147 +160,245 @@ export const ReportService = {
           infoText += ` | Filtro: ${filters.client}`;
       }
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
-      doc.text(infoText, pageWidth - 14, yPos, { align: 'right' });
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      yPos += 5;
+      const calcDelay = (transaction: Transaction) => {
+        if (isPaidStatus(transaction.status)) return '-';
+        if (!transaction.dueDate || transaction.dueDate === '1970-01-01') return '-';
+        const [year, month, day] = transaction.dueDate.split('-').map(Number);
+        if (!year || !month || !day) return '-';
+        const due = new Date(year, month - 1, day);
+        due.setHours(0, 0, 0, 0);
+        if (due.getTime() >= today.getTime()) return '-';
+        return `${Math.ceil((today.getTime() - due.getTime()) / 86400000)}d`;
+      };
 
-      const safeTransactions = Array.isArray(transactions) ? transactions : [];
+      const compactBody = (rows: Transaction[]) => rows.map(t => [
+        formatDate(t.date),
+        formatDate(t.dueDate),
+        formatDate(t.paymentDate),
+        calcDelay(t),
+        safeStr(t.client),
+        safeStr(t.clientNumber),
+        safeStr(t.cpfCnpj),
+        safeStr(t.status),
+        fmtNumber(safeNum(t.honorarios)),
+        fmtNumber(safeNum(t.valorExtra)),
+        fmtNumber(getOriginalAmount(t)),
+        fmtNumber(getPaidAmount(t)),
+        fmtNumber(getOutstandingAmount(t)),
+        safeStr(t.paymentMethod || t.method || 'Pix'),
+      ]);
 
-      // NOVO LAYOUT SOLICITADO
-      // Data, Venc., Data Baixa, Movimentação (Coluna F), Status, Valor Orig., Valor Pago, Observação a Pagar (Cliente)
-      const tableBody = safeTransactions.map(t => {
-        const dataLanc = formatDate(t.date);
-        const dataVenc = formatDate(t.dueDate);
-        const dataBaixa = formatDate(t.paymentDate);
-        const status = safeStr(t.status);
-        
-        // Movimentação = Exatamente o que está na Coluna F (t.description)
-        const movimentacaoDesc = safeStr(t.description);
+      const renderCompactReceivablesTable = (title: string, rows: Transaction[], startY: number, highlightedTitle = false) => {
+        let titleY = startY;
+        if (titleY > pageHeight - 28) {
+          doc.addPage();
+          titleY = 18;
+        }
 
-        // Observação a Pagar = Cliente / Favorecido
-        const observacao = safeStr(t.client);
-        
-        const numeroCliente = safeStr(t.clientNumber);
-        
-        const valRec = safeNum(t.valueReceived);
-        const valPaid = safeNum(t.valuePaid);
-        const totalCobranca = safeNum(t.totalCobranca);
+        if (highlightedTitle) {
+          doc.setFillColor(254, 240, 138);
+          doc.rect(14, titleY - 3.6, 34, 5.2, 'F');
+        }
 
-        const isEntry = t.movement === 'Entrada' || (valRec > 0 && valPaid === 0);
-        
-        // Valor Original = Valor da conta (previsto)
-        let valorOriginalRaw = 0;
-        if (isEntry) {
-            // Se for entrada e estiver pendente, preferir totalCobranca se disponível
-            if ((status.toLowerCase() === 'pendente' || status.toLowerCase() === 'agendado') && totalCobranca > 0) {
-                valorOriginalRaw = totalCobranca;
-            } else {
-                valorOriginalRaw = valRec > 0 ? valRec : totalCobranca;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(30, 64, 175);
+        doc.text(title, 14, titleY);
+
+        autoTable(doc, {
+          startY: titleY + 3,
+          head: [[
+            'Lanç.', 'Venc.', 'Receb.', 'Atraso', 'Cliente', 'N.Cli.', 'CPF/CNPJ', 'Status',
+            'Honor.', 'Extras', 'Total', 'Recebido', 'Saldo', 'Método'
+          ]],
+          body: compactBody(rows),
+          theme: 'striped',
+          margin: { left: 14, right: 14 },
+          headStyles: {
+            fillColor: secondaryColor,
+            textColor: highlightedTitle ? [254, 240, 138] : 255,
+            fontStyle: 'bold',
+            fontSize: compactTableHeadFontSize,
+            halign: 'center',
+            cellPadding: compactTableCellPadding
+          },
+          bodyStyles: {
+            fontSize: compactTableBodyFontSize,
+            textColor: 50,
+            cellPadding: compactTableCellPadding,
+            lineWidth: 0
+          },
+          alternateRowStyles: {
+            fillColor: [245, 247, 250]
+          },
+          columnStyles: {
+            0: { cellWidth: 14, halign: 'center' },
+            1: { cellWidth: 14, halign: 'center' },
+            2: { cellWidth: 14, halign: 'center' },
+            3: { cellWidth: 10, halign: 'center' },
+            4: { cellWidth: 'auto' },
+            5: { cellWidth: 12, halign: 'center' },
+            6: { cellWidth: 22, halign: 'center' },
+            7: { cellWidth: 16, halign: 'center' },
+            8: { cellWidth: 15, halign: 'right' },
+            9: { cellWidth: 15, halign: 'right' },
+            10: { cellWidth: 16, halign: 'right' },
+            11: { cellWidth: 17, halign: 'right' },
+            12: { cellWidth: 16, halign: 'right' },
+            13: { cellWidth: 11, halign: 'center' },
+          },
+          didParseCell: (data: any) => {
+            if (data.section === 'body' && data.column.index === 3) {
+              const txt = String(data.cell.raw).toLowerCase();
+              if (txt.endsWith('d')) {
+                data.cell.styles.textColor = [220, 38, 38] as [number, number, number];
+                data.cell.styles.fontStyle = 'bold';
+              }
             }
-        } else {
-            valorOriginalRaw = valPaid;
+
+            if (data.section === 'body' && data.column.index === 7) {
+              const txt = String(data.cell.raw).toLowerCase();
+              if (isPaidStatus(txt)) data.cell.styles.textColor = [22, 163, 74] as [number, number, number];
+              else {
+                data.cell.styles.textColor = [234, 88, 12] as [number, number, number];
+                data.cell.styles.fontStyle = 'bold';
+              }
+            }
+
+            if (data.section === 'body' && data.column.index === 10) {
+              data.cell.styles.textColor = [37, 99, 235] as [number, number, number];
+              data.cell.styles.fontStyle = 'bold';
+            }
+
+            if (data.section === 'body' && data.column.index === 11) {
+              data.cell.styles.textColor = [22, 163, 74] as [number, number, number];
+              data.cell.styles.fontStyle = 'bold';
+            }
+
+            if (data.section === 'body' && data.column.index === 12) {
+              data.cell.styles.textColor = [234, 88, 12] as [number, number, number];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        });
+      };
+
+      if (isEntradaHeader) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text(infoText, pageWidth - 14, yPos, { align: 'right' });
+
+        renderCompactReceivablesTable(`Contas a Receber (${detailTransactions.length})`, detailTransactions, yPos, false);
+
+        if (wixTransactions.length > 0) {
+          const wixStartY = ((doc as any).lastAutoTable?.finalY || yPos) + 8;
+          renderCompactReceivablesTable(`Faturas Wix (${wixTransactions.length})`, wixTransactions, wixStartY, true);
         }
-        
-        const valorOriginalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorOriginalRaw);
+      } else {
+        const sectionTitle = isSaidaHeader
+          ? `Contas a Pagar (${detailTransactions.length})`
+          : 'Transações Detalhadas:';
+        doc.text(sectionTitle, 14, yPos);
 
-        // Valor Pago = Se Pendente é 0, se Pago é o valor total
-        let valorPagoRaw = 0;
-        if (status.toLowerCase() === 'pago' || status.toLowerCase() === 'paga' || status.toLowerCase() === 'recebido') {
-            valorPagoRaw = isEntry ? valRec : valPaid; // Se pago, usa o valor efetivamente pago/recebido
-        } else {
-            valorPagoRaw = 0; // Se pendente, valor pago é 0
-        }
-        
-        const valorPagoFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valorPagoRaw);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text(infoText, pageWidth - 14, yPos, { align: 'right' });
 
-        const observacaoAPagar = safeStr(t.observacaoAPagar);
+        yPos += 5;
 
-        const row = [
-          dataLanc,          // 0: Data
-          dataVenc,          // 1: Vencimento
-          dataBaixa,         // 2: Data Baixa
-          movimentacaoDesc,  // 3: Movimentação
-          status,            // 4: Status
-          valorOriginalFmt,  // 5: Valor Original (Previsto)
-          valorPagoFmt,      // 6: Valor Pago (Efetivado)
-          observacao,        // 7: Cliente / Favorecido
-        ];
+        const tableBody = detailTransactions.map(t => {
+          const dataLanc = formatDate(t.date);
+          const dataVenc = formatDate(t.dueDate);
+          const dataBaixa = formatDate(t.paymentDate);
+          const status = safeStr(t.status);
+          const movimentacaoDesc = safeStr(t.description);
+          const observacao = safeStr(t.client);
+          const valorOriginalFmt = fmtNumber(getOriginalAmount(t));
+          const valorPagoFmt = fmtNumber(getPaidAmount(t));
+          const observacaoAPagar = safeStr(t.observacaoAPagar);
 
-        const isEntrada = filters.movement === 'Entrada' || (filters.types && filters.types.includes('Entrada de Caixa / Contas a Receber'));
-        const isSaida = filters.movement === 'Saída' || (filters.types && filters.types.includes('Saída de Caixa / Contas a Pagar'));
+          const row = [
+            dataLanc,
+            dataVenc,
+            dataBaixa,
+            movimentacaoDesc,
+            status,
+            valorOriginalFmt,
+            valorPagoFmt,
+            observacao,
+          ];
 
-        if (isEntrada) {
-          row.push(numeroCliente); // 8: N.Cliente
-        }
-        if (isSaida) {
-          row.push(observacaoAPagar); // 9: Observação - A Pagar
-        }
+          if (isSaidaHeader) {
+            row.push(observacaoAPagar);
+          }
 
-        return row;
-      });
+          return row;
+        });
 
-      const isEntradaHeader = filters.movement === 'Entrada' || (filters.types && filters.types.includes('Entrada de Caixa / Contas a Receber'));
-      const isSaidaHeader = filters.movement === 'Saída' || (filters.types && filters.types.includes('Saída de Caixa / Contas a Pagar'));
-
-      autoTable(doc, {
+        autoTable(doc, {
           startY: yPos,
           head: [[
             'Data', 'Venc.', 'Data Baixa', 'Movimentação', 'Status', 'Valor Orig. (Aberto)', 'Valor Pago (Baixado)', 'Cliente / Favorecido',
-            ...(isEntradaHeader ? ['N.Cliente'] : []),
             ...(isSaidaHeader ? ['Observação - A Pagar'] : [])
           ]],
           body: tableBody,
           theme: 'striped',
-          headStyles: { 
-              fillColor: secondaryColor, 
-              textColor: 255, 
-              fontStyle: 'bold',
-              fontSize: 8,
-              halign: 'center'
+          headStyles: {
+            fillColor: secondaryColor,
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 8,
+            halign: 'center'
           },
-          bodyStyles: { 
-              fontSize: 7, 
-              textColor: 50,
-              cellPadding: 2
+          bodyStyles: {
+            fontSize: 7,
+            textColor: 50,
+            cellPadding: 2
           },
-          alternateRowStyles: { 
-              fillColor: [245, 247, 250] 
+          alternateRowStyles: {
+            fillColor: [245, 247, 250]
           },
           columnStyles: {
-              0: { cellWidth: 16, halign: 'center' }, // Data
-              1: { cellWidth: 16, halign: 'center' }, // Venc
-              2: { cellWidth: 16, halign: 'center' }, // Baixa
-              3: { cellWidth: 35, halign: 'left' },   // Movimentação (Coluna F)
-              4: { cellWidth: 18, halign: 'center' }, // Status
-              5: { cellWidth: 22, halign: 'right' },  // Valor Orig
-              6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }, // Valor Pago
-              7: { cellWidth: 'auto' },               // Cliente
-              ...(filters.movement === 'Entrada' ? { 8: { cellWidth: 25, halign: 'center' } } : {})
+            0: { cellWidth: 16, halign: 'center' },
+            1: { cellWidth: 16, halign: 'center' },
+            2: { cellWidth: 16, halign: 'center' },
+            3: { cellWidth: 35, halign: 'left' },
+            4: { cellWidth: 18, halign: 'center' },
+            5: { cellWidth: 22, halign: 'right' },
+            6: { cellWidth: 22, halign: 'right', fontStyle: 'bold' },
+            7: { cellWidth: 'auto' },
           },
           didParseCell: (data: any) => {
-              // Colorir Status (Index 4)
-              if (data.section === 'body' && data.column.index === 4) {
-                  const txt = String(data.cell.raw).toLowerCase();
-                  if (txt === 'pago' || txt === 'paga') data.cell.styles.textColor = [22, 163, 74] as [number, number, number];
-                  else if (txt === 'pendente' || txt === 'agendado') {
-                      data.cell.styles.textColor = [234, 88, 12] as [number, number, number];
-                      data.cell.styles.fontStyle = 'bold';
-                  }
+            if (data.section === 'body' && data.column.index === 4) {
+              const txt = String(data.cell.raw).toLowerCase();
+              if (isPaidStatus(txt)) data.cell.styles.textColor = [22, 163, 74] as [number, number, number];
+              else if (txt === 'pendente' || txt === 'agendado' || txt === 'vencida') {
+                data.cell.styles.textColor = [234, 88, 12] as [number, number, number];
+                data.cell.styles.fontStyle = 'bold';
               }
-              // Colorir Valor Original se Pendente (Index 5)
-              if (data.section === 'body' && data.column.index === 5) {
-                  const statusRow = data.row.raw[4]; // Coluna Status é indice 4 agora
-                  const statusTxt = String(statusRow).toLowerCase();
-                  if (statusTxt === 'pendente' || statusTxt === 'agendado') {
-                      data.cell.styles.textColor = [234, 88, 12] as [number, number, number]; // Orange
-                      data.cell.styles.fontStyle = 'bold';
-                  }
+            }
+
+            if (data.section === 'body' && data.column.index === 5) {
+              const statusRow = data.row.raw[4];
+              const statusTxt = String(statusRow).toLowerCase();
+              if (statusTxt === 'pendente' || statusTxt === 'agendado' || statusTxt === 'vencida') {
+                data.cell.styles.textColor = [234, 88, 12] as [number, number, number];
+                data.cell.styles.fontStyle = 'bold';
               }
+            }
           }
-      });
+        });
+
+        if (wixTransactions.length > 0) {
+          const wixStartY = ((doc as any).lastAutoTable?.finalY || yPos) + 8;
+          renderCompactReceivablesTable(`Faturas Wix (${wixTransactions.length})`, wixTransactions, wixStartY, true);
+        }
+      }
 
       const pageCount = (doc.internal as any).getNumberOfPages();
       for(let i = 1; i <= pageCount; i++) {
