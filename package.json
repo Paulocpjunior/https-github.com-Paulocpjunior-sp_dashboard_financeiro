@@ -30,6 +30,7 @@
     "client-numbers:map": "node scripts/apply-client-number-map.mjs",
     "client-numbers:map:apply": "node scripts/apply-client-number-map.mjs --apply",
     "test:client-number-map": "node scripts/test-client-number-map.mjs",
+    "test:data-loading": "node scripts/test-data-loading-concurrency.mjs",
     "normalize:transactions": "node scripts/normalize-transactions-data.mjs",
     "fix:total-cobranca": "node scripts/fix-total-cobranca-mismatches.mjs",
     "fix:total-cobranca:apply": "node scripts/fix-total-cobranca-mismatches.mjs --apply",

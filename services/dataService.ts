@@ -26,6 +26,9 @@ let lastLoadedRange: LoadedRange | null = null;
 
 // Controle de Concorrência (Evita requisições simultâneas/loops)
 let currentLoadPromise: Promise<void> | null = null;
+let currentLoadRange: LoadedRange | null = null;
+let currentLoadRequestId: number | null = null;
+let latestScopedLoadRequestId = 0;
 
 // Timer para Auto-Refresh
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -451,6 +454,8 @@ export const DataService = {
     }
 
     // 3. Inicia nova requisição e guarda a promessa
+    currentLoadRange = null;
+    currentLoadRequestId = null;
     currentLoadPromise = (async () => {
         const wasDataLoaded = isDataLoaded;
 
@@ -476,6 +481,8 @@ export const DataService = {
         } finally {
             // Libera o lock para permitir novas tentativas futuras (ex: clique no botão "Tentar Novamente")
             currentLoadPromise = null;
+            currentLoadRange = null;
+            currentLoadRequestId = null;
         }
     })();
 
@@ -489,11 +496,47 @@ export const DataService = {
       return;
     }
 
-    if (currentLoadPromise) {
-      logger.info("[DataService] Requisição já em andamento. Aguardando...");
+    // Consultas idênticas podem compartilhar a mesma promessa sem disparar outro fetch.
+    if (
+      currentLoadPromise
+      && loadedRangesMatch(currentLoadRange, range)
+      && currentLoadRequestId === latestScopedLoadRequestId
+    ) {
+      logger.info("[DataService] O mesmo período já está sendo carregado. Aguardando...");
       return currentLoadPromise;
     }
 
+    // Cada novo período invalida solicitações anteriores ainda aguardando ou em trânsito.
+    // Isso evita que uma consulta antiga sobrescreva o cache depois que o usuário já mudou
+    // as datas (ex.: Julho por Lançamento -> Abril/Julho por Vencimento).
+    const requestId = ++latestScopedLoadRequestId;
+
+    if (currentLoadPromise) {
+      logger.info("[DataService] Outro período está em andamento. Aguardando a consulta mais recente...");
+      try {
+        await currentLoadPromise;
+      } catch (previousError) {
+        if (requestId !== latestScopedLoadRequestId) {
+          return;
+        }
+        logger.warn('[DataService] A consulta anterior falhou. Tentando o período mais recente.', previousError);
+      }
+
+      if (requestId !== latestScopedLoadRequestId) {
+        return;
+      }
+
+      if (loadedRangesMatch(lastLoadedRange, range)) {
+        return;
+      }
+    }
+
+    if (requestId !== latestScopedLoadRequestId) {
+      return;
+    }
+
+    currentLoadRange = range;
+    currentLoadRequestId = requestId;
     currentLoadPromise = (async () => {
       const wasDataLoaded = isDataLoaded;
 
@@ -508,6 +551,11 @@ export const DataService = {
           throw new Error("Formato de dados inválido recebido do backend.");
         }
 
+        if (requestId !== latestScopedLoadRequestId) {
+          logger.info(`[DataService] Resultado antigo descartado: ${range.field} ${range.startDate} até ${range.endDate}`);
+          return;
+        }
+
         normalizeAndCacheTransactions(data, clientRegistryResult, range);
         logger.info(`[DataService] Sucesso no período. ${data.length} registros carregados.`);
       } catch (error) {
@@ -516,6 +564,8 @@ export const DataService = {
         throw error;
       } finally {
         currentLoadPromise = null;
+        currentLoadRange = null;
+        currentLoadRequestId = null;
       }
     })();
 
