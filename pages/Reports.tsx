@@ -250,14 +250,14 @@ const Reports: React.FC = () => {
     
     if (mode === 'payables') {
       setSelectedMovement('Saída');
-      setSelectedTypes([]); 
+      setSelectedTypes(['Saída de Caixa / Contas a Pagar']);
       setDateFilterType('dueDate');
       setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
       setSortField('dueDate'); // Ordenar por vencimento
       setSortDirection('asc');
     } else if (mode === 'receivables') {
       setSelectedMovement('Entrada');
-      setSelectedTypes([]); 
+      setSelectedTypes(['Entrada de Caixa / Contas a Receber']);
       setDateFilterType('dueDate'); 
       setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
       setSortField('dueDate'); // Ordenar por vencimento
@@ -402,18 +402,15 @@ const Reports: React.FC = () => {
     const newKpi = result.reduce(
       (acc, curr) => {
         const isPaid = isPaidStatus(curr.status);
-        const isPending = !isPaid;
 
         // Detalhamento Saídas (Contas a Pagar)
         if (isSaidaTransaction(curr)) {
             if (isPaid) acc.settledPayables += getPaidAmount(curr);
-            if (isPending) acc.pendingPayables += getOriginalAmount(curr);
         }
 
         // Detalhamento Entradas (Contas a Receber)
         if (isEntradaTransaction(curr)) {
             if (isPaid) acc.settledReceivables += getPaidAmount(curr);
-            if (isPending) acc.pendingReceivables += getOriginalAmount(curr);
         }
 
         return acc;
@@ -425,8 +422,16 @@ const Reports: React.FC = () => {
       }
     );
 
-    newKpi.totalPaid = newKpi.settledPayables + newKpi.pendingPayables;
-    newKpi.totalReceived = newKpi.settledReceivables + newKpi.pendingReceivables;
+    // Mesma fórmula usada pelo Painel Principal: total original menos valor efetivado.
+    // Isso preserva no saldo eventuais diferenças de registros marcados como pagos.
+    newKpi.totalPaid = result
+      .filter(isSaidaTransaction)
+      .reduce((total, transaction) => total + getOriginalAmount(transaction), 0);
+    newKpi.totalReceived = result
+      .filter(isEntradaTransaction)
+      .reduce((total, transaction) => total + getOriginalAmount(transaction), 0);
+    newKpi.pendingPayables = Math.max(0, newKpi.totalPaid - newKpi.settledPayables);
+    newKpi.pendingReceivables = Math.max(0, newKpi.totalReceived - newKpi.settledReceivables);
     newKpi.balance = newKpi.totalReceived - newKpi.totalPaid;
 
     setKpi(newKpi);
