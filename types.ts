@@ -31,6 +31,7 @@ export interface Transaction {
   valorOriginal?: number | string;
   // Campos específicos para 'Entrada de Caixa / Contas a Receber'
   honorarios?: number;
+  cobrancaExtra?: string;
   valorExtra?: number;
   totalCobranca?: number;
   paymentMethod?: string;

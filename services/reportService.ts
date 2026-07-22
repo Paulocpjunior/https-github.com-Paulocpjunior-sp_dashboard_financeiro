@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable';
 import { Transaction, User } from '../types';
 import { logger } from '../utils/logger';
 import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { formatExtraChargeDescription } from '../utils/extraCharges';
 
 export const ReportService = {
   
@@ -22,6 +23,7 @@ export const ReportService = {
         sortField?: string; 
         sortDirection?: string;
         client?: string; // Novo Campo: Cliente
+        extraChargesOnly?: boolean;
     },
     currentUser: User | null
   ) => {
@@ -131,6 +133,7 @@ export const ReportService = {
       doc.setFont('helvetica', 'bold');
       const isEntradaHeader = filters.movement === 'Entrada' || (filters.types && filters.types.includes('Entrada de Caixa / Contas a Receber'));
       const isSaidaHeader = filters.movement === 'Saída' || (filters.types && filters.types.includes('Saída de Caixa / Contas a Pagar'));
+      const showExtraChargeDescription = isEntradaHeader && Boolean(filters.extraChargesOnly);
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
       const shouldSeparateWix = !isSaidaHeader;
       const wixTransactions = shouldSeparateWix ? safeTransactions.filter(isWixInvoice) : [];
@@ -175,7 +178,7 @@ export const ReportService = {
       };
 
       const compactBody = (rows: Transaction[]) => rows.map(t => [
-        formatDate(t.date),
+        showExtraChargeDescription ? formatExtraChargeDescription(t.cobrancaExtra) : formatDate(t.date),
         formatDate(t.dueDate),
         formatDate(t.paymentDate),
         calcDelay(t),
@@ -211,7 +214,7 @@ export const ReportService = {
         autoTable(doc, {
           startY: titleY + 3,
           head: [[
-            'Lanç.', 'Venc.', 'Receb.', 'Atraso', 'Cliente', 'N.Cli.', 'CPF/CNPJ', 'Status',
+            showExtraChargeDescription ? 'Cobrança Extra' : 'Lanç.', 'Venc.', 'Receb.', 'Atraso', 'Cliente', 'N.Cli.', 'CPF/CNPJ', 'Status',
             'Honor.', 'Extras', 'Total', 'Recebido', 'Saldo', 'Método'
           ]],
           body: compactBody(rows),
@@ -235,7 +238,7 @@ export const ReportService = {
             fillColor: [245, 247, 250]
           },
           columnStyles: {
-            0: { cellWidth: 14, halign: 'center' },
+            0: { cellWidth: showExtraChargeDescription ? 24 : 14, halign: showExtraChargeDescription ? 'left' : 'center' },
             1: { cellWidth: 14, halign: 'center' },
             2: { cellWidth: 14, halign: 'center' },
             3: { cellWidth: 10, halign: 'center' },

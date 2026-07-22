@@ -8,7 +8,8 @@ import { Transaction, KPIData, FilterState } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { formatISODateBR } from '../utils/dateUtils';
-import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
+import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, parseMoneyValue } from '../utils/transactionAmounts';
+import { formatExtraChargeDescription, hasExtraCharge } from '../utils/extraCharges';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -106,6 +107,7 @@ const Reports: React.FC = () => {
   const [selectedBank, setSelectedBank] = useState<string>(''); 
   const [selectedMovement, setSelectedMovement] = useState<string>(''); 
   const [selectedClient, setSelectedClient] = useState<string>(''); // Novo estado para Cliente
+  const [extraChargesOnly, setExtraChargesOnly] = useState(false);
   
   // Sort States
   const [sortField, setSortField] = useState<SortField>('date');
@@ -239,6 +241,7 @@ const Reports: React.FC = () => {
 
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
+    setExtraChargesOnly(false);
     
     // Reset filters before applying new mode specifics to avoid conflicts
     setSelectedStatus('');
@@ -340,7 +343,12 @@ const Reports: React.FC = () => {
       result = result.filter(t => (t.client || '').toLowerCase().includes(search));
     }
 
-    // 7. Sorting
+    // 7. Cobranças extras (exclusivo do modo Contas a Receber)
+    if (reportMode === 'receivables' && extraChargesOnly) {
+      result = result.filter(hasExtraCharge);
+    }
+
+    // 8. Sorting
     result = [...result].sort((a, b) => {
       let valA: any;
       let valB: any;
@@ -423,13 +431,14 @@ const Reports: React.FC = () => {
 
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient, reportMode, extraChargesOnly]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
-    setReportMode('general'); 
+    setReportMode('general');
+    setExtraChargesOnly(false);
   };
 
   const selectAllTypes = () => setSelectedTypes([...availableTypes]);
@@ -457,7 +466,8 @@ const Reports: React.FC = () => {
         client: selectedClient,
         dateContext: dateLabelMap[dateFilterType],
         sortField,
-        sortDirection
+        sortDirection,
+        extraChargesOnly: reportMode === 'receivables' && extraChargesOnly
     };
 
     setTimeout(() => {
@@ -516,6 +526,7 @@ const Reports: React.FC = () => {
 
   const isEntrada = selectedMovement === 'Entrada' || selectedTypes.includes('Entrada de Caixa / Contas a Receber');
   const isSaida = selectedMovement === 'Saída' || selectedTypes.includes('Saída de Caixa / Contas a Pagar');
+  const extraChargesFilterActive = reportMode === 'receivables' && extraChargesOnly;
 
   return (
     <Layout>
@@ -617,7 +628,7 @@ const Reports: React.FC = () => {
                         </div>
                         <div>
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><ArrowLeftRight className="h-4 w-4" /> Movimentação</label>
-                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); }}>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); }}>
                                 <option value="">Todas</option>
                                 <option value="Entrada">Entradas / Receitas</option>
                                 <option value="Saída">Saídas / Despesas</option>
@@ -654,6 +665,24 @@ const Reports: React.FC = () => {
                                 )}
                             </div>
                         </div>
+                        {reportMode === 'receivables' && (
+                            <label className={`md:col-span-2 flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${extraChargesOnly ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={extraChargesOnly}
+                                    onChange={(e) => setExtraChargesOnly(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                        Somente lançamentos com Cobranças Extras
+                                    </span>
+                                    <span className="block mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                        No PDF, a coluna Lanç. será substituída por Cobrança Extra; CPF/CNPJ será preservado e o valor cobrado continuará na coluna Extras.
+                                    </span>
+                                </span>
+                            </label>
+                        )}
                     </div>
             </div>
 
@@ -828,19 +857,24 @@ const Reports: React.FC = () => {
                           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-[10px]">
                              <thead className="bg-slate-50 dark:bg-slate-800">
                                 <tr>
-                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Data</th>
+                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">{extraChargesFilterActive ? 'Cobrança Extra' : 'Data'}</th>
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Venc.</th>
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Cliente</th>
                                    {isEntrada && <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">N.Cliente</th>}
                                    {isSaida && <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Observação - A Pagar</th>}
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Status</th>
-                                   <th className="px-3 py-2 text-right font-medium text-slate-500 uppercase">Valor</th>
+                                   <th className="px-3 py-2 text-right font-medium text-slate-500 uppercase">{extraChargesFilterActive ? 'Valor Extra' : 'Valor'}</th>
                                 </tr>
                              </thead>
                              <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
                                 {filteredData.slice(0, 50).map((row) => (
                                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                      <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400">{formatDate(row.date)}</td>
+                                      <td
+                                          className={`px-3 py-2 text-slate-600 dark:text-slate-400 ${extraChargesFilterActive ? 'truncate max-w-[180px]' : 'whitespace-nowrap'}`}
+                                          title={extraChargesFilterActive ? formatExtraChargeDescription(row.cobrancaExtra) : undefined}
+                                      >
+                                          {extraChargesFilterActive ? formatExtraChargeDescription(row.cobrancaExtra) || '-' : formatDate(row.date)}
+                                      </td>
                                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium">{formatDate(row.dueDate)}</td>
                                       <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[150px]">{row.client || '-'}</td>
                                       {isEntrada && <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-slate-500">{row.clientNumber ?? '-'}</td>}
@@ -853,7 +887,7 @@ const Reports: React.FC = () => {
                                          </span>
                                       </td>
                                       <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-slate-700 dark:text-slate-300">
-                                         {formatCurrency(getOriginalAmount(row))}
+                                         {formatCurrency(extraChargesFilterActive ? parseMoneyValue(row.valorExtra) : getOriginalAmount(row))}
                                       </td>
                                    </tr>
                                 ))}
