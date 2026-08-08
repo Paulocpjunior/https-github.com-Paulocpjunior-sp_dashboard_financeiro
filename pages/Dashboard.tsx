@@ -7,6 +7,8 @@ import { AgingReport } from '../components/AgingReport';
 import { AlertsBanner } from '../components/AlertsBanner';
 import { ClientProfile } from '../components/ClientProfile';
 import { DataService } from '../services/dataService';
+import { buscarCadastroCentral, conferirTransacoes, ConferenciaFinanceiro } from '../services/cadastroCentralConferencia';
+import { auth } from '../services/firebaseConfig';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
@@ -45,6 +47,23 @@ const Dashboard: React.FC = () => {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Transaction[]>([]);
   const [allFilteredData, setAllFilteredData] = useState<Transaction[]>([]);
+  // Conferência com o cadastro central do CFI (08/08): só transações com CNPJ.
+  // Falha do túnel não acende nada — vigilância, não pré-requisito.
+  const [confCentral, setConfCentral] = useState<ConferenciaFinanceiro | null>(null);
+  useEffect(() => {
+    if (!allFilteredData.length) { setConfCentral(null); return; }
+    let vivo = true;
+    buscarCadastroCentral(async () => {
+      const u = auth.currentUser;
+      if (!u) throw new Error('sem sessão Firebase');
+      return await u.getIdToken();
+    }).then((central) => {
+      if (!vivo || !central) return;
+      setConfCentral(conferirTransacoes(allFilteredData, central));
+    });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFilteredData]);
   const [totalPages, setTotalPages] = useState(1);
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
@@ -638,6 +657,27 @@ const Dashboard: React.FC = () => {
                 A Receber (Aberto)
             </button>
         </div>
+
+        {confCentral && confCentral.foraDoCadastro.length > 0 && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm">
+            <div className="font-extrabold text-red-800 mb-1">
+              🧭 Cadastro central: {confCentral.foraDoCadastro.length} CNPJ(s) que o Consultor Fiscal não conhece
+            </div>
+            <p className="text-xs text-slate-600 mb-2">
+              Ou o CNPJ foi digitado errado no Jotform (e a cobrança bate no cliente errado), ou o cliente está
+              fora do cadastro central — e de todos os módulos. Quem arruma é gente, na fonte.
+              {confCentral.pessoasFisicas > 0 && ` (${confCentral.pessoasFisicas} transação(ões) de pessoa física ficam fora desta conferência.)`}
+            </p>
+            {confCentral.foraDoCadastro.slice(0, 8).map((f) => (
+              <div key={f.cnpj} className="text-xs py-0.5 text-slate-700">
+                <strong>{f.cnpj}</strong> — {f.nomes.join(' / ') || 'sem nome'} · {f.transacoes} transação(ões)
+              </div>
+            ))}
+            {confCentral.foraDoCadastro.length > 8 && (
+              <div className="text-xs text-slate-500">mostrando 8 de {confCentral.foraDoCadastro.length}</div>
+            )}
+          </div>
+        )}
 
         <AlertsBanner 
           transactions={allFilteredData} 
