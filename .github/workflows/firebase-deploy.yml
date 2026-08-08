@@ -1,6 +1,12 @@
 name: Deploy to Firebase Hosting
 
 on:
+  # Push na main = deploy — mesma cultura dos módulos irmãos. O disparo
+  # manual continua disponível. Antes era SÓ manual, e dois merges (gate de
+  # departamento em aviso e em bloqueio) ficaram na main sem subir até
+  # alguém lembrar de clicar (08/08).
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
