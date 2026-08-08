@@ -20,6 +20,10 @@ jobs:
         run: npm ci
 
       - name: Build do projeto
+        env:
+          # Gate de departamento em BLOQUEIO (Paulo, 08/08, após teste):
+          # app estático — o modo entra no build.
+          VITE_DEPARTAMENTO_GATE_MODO: bloqueio
         run: npm run build
 
       - name: Deploy no Firebase Hosting
