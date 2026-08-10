@@ -31,12 +31,21 @@ const MODULO_DESTE_APP = 'financeiro';
 const MODULO_NOME = 'Consultor Financeiro';
 const CFI_URL = 'https://consultor-fiscal-inteligente-zricstsjqa-uw.a.run.app';
 
+export interface VereditoHorario {
+    permitido?: boolean;
+    mensagem?: string;
+    janela?: string;
+}
+
 export interface GateDepartamento {
     permitido: boolean;
     modo: 'aviso' | 'bloqueio';
     indeterminado: boolean;
     aviso: string | null;
     motivo: string | null;
+    /** Qual trava fechou a porta: cadeado fixo "sem vínculo" mentiria pra quem só está fora do horário. */
+    bloqueio?: 'departamento' | 'horario';
+    titulo?: string;
 }
 
 export function modoAtual(env: Record<string, string | undefined> = (import.meta as any).env ?? {}): 'aviso' | 'bloqueio' {
@@ -44,9 +53,27 @@ export function modoAtual(env: Record<string, string | undefined> = (import.meta
         ? 'bloqueio' : 'aviso';
 }
 
-/** A decisão, pura — testável sem rede. */
+/**
+ * TRAVA DE HORÁRIO (Paulo, 10/08): chega no MESMO corpo do túnel, no campo
+ * `horario`, JÁ decidida pelo CFI — ele só devolve `permitido:false` quando a
+ * chave-mestra dele (HORARIO_ACESSO_ATIVO=bloqueio) está armada. O arme é ÚNICO
+ * e central; cabear este app agora é inócuo até o Paulo virar a env no CFI. É
+ * INDEPENDENTE do VITE_DEPARTAMENTO_GATE_MODO. Admin já vem liberado de lá;
+ * túnel fora do ar ⇒ sem `horario` ⇒ não barra.
+ */
+export function avaliarHorario(horario?: VereditoHorario | null): { bloqueia: boolean; mensagem: string | null } {
+    if (!horario || horario.permitido !== false) return { bloqueia: false, mensagem: null };
+    return {
+        bloqueia: true,
+        mensagem: horario.mensagem
+            || `Acesso fora do horário permitido${horario.janela ? ` — seu acesso é ${horario.janela}` : ''}. `
+                + 'Se precisar de exceção, fale com um administrador.',
+    };
+}
+
+/** A decisão, pura — testável sem rede. Dobra as DUAS travas (depto + horário). */
 export function decidirGate(
-    { acesso, erro, modo }: { acesso?: { temAcesso: boolean; motivo?: string } | null; erro?: unknown; modo: 'aviso' | 'bloqueio' },
+    { acesso, erro, modo }: { acesso?: { temAcesso: boolean; motivo?: string; horario?: VereditoHorario | null } | null; erro?: unknown; modo: 'aviso' | 'bloqueio' },
 ): GateDepartamento {
     if (erro || !acesso) {
         return {
@@ -54,12 +81,24 @@ export function decidirGate(
             motivo: erro ? String((erro as any)?.message || erro) : 'sem resposta do cadastro central',
         };
     }
+    // Horário barra ANTES: trava armada no CFI, vale mesmo com departamento OK e
+    // mesmo em modo aviso.
+    const h = avaliarHorario(acesso.horario);
+    if (h.bloqueia) {
+        return {
+            permitido: false, modo, indeterminado: false, aviso: null,
+            motivo: h.mensagem, bloqueio: 'horario', titulo: 'Fora do horário de acesso',
+        };
+    }
     if (acesso.temAcesso) {
         return { permitido: true, modo, indeterminado: false, aviso: null, motivo: acesso.motivo || null };
     }
     const motivo = acesso.motivo || `Sem vínculo com o ${MODULO_NOME}.`;
     if (modo === 'bloqueio') {
-        return { permitido: false, modo, indeterminado: false, aviso: null, motivo };
+        return {
+            permitido: false, modo, indeterminado: false, aviso: null, motivo,
+            bloqueio: 'departamento', titulo: `Sem vínculo com o ${MODULO_NOME}`,
+        };
     }
     return {
         permitido: true, modo, indeterminado: false,
@@ -90,7 +129,7 @@ export async function consultarGateDepartamento(
         if (!resp.ok || corpo?.ok !== true) {
             return decidirGate({ erro: new Error(corpo?.error || `HTTP ${resp.status}`), modo });
         }
-        return decidirGate({ acesso: { temAcesso: corpo.temAcesso === true, motivo: corpo.motivo }, modo });
+        return decidirGate({ acesso: { temAcesso: corpo.temAcesso === true, motivo: corpo.motivo, horario: corpo.horario }, modo });
     } catch (e) {
         return decidirGate({ erro: e, modo });
     }
