@@ -56,8 +56,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles }) => {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
         <div style={{ maxWidth: 520 }}>
-          <div style={{ fontSize: 40 }}>🔒</div>
-          <h2 style={{ margin: '12px 0' }}>Sem vínculo com o módulo Financeiro</h2>
+          <div style={{ fontSize: 40 }}>{gate.bloqueio === 'horario' ? '⏰' : '🔒'}</div>
+          <h2 style={{ margin: '12px 0' }}>{gate.titulo || 'Sem vínculo com o módulo Financeiro'}</h2>
           <p style={{ lineHeight: 1.6, color: '#64748b' }}>{gate.motivo}</p>
         </div>
       </div>
