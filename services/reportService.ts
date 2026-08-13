@@ -6,6 +6,7 @@ import { Transaction, User } from '../types';
 import { logger } from '../utils/logger';
 import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
 import { formatExtraChargeDescription } from '../utils/extraCharges';
+import { getPaymentMethod } from '../utils/paymentMethod';
 
 export const ReportService = {
   
@@ -24,6 +25,7 @@ export const ReportService = {
         sortDirection?: string;
         client?: string; // Novo Campo: Cliente
         extraChargesOnly?: boolean;
+        wixInvoicesOnly?: boolean;
     },
     currentUser: User | null
   ) => {
@@ -162,6 +164,9 @@ export const ReportService = {
       if(filters.client) {
           infoText += ` | Filtro: ${filters.client}`;
       }
+      if (filters.wixInvoicesOnly) {
+          infoText += `${infoText ? ' | ' : ''}Filtro: somente Faturas Wix`;
+      }
 
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -191,7 +196,7 @@ export const ReportService = {
         fmtNumber(getOriginalAmount(t)),
         fmtNumber(getPaidAmount(t)),
         fmtNumber(getOutstandingAmount(t)),
-        safeStr(t.paymentMethod || t.method || 'Pix'),
+        getPaymentMethod(t) || '-',
       ]);
 
       const renderCompactReceivablesTable = (title: string, rows: Transaction[], startY: number, highlightedTitle = false) => {
@@ -215,7 +220,7 @@ export const ReportService = {
           startY: titleY + 3,
           head: [[
             showExtraChargeDescription ? 'Cobrança Extra' : 'Lanç.', 'Venc.', 'Receb.', 'Atraso', 'Cliente', 'N.Cli.', 'CPF/CNPJ', 'Status',
-            'Honor.', 'Extras', 'Total', 'Recebido', 'Saldo', 'Método'
+            'Honor.', 'Extras', 'Total', 'Recebido', 'Saldo', 'Modo de cobrança'
           ]],
           body: compactBody(rows),
           theme: 'striped',
@@ -251,7 +256,7 @@ export const ReportService = {
             10: { cellWidth: 16, halign: 'right' },
             11: { cellWidth: 17, halign: 'right' },
             12: { cellWidth: 16, halign: 'right' },
-            13: { cellWidth: 11, halign: 'center' },
+            13: { cellWidth: 28, halign: 'left' },
           },
           didParseCell: (data: any) => {
             if (data.section === 'body' && data.column.index === 3) {
@@ -295,10 +300,12 @@ export const ReportService = {
         doc.setTextColor(120, 120, 120);
         doc.text(infoText, pageWidth - 14, yPos, { align: 'right' });
 
-        renderCompactReceivablesTable(`Contas a Receber (${detailTransactions.length})`, detailTransactions, yPos, false);
+        if (!filters.wixInvoicesOnly) {
+          renderCompactReceivablesTable(`Contas a Receber (${detailTransactions.length})`, detailTransactions, yPos, false);
+        }
 
         if (wixTransactions.length > 0) {
-          const wixStartY = ((doc as any).lastAutoTable?.finalY || yPos) + 8;
+          const wixStartY = filters.wixInvoicesOnly ? yPos : ((doc as any).lastAutoTable?.finalY || yPos) + 8;
           renderCompactReceivablesTable(`Faturas Wix (${wixTransactions.length})`, wixTransactions, wixStartY, true);
         }
       } else {

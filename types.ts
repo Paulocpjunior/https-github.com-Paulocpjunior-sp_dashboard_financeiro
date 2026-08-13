@@ -34,6 +34,7 @@ export interface Transaction {
   cobrancaExtra?: string;
   valorExtra?: number;
   totalCobranca?: number;
+  metodoPagamento?: string; // Campo original gravado pelo Jotform
   paymentMethod?: string;
   method?: string;
   source?: string;

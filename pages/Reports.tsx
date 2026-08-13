@@ -8,7 +8,7 @@ import { Transaction, KPIData, FilterState } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { formatISODateBR } from '../utils/dateUtils';
-import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, parseMoneyValue } from '../utils/transactionAmounts';
+import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
 import { formatExtraChargeDescription, hasExtraCharge } from '../utils/extraCharges';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
@@ -108,6 +108,7 @@ const Reports: React.FC = () => {
   const [selectedMovement, setSelectedMovement] = useState<string>(''); 
   const [selectedClient, setSelectedClient] = useState<string>(''); // Novo estado para Cliente
   const [extraChargesOnly, setExtraChargesOnly] = useState(false);
+  const [wixInvoicesOnly, setWixInvoicesOnly] = useState(false);
   
   // Sort States
   const [sortField, setSortField] = useState<SortField>('date');
@@ -242,6 +243,7 @@ const Reports: React.FC = () => {
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
     setExtraChargesOnly(false);
+    setWixInvoicesOnly(false);
     
     // Reset filters before applying new mode specifics to avoid conflicts
     setSelectedStatus('');
@@ -348,7 +350,12 @@ const Reports: React.FC = () => {
       result = result.filter(hasExtraCharge);
     }
 
-    // 8. Sorting
+    // 8. Faturas Wix (exclusivo do modo Contas a Receber)
+    if (reportMode === 'receivables' && wixInvoicesOnly) {
+      result = result.filter(isWixInvoice);
+    }
+
+    // 9. Sorting
     result = [...result].sort((a, b) => {
       let valA: any;
       let valB: any;
@@ -436,7 +443,7 @@ const Reports: React.FC = () => {
 
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient, reportMode, extraChargesOnly]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient, reportMode, extraChargesOnly, wixInvoicesOnly]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
@@ -444,6 +451,7 @@ const Reports: React.FC = () => {
     );
     setReportMode('general');
     setExtraChargesOnly(false);
+    setWixInvoicesOnly(false);
   };
 
   const selectAllTypes = () => setSelectedTypes([...availableTypes]);
@@ -472,7 +480,8 @@ const Reports: React.FC = () => {
         dateContext: dateLabelMap[dateFilterType],
         sortField,
         sortDirection,
-        extraChargesOnly: reportMode === 'receivables' && extraChargesOnly
+        extraChargesOnly: reportMode === 'receivables' && extraChargesOnly,
+        wixInvoicesOnly: reportMode === 'receivables' && wixInvoicesOnly
     };
 
     setTimeout(() => {
@@ -633,7 +642,7 @@ const Reports: React.FC = () => {
                         </div>
                         <div>
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><ArrowLeftRight className="h-4 w-4" /> Movimentação</label>
-                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); }}>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); setWixInvoicesOnly(false); }}>
                                 <option value="">Todas</option>
                                 <option value="Entrada">Entradas / Receitas</option>
                                 <option value="Saída">Saídas / Despesas</option>
@@ -671,11 +680,15 @@ const Reports: React.FC = () => {
                             </div>
                         </div>
                         {reportMode === 'receivables' && (
-                            <label className={`md:col-span-2 flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${extraChargesOnly ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                          <>
+                            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${extraChargesOnly ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
                                 <input
                                     type="checkbox"
                                     checked={extraChargesOnly}
-                                    onChange={(e) => setExtraChargesOnly(e.target.checked)}
+                                    onChange={(e) => {
+                                      setExtraChargesOnly(e.target.checked);
+                                      if (e.target.checked) setWixInvoicesOnly(false);
+                                    }}
                                     className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                 />
                                 <span>
@@ -687,6 +700,26 @@ const Reports: React.FC = () => {
                                     </span>
                                 </span>
                             </label>
+                            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${wixInvoicesOnly ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={wixInvoicesOnly}
+                                    onChange={(e) => {
+                                      setWixInvoicesOnly(e.target.checked);
+                                      if (e.target.checked) setExtraChargesOnly(false);
+                                    }}
+                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                        Somente Faturas Wix
+                                    </span>
+                                    <span className="block mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                        Exibe apenas as faturas emitidas pelo Wix, preservando as datas originais de lançamento, vencimento e recebimento.
+                                    </span>
+                                </span>
+                            </label>
+                          </>
                         )}
                     </div>
             </div>

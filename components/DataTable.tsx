@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangl
 import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
 import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
+import { getPaymentMethod } from '../utils/paymentMethod';
 
 interface DataTableProps {
   data: Transaction[];
@@ -1022,7 +1023,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">
-                              {row.paymentMethod || 'Pix'}
+                              {getPaymentMethod(row) || '-'}
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
