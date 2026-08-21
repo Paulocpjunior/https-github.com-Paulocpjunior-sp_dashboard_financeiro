@@ -5,13 +5,9 @@ const isSafari = (): boolean => {
   return /Safari/i.test(userAgent) && !/Chrome|Chromium|CriOS|Android/i.test(userAgent);
 };
 
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let offset = 0; offset < bytes.length; offset += 32_768) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
-  }
-  return btoa(binary);
+export const warmPDFDownloadService = (): void => {
+  if (!isSafari()) return;
+  void fetch('/api/pdf-download/health', { cache: 'no-store' }).catch(() => undefined);
 };
 
 export const savePDF = async (doc: jsPDF, fileName: string): Promise<void> => {
@@ -23,8 +19,11 @@ export const savePDF = async (doc: jsPDF, fileName: string): Promise<void> => {
   const pdfBytes = doc.output('arraybuffer');
   const response = await fetch('/api/pdf-download', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-    body: new URLSearchParams({ fileName, pdfBase64: arrayBufferToBase64(pdfBytes) }),
+    headers: {
+      'Content-Type': 'application/pdf',
+      'X-PDF-Filename': fileName,
+    },
+    body: pdfBytes,
   });
   if (!response.ok) throw new Error(`Não foi possível preparar o PDF para download (${response.status}).`);
   const { downloadUrl } = await response.json();

@@ -17,6 +17,7 @@ import {
 } from '../utils/billingForecast';
 import { formatISODateBR } from '../utils/dateUtils';
 import { logger } from '../utils/logger';
+import { warmPDFDownloadService } from '../utils/pdfDownload';
 import {
   AlertTriangle, Building2, CalendarDays, CheckCircle2, Download, FileSpreadsheet, FileText,
   Mail, MessageCircle, Pencil, Plus, Printer, RefreshCw, Search, Send, X, ArrowUp, ArrowDown,
@@ -67,6 +68,7 @@ const BillingForecast: React.FC = () => {
   const [sortField, setSortField] = useState<BillingSortField>('groupName');
   const [sortDirection, setSortDirection] = useState<BillingSortDirection>('asc');
   const [downloadMessage, setDownloadMessage] = useState('');
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [editingProfile, setEditingProfile] = useState<BillingProfile | null>(null);
 
   const load = async () => {
@@ -91,6 +93,10 @@ const BillingForecast: React.FC = () => {
   useEffect(() => {
     load();
   }, [referenceMonth]);
+
+  useEffect(() => {
+    warmPDFDownloadService();
+  }, []);
 
   const allRows = useMemo(
     () => buildBillingForecastRows(transactions, profiles, referenceMonth, targetMonth),
@@ -204,7 +210,11 @@ const BillingForecast: React.FC = () => {
   };
 
   const handlePDFDownload = async () => {
+    if (downloadingPDF) return;
+    setDownloadingPDF(true);
+    setDownloadMessage('Preparando PDF...');
     try {
+      await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
       const fileName = await BillingReportService.generatePDF(rows, user);
       setDownloadMessage(`PDF gerado: ${fileName}`);
       window.setTimeout(() => setDownloadMessage(''), 6000);
@@ -215,6 +225,8 @@ const BillingForecast: React.FC = () => {
       }
       logger.error('Erro ao baixar PDF:', downloadError);
       setDownloadMessage(downloadError?.message || 'Não foi possível gerar o PDF.');
+    } finally {
+      setDownloadingPDF(false);
     }
   };
 
@@ -240,8 +252,9 @@ const BillingForecast: React.FC = () => {
             <button type="button" disabled={!rows.length} onClick={() => BillingReportService.exportCSV(rows)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold disabled:opacity-50">
               <Download className="h-4 w-4" /> CSV
             </button>
-            <button type="button" disabled={!rows.length} onClick={handlePDFDownload} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white font-semibold disabled:opacity-50">
-              <FileText className="h-4 w-4" /> Baixar PDF
+            <button type="button" disabled={!rows.length || downloadingPDF} onClick={handlePDFDownload} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white font-semibold disabled:opacity-50">
+              {downloadingPDF ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {downloadingPDF ? 'Preparando...' : 'Baixar PDF'}
             </button>
           </div>
         </div>

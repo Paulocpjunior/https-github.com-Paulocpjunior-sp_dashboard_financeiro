@@ -17,7 +17,7 @@ function sanitizeFileName(value) {
 
 function createServer() {
   return http.createServer((request, response) => {
-    if (request.method === 'GET' && request.url === '/health') {
+    if (request.method === 'GET' && (request.url === '/health' || request.url === '/api/pdf-download/health')) {
       sendText(response, 200, 'ok');
       return;
     }
@@ -75,15 +75,25 @@ function createServer() {
     });
     request.on('end', () => {
       try {
-        const body = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
-        const pdf = Buffer.from(body.get('pdfBase64') || '', 'base64');
+        const contentType = String(request.headers['content-type'] || '').toLowerCase();
+        const requestBody = Buffer.concat(chunks);
+        let pdf;
+        let fileName;
+        if (contentType.startsWith('application/pdf')) {
+          pdf = requestBody;
+          fileName = request.headers['x-pdf-filename'];
+        } else {
+          const body = new URLSearchParams(requestBody.toString('utf8'));
+          pdf = Buffer.from(body.get('pdfBase64') || '', 'base64');
+          fileName = body.get('fileName');
+        }
         if (pdf.length < 5 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
           sendText(response, 400, 'invalid PDF');
           return;
         }
 
         const token = randomUUID();
-        pendingPDFs.set(token, { pdf, fileName: sanitizeFileName(body.get('fileName')), expiresAt: Date.now() + PDF_TTL_MS });
+        pendingPDFs.set(token, { pdf, fileName: sanitizeFileName(fileName), expiresAt: Date.now() + PDF_TTL_MS });
         const cleanup = setTimeout(() => pendingPDFs.delete(token), PDF_TTL_MS);
         cleanup.unref();
         const payload = JSON.stringify({ downloadUrl: `/api/pdf-download/${token}` });
