@@ -6,6 +6,7 @@ import { VersionUpdateNotice } from './components/VersionUpdateNotice';
 const Login = React.lazy(() => import('./pages/Login'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Reports = React.lazy(() => import('./pages/Reports'));
+const BillingForecast = React.lazy(() => import('./pages/BillingForecast'));
 const Admin = React.lazy(() => import('./pages/Admin'));
 
 const App: React.FC = () => {
@@ -28,6 +29,14 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/faturamento"
+            element={
+              <ProtectedRoute>
+                <BillingForecast />
               </ProtectedRoute>
             }
           />

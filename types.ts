@@ -65,6 +65,54 @@ export interface ClientRegistryEntry {
   confidence?: 'high' | 'medium' | string;
 }
 
+export type BillingDeliveryChannel = 'email' | 'whatsapp' | 'printed';
+
+export interface BillingProfile {
+  id: string;
+  identityKey: string;
+  client: string;
+  cpfCnpj?: string;
+  clientNumber?: string;
+  groupName?: string;
+  billingMethod?: string;
+  issueDay?: number;
+  dueDay?: number;
+  deliveryChannels: BillingDeliveryChannel[];
+  billingEmail?: string;
+  whatsapp?: string;
+  printedDeliveryDetails?: string;
+  billingInstructions?: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface BillingForecastRow {
+  identityKey: string;
+  client: string;
+  cpfCnpj: string;
+  clientNumber: string;
+  groupName: string;
+  billingMethod: string;
+  issueDate: string;
+  dueDate: string;
+  deliveryChannels: BillingDeliveryChannel[];
+  billingEmail: string;
+  whatsapp: string;
+  printedDeliveryDetails: string;
+  billingInstructions: string;
+  honorarios: number;
+  extras: number;
+  referenceAmount: number;
+  referenceCount: number;
+  referenceMonth: string;
+  targetMonth: string;
+  profile?: BillingProfile;
+  hasReference: boolean;
+  missingFields: string[];
+}
+
 export interface FilterState {
   id: string;
   startDate: string;

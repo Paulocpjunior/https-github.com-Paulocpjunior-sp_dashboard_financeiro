@@ -12,10 +12,11 @@ import {
   getDocsFromCache,
   getDocsFromServer,
   getCountFromServer,
-  QueryConstraint
+  QueryConstraint,
+  setDoc
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { ClientRegistryEntry, Transaction, FilterState, KPIData } from '../types';
+import { BillingProfile, ClientRegistryEntry, Transaction, FilterState, KPIData } from '../types';
 import { logger } from '../utils/logger';
 
 const FIRESTORE_LIGHT_FETCH_TIMEOUT_MS = 15000;
@@ -60,6 +61,14 @@ const mapClientRegistrySnapshot = (snapshot: { docs: Array<{ id: string; data: (
     id: doc.id,
     ...doc.data()
   })) as ClientRegistryEntry[];
+};
+
+const mapBillingProfilesSnapshot = (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }): BillingProfile[] => {
+  return snapshot.docs.map(document => ({
+    id: document.id,
+    ...document.data(),
+    deliveryChannels: Array.isArray(document.data().deliveryChannels) ? document.data().deliveryChannels : [],
+  })) as BillingProfile[];
 };
 
 export const FirebaseService = {
@@ -241,6 +250,28 @@ export const FirebaseService = {
 
     const snapshot = await withTimeout(getDocsFromServer(q), timeoutMs);
     return mapClientRegistrySnapshot(snapshot);
+  },
+
+  /**
+   * Cadastro operacional usado exclusivamente como base do faturamento.
+   * Valores financeiros continuam vindo das transações do mês de referência.
+   */
+  fetchBillingProfiles: async (timeoutMs = FIRESTORE_LIGHT_FETCH_TIMEOUT_MS): Promise<BillingProfile[]> => {
+    const snapshot = await withTimeout(
+      getDocsFromServer(collection(db, 'billingProfiles')),
+      timeoutMs,
+    );
+    return mapBillingProfilesSnapshot(snapshot);
+  },
+
+  upsertBillingProfile: async (profile: BillingProfile) => {
+    const now = new Date().toISOString();
+    const profileRef = doc(db, 'billingProfiles', profile.id);
+    return setDoc(profileRef, {
+      ...profile,
+      createdAt: profile.createdAt || now,
+      updatedAt: now,
+    }, { merge: true });
   },
 
   /**

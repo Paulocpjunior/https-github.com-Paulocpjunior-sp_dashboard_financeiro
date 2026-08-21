@@ -12,6 +12,18 @@ Dashboard financeiro da SP Contabil, publicado no Firebase Hosting e usando Fire
 
 O app nao usa Google Sheets nem Apps Script como fonte operacional de dados. A leitura e a manutencao financeira passam pelo Firebase.
 
+## Base de Faturamento
+
+A rota `/faturamento` prepara o faturamento do mes seguinte usando os lancamentos reais de contas a receber do mes de referencia. O relatorio:
+
+- mantem empresas do mesmo grupo economico juntas;
+- registra Boleto Itau, Fatura Wix ou combinacao dos dois;
+- projeta data de emissao e vencimento sem emitir cobrancas;
+- registra envio por e-mail, WhatsApp e/ou documento fisico impresso;
+- evidencia dados cadastrais ausentes antes da geracao do PDF ou CSV.
+
+As regras operacionais ficam na colecao `billingProfiles`. Usuarios ativos podem consultar; apenas administradores podem criar ou atualizar. Os valores financeiros continuam vindo das transacoes e sao apresentados como base de referencia, nunca como cobranca emitida automaticamente.
+
 ## Rodar Localmente
 
 Pre-requisitos:
@@ -87,6 +99,7 @@ Depois do deploy, validar:
 
 - https://gen-lang-client-0888019226.web.app
 - https://gen-lang-client-0888019226.web.app/relatorios
+- https://gen-lang-client-0888019226.web.app/faturamento
 - https://gen-lang-client-0888019226.web.app/admin
 
 ## Fluxo de Usuarios
