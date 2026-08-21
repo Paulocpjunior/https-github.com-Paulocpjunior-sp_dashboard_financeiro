@@ -54,8 +54,8 @@
   "dependencies": {
     "@google/genai": "0.14.1",
     "firebase": "^12.10.0",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.7",
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "5.0.7",
     "lucide-react": "0.344.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
