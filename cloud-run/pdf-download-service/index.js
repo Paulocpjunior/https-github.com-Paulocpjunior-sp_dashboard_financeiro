@@ -103,7 +103,10 @@ function createServer() {
         });
         const cleanup = setTimeout(() => pendingPDFs.delete(token), PDF_TTL_MS);
         cleanup.unref();
-        const payload = JSON.stringify({ downloadUrl: `/api/pdf-download/${token}` });
+        const forwardedHost = String(request.headers['x-forwarded-host'] || '').split(',')[0].trim();
+        const serviceHost = request.headers.host;
+        const downloadHost = serviceHost.includes('run.app') ? serviceHost : forwardedHost || serviceHost;
+        const payload = JSON.stringify({ downloadUrl: `https://${downloadHost}/api/pdf-download/${token}` });
         response.writeHead(201, {
           'Content-Type': 'application/json; charset=utf-8',
           'Content-Length': Buffer.byteLength(payload),

@@ -27,14 +27,15 @@ test('prepares a resumable real PDF attachment', async () => {
     });
     assert.equal(response.status, 201);
     const { downloadUrl } = await response.json();
-    const download = await fetch(`http://127.0.0.1:${port}${downloadUrl}`);
+    const downloadPath = new URL(downloadUrl).pathname;
+    const download = await fetch(`http://127.0.0.1:${port}${downloadPath}`);
     assert.equal(download.status, 200);
     assert.equal(download.headers.get('content-type'), 'application/pdf');
     assert.equal(download.headers.get('accept-ranges'), 'bytes');
     assert.equal(download.headers.get('content-disposition'), 'attachment; filename="base-faturamento-2026-09.pdf"');
     assert.equal(Buffer.from(await download.arrayBuffer()).toString('ascii'), '%PDF-test');
 
-    const resumed = await fetch(`http://127.0.0.1:${port}${downloadUrl}`, {
+    const resumed = await fetch(`http://127.0.0.1:${port}${downloadPath}`, {
       headers: { Range: 'bytes=5-8' },
     });
     assert.equal(resumed.status, 206);
