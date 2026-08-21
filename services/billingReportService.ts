@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { BillingForecastRow, User } from '../types';
 import { formatDeliveryChannels } from '../utils/billingForecast';
 import { formatISODateBR } from '../utils/dateUtils';
+import { savePDF } from '../utils/pdfDownload';
 
 const formatMonth = (month: string): string => {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -128,8 +129,7 @@ export const BillingReportService = {
     const doc = buildBillingForecastPDF(rows, currentUser);
     const targetMonth = rows[0]?.targetMonth || new Date().toISOString().slice(0, 7);
     const fileName = `base-faturamento-${targetMonth}.pdf`;
-    // Mesmo fluxo já utilizado e validado pelos relatórios financeiros do sistema.
-    doc.save(fileName);
+    savePDF(doc, fileName);
     return fileName;
   },
 

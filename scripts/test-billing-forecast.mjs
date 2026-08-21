@@ -68,8 +68,8 @@ try {
 
   const billingReportSource = readFileSync(new URL('../services/billingReportService.ts', import.meta.url), 'utf8');
   const financialReportSource = readFileSync(new URL('../services/reportService.ts', import.meta.url), 'utf8');
-  assert.match(financialReportSource, /doc\.save\(fileName\)/, 'o relatório financeiro deve continuar usando o save nativo do jsPDF');
-  assert.match(billingReportSource, /doc\.save\(fileName\)/, 'a base de faturamento deve usar o mesmo save nativo do relatório financeiro');
+  assert.match(financialReportSource, /savePDF\(doc, fileName\)/, 'o relatório financeiro deve usar a base compartilhada de download PDF');
+  assert.match(billingReportSource, /savePDF\(doc, fileName\)/, 'a base de faturamento deve reutilizar a base compartilhada de download PDF');
   assert.doesNotMatch(billingReportSource, /pdf-download|serviceWorker|downloadPDFThroughServer/, 'o PDF não deve usar mecanismo paralelo de download');
 
   console.log('OK: base de faturamento agrupa empresas, projeta datas e gera um PDF real.');

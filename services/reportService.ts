@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
 import { formatExtraChargeDescription } from '../utils/extraCharges';
 import { getPaymentMethod } from '../utils/paymentMethod';
+import { savePDF } from '../utils/pdfDownload';
 
 export const ReportService = {
   
@@ -421,7 +422,7 @@ export const ReportService = {
       }
 
       const fileName = `Relatorio_Financeiro_${new Date().toISOString().slice(0,10)}.pdf`;
-      doc.save(fileName);
+      savePDF(doc, fileName);
 
     } catch (error: any) {
       logger.error("Erro ao gerar PDF:", error);
