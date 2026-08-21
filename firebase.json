@@ -3,6 +3,20 @@
     "public": "dist",
     "rewrites": [
       {
+        "source": "/api/pdf-download",
+        "run": {
+          "serviceId": "sp-pdf-download",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/api/pdf-download/**",
+        "run": {
+          "serviceId": "sp-pdf-download",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

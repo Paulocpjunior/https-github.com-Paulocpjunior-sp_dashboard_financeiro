@@ -1,57 +1,42 @@
 import { jsPDF } from 'jspdf';
 
-const PDF_CACHE = 'sp-pdf-downloads-v1';
-
 const isSafari = (): boolean => {
   const userAgent = navigator.userAgent;
   return /Safari/i.test(userAgent) && !/Chrome|Chromium|CriOS|Android/i.test(userAgent);
 };
 
-const waitForServiceWorkerControl = async (): Promise<void> => {
-  await navigator.serviceWorker.register('/pdf-download-sw.js', { scope: '/' });
-  await navigator.serviceWorker.ready;
-
-  if (navigator.serviceWorker.controller) return;
-
-  await new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(() => reject(new Error('O Safari não ativou o download de PDF. Recarregue a página e tente novamente.')), 8_000);
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.clearTimeout(timeout);
-      resolve();
-    }, { once: true });
-  });
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 32_768) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+  }
+  return btoa(binary);
 };
 
 export const savePDF = async (doc: jsPDF, fileName: string): Promise<void> => {
-  if (!isSafari() || !('serviceWorker' in navigator) || !('caches' in window)) {
+  if (!isSafari()) {
     doc.save(fileName);
     return;
   }
 
-  await waitForServiceWorkerControl();
-
   const pdfBytes = doc.output('arraybuffer');
-  const downloadId = `${Date.now()}-${crypto.randomUUID()}`;
-  const downloadUrl = new URL(`/__pdf-download__/${downloadId}/${encodeURIComponent(fileName)}`, window.location.origin);
-  const cache = await caches.open(PDF_CACHE);
-  await cache.put(downloadUrl.toString(), new Response(pdfBytes, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${fileName}"`,
-      'Content-Length': String(pdfBytes.byteLength),
-      'Cache-Control': 'no-store',
-    },
-  }));
+  const response = await fetch('/api/pdf-download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+    body: new URLSearchParams({ fileName, pdfBase64: arrayBufferToBase64(pdfBytes) }),
+  });
+  if (!response.ok) throw new Error(`Não foi possível preparar o PDF para download (${response.status}).`);
+  const { downloadUrl } = await response.json();
+  if (typeof downloadUrl !== 'string' || !downloadUrl.startsWith('/api/pdf-download/')) {
+    throw new Error('O endereço de download do PDF é inválido.');
+  }
 
   const link = document.createElement('a');
-  link.href = downloadUrl.toString();
+  link.href = downloadUrl;
   link.download = fileName;
   link.rel = 'noopener';
   document.body.appendChild(link);
   link.click();
   link.remove();
-
-  window.setTimeout(() => {
-    void caches.open(PDF_CACHE).then(pdfCache => pdfCache.delete(downloadUrl.toString()));
-  }, 60_000);
 };
