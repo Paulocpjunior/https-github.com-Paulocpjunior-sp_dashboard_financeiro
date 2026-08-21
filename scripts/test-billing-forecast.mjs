@@ -48,7 +48,12 @@ try {
   assert.ok(missing.missingFields.includes('meio de envio'));
   assert.ok(missing.missingFields.includes('método de cobrança'));
 
-  console.log('OK: base de faturamento agrupa empresas, projeta datas e evidencia dados ausentes.');
+  const { buildBillingForecastPDF } = await server.ssrLoadModule('/services/billingReportService.ts');
+  const pdf = buildBillingForecastPDF(rows, { id: '1', username: 'teste', name: 'Teste', role: 'admin', active: true });
+  const pdfBytes = new Uint8Array(pdf.output('arraybuffer'));
+  assert.equal(new TextDecoder().decode(pdfBytes.slice(0, 5)), '%PDF-', 'o arquivo gerado deve conter um PDF real');
+
+  console.log('OK: base de faturamento agrupa empresas, projeta datas e gera um PDF real.');
 } finally {
   await server.close();
 }

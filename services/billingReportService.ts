@@ -16,8 +16,7 @@ const formatCurrency = (value: number): string => new Intl.NumberFormat('pt-BR',
 
 const csvCell = (value: unknown): string => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
-export const BillingReportService = {
-  generatePDF: (rows: BillingForecastRow[], currentUser: User | null) => {
+export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser: User | null): jsPDF => {
     const doc = new jsPDF({ orientation: 'landscape' });
     const pageWidth = doc.internal.pageSize.width || 297;
     const targetMonth = rows[0]?.targetMonth || '';
@@ -76,6 +75,7 @@ export const BillingReportService = {
         ];
       }),
       theme: 'striped',
+      styles: { minCellWidth: 2, overflow: 'linebreak' },
       headStyles: { fillColor: [51, 65, 85], textColor: 255, fontSize: 6.5, fontStyle: 'bold' },
       bodyStyles: { fontSize: 6.2, textColor: [30, 41, 59], cellPadding: 1.2, valign: 'middle' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -108,7 +108,28 @@ export const BillingReportService = {
       doc.text(`Página ${page} de ${pages}`, pageWidth - 10, doc.internal.pageSize.height - 6, { align: 'right' });
     }
 
-    doc.save(`base-faturamento-${targetMonth || new Date().toISOString().slice(0, 7)}.pdf`);
+    return doc;
+};
+
+const downloadPDF = (doc: jsPDF, fileName: string) => {
+  const pdfArrayBuffer = doc.output('arraybuffer');
+  const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+  link.type = 'application/pdf';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+export const BillingReportService = {
+  generatePDF: (rows: BillingForecastRow[], currentUser: User | null) => {
+    const doc = buildBillingForecastPDF(rows, currentUser);
+    const targetMonth = rows[0]?.targetMonth || new Date().toISOString().slice(0, 7);
+    downloadPDF(doc, `base-faturamento-${targetMonth}.pdf`);
   },
 
   exportCSV: (rows: BillingForecastRow[]) => {
