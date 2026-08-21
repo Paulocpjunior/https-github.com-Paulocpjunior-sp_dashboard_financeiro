@@ -2,6 +2,9 @@ import { BillingDeliveryChannel, BillingForecastRow, BillingProfile, Transaction
 import { getPaymentMethod } from './paymentMethod';
 import { getOriginalAmount, isEntradaTransaction, isWixInvoice, parseMoneyValue } from './transactionAmounts';
 
+export type BillingSortField = 'groupName' | 'client' | 'clientNumber' | 'referenceAmount' | 'issueDate' | 'dueDate' | 'billingMethod' | 'status';
+export type BillingSortDirection = 'asc' | 'desc';
+
 const normalizeText = (value: unknown): string => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -151,3 +154,25 @@ export const buildBillingForecastRows = (
 export const makeBillingProfileId = (identityKey: string): string => identityKey
   .replace(/[^a-zA-Z0-9_-]/g, '-')
   .slice(0, 140);
+
+export const sortBillingForecastRows = (
+  rows: BillingForecastRow[],
+  field: BillingSortField,
+  direction: BillingSortDirection,
+): BillingForecastRow[] => [...rows].sort((left, right) => {
+  let comparison = 0;
+  if (field === 'referenceAmount') {
+    comparison = left.referenceAmount - right.referenceAmount;
+  } else if (field === 'status') {
+    comparison = left.missingFields.length - right.missingFields.length;
+  } else if (field === 'clientNumber') {
+    comparison = String(left.clientNumber || '').localeCompare(String(right.clientNumber || ''), 'pt-BR', { numeric: true });
+  } else {
+    comparison = String(left[field] || '').localeCompare(String(right[field] || ''), 'pt-BR', { numeric: true });
+  }
+
+  if (comparison === 0) {
+    comparison = left.client.localeCompare(right.client, 'pt-BR', { numeric: true });
+  }
+  return direction === 'asc' ? comparison : -comparison;
+});

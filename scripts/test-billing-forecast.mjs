@@ -13,6 +13,7 @@ try {
     buildBillingForecastRows,
     dateForMonthDay,
     getBillingIdentityKey,
+    sortBillingForecastRows,
   } = await server.ssrLoadModule('/utils/billingForecast.ts');
 
   assert.equal(addMonths('2026-12', 1), '2027-01');
@@ -48,10 +49,21 @@ try {
   assert.ok(missing.missingFields.includes('meio de envio'));
   assert.ok(missing.missingFields.includes('método de cobrança'));
 
-  const { buildBillingForecastPDF } = await server.ssrLoadModule('/services/billingReportService.ts');
+  const { buildBillingForecastPDF, createBillingForecastPDFFile } = await server.ssrLoadModule('/services/billingReportService.ts');
   const pdf = buildBillingForecastPDF(rows, { id: '1', username: 'teste', name: 'Teste', role: 'admin', active: true });
   const pdfBytes = new Uint8Array(pdf.output('arraybuffer'));
   assert.equal(new TextDecoder().decode(pdfBytes.slice(0, 5)), '%PDF-', 'o arquivo gerado deve conter um PDF real');
+
+  const pdfFile = createBillingForecastPDFFile(rows, { id: '1', username: 'teste', name: 'Teste', role: 'admin', active: true });
+  assert.equal(pdfFile.name, 'base-faturamento-2026-09.pdf');
+  assert.equal(pdfFile.type, 'application/pdf');
+  const fileBytes = new Uint8Array(await pdfFile.arrayBuffer());
+  assert.equal(new TextDecoder().decode(fileBytes.slice(0, 5)), '%PDF-');
+
+  const secondRow = { ...rows[0], identityKey: 'doc-2', client: 'Empresa B', clientNumber: '2', referenceAmount: 900, dueDate: '2026-09-10', missingFields: ['e-mail'] };
+  assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'referenceAmount', 'asc').map(row => row.identityKey), ['doc-2', 'doc-11111111000111']);
+  assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'dueDate', 'desc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
+  assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'status', 'asc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
 
   console.log('OK: base de faturamento agrupa empresas, projeta datas e gera um PDF real.');
 } finally {

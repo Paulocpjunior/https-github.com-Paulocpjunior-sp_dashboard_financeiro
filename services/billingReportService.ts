@@ -111,14 +111,40 @@ export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser:
     return doc;
 };
 
-const downloadPDF = (doc: jsPDF, fileName: string) => {
+export const createBillingForecastPDFFile = (rows: BillingForecastRow[], currentUser: User | null): File => {
+  const doc = buildBillingForecastPDF(rows, currentUser);
   const pdfArrayBuffer = doc.output('arraybuffer');
-  const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
+  const header = new TextDecoder().decode(new Uint8Array(pdfArrayBuffer).slice(0, 5));
+  if (header !== '%PDF-') {
+    throw new Error('O conteúdo gerado não é um PDF válido.');
+  }
+
+  const targetMonth = rows[0]?.targetMonth || new Date().toISOString().slice(0, 7);
+  return new File([pdfArrayBuffer], `base-faturamento-${targetMonth}.pdf`, { type: 'application/pdf' });
+};
+
+const downloadPDF = async (file: File) => {
+  const saveFilePicker = (window as any).showSaveFilePicker;
+  if (typeof saveFilePicker === 'function') {
+    const handle = await saveFilePicker({
+      suggestedName: file.name,
+      types: [{
+        description: 'Documento PDF',
+        accept: { 'application/pdf': ['.pdf'] },
+      }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(file);
+    await writable.close();
+    return;
+  }
+
+  const url = URL.createObjectURL(file);
   const link = document.createElement('a');
   link.href = url;
-  link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+  link.download = file.name;
   link.type = 'application/pdf';
+  link.rel = 'noopener';
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -126,10 +152,10 @@ const downloadPDF = (doc: jsPDF, fileName: string) => {
 };
 
 export const BillingReportService = {
-  generatePDF: (rows: BillingForecastRow[], currentUser: User | null) => {
-    const doc = buildBillingForecastPDF(rows, currentUser);
-    const targetMonth = rows[0]?.targetMonth || new Date().toISOString().slice(0, 7);
-    downloadPDF(doc, `base-faturamento-${targetMonth}.pdf`);
+  generatePDF: async (rows: BillingForecastRow[], currentUser: User | null) => {
+    const file = createBillingForecastPDFFile(rows, currentUser);
+    await downloadPDF(file);
+    return file.name;
   },
 
   exportCSV: (rows: BillingForecastRow[]) => {

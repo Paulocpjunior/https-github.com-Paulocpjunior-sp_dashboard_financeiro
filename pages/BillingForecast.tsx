@@ -11,12 +11,15 @@ import {
   getBillingIdentityKey,
   getMonthRange,
   makeBillingProfileId,
+  sortBillingForecastRows,
+  BillingSortDirection,
+  BillingSortField,
 } from '../utils/billingForecast';
 import { formatISODateBR } from '../utils/dateUtils';
 import { logger } from '../utils/logger';
 import {
   AlertTriangle, Building2, CalendarDays, CheckCircle2, Download, FileSpreadsheet, FileText,
-  Mail, MessageCircle, Pencil, Plus, Printer, RefreshCw, Search, Send, X,
+  Mail, MessageCircle, Pencil, Plus, Printer, RefreshCw, Search, Send, X, ArrowUp, ArrowDown,
 } from 'lucide-react';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -61,6 +64,9 @@ const BillingForecast: React.FC = () => {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [onlyPending, setOnlyPending] = useState(false);
+  const [sortField, setSortField] = useState<BillingSortField>('groupName');
+  const [sortDirection, setSortDirection] = useState<BillingSortDirection>('asc');
+  const [downloadMessage, setDownloadMessage] = useState('');
   const [editingProfile, setEditingProfile] = useState<BillingProfile | null>(null);
 
   const load = async () => {
@@ -93,7 +99,7 @@ const BillingForecast: React.FC = () => {
 
   const rows = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
-    return allRows.filter(row => {
+    const filtered = allRows.filter(row => {
       if (onlyPending && row.missingFields.length === 0) return false;
       if (!normalizedSearch) return true;
       return [row.groupName, row.client, row.cpfCnpj, row.clientNumber, row.billingMethod]
@@ -101,7 +107,9 @@ const BillingForecast: React.FC = () => {
         .toLocaleLowerCase('pt-BR')
         .includes(normalizedSearch);
     });
-  }, [allRows, onlyPending, search]);
+
+    return sortBillingForecastRows(filtered, sortField, sortDirection);
+  }, [allRows, onlyPending, search, sortDirection, sortField]);
 
   const groupedRows = useMemo(() => {
     const groups = new Map<string, BillingForecastRow[]>();
@@ -195,6 +203,21 @@ const BillingForecast: React.FC = () => {
     }
   };
 
+  const handlePDFDownload = async () => {
+    try {
+      const fileName = await BillingReportService.generatePDF(rows, user);
+      setDownloadMessage(`PDF gerado: ${fileName}`);
+      window.setTimeout(() => setDownloadMessage(''), 6000);
+    } catch (downloadError: any) {
+      if (downloadError?.name === 'AbortError') {
+        setDownloadMessage('Download cancelado.');
+        return;
+      }
+      logger.error('Erro ao baixar PDF:', downloadError);
+      setDownloadMessage(downloadError?.message || 'Não foi possível gerar o PDF.');
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -217,11 +240,17 @@ const BillingForecast: React.FC = () => {
             <button type="button" disabled={!rows.length} onClick={() => BillingReportService.exportCSV(rows)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold disabled:opacity-50">
               <Download className="h-4 w-4" /> CSV
             </button>
-            <button type="button" disabled={!rows.length} onClick={() => BillingReportService.generatePDF(rows, user)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white font-semibold disabled:opacity-50">
-              <FileText className="h-4 w-4" /> Gerar PDF
+            <button type="button" disabled={!rows.length} onClick={handlePDFDownload} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-900 dark:bg-blue-600 text-white font-semibold disabled:opacity-50">
+              <FileText className="h-4 w-4" /> Baixar PDF
             </button>
           </div>
         </div>
+
+        {downloadMessage && (
+          <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            {downloadMessage}
+          </div>
+        )}
 
         <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/20 p-4 text-sm text-blue-900 dark:text-blue-200 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
@@ -251,7 +280,7 @@ const BillingForecast: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col xl:flex-row gap-3 xl:items-center">
           <div className="relative flex-1">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar empresa, grupo, CNPJ ou método..." className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950" />
@@ -260,6 +289,23 @@ const BillingForecast: React.FC = () => {
             <input type="checkbox" checked={onlyPending} onChange={event => setOnlyPending(event.target.checked)} className="rounded border-slate-300" />
             Mostrar apenas cadastros pendentes
           </label>
+          <div className="flex gap-2">
+            <label className="sr-only" htmlFor="billing-sort-field">Ordenar por</label>
+            <select id="billing-sort-field" value={sortField} onChange={event => setSortField(event.target.value as BillingSortField)} className="min-w-44 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm font-semibold">
+              <option value="groupName">Ordenar por grupo</option>
+              <option value="client">Ordenar por empresa</option>
+              <option value="clientNumber">Ordenar por N.Cliente</option>
+              <option value="referenceAmount">Ordenar por valor</option>
+              <option value="issueDate">Ordenar por emissão</option>
+              <option value="dueDate">Ordenar por vencimento</option>
+              <option value="billingMethod">Ordenar por método</option>
+              <option value="status">Ordenar por situação</option>
+            </select>
+            <button type="button" onClick={() => setSortDirection(current => current === 'asc' ? 'desc' : 'asc')} className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300" title={sortDirection === 'asc' ? 'Crescente' : 'Decrescente'}>
+              {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+              {sortDirection === 'asc' ? 'Crescente' : 'Decrescente'}
+            </button>
+          </div>
           <button type="button" onClick={load} className="p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300" title="Atualizar">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
