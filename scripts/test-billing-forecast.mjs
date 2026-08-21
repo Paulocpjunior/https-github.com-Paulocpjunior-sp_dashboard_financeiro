@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
 import { createServer } from 'vite';
 
 const server = await createServer({
@@ -93,40 +91,6 @@ try {
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
   }
-
-  const workerHandlers = new Map();
-  const workerMessages = [];
-  const workerSource = readFileSync(new URL('../public/pdf-download-sw.js', import.meta.url), 'utf8');
-  runInNewContext(workerSource, {
-    self: {
-      addEventListener: (event, handler) => workerHandlers.set(event, handler),
-      skipWaiting: () => {},
-      clients: { claim: async () => {} },
-    },
-    Map,
-    URL,
-    Response,
-    ArrayBuffer,
-    encodeURIComponent,
-  });
-
-  const workerPdfBytes = new TextEncoder().encode('%PDF-worker-test').buffer;
-  workerHandlers.get('message')({
-    data: { type: 'STORE_PDF', token: 'token-1', fileName: 'base-faturamento-2026-09.pdf', bytes: workerPdfBytes },
-    source: { postMessage: message => workerMessages.push(message) },
-  });
-  assert.equal(JSON.stringify(workerMessages), JSON.stringify([{ type: 'PDF_STORED', token: 'token-1' }]));
-
-  let workerResponse;
-  workerHandlers.get('fetch')({
-    request: { url: 'https://app.exemplo/__pdf_download__/token-1' },
-    respondWith: response => { workerResponse = response; },
-  });
-  assert.equal(workerResponse.status, 200);
-  assert.equal(workerResponse.headers.get('Content-Type'), 'application/pdf');
-  assert.match(workerResponse.headers.get('Content-Disposition'), /attachment; filename="base-faturamento-2026-09\.pdf"/);
-  const workerResponseBytes = new Uint8Array(await workerResponse.arrayBuffer());
-  assert.equal(new TextDecoder().decode(workerResponseBytes.slice(0, 5)), '%PDF-');
 
   console.log('OK: base de faturamento agrupa empresas, projeta datas e gera um PDF real.');
 } finally {

@@ -17,7 +17,6 @@ const formatCurrency = (value: number): string => new Intl.NumberFormat('pt-BR',
 const csvCell = (value: unknown): string => `"${String(value ?? '').replace(/"/g, '""')}"`;
 const activePDFDownloadUrls = new Set<string>();
 let pdfDownloadCleanupRegistered = false;
-let pdfDownloadServiceRegistration: Promise<ServiceWorkerRegistration | null> | null = null;
 
 const retainPDFDownloadUrl = (url: string) => {
   activePDFDownloadUrls.add(url);
@@ -30,67 +29,49 @@ const retainPDFDownloadUrl = (url: string) => {
   pdfDownloadCleanupRegistered = true;
 };
 
-const waitForServiceWorkerController = async (registration: ServiceWorkerRegistration): Promise<ServiceWorker | null> => {
-  if (navigator.serviceWorker.controller) return navigator.serviceWorker.controller;
-
-  return new Promise(resolve => {
-    const timeout = window.setTimeout(() => resolve(registration.active), 5000);
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.clearTimeout(timeout);
-      resolve(navigator.serviceWorker.controller || registration.active);
-    }, { once: true });
-  });
-};
-
-const getPDFDownloadServiceWorker = async (): Promise<ServiceWorker | null> => {
-  if (!('serviceWorker' in navigator)) return null;
-
-  if (!pdfDownloadServiceRegistration) {
-    pdfDownloadServiceRegistration = navigator.serviceWorker
-      .register('/pdf-download-sw.js', { scope: '/', updateViaCache: 'none' })
-      .then(async registration => {
-        await navigator.serviceWorker.ready;
-        return registration;
-      })
-      .catch(() => null);
-  }
-
-  const registration = await pdfDownloadServiceRegistration;
-  if (!registration) return null;
-  return waitForServiceWorkerController(registration);
-};
-
-const downloadPDFThroughServiceWorker = async (file: File): Promise<boolean> => {
-  const worker = await getPDFDownloadServiceWorker();
-  if (!worker || !navigator.serviceWorker.controller) return false;
-
-  const token = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const bytes = await file.arrayBuffer();
-  const stored = new Promise<boolean>(resolve => {
-    const timeout = window.setTimeout(() => resolve(false), 10000);
-    const onMessage = (event: MessageEvent) => {
-      if (event.data?.type !== 'PDF_STORED' || event.data?.token !== token) return;
-      window.clearTimeout(timeout);
-      navigator.serviceWorker.removeEventListener('message', onMessage);
-      resolve(true);
-    };
-    navigator.serviceWorker.addEventListener('message', onMessage);
-  });
-
-  worker.postMessage({ type: 'STORE_PDF', token, fileName: file.name, bytes }, [bytes]);
-  if (!await stored) return false;
-
-  const link = document.createElement('a');
-  link.href = `/__pdf_download__/${encodeURIComponent(token)}`;
-  link.download = file.name;
-  link.rel = 'noopener';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  return true;
-};
-
 const isSafariBrowser = (): boolean => /Safari/i.test(navigator.userAgent) && !/(Chrome|CriOS|Edg|OPR)/i.test(navigator.userAgent);
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return window.btoa(binary);
+};
+
+const downloadPDFThroughServer = async (file: File) => {
+  const frameName = `pdf-download-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const frame = document.createElement('iframe');
+  frame.name = frameName;
+  frame.hidden = true;
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/api/pdf-download';
+  form.target = frameName;
+  form.hidden = true;
+
+  const fields = {
+    fileName: file.name,
+    pdfBase64: arrayBufferToBase64(await file.arrayBuffer()),
+  };
+  Object.entries(fields).forEach(([name, value]) => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.append(frame, form);
+  form.submit();
+  window.setTimeout(() => {
+    form.remove();
+    frame.remove();
+  }, 60000);
+};
 
 export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser: User | null): jsPDF => {
     const doc = new jsPDF({ orientation: 'landscape' });
@@ -215,19 +196,17 @@ const downloadPDF = async (file: File) => {
     return;
   }
 
-  if (await downloadPDFThroughServiceWorker(file)) return;
+  if (isSafariBrowser()) {
+    await downloadPDFThroughServer(file);
+    return;
+  }
 
   const url = URL.createObjectURL(file);
   const link = document.createElement('a');
   link.href = url;
   link.type = 'application/pdf';
   link.rel = 'noopener';
-  if (isSafariBrowser()) {
-    // Ultimo recurso: abre o PDF nativo em vez de criar outra pasta .pdf.download incompleta.
-    link.target = '_blank';
-  } else {
-    link.download = file.name;
-  }
+  link.download = file.name;
   document.body.appendChild(link);
   // Safari mantem o download em uma pasta .download enquanto ainda consome o Blob.
   // O URL precisa continuar valido ate a pagina ser encerrada para nao interromper PDFs maiores.
