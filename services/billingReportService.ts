@@ -18,7 +18,7 @@ const formatCurrency = (value: number): string => new Intl.NumberFormat('pt-BR',
 const csvCell = (value: unknown): string => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser: User | null): jsPDF => {
-    const doc = new jsPDF({ orientation: 'landscape' });
+    const doc = new jsPDF({ orientation: 'landscape', compress: true, putOnlyUsedFonts: true });
     const pageWidth = doc.internal.pageSize.width || 297;
     const targetMonth = rows[0]?.targetMonth || '';
     const referenceMonth = rows[0]?.referenceMonth || '';
