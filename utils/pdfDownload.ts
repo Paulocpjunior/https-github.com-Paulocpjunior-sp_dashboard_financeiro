@@ -34,7 +34,9 @@ export const savePDF = async (doc: jsPDF, fileName: string): Promise<void> => {
   }
 
   const link = document.createElement('a');
-  link.href = `${PDF_DOWNLOAD_SERVICE_URL}${downloadUrl}`;
+  // O envio vai direto ao serviço por desempenho, mas o download permanece no
+  // domínio já autorizado do sistema para não exibir um novo aviso no Safari.
+  link.href = downloadUrl;
   link.download = fileName;
   link.rel = 'noopener';
   document.body.appendChild(link);
