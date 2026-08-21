@@ -15,47 +15,6 @@ const formatCurrency = (value: number): string => new Intl.NumberFormat('pt-BR',
 }).format(value || 0);
 
 const csvCell = (value: unknown): string => `"${String(value ?? '').replace(/"/g, '""')}"`;
-const activePDFDownloadUrls = new Set<string>();
-let pdfDownloadCleanupRegistered = false;
-
-const retainPDFDownloadUrl = (url: string) => {
-  activePDFDownloadUrls.add(url);
-  if (pdfDownloadCleanupRegistered) return;
-
-  window.addEventListener('pagehide', () => {
-    activePDFDownloadUrls.forEach(activeUrl => URL.revokeObjectURL(activeUrl));
-    activePDFDownloadUrls.clear();
-  }, { once: true });
-  pdfDownloadCleanupRegistered = true;
-};
-
-const isSafariBrowser = (): boolean => /Safari/i.test(navigator.userAgent) && !/(Chrome|CriOS|Edg|OPR)/i.test(navigator.userAgent);
-
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  }
-  return window.btoa(binary);
-};
-
-const downloadPDFThroughServer = async (file: File) => {
-  const body = new URLSearchParams({
-    fileName: file.name,
-    pdfBase64: arrayBufferToBase64(await file.arrayBuffer()),
-  });
-  const response = await fetch('/api/pdf-download', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!response.ok) throw new Error('Não foi possível preparar o PDF para download.');
-  const payload = await response.json();
-  if (!payload?.downloadUrl) throw new Error('O servidor não retornou o endereço do PDF.');
-  window.location.assign(payload.downloadUrl);
-};
 
 export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser: User | null): jsPDF => {
     const doc = new jsPDF({ orientation: 'landscape' });
@@ -164,46 +123,14 @@ export const createBillingForecastPDFFile = (rows: BillingForecastRow[], current
   return new File([pdfArrayBuffer], `base-faturamento-${targetMonth}.pdf`, { type: 'application/pdf' });
 };
 
-const downloadPDF = async (file: File) => {
-  const saveFilePicker = (window as any).showSaveFilePicker;
-  if (typeof saveFilePicker === 'function') {
-    const handle = await saveFilePicker({
-      suggestedName: file.name,
-      types: [{
-        description: 'Documento PDF',
-        accept: { 'application/pdf': ['.pdf'] },
-      }],
-    });
-    const writable = await handle.createWritable();
-    await writable.write(file);
-    await writable.close();
-    return;
-  }
-
-  if (isSafariBrowser()) {
-    await downloadPDFThroughServer(file);
-    return;
-  }
-
-  const url = URL.createObjectURL(file);
-  const link = document.createElement('a');
-  link.href = url;
-  link.type = 'application/pdf';
-  link.rel = 'noopener';
-  link.download = file.name;
-  document.body.appendChild(link);
-  // Safari mantem o download em uma pasta .download enquanto ainda consome o Blob.
-  // O URL precisa continuar valido ate a pagina ser encerrada para nao interromper PDFs maiores.
-  retainPDFDownloadUrl(url);
-  link.click();
-  link.remove();
-};
-
 export const BillingReportService = {
-  generatePDF: async (rows: BillingForecastRow[], currentUser: User | null) => {
-    const file = createBillingForecastPDFFile(rows, currentUser);
-    await downloadPDF(file);
-    return file.name;
+  generatePDF: (rows: BillingForecastRow[], currentUser: User | null) => {
+    const doc = buildBillingForecastPDF(rows, currentUser);
+    const targetMonth = rows[0]?.targetMonth || new Date().toISOString().slice(0, 7);
+    const fileName = `base-faturamento-${targetMonth}.pdf`;
+    // Mesmo fluxo já utilizado e validado pelos relatórios financeiros do sistema.
+    doc.save(fileName);
+    return fileName;
   },
 
   exportCSV: (rows: BillingForecastRow[]) => {

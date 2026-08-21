@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'vite';
 
 const server = await createServer({
@@ -49,7 +50,7 @@ try {
   assert.ok(missing.missingFields.includes('meio de envio'));
   assert.ok(missing.missingFields.includes('método de cobrança'));
 
-  const { BillingReportService, buildBillingForecastPDF, createBillingForecastPDFFile } = await server.ssrLoadModule('/services/billingReportService.ts');
+  const { buildBillingForecastPDF, createBillingForecastPDFFile } = await server.ssrLoadModule('/services/billingReportService.ts');
   const pdf = buildBillingForecastPDF(rows, { id: '1', username: 'teste', name: 'Teste', role: 'admin', active: true });
   const pdfBytes = new Uint8Array(pdf.output('arraybuffer'));
   assert.equal(new TextDecoder().decode(pdfBytes.slice(0, 5)), '%PDF-', 'o arquivo gerado deve conter um PDF real');
@@ -65,32 +66,11 @@ try {
   assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'dueDate', 'desc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
   assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'status', 'asc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
 
-  let pageHideHandler;
-  let clicked = 0;
-  let revoked = 0;
-  const originalWindow = globalThis.window;
-  const originalDocument = globalThis.document;
-  const originalCreateObjectURL = URL.createObjectURL;
-  const originalRevokeObjectURL = URL.revokeObjectURL;
-  globalThis.window = { addEventListener: (_event, handler) => { pageHideHandler = handler; } };
-  globalThis.document = {
-    body: { appendChild: () => {} },
-    createElement: () => ({ click: () => { clicked += 1; }, remove: () => {} }),
-  };
-  URL.createObjectURL = () => 'blob:pdf-test';
-  URL.revokeObjectURL = () => { revoked += 1; };
-  try {
-    await BillingReportService.generatePDF(rows, null);
-    assert.equal(clicked, 1, 'o fallback deve iniciar o download');
-    assert.equal(revoked, 0, 'o Blob nao pode ser liberado enquanto o Safari ainda baixa o PDF');
-    pageHideHandler();
-    assert.equal(revoked, 1, 'o Blob deve ser liberado quando a pagina for encerrada');
-  } finally {
-    globalThis.window = originalWindow;
-    globalThis.document = originalDocument;
-    URL.createObjectURL = originalCreateObjectURL;
-    URL.revokeObjectURL = originalRevokeObjectURL;
-  }
+  const billingReportSource = readFileSync(new URL('../services/billingReportService.ts', import.meta.url), 'utf8');
+  const financialReportSource = readFileSync(new URL('../services/reportService.ts', import.meta.url), 'utf8');
+  assert.match(financialReportSource, /doc\.save\(fileName\)/, 'o relatório financeiro deve continuar usando o save nativo do jsPDF');
+  assert.match(billingReportSource, /doc\.save\(fileName\)/, 'a base de faturamento deve usar o mesmo save nativo do relatório financeiro');
+  assert.doesNotMatch(billingReportSource, /pdf-download|serviceWorker|downloadPDFThroughServer/, 'o PDF não deve usar mecanismo paralelo de download');
 
   console.log('OK: base de faturamento agrupa empresas, projeta datas e gera um PDF real.');
 } finally {
