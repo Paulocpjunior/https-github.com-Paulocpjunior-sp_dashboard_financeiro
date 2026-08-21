@@ -484,13 +484,13 @@ const Reports: React.FC = () => {
         wixInvoicesOnly: reportMode === 'receivables' && wixInvoicesOnly
     };
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         if (snapshotData.length === 0) {
           alert('Nenhum registro encontrado com os filtros aplicados. Ajuste os filtros e tente novamente.');
           return;
         }
-        ReportService.generatePDF(
+        await ReportService.generatePDF(
           snapshotData, 
           snapshotKpi, 
           snapshotFilters,

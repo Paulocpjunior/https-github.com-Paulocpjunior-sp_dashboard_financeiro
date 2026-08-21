@@ -11,7 +11,7 @@ import { savePDF } from '../utils/pdfDownload';
 
 export const ReportService = {
   
-  generatePDF: (
+  generatePDF: async (
     transactions: Transaction[], 
     kpi: any,
     filters: { 
@@ -422,7 +422,7 @@ export const ReportService = {
       }
 
       const fileName = `Relatorio_Financeiro_${new Date().toISOString().slice(0,10)}.pdf`;
-      savePDF(doc, fileName);
+      await savePDF(doc, fileName);
 
     } catch (error: any) {
       logger.error("Erro ao gerar PDF:", error);

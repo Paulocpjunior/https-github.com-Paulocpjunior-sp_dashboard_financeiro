@@ -125,11 +125,11 @@ export const createBillingForecastPDFFile = (rows: BillingForecastRow[], current
 };
 
 export const BillingReportService = {
-  generatePDF: (rows: BillingForecastRow[], currentUser: User | null) => {
+  generatePDF: async (rows: BillingForecastRow[], currentUser: User | null) => {
     const doc = buildBillingForecastPDF(rows, currentUser);
     const targetMonth = rows[0]?.targetMonth || new Date().toISOString().slice(0, 7);
     const fileName = `base-faturamento-${targetMonth}.pdf`;
-    savePDF(doc, fileName);
+    await savePDF(doc, fileName);
     return fileName;
   },
 
