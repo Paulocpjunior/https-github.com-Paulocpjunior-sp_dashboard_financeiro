@@ -6,6 +6,7 @@ const SAFARI_NATIVE_DOWNLOAD_LIMIT = 500 * 1024;
 export interface PreparedPDFDownload {
   download: () => void;
   expiresAt: number;
+  dispose?: () => void;
 }
 
 const isSafari = (): boolean => {
@@ -25,7 +26,19 @@ export const preparePDFDownload = async (doc: jsPDF, fileName: string): Promise<
 
   const pdfBytes = doc.output('arraybuffer');
   if (pdfBytes.byteLength <= SAFARI_NATIVE_DOWNLOAD_LIMIT) {
-    return { download: () => doc.save(fileName), expiresAt: Number.POSITIVE_INFINITY };
+    const pdfUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }));
+    return {
+      expiresAt: Number.POSITIVE_INFINITY,
+      dispose: () => URL.revokeObjectURL(pdfUrl),
+      download: () => {
+        const link = document.createElement('a');
+        link.href = pdfUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      },
+    };
   }
 
   const response = await fetch(`${PDF_DOWNLOAD_SERVICE_URL}/api/pdf-download`, {

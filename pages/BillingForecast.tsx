@@ -123,10 +123,13 @@ const BillingForecast: React.FC = () => {
     if (loading || !rows.length) return;
 
     let cancelled = false;
+    let preparedResult: Awaited<ReturnType<typeof BillingReportService.preparePDF>> | null = null;
     const timer = window.setTimeout(() => {
       void BillingReportService.preparePDF(rows, user)
         .then(prepared => {
+          preparedResult = prepared;
           if (!cancelled) setPreparedPDF(prepared);
+          else prepared.dispose?.();
         })
         .catch(prepareError => logger.warn('Não foi possível antecipar o PDF:', prepareError));
     }, 300);
@@ -134,6 +137,7 @@ const BillingForecast: React.FC = () => {
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      preparedResult?.dispose?.();
     };
   }, [loading, rows, user?.username]);
 
