@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 
+const PDF_DOWNLOAD_SERVICE_URL = 'https://sp-pdf-download-291088837584.us-central1.run.app';
+
 const isSafari = (): boolean => {
   const userAgent = navigator.userAgent;
   return /Safari/i.test(userAgent) && !/Chrome|Chromium|CriOS|Android/i.test(userAgent);
@@ -7,7 +9,7 @@ const isSafari = (): boolean => {
 
 export const warmPDFDownloadService = (): void => {
   if (!isSafari()) return;
-  void fetch('/api/pdf-download/health', { cache: 'no-store' }).catch(() => undefined);
+  void fetch(`${PDF_DOWNLOAD_SERVICE_URL}/api/pdf-download/health`, { cache: 'no-store' }).catch(() => undefined);
 };
 
 export const savePDF = async (doc: jsPDF, fileName: string): Promise<void> => {
@@ -17,7 +19,7 @@ export const savePDF = async (doc: jsPDF, fileName: string): Promise<void> => {
   }
 
   const pdfBytes = doc.output('arraybuffer');
-  const response = await fetch('/api/pdf-download', {
+  const response = await fetch(`${PDF_DOWNLOAD_SERVICE_URL}/api/pdf-download`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/pdf',
@@ -32,7 +34,7 @@ export const savePDF = async (doc: jsPDF, fileName: string): Promise<void> => {
   }
 
   const link = document.createElement('a');
-  link.href = downloadUrl;
+  link.href = `${PDF_DOWNLOAD_SERVICE_URL}${downloadUrl}`;
   link.download = fileName;
   link.rel = 'noopener';
   document.body.appendChild(link);

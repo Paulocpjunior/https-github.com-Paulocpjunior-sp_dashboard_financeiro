@@ -4,9 +4,19 @@ const { randomUUID } = require('node:crypto');
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const pendingPDFs = new Map();
 const PDF_TTL_MS = 5 * 60 * 1000;
+const ALLOWED_ORIGINS = new Set([
+  'https://gen-lang-client-0888019226.web.app',
+  'http://127.0.0.1:3000',
+  'http://localhost:3000',
+]);
 
-function sendText(response, status, text) {
-  response.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+function corsHeaders(request) {
+  const origin = String(request.headers.origin || '');
+  return ALLOWED_ORIGINS.has(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {};
+}
+
+function sendText(request, response, status, text) {
+  response.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...corsHeaders(request) });
   response.end(text);
 }
 
@@ -17,8 +27,19 @@ function sanitizeFileName(value) {
 
 function createServer() {
   return http.createServer((request, response) => {
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, {
+        ...corsHeaders(request),
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-PDF-Filename',
+        'Access-Control-Max-Age': '86400',
+      });
+      response.end();
+      return;
+    }
+
     if (request.method === 'GET' && (request.url === '/health' || request.url === '/api/pdf-download/health')) {
-      sendText(response, 200, 'ok');
+      sendText(request, response, 200, 'ok');
       return;
     }
 
@@ -27,7 +48,7 @@ function createServer() {
       const entry = pendingPDFs.get(downloadMatch[1]);
       if (!entry || entry.expiresAt < Date.now()) {
         pendingPDFs.delete(downloadMatch[1]);
-        sendText(response, 404, 'PDF expired');
+        sendText(request, response, 404, 'PDF expired');
         return;
       }
 
@@ -62,7 +83,7 @@ function createServer() {
     }
 
     if (request.method !== 'POST' || request.url !== '/api/pdf-download') {
-      sendText(response, 404, 'not found');
+      sendText(request, response, 404, 'not found');
       return;
     }
 
@@ -88,7 +109,7 @@ function createServer() {
           fileName = body.get('fileName');
         }
         if (pdf.length < 5 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
-          sendText(response, 400, 'invalid PDF');
+          sendText(request, response, 400, 'invalid PDF');
           return;
         }
 
@@ -101,10 +122,11 @@ function createServer() {
           'Content-Type': 'application/json; charset=utf-8',
           'Content-Length': Buffer.byteLength(payload),
           'Cache-Control': 'no-store',
+          ...corsHeaders(request),
         });
         response.end(payload);
       } catch {
-        sendText(response, 400, 'invalid request');
+        sendText(request, response, 400, 'invalid request');
       }
     });
   });
