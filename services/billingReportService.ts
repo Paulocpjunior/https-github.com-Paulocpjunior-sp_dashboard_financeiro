@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { BillingForecastRow, User } from '../types';
 import { formatDeliveryChannels } from '../utils/billingForecast';
 import { formatISODateBR } from '../utils/dateUtils';
-import { savePDF } from '../utils/pdfDownload';
+import { preparePDFDownload } from '../utils/pdfDownload';
 
 const formatMonth = (month: string): string => {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -125,12 +125,18 @@ export const createBillingForecastPDFFile = (rows: BillingForecastRow[], current
 };
 
 export const BillingReportService = {
-  generatePDF: async (rows: BillingForecastRow[], currentUser: User | null) => {
+  preparePDF: async (rows: BillingForecastRow[], currentUser: User | null) => {
     const doc = buildBillingForecastPDF(rows, currentUser);
     const targetMonth = rows[0]?.targetMonth || new Date().toISOString().slice(0, 7);
     const fileName = `base-faturamento-${targetMonth}.pdf`;
-    await savePDF(doc, fileName);
-    return fileName;
+    const prepared = await preparePDFDownload(doc, fileName);
+    return { ...prepared, fileName };
+  },
+
+  generatePDF: async (rows: BillingForecastRow[], currentUser: User | null) => {
+    const prepared = await BillingReportService.preparePDF(rows, currentUser);
+    prepared.download();
+    return prepared.fileName;
   },
 
   exportCSV: (rows: BillingForecastRow[]) => {

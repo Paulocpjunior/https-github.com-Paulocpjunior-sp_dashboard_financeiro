@@ -69,6 +69,7 @@ const BillingForecast: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<BillingSortDirection>('asc');
   const [downloadMessage, setDownloadMessage] = useState('');
   const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [preparedPDF, setPreparedPDF] = useState<Awaited<ReturnType<typeof BillingReportService.preparePDF>> | null>(null);
   const [editingProfile, setEditingProfile] = useState<BillingProfile | null>(null);
 
   const load = async () => {
@@ -116,6 +117,25 @@ const BillingForecast: React.FC = () => {
 
     return sortBillingForecastRows(filtered, sortField, sortDirection);
   }, [allRows, onlyPending, search, sortDirection, sortField]);
+
+  useEffect(() => {
+    setPreparedPDF(null);
+    if (loading || !rows.length) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void BillingReportService.preparePDF(rows, user)
+        .then(prepared => {
+          if (!cancelled) setPreparedPDF(prepared);
+        })
+        .catch(prepareError => logger.warn('Não foi possível antecipar o PDF:', prepareError));
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [loading, rows, user?.username]);
 
   const groupedRows = useMemo(() => {
     const groups = new Map<string, BillingForecastRow[]>();
@@ -215,7 +235,13 @@ const BillingForecast: React.FC = () => {
     setDownloadMessage('Preparando PDF...');
     try {
       await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
-      const fileName = await BillingReportService.generatePDF(rows, user);
+      let fileName: string;
+      if (preparedPDF && preparedPDF.expiresAt > Date.now()) {
+        preparedPDF.download();
+        fileName = preparedPDF.fileName;
+      } else {
+        fileName = await BillingReportService.generatePDF(rows, user);
+      }
       setDownloadMessage(`PDF gerado: ${fileName}`);
       window.setTimeout(() => setDownloadMessage(''), 6000);
     } catch (downloadError: any) {
