@@ -15,6 +15,19 @@ const formatCurrency = (value: number): string => new Intl.NumberFormat('pt-BR',
 }).format(value || 0);
 
 const csvCell = (value: unknown): string => `"${String(value ?? '').replace(/"/g, '""')}"`;
+const activePDFDownloadUrls = new Set<string>();
+let pdfDownloadCleanupRegistered = false;
+
+const retainPDFDownloadUrl = (url: string) => {
+  activePDFDownloadUrls.add(url);
+  if (pdfDownloadCleanupRegistered) return;
+
+  window.addEventListener('pagehide', () => {
+    activePDFDownloadUrls.forEach(activeUrl => URL.revokeObjectURL(activeUrl));
+    activePDFDownloadUrls.clear();
+  }, { once: true });
+  pdfDownloadCleanupRegistered = true;
+};
 
 export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser: User | null): jsPDF => {
     const doc = new jsPDF({ orientation: 'landscape' });
@@ -146,9 +159,11 @@ const downloadPDF = async (file: File) => {
   link.type = 'application/pdf';
   link.rel = 'noopener';
   document.body.appendChild(link);
+  // Safari mantem o download em uma pasta .download enquanto ainda consome o Blob.
+  // O URL precisa continuar valido ate a pagina ser encerrada para nao interromper PDFs maiores.
+  retainPDFDownloadUrl(url);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 export const BillingReportService = {
