@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 
 const PDF_DOWNLOAD_SERVICE_URL = 'https://sp-pdf-download-291088837584.us-central1.run.app';
+const SAFARI_NATIVE_DOWNLOAD_LIMIT = 500 * 1024;
 
 export interface PreparedPDFDownload {
   download: () => void;
@@ -23,6 +24,10 @@ export const preparePDFDownload = async (doc: jsPDF, fileName: string): Promise<
   }
 
   const pdfBytes = doc.output('arraybuffer');
+  if (pdfBytes.byteLength <= SAFARI_NATIVE_DOWNLOAD_LIMIT) {
+    return { download: () => doc.save(fileName), expiresAt: Number.POSITIVE_INFINITY };
+  }
+
   const response = await fetch(`${PDF_DOWNLOAD_SERVICE_URL}/api/pdf-download`, {
     method: 'POST',
     headers: {
