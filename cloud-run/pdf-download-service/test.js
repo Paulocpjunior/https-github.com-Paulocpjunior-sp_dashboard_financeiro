@@ -7,7 +7,7 @@ test('sanitizes and preserves the PDF extension', () => {
   assert.equal(sanitizeFileName('relatorio'), 'relatorio.pdf');
 });
 
-test('returns a real PDF attachment', async () => {
+test('prepares a resumable real PDF attachment', async () => {
   const server = createServer().listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   try {
@@ -25,10 +25,21 @@ test('returns a real PDF attachment', async () => {
       },
       body,
     });
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get('content-type'), 'application/pdf');
-    assert.equal(response.headers.get('content-disposition'), 'attachment; filename="base-faturamento-2026-09.pdf"');
-    assert.equal(Buffer.from(await response.arrayBuffer()).toString('ascii'), '%PDF-test');
+    assert.equal(response.status, 201);
+    const { downloadUrl } = await response.json();
+    const download = await fetch(`http://127.0.0.1:${port}${downloadUrl}`);
+    assert.equal(download.status, 200);
+    assert.equal(download.headers.get('content-type'), 'application/pdf');
+    assert.equal(download.headers.get('accept-ranges'), 'bytes');
+    assert.equal(download.headers.get('content-disposition'), 'attachment; filename="base-faturamento-2026-09.pdf"');
+    assert.equal(Buffer.from(await download.arrayBuffer()).toString('ascii'), '%PDF-test');
+
+    const resumed = await fetch(`http://127.0.0.1:${port}${downloadUrl}`, {
+      headers: { Range: 'bytes=5-8' },
+    });
+    assert.equal(resumed.status, 206);
+    assert.equal(resumed.headers.get('content-range'), 'bytes 5-8/9');
+    assert.equal(Buffer.from(await resumed.arrayBuffer()).toString('ascii'), 'test');
   } finally {
     server.close();
   }

@@ -42,29 +42,19 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
 };
 
 const downloadPDFThroughServer = async (file: File) => {
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = '/api/pdf-download';
-  // O Safari nao conclui anexos iniciados em iframe oculto. Uma resposta
-  // attachment na navegacao principal baixa o arquivo sem sair desta tela.
-  form.target = '_self';
-  form.hidden = true;
-
-  const fields = {
+  const body = new URLSearchParams({
     fileName: file.name,
     pdfBase64: arrayBufferToBase64(await file.arrayBuffer()),
-  };
-  Object.entries(fields).forEach(([name, value]) => {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
   });
-
-  document.body.append(form);
-  form.submit();
-  window.setTimeout(() => form.remove(), 60000);
+  const response = await fetch('/api/pdf-download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!response.ok) throw new Error('Não foi possível preparar o PDF para download.');
+  const payload = await response.json();
+  if (!payload?.downloadUrl) throw new Error('O servidor não retornou o endereço do PDF.');
+  window.location.assign(payload.downloadUrl);
 };
 
 export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser: User | null): jsPDF => {
