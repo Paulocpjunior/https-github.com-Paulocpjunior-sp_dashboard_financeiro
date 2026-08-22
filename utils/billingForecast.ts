@@ -113,7 +113,12 @@ export const buildBillingForecastRows = (
     profilesByKey.set(key, profile);
   }
 
-  const keys = new Set([...transactionsByKey.keys(), ...profilesByKey.keys()]);
+  // O cadastro de empresas é originado pelo Jotform. Perfis salvos apenas
+  // complementam uma empresa existente; eles não podem criar novas linhas.
+  // Faturas Wix isoladas também não criam um segundo cadastro sem documento.
+  const keys = new Set(activeTransactions
+    .filter(transaction => !isWixInvoice(transaction))
+    .map(transaction => getBillingIdentityKey(transaction)));
 
   return Array.from(keys).map(identityKey => {
     const matchingTransactions = (transactionsByKey.get(identityKey) || [])

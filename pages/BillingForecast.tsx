@@ -20,7 +20,7 @@ import { logger } from '../utils/logger';
 import { warmPDFDownloadService } from '../utils/pdfDownload';
 import {
   AlertTriangle, Building2, CalendarDays, CheckCircle2, Download, FileSpreadsheet, FileText,
-  Mail, MessageCircle, Pencil, Plus, Printer, RefreshCw, Search, Send, X, ArrowUp, ArrowDown,
+  Mail, MessageCircle, Pencil, Printer, RefreshCw, Search, Send, X, ArrowUp, ArrowDown,
 } from 'lucide-react';
 
 const getCurrentLocalMonth = () => {
@@ -29,7 +29,6 @@ const getCurrentLocalMonth = () => {
 };
 
 const currentMonth = getCurrentLocalMonth();
-type BillingReferenceField = 'date' | 'dueDate';
 
 const emptyProfile = (): BillingProfile => ({
   id: '',
@@ -64,7 +63,6 @@ const BillingForecast: React.FC = () => {
   const isAdmin = (user?.role || '').toLowerCase() === 'admin';
   const [referenceMonth, setReferenceMonth] = useState(currentMonth);
   const [targetMonth, setTargetMonth] = useState(addMonths(currentMonth, 1));
-  const [referenceField, setReferenceField] = useState<BillingReferenceField>('date');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [profiles, setProfiles] = useState<BillingProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +83,7 @@ const BillingForecast: React.FC = () => {
     try {
       const range = getMonthRange(referenceMonth);
       const [loadedTransactions, loadedProfiles] = await Promise.all([
-        FirebaseService.fetchTransactionsByRange(referenceField, range.startDate, range.endDate),
+        FirebaseService.fetchTransactionsByRange('date', range.startDate, range.endDate),
         FirebaseService.fetchBillingProfiles(),
       ]);
       setTransactions(loadedTransactions);
@@ -100,15 +98,15 @@ const BillingForecast: React.FC = () => {
 
   useEffect(() => {
     load();
-  }, [referenceMonth, referenceField]);
+  }, [referenceMonth]);
 
   useEffect(() => {
     warmPDFDownloadService();
   }, []);
 
   const allRows = useMemo(
-    () => buildBillingForecastRows(transactions, profiles, referenceMonth, targetMonth, referenceField),
-    [transactions, profiles, referenceMonth, targetMonth, referenceField],
+    () => buildBillingForecastRows(transactions, profiles, referenceMonth, targetMonth, 'date'),
+    [transactions, profiles, referenceMonth, targetMonth],
   );
 
   const rows = useMemo(() => {
@@ -165,12 +163,7 @@ const BillingForecast: React.FC = () => {
     groups: new Set(rows.map(row => row.groupName).filter(group => group !== 'Sem grupo')).size,
   }), [rows]);
 
-  const openEditor = (row?: BillingForecastRow) => {
-    if (!row) {
-      setEditingProfile(emptyProfile());
-      return;
-    }
-
+  const openEditor = (row: BillingForecastRow) => {
     setEditingProfile({
       ...emptyProfile(),
       ...row.profile,
@@ -212,18 +205,20 @@ const BillingForecast: React.FC = () => {
 
     setSaving(true);
     try {
-      const identityKey = getBillingIdentityKey(editingProfile);
+      const sourceRow = allRows.find(row => row.identityKey === editingProfile.identityKey);
+      if (!sourceRow) throw new Error('A empresa não está mais disponível na base recebida do Jotform. Atualize a tela.');
+      const identityKey = sourceRow.identityKey;
       const conflictingProfile = profiles.find(item => item.id !== editingProfile.id && item.active !== false && (item.identityKey || getBillingIdentityKey(item)) === identityKey);
       if (conflictingProfile) {
-        throw new Error(`Já existe uma regra ativa para ${conflictingProfile.client}. Revise o CPF/CNPJ ou N.Cliente.`);
+        throw new Error(`Já existe uma regra ativa para ${conflictingProfile.client}.`);
       }
       const profile: BillingProfile = {
         ...editingProfile,
         id: editingProfile.id || makeBillingProfileId(identityKey),
         identityKey,
-        client: editingProfile.client.trim(),
-        cpfCnpj: editingProfile.cpfCnpj?.trim(),
-        clientNumber: editingProfile.clientNumber?.trim(),
+        client: sourceRow.client,
+        cpfCnpj: sourceRow.cpfCnpj,
+        clientNumber: sourceRow.clientNumber,
         groupName: editingProfile.groupName?.trim(),
         billingMethod: editingProfile.billingMethod?.trim(),
         billingEmail: editingProfile.billingEmail?.trim(),
@@ -285,11 +280,6 @@ const BillingForecast: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {isAdmin && (
-              <button type="button" onClick={() => openEditor()} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm">
-                <Plus className="h-4 w-4" /> Adicionar empresa
-              </button>
-            )}
             <button type="button" disabled={!rows.length} onClick={() => BillingReportService.exportCSV(rows)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-semibold disabled:opacity-50">
               <Download className="h-4 w-4" /> CSV
             </button>
@@ -308,18 +298,15 @@ const BillingForecast: React.FC = () => {
 
         <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/20 p-4 text-sm text-blue-900 dark:text-blue-200 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
-          <p><strong>Relatório preparatório:</strong> os valores são apenas a base real do mês de referência. Esta tela não emite boleto Itaú, não cria fatura Wix e não envia cobranças automaticamente.</p>
+          <p><strong>Relatório preparatório:</strong> o cadastro das empresas vem do Jotform. Aqui são mantidas somente as regras de cobrança e envio; esta tela não emite boleto Itaú, não cria fatura Wix e não envia cobranças automaticamente.</p>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
           <div className="xl:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 grid sm:grid-cols-3 gap-4">
-            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              Critério do mês-base
-              <select value={referenceField} onChange={event => setReferenceField(event.target.value as BillingReferenceField)} className="mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5">
-                <option value="date">Data de lançamento</option>
-                <option value="dueDate">Data de vencimento</option>
-              </select>
-            </label>
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Origem das empresas
+              <div className="mt-2 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2.5">Jotform • data de lançamento</div>
+            </div>
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               Mês usado como base financeira
               <input type="month" value={referenceMonth} onChange={event => { setReferenceMonth(event.target.value); setTargetMonth(addMonths(event.target.value, 1)); }} className="mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" />
@@ -332,7 +319,7 @@ const BillingForecast: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
             <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">{search || onlyPending ? 'Total filtrado' : 'Total de referência'}</p>
             <p className="text-2xl font-black text-blue-700 dark:text-blue-300 mt-1">{formatCurrency(summary.total)}</p>
-            <p className="text-xs text-slate-500 mt-1">{formatMonth(referenceMonth)} • por {referenceField === 'date' ? 'lançamento' : 'vencimento'}</p>
+            <p className="text-xs text-slate-500 mt-1">{formatMonth(referenceMonth)} • lançamentos do Jotform</p>
           </div>
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 grid grid-cols-3 gap-2 text-center">
             <div><p className="text-xl font-black text-emerald-600">{summary.ready}</p><p className="text-[10px] uppercase text-slate-500">Prontos</p></div>
@@ -419,9 +406,9 @@ const BillingForecast: React.FC = () => {
             <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between"><div><h2 className="font-black text-lg text-slate-900 dark:text-white">Regra de faturamento e envio</h2><p className="text-xs text-slate-500">Associe empresas do mesmo grupo usando exatamente o mesmo nome de grupo.</p></div><button type="button" onClick={() => setEditingProfile(null)} className="p-2 text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button></div>
             <div className="p-6 overflow-y-auto space-y-5">
               <div className="grid sm:grid-cols-2 gap-4">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Empresa *<input required value={editingProfile.client} onChange={event => updateEditing({ client: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">CPF/CNPJ<input value={editingProfile.cpfCnpj || ''} onChange={event => updateEditing({ cpfCnpj: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">N.Cliente<input value={editingProfile.clientNumber || ''} onChange={event => updateEditing({ clientNumber: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Empresa — recebida do Jotform<input readOnly value={editingProfile.client} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">CPF/CNPJ — Jotform<input readOnly value={editingProfile.cpfCnpj || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">N.Cliente — Jotform<input readOnly value={editingProfile.clientNumber || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Grupo econômico<input value={editingProfile.groupName || ''} onChange={event => updateEditing({ groupName: event.target.value })} placeholder="Ex.: Grupo Empresa Alfa" className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">

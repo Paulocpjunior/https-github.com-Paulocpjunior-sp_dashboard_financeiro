@@ -46,10 +46,18 @@ try {
   assert.deepEqual(rows[0].adjustedDates, ['vencimento ajustado do dia 31 para 30']);
   assert.deepEqual(rows[0].missingFields, []);
 
-  const missing = buildBillingForecastRows([], [{
+  const profileOnly = buildBillingForecastRows([], [{
     id: 'manual', identityKey: 'name-sem-canal', client: 'Sem Canal', deliveryChannels: [], active: true,
-  }], '2026-08', '2026-09')[0];
-  assert.equal(missing.hasReference, false);
+  }], '2026-08', '2026-09');
+  assert.equal(profileOnly.length, 0, 'uma regra manual não deve criar empresa fora da base do Jotform');
+
+  const missing = buildBillingForecastRows([{
+    id: 'jotform-sem-canal', date: '2026-08-10', dueDate: '', type: 'Entrada de Caixa / Contas a Receber',
+    description: 'Sem Canal', status: 'Pendente', client: 'Sem Canal', movement: 'Entrada',
+    valuePaid: 0, valueReceived: 0, cpfCnpj: '33.333.333/0001-33', totalCobranca: 300,
+    metodoPagamento: '', bankAccount: '', paidBy: '', source: 'jotform',
+  }], [], '2026-08', '2026-09')[0];
+  assert.equal(missing.hasReference, true);
   assert.ok(missing.missingFields.includes('meio de envio'));
   assert.ok(missing.missingFields.includes('método de cobrança'));
 
