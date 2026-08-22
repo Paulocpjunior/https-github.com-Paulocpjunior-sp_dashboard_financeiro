@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
 import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
 import { getPaymentMethod } from '../utils/paymentMethod';
+import { PossibleDuplicateScan, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 interface DataTableProps {
   data: Transaction[];
@@ -24,10 +25,11 @@ interface DataTableProps {
   onDelete?: (id: string) => void;
   onMarkAsPaid?: (id: string) => void;
   onClientClick?: (clientName: string) => void;
+  sortField: TransactionSortField;
+  sortDirection: TransactionSortDirection;
+  onSortChange: (field: TransactionSortField, direction: TransactionSortDirection) => void;
+  possibleDuplicates?: PossibleDuplicateScan;
 }
-
-type SortField = 'client' | 'clientNumber' | 'dueDate' | 'receiptDate' | 'cpfCnpj' | 'none';
-type SortDirection = 'asc' | 'desc';
 
 // --- VALIDAÇÕES E MÁSCARAS ---
 
@@ -110,10 +112,12 @@ const DataTable: React.FC<DataTableProps> = ({
     allData = [],
     canDelete = false,
     onDelete,
-    onClientClick
+    onClientClick,
+    sortField,
+    sortDirection,
+    onSortChange,
+    possibleDuplicates,
 }) => {
-  const [sortField, setSortField] = useState<SortField>('none');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
@@ -151,17 +155,15 @@ const DataTable: React.FC<DataTableProps> = ({
       }
   }, []);
 
-  const handleSort = (field: SortField) => {
+  const handleSort = (field: TransactionSortField) => {
     if (sortField === field) {
       if (sortDirection === 'asc') {
-        setSortDirection('desc');
+        onSortChange(field, 'desc');
       } else {
-        setSortField('none');
-        setSortDirection('asc');
+        onSortChange('none', 'asc');
       }
     } else {
-      setSortField(field);
-      setSortDirection('asc');
+      onSortChange(field, 'asc');
     }
   };
 
@@ -299,7 +301,7 @@ const DataTable: React.FC<DataTableProps> = ({
       handleClientDocChange(clientName, formatDocument(clean));
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const SortIcon = ({ field }: { field: TransactionSortField }) => {
     if (sortField !== field) {
       return <ChevronsUpDown className="h-3 w-3 text-slate-400" />;
     }
@@ -316,19 +318,6 @@ const DataTable: React.FC<DataTableProps> = ({
     const rawValue = row.clientNumber;
     if (rawValue === null || rawValue === undefined || rawValue === '') return '-';
     return String(rawValue).trim() || '-';
-  };
-
-  const compareClientNumber = (a: Transaction, b: Transaction): number => {
-    const rawA = getClientNumber(a);
-    const rawB = getClientNumber(b);
-    if (rawA === '-' && rawB === '-') return 0;
-    if (rawA === '-') return 1;
-    if (rawB === '-') return -1;
-
-    const numA = Number(String(rawA).replace(/\D/g, ''));
-    const numB = Number(String(rawB).replace(/\D/g, ''));
-    if (Number.isFinite(numA) && Number.isFinite(numB)) return numA - numB;
-    return rawA.localeCompare(rawB, 'pt-BR', { numeric: true });
   };
 
   const normalizedType = normalizeText(selectedType || '');
@@ -608,43 +597,6 @@ const DataTable: React.FC<DataTableProps> = ({
     alert(`✅ Arquivo gerado com ${selectedExportClients.length} boletos.`);
   };
 
-  const sortedData = useMemo(() => {
-    if (sortField === 'none') return data;
-
-    return [...data].sort((a, b) => {
-      let comparison = 0;
-
-      switch (sortField) {
-        case 'client':
-          const clientA = (a.client || '').toLowerCase();
-          const clientB = (b.client || '').toLowerCase();
-          comparison = clientA.localeCompare(clientB, 'pt-BR');
-          break;
-        case 'clientNumber':
-          comparison = compareClientNumber(a, b);
-          break;
-        case 'dueDate':
-          const dateA = new Date(a.dueDate || '1970-01-01').getTime();
-          const dateB = new Date(b.dueDate || '1970-01-01').getTime();
-          comparison = dateA - dateB;
-          break;
-        case 'receiptDate':
-          // Using paymentDate as substitute for receiptDate since it's the effective date
-          const recA = new Date(a.paymentDate || '1970-01-01').getTime();
-          const recB = new Date(b.paymentDate || '1970-01-01').getTime();
-          comparison = recA - recB;
-          break;
-        case 'cpfCnpj':
-          const docA = (a.cpfCnpj || '').toLowerCase();
-          const docB = (b.cpfCnpj || '').toLowerCase();
-          comparison = docA.localeCompare(docB, 'pt-BR');
-          break;
-      }
-
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [data, sortField, sortDirection]);
-
   const formatCurrency = (val: number | string | undefined) => {
     const num = Number(val || 0);
     return new Intl.NumberFormat('pt-BR', { 
@@ -707,7 +659,7 @@ const DataTable: React.FC<DataTableProps> = ({
     return 6;
   };
 
-  const SortableHeader = ({ field, label, className = '' }: { field: SortField; label: string; className?: string }) => (
+  const SortableHeader = ({ field, label, className = '' }: { field: TransactionSortField; label: string; className?: string }) => (
     <th 
       className={`px-2 py-2 font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors select-none ${className}`}
       onClick={() => handleSort(field)}
@@ -729,9 +681,32 @@ const DataTable: React.FC<DataTableProps> = ({
   const areAllVisibleSelected = filteredExportClients.length > 0 && filteredExportClients.every(c => selectedExportClients.includes(c));
   const isSelectionEmpty = selectedExportClients.length === 0;
 
+  const renderDuplicateBadge = (row: Transaction) => {
+    const signal = possibleDuplicates?.byTransactionId.get(row.id);
+    if (!signal) return null;
+    const highRisk = signal.reasons.includes('paid-open') || signal.reasons.includes('submission');
+    return (
+      <span
+        className={`ml-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold ${highRisk ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}
+        title="Possível duplicidade: revise os lançamentos antes de qualquer ação"
+      >
+        <AlertTriangle className="h-2.5 w-2.5" />
+        DUPLICIDADE
+      </span>
+    );
+  };
+
   return (
     <>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors relative">
+        {possibleDuplicates && possibleDuplicates.transactionCount > 0 && (
+          <div className="px-3 py-2 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="text-xs font-medium">
+              {possibleDuplicates.transactionCount} lançamentos em {possibleDuplicates.groupCount} grupo{possibleDuplicates.groupCount === 1 ? '' : 's'} com indício de duplicidade. Revise antes de baixar ou excluir; nenhuma correção é automática.
+            </span>
+          </div>
+        )}
         
         {/* Header com botão de exportar - Apenas Contas a Receber */}
         {isContasAReceber && (
@@ -898,14 +873,14 @@ const DataTable: React.FC<DataTableProps> = ({
                     </div>
                   </td>
                 </tr>
-              ) : sortedData.length === 0 ? (
+              ) : data.length === 0 ? (
                 <tr>
                   <td colSpan={getColSpan()} className="px-6 py-10 text-center text-slate-500">
                     Nenhum registro encontrado.
                   </td>
                 </tr>
               ) : (
-                sortedData.map((row) => {
+                data.map((row) => {
                   const isRowSaida = isSaidaTransaction(row);
                   const isPago = isPaidStatus(row.status);
                   const isPending = !isPago;
@@ -914,7 +889,7 @@ const DataTable: React.FC<DataTableProps> = ({
                   const isVencido = diasAtraso > 0;
 
                   return (
-                    <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
+                    <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${possibleDuplicates?.byTransactionId.has(row.id) ? 'bg-amber-50/70 dark:bg-amber-900/15 ring-1 ring-inset ring-amber-300/60' : isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
                       
                       {isContasAPagar && (
                         <>
@@ -930,6 +905,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             onClick={() => onClientClick && onClientClick(row.client)}
                           >
                             {row.description || row.client || '-'}
+                            {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                             {row.cpfCnpj || '-'}
@@ -984,6 +960,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             onClick={() => onClientClick && onClientClick(row.client)}
                           >
                             {row.client || '-'}
+                            {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center text-xs font-bold text-blue-600 dark:text-blue-400">
                             {getClientNumber(row)}
@@ -1048,6 +1025,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             onClick={() => onClientClick && onClientClick(row.client)}
                           >
                             {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                            {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                             {row.cpfCnpj || '-'}

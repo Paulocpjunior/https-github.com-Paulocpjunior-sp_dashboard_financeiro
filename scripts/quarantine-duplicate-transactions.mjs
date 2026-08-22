@@ -186,9 +186,11 @@ const normalizeBusinessDetail = (value) => {
   const normalized = normalizeText(value);
   if (!normalized) return '';
 
-  const competenceMatch = normalized.match(/\b(?:competencia|comp|hon|honorario|honorarios)?\s*(\d{1,2})\s+(\d{2,4})\b/);
+  const competenceMatch = normalized.match(/\b(?:competencia|comp|hon|honorario|honorarios)\s+(\d{1,2})\s+(\d{2,4})\b/);
   if (competenceMatch) {
-    const month = competenceMatch[1].padStart(2, '0');
+    const monthNumber = Number(competenceMatch[1]);
+    if (monthNumber < 1 || monthNumber > 12) return normalized;
+    const month = String(monthNumber).padStart(2, '0');
     const year = normalizeYear(competenceMatch[2]);
     return `competencia:${year}-${month}`;
   }

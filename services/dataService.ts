@@ -7,6 +7,7 @@ import { db } from './firebaseConfig';
 import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
 import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { sortTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 type LoadedRange = {
   field: TransactionRangeField;
@@ -851,7 +852,9 @@ export const DataService = {
   getTransactions: (
     filters: Partial<FilterState>,
     page: number = 1,
-    pageSize: number = 20
+    pageSize: number = 20,
+    sortField: TransactionSortField = 'none',
+    sortDirection: TransactionSortDirection = 'asc',
   ): { result: PaginatedResult<Transaction>; kpi: KPIData } => {
     
     let filtered = CACHED_TRANSACTIONS;
@@ -942,6 +945,8 @@ export const DataService = {
         { totalPaid: 0, totalReceived: 0, balance: 0 }
       );
     }
+
+    filtered = sortTransactions(filtered, sortField, sortDirection);
 
     const total = filtered.length;
     const totalPages = Math.ceil(total / pageSize);

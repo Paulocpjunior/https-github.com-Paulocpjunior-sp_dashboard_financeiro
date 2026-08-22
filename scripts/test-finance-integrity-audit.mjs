@@ -64,7 +64,7 @@ const backup = {
           valuePaid: 31,
           valueReceived: 0,
           totalCobranca: 0,
-          observacaoAPagar: 'VR BRUNA',
+          observacaoAPagar: 'VR BRUNA 18-05',
         }),
         doc('payable-detail-b', {
           type: 'Saída de Caixa / Contas a Pagar',
@@ -77,7 +77,7 @@ const backup = {
           valuePaid: 31,
           valueReceived: 0,
           totalCobranca: 0,
-          observacaoAPagar: 'VR GABRIELLE',
+          observacaoAPagar: 'VR GABRIELLE 18-05',
         }),
       ],
     },

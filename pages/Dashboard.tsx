@@ -13,6 +13,7 @@ import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCir
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { logger } from '../utils/logger';
 import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
+import { findPossibleDuplicateTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -61,6 +62,8 @@ const Dashboard: React.FC = () => {
   const [data, setData] = useState<Transaction[]>([]);
   const [allFilteredData, setAllFilteredData] = useState<Transaction[]>([]);
   const [totalPages, setTotalPages] = useState(1);
+  const [sortField, setSortField] = useState<TransactionSortField>('none');
+  const [sortDirection, setSortDirection] = useState<TransactionSortDirection>('asc');
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [showAdvancedDates, setShowAdvancedDates] = useState(false);
@@ -83,9 +86,11 @@ const Dashboard: React.FC = () => {
   // Refs para manter filtros/página atuais acessíveis no callback do onRefresh
   const filtersRef = useRef(filters);
   const pageRef = useRef(page);
+  const sortRef = useRef({ field: sortField, direction: sortDirection });
   const loadedScopeRef = useRef('');
   filtersRef.current = filters;
   pageRef.current = page;
+  sortRef.current = { field: sortField, direction: sortDirection };
 
   // Refresh States
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -106,13 +111,23 @@ const Dashboard: React.FC = () => {
                           normalizedType.includes('servico') ||
                           filters.movement === 'Entrada';
 
-  const applyTransactionResult = useCallback((filtersToApply: Partial<FilterState>, pageToApply: number) => {
-    const { result, kpi: newKpi } = DataService.getTransactions(filtersToApply, pageToApply);
+  const applyTransactionResult = useCallback((
+    filtersToApply: Partial<FilterState>,
+    pageToApply: number,
+    field: TransactionSortField = sortRef.current.field,
+    direction: TransactionSortDirection = sortRef.current.direction,
+  ) => {
+    const { result, kpi: newKpi } = DataService.getTransactions(filtersToApply, pageToApply, 20, field, direction);
     setData(result.data);
     setAllFilteredData(result.allData ?? result.data);
     setTotalPages(result.totalPages);
     setKpi(newKpi);
   }, []);
+
+  const possibleDuplicates = useMemo(
+    () => findPossibleDuplicateTransactions(allFilteredData),
+    [allFilteredData],
+  );
 
   // Initial Data Load
   useEffect(() => {
@@ -179,7 +194,7 @@ const Dashboard: React.FC = () => {
       // ★ FIX: Também atualizar tabela e KPIs com os dados mais recentes do cache
       const currentFilters = filtersRef.current;
       const currentPage = pageRef.current;
-      applyTransactionResult(currentFilters, currentPage);
+      applyTransactionResult(currentFilters, currentPage, sortRef.current.field, sortRef.current.direction);
     });
 
     // Iniciar auto-refresh
@@ -212,7 +227,7 @@ const Dashboard: React.FC = () => {
       setRefreshCountdown(60);
       
       // Recarregar dados com filtros atuais
-      applyTransactionResult(filters, page);
+      applyTransactionResult(filters, page, sortField, sortDirection);
 
       // Atualizar opções de filtro
       setOptions({
@@ -228,14 +243,14 @@ const Dashboard: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [filters, page, isRefreshing, applyTransactionResult]);
+  }, [filters, page, sortField, sortDirection, isRefreshing, applyTransactionResult]);
 
   // Handle Filter Changes
   useEffect(() => {
     if (!isLoading && !initError) {
-      applyTransactionResult(filters, page);
+      applyTransactionResult(filters, page, sortField, sortDirection);
     }
-  }, [filters, page, isLoading, initError, applyTransactionResult]);
+  }, [filters, page, sortField, sortDirection, isLoading, initError, applyTransactionResult]);
 
   useEffect(() => {
     if (isLoading || initError) return;
@@ -330,6 +345,12 @@ const Dashboard: React.FC = () => {
       return updated;
     });
     setPage(1); // Reset to page 1 on filter change
+  };
+
+  const handleSortChange = (field: TransactionSortField, direction: TransactionSortDirection) => {
+    setSortField(field);
+    setSortDirection(direction);
+    setPage(1);
   };
 
   const clearFilters = () => {
@@ -1117,6 +1138,10 @@ const Dashboard: React.FC = () => {
                 isLoading={isLoading}
                 selectedType={filters.type}
                 onClientClick={(name) => setSelectedClient(name)}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSortChange={handleSortChange}
+                possibleDuplicates={possibleDuplicates}
               />
            </div>
         </div>

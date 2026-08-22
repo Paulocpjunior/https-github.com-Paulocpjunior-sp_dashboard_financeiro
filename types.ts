@@ -43,6 +43,11 @@ export interface Transaction {
   cpfCnpj?: string; // Campo vindo do Jotform/Firebase
   clientNumber?: number | string;
   observacaoAPagar?: string; // Observação do contas a pagar
+  observacaoReceber?: string;
+  observacao?: string;
+  numeroDocumento?: string;
+  parcela?: string | number;
+  submissionId?: string;
   isExcluded?: boolean; // Marcação de exclusão lógica
   exclusionReason?: string;
   excludedAt?: string;

@@ -32,6 +32,7 @@
     "client-numbers:map:apply": "node scripts/apply-client-number-map.mjs --apply",
     "test:client-number-map": "node scripts/test-client-number-map.mjs",
     "test:data-loading": "node scripts/test-data-loading-concurrency.mjs",
+    "test:dashboard-duplicates-sorting": "node scripts/test-dashboard-duplicates-sorting.mjs",
     "test:payment-method": "node scripts/test-payment-method.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
     "normalize:transactions": "node scripts/normalize-transactions-data.mjs",

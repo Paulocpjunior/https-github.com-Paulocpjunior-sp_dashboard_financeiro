@@ -72,7 +72,7 @@ const backup = {
           valuePaid: 31,
           valueReceived: 0,
           valorOriginal: 31,
-          observacaoAPagar: 'VR BRUNA',
+          observacaoAPagar: 'VR BRUNA 13-05',
         }),
         doc('payable-b', {
           type: 'Saida de Caixa / Contas a Pagar',
@@ -82,7 +82,7 @@ const backup = {
           valuePaid: 31,
           valueReceived: 0,
           valorOriginal: 31,
-          observacaoAPagar: 'VR GABRIELLE',
+          observacaoAPagar: 'VR GABRIELLE 13-05',
         }),
         doc('paid-shadow-paid', {
           client: 'Cliente sombra',
