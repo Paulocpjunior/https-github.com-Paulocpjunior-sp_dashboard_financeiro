@@ -22,6 +22,7 @@ export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser:
     const pageWidth = doc.internal.pageSize.width || 297;
     const targetMonth = rows[0]?.targetMonth || '';
     const referenceMonth = rows[0]?.referenceMonth || '';
+    const referenceCriterion = rows[0]?.referenceField === 'dueDate' ? 'vencimento' : 'lançamento';
     const total = rows.reduce((sum, row) => sum + row.referenceAmount, 0);
     const ready = rows.filter(row => row.missingFields.length === 0).length;
 
@@ -33,7 +34,7 @@ export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser:
     doc.text('Base de Faturamento do Próximo Mês', 14, 16);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`Competência a faturar: ${formatMonth(targetMonth)} | Base financeira: ${formatMonth(referenceMonth)}`, 14, 24);
+    doc.text(`Competência a faturar: ${formatMonth(targetMonth)} | Base financeira: ${formatMonth(referenceMonth)} por ${referenceCriterion}`, 14, 24);
     doc.text('Documento preparatório: não emite boleto, fatura nem cobrança automaticamente.', 14, 31);
     doc.setFont('helvetica', 'bold');
     doc.text(`Emitido por: ${(currentUser?.name || 'Usuário do sistema').toUpperCase()}`, pageWidth - 14, 17, { align: 'right' });
@@ -51,6 +52,7 @@ export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser:
     autoTable(doc, {
       startY: 54,
       margin: { left: 8, right: 8 },
+      tableWidth: 244,
       head: [[
         'Grupo', 'Empresa / CNPJ', 'N.Cli.', 'Base financeira', 'Como cobrar',
         'Emitir em', 'Vencimento', 'Meio de envio / destino', 'Orientações', 'Situação',
@@ -81,16 +83,16 @@ export const buildBillingForecastPDF = (rows: BillingForecastRow[], currentUser:
       bodyStyles: { fontSize: 6.2, textColor: [30, 41, 59], cellPadding: 1.2, valign: 'middle' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
-        0: { cellWidth: 23 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 11, halign: 'center' },
-        3: { cellWidth: 24, halign: 'right' },
-        4: { cellWidth: 24 },
-        5: { cellWidth: 17, halign: 'center' },
-        6: { cellWidth: 17, halign: 'center' },
-        7: { cellWidth: 40 },
-        8: { cellWidth: 40 },
-        9: { cellWidth: 32 },
+        0: { cellWidth: 20 },
+        1: { cellWidth: 36 },
+        2: { cellWidth: 10, halign: 'center' },
+        3: { cellWidth: 22, halign: 'right' },
+        4: { cellWidth: 21 },
+        5: { cellWidth: 16, halign: 'center' },
+        6: { cellWidth: 16, halign: 'center' },
+        7: { cellWidth: 37 },
+        8: { cellWidth: 37 },
+        9: { cellWidth: 29 },
       },
       didParseCell: (data: any) => {
         if (data.section === 'body' && data.column.index === 9) {
@@ -141,12 +143,13 @@ export const BillingReportService = {
 
   exportCSV: (rows: BillingForecastRow[]) => {
     const headers = [
-      'Grupo econômico', 'Empresa', 'CPF/CNPJ', 'N.Cliente', 'Competência base', 'Competência a faturar',
+      'Grupo econômico', 'Empresa', 'CPF/CNPJ', 'N.Cliente', 'Competência base', 'Critério do mês-base', 'Competência a faturar',
       'Honorários base', 'Extras base', 'Total de referência', 'Método de cobrança', 'Data de emissão',
       'Data de vencimento', 'Meios de envio', 'E-mail', 'WhatsApp', 'Entrega física', 'Orientações', 'Pendências',
     ];
     const lines = rows.map(row => [
-      row.groupName, row.client, row.cpfCnpj, row.clientNumber, row.referenceMonth, row.targetMonth,
+      row.groupName, row.client, row.cpfCnpj, row.clientNumber, row.referenceMonth,
+      row.referenceField === 'dueDate' ? 'Vencimento' : 'Lançamento', row.targetMonth,
       row.honorarios.toFixed(2).replace('.', ','), row.extras.toFixed(2).replace('.', ','),
       row.referenceAmount.toFixed(2).replace('.', ','), row.billingMethod, row.issueDate, row.dueDate,
       formatDeliveryChannels(row.deliveryChannels), row.billingEmail, row.whatsapp, row.printedDeliveryDetails,

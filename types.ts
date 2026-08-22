@@ -113,9 +113,12 @@ export interface BillingForecastRow {
   referenceCount: number;
   referenceMonth: string;
   targetMonth: string;
+  referenceField: 'date' | 'dueDate';
   profile?: BillingProfile;
   hasReference: boolean;
   missingFields: string[];
+  conflicts: string[];
+  adjustedDates: string[];
 }
 
 export interface FilterState {

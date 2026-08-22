@@ -23,7 +23,13 @@ import {
   Mail, MessageCircle, Pencil, Plus, Printer, RefreshCw, Search, Send, X, ArrowUp, ArrowDown,
 } from 'lucide-react';
 
-const currentMonth = new Date().toISOString().slice(0, 7);
+const getCurrentLocalMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const currentMonth = getCurrentLocalMonth();
+type BillingReferenceField = 'date' | 'dueDate';
 
 const emptyProfile = (): BillingProfile => ({
   id: '',
@@ -58,6 +64,7 @@ const BillingForecast: React.FC = () => {
   const isAdmin = (user?.role || '').toLowerCase() === 'admin';
   const [referenceMonth, setReferenceMonth] = useState(currentMonth);
   const [targetMonth, setTargetMonth] = useState(addMonths(currentMonth, 1));
+  const [referenceField, setReferenceField] = useState<BillingReferenceField>('date');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [profiles, setProfiles] = useState<BillingProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +85,7 @@ const BillingForecast: React.FC = () => {
     try {
       const range = getMonthRange(referenceMonth);
       const [loadedTransactions, loadedProfiles] = await Promise.all([
-        FirebaseService.fetchTransactionsByRange('dueDate', range.startDate, range.endDate),
+        FirebaseService.fetchTransactionsByRange(referenceField, range.startDate, range.endDate),
         FirebaseService.fetchBillingProfiles(),
       ]);
       setTransactions(loadedTransactions);
@@ -93,15 +100,15 @@ const BillingForecast: React.FC = () => {
 
   useEffect(() => {
     load();
-  }, [referenceMonth]);
+  }, [referenceMonth, referenceField]);
 
   useEffect(() => {
     warmPDFDownloadService();
   }, []);
 
   const allRows = useMemo(
-    () => buildBillingForecastRows(transactions, profiles, referenceMonth, targetMonth),
-    [transactions, profiles, referenceMonth, targetMonth],
+    () => buildBillingForecastRows(transactions, profiles, referenceMonth, targetMonth, referenceField),
+    [transactions, profiles, referenceMonth, targetMonth, referenceField],
   );
 
   const rows = useMemo(() => {
@@ -152,11 +159,11 @@ const BillingForecast: React.FC = () => {
   }, [rows]);
 
   const summary = useMemo(() => ({
-    total: allRows.reduce((sum, row) => sum + row.referenceAmount, 0),
-    ready: allRows.filter(row => row.missingFields.length === 0).length,
-    pending: allRows.filter(row => row.missingFields.length > 0).length,
-    groups: new Set(allRows.map(row => row.groupName).filter(group => group !== 'Sem grupo')).size,
-  }), [allRows]);
+    total: rows.reduce((sum, row) => sum + row.referenceAmount, 0),
+    ready: rows.filter(row => row.missingFields.length === 0).length,
+    pending: rows.filter(row => row.missingFields.length > 0).length,
+    groups: new Set(rows.map(row => row.groupName).filter(group => group !== 'Sem grupo')).size,
+  }), [rows]);
 
   const openEditor = (row?: BillingForecastRow) => {
     if (!row) {
@@ -205,7 +212,11 @@ const BillingForecast: React.FC = () => {
 
     setSaving(true);
     try {
-      const identityKey = editingProfile.identityKey || getBillingIdentityKey(editingProfile);
+      const identityKey = getBillingIdentityKey(editingProfile);
+      const conflictingProfile = profiles.find(item => item.id !== editingProfile.id && item.active !== false && (item.identityKey || getBillingIdentityKey(item)) === identityKey);
+      if (conflictingProfile) {
+        throw new Error(`Já existe uma regra ativa para ${conflictingProfile.client}. Revise o CPF/CNPJ ou N.Cliente.`);
+      }
       const profile: BillingProfile = {
         ...editingProfile,
         id: editingProfile.id || makeBillingProfileId(identityKey),
@@ -301,7 +312,14 @@ const BillingForecast: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-          <div className="xl:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 grid sm:grid-cols-2 gap-4">
+          <div className="xl:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 grid sm:grid-cols-3 gap-4">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Critério do mês-base
+              <select value={referenceField} onChange={event => setReferenceField(event.target.value as BillingReferenceField)} className="mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5">
+                <option value="date">Data de lançamento</option>
+                <option value="dueDate">Data de vencimento</option>
+              </select>
+            </label>
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               Mês usado como base financeira
               <input type="month" value={referenceMonth} onChange={event => { setReferenceMonth(event.target.value); setTargetMonth(addMonths(event.target.value, 1)); }} className="mt-2 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" />
@@ -312,9 +330,9 @@ const BillingForecast: React.FC = () => {
             </label>
           </div>
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">Total de referência</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">{search || onlyPending ? 'Total filtrado' : 'Total de referência'}</p>
             <p className="text-2xl font-black text-blue-700 dark:text-blue-300 mt-1">{formatCurrency(summary.total)}</p>
-            <p className="text-xs text-slate-500 mt-1">{formatMonth(referenceMonth)}</p>
+            <p className="text-xs text-slate-500 mt-1">{formatMonth(referenceMonth)} • por {referenceField === 'date' ? 'lançamento' : 'vencimento'}</p>
           </div>
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 grid grid-cols-3 gap-2 text-center">
             <div><p className="text-xl font-black text-emerald-600">{summary.ready}</p><p className="text-[10px] uppercase text-slate-500">Prontos</p></div>
@@ -379,7 +397,7 @@ const BillingForecast: React.FC = () => {
                           <td className="px-4 py-4"><p className="font-bold text-slate-900 dark:text-white">{row.client}</p><p className="text-xs text-slate-500 mt-1">{row.cpfCnpj || 'CPF/CNPJ não informado'}{row.clientNumber ? ` • N.Cliente ${row.clientNumber}` : ''}</p></td>
                           <td className="px-4 py-4 text-right"><p className="font-black text-slate-900 dark:text-white">{formatCurrency(row.referenceAmount)}</p><p className="text-xs text-slate-500 mt-1">{row.hasReference ? `${row.referenceCount} cobrança(s) em ${formatMonth(referenceMonth)}` : 'Sem lançamento no mês-base'}</p></td>
                           <td className="px-4 py-4 font-semibold text-slate-700 dark:text-slate-200">{row.billingMethod || <span className="text-amber-600">Não cadastrado</span>}</td>
-                          <td className="px-4 py-4 text-center"><div className="inline-flex flex-col gap-1 text-xs"><span className="flex items-center gap-1"><Send className="h-3.5 w-3.5 text-blue-500" /> Emitir {formatISODateBR(row.issueDate) || '-'}</span><span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5 text-slate-400" /> Vencer {formatISODateBR(row.dueDate) || '-'}</span></div></td>
+                          <td className="px-4 py-4 text-center"><div className="inline-flex flex-col gap-1 text-xs"><span className="flex items-center gap-1"><Send className="h-3.5 w-3.5 text-blue-500" /> Emitir {formatISODateBR(row.issueDate) || '-'}</span><span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5 text-slate-400" /> Vencer {formatISODateBR(row.dueDate) || '-'}</span>{row.adjustedDates.map(item => <span key={item} className="text-amber-600">{item}</span>)}</div></td>
                           <td className="px-4 py-4">{row.deliveryChannels.length ? <span className="font-semibold text-slate-700 dark:text-slate-200">{formatDeliveryChannels(row.deliveryChannels)}</span> : <span className="text-amber-600">Não cadastrado</span>}</td>
                           <td className="px-4 py-4 text-xs text-slate-600 dark:text-slate-300"><p>{[row.billingEmail, row.whatsapp, row.printedDeliveryDetails].filter(Boolean).join(' • ') || '-'}</p>{row.billingInstructions && <p className="mt-1 text-slate-500">{row.billingInstructions}</p>}</td>
                           <td className="px-4 py-4">{row.missingFields.length === 0 ? <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-xs"><CheckCircle2 className="h-4 w-4" /> Pronto</span> : <div className="text-amber-700 dark:text-amber-400 text-xs"><span className="inline-flex items-center gap-1 font-bold"><AlertTriangle className="h-4 w-4" /> Pendente</span><p className="mt-1 max-w-48">{row.missingFields.join(', ')}</p></div>}</td>

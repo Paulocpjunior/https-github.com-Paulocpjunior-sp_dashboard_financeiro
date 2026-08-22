@@ -4,6 +4,7 @@ import { createServer } from 'vite';
 
 const server = await createServer({
   server: { middlewareMode: true },
+  optimizeDeps: { noDiscovery: true },
   appType: 'custom',
   logLevel: 'error',
 });
@@ -41,6 +42,8 @@ try {
   assert.equal(rows[0].referenceAmount, 1100);
   assert.equal(rows[0].issueDate, '2026-09-25');
   assert.equal(rows[0].dueDate, '2026-09-30');
+  assert.equal(rows[0].referenceField, 'date');
+  assert.deepEqual(rows[0].adjustedDates, ['vencimento ajustado do dia 31 para 30']);
   assert.deepEqual(rows[0].missingFields, []);
 
   const missing = buildBillingForecastRows([], [{
@@ -49,6 +52,27 @@ try {
   assert.equal(missing.hasReference, false);
   assert.ok(missing.missingFields.includes('meio de envio'));
   assert.ok(missing.missingFields.includes('método de cobrança'));
+
+  const inferred = buildBillingForecastRows([
+    {
+      id: 'method-a', date: '2026-08-20', dueDate: '2026-08-31', type: 'Entrada de Caixa / Contas a Receber',
+      description: 'Empresa Conflito', status: 'Pendente', client: 'Empresa Conflito', movement: 'Entrada',
+      valuePaid: 0, valueReceived: 0, cpfCnpj: '22.222.222/0001-22', totalCobranca: 500,
+      metodoPagamento: '11-Boleto ITAU', bankAccount: '', paidBy: '',
+    },
+    {
+      id: 'method-b', date: '2026-08-21', dueDate: '2026-08-15', type: 'Entrada de Caixa / Contas a Receber',
+      description: 'Empresa Conflito', status: 'Pendente', client: 'Empresa Conflito', movement: 'Entrada',
+      valuePaid: 0, valueReceived: 0, cpfCnpj: '22.222.222/0001-22', totalCobranca: 600,
+      metodoPagamento: '3- Pix -ITAU', bankAccount: '', paidBy: '',
+    },
+  ], [], '2026-08', '2026-09', 'date')[0];
+  assert.equal(inferred.billingMethod, '3- Pix -ITAU', 'deve preservar o método mais recente quando a origem estiver divergente');
+  assert.ok(inferred.conflicts.includes('métodos de cobrança divergentes'));
+  assert.ok(inferred.conflicts.includes('dias de emissão divergentes'));
+  assert.ok(inferred.conflicts.includes('dias de vencimento divergentes'));
+  assert.ok(inferred.missingFields.includes('confirmar método de cobrança'));
+  assert.ok(inferred.missingFields.includes('métodos de cobrança divergentes'));
 
   const { buildBillingForecastPDF, createBillingForecastPDFFile } = await server.ssrLoadModule('/services/billingReportService.ts');
   const pdf = buildBillingForecastPDF(rows, { id: '1', username: 'teste', name: 'Teste', role: 'admin', active: true });

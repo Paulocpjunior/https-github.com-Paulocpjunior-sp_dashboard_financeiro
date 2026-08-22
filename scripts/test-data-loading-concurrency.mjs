@@ -11,6 +11,7 @@ globalThis.localStorage = {
 
 const server = await createServer({
   server: { middlewareMode: true },
+  optimizeDeps: { noDiscovery: true },
   appType: 'custom',
   logLevel: 'error',
 });

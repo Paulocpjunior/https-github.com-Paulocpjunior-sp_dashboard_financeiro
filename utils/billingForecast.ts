@@ -69,11 +69,32 @@ const preferredText = (...values: unknown[]): string => {
   return '';
 };
 
+const uniqueTexts = (values: unknown[]): string[] => Array.from(new Set(
+  values.map(value => String(value || '').trim()).filter(Boolean),
+));
+
+const canonicalBillingMethod = (value: unknown): string => {
+  const original = String(value || '').trim();
+  const normalized = normalizeText(original);
+  if (!normalized) return '';
+  if (normalized.includes('wix') || normalized.includes('fatura-online')) return 'Fatura Wix';
+  if (normalized.includes('boleto')) return 'Boleto Itaú';
+  return original;
+};
+
+const isConfirmedBillingMethod = (value: string): boolean => [
+  'Boleto Itaú',
+  'Fatura Wix',
+  'Boleto Itaú + Fatura Wix',
+  'Outro',
+].includes(value);
+
 export const buildBillingForecastRows = (
   transactions: Transaction[],
   profiles: BillingProfile[],
   referenceMonth: string,
   targetMonth: string,
+  referenceField: 'date' | 'dueDate' = 'date',
 ): BillingForecastRow[] => {
   const activeTransactions = transactions.filter(transaction => !transaction.isExcluded && isEntradaTransaction(transaction));
   const activeProfiles = profiles.filter(profile => profile.active !== false);
@@ -96,30 +117,49 @@ export const buildBillingForecastRows = (
 
   return Array.from(keys).map(identityKey => {
     const matchingTransactions = (transactionsByKey.get(identityKey) || [])
-      .sort((left, right) => (right.dueDate || right.date || '').localeCompare(left.dueDate || left.date || ''));
+      .sort((left, right) => String(right[referenceField] || '').localeCompare(String(left[referenceField] || ''))
+        || (right.dueDate || right.date || '').localeCompare(left.dueDate || left.date || ''));
     const profile = profilesByKey.get(identityKey);
     const latest = matchingTransactions[0];
     const deliveryChannels = profile?.deliveryChannels || [];
     const client = preferredText(profile?.client, latest?.client);
     const issueDay = profile?.issueDay || getDay(latest?.date);
     const dueDay = profile?.dueDay || getDay(latest?.dueDate);
-    const billingMethod = preferredText(
+    const inferredMethods = uniqueTexts(matchingTransactions.map(transaction => canonicalBillingMethod(
+      getPaymentMethod(transaction) || (isWixInvoice(transaction) ? 'Fatura Wix' : ''),
+    )));
+    const issueDays = uniqueTexts(matchingTransactions.map(transaction => getDay(transaction.date)));
+    const dueDays = uniqueTexts(matchingTransactions.map(transaction => getDay(transaction.dueDate)));
+    const billingMethod = canonicalBillingMethod(preferredText(
       profile?.billingMethod,
-      latest && getPaymentMethod(latest),
+      inferredMethods[0],
       latest && isWixInvoice(latest) ? 'Fatura Wix' : '',
-    );
+    ));
     const billingEmail = preferredText(profile?.billingEmail);
     const whatsapp = preferredText(profile?.whatsapp);
     const printedDeliveryDetails = preferredText(profile?.printedDeliveryDetails);
     const missingFields: string[] = [];
+    const conflicts: string[] = [];
+
+    if (!profile?.billingMethod && inferredMethods.length > 1) conflicts.push('métodos de cobrança divergentes');
+    if (!profile?.issueDay && issueDays.length > 1) conflicts.push('dias de emissão divergentes');
+    if (!profile?.dueDay && dueDays.length > 1) conflicts.push('dias de vencimento divergentes');
 
     if (!billingMethod) missingFields.push('método de cobrança');
+    else if (!isConfirmedBillingMethod(billingMethod)) missingFields.push('confirmar método de cobrança');
     if (!issueDay) missingFields.push('data de emissão');
     if (!dueDay) missingFields.push('data de vencimento');
     if (deliveryChannels.length === 0) missingFields.push('meio de envio');
     if (deliveryChannels.includes('email') && !billingEmail) missingFields.push('e-mail');
     if (deliveryChannels.includes('whatsapp') && !whatsapp) missingFields.push('WhatsApp');
     if (deliveryChannels.includes('printed') && !printedDeliveryDetails) missingFields.push('entrega física');
+    missingFields.push(...conflicts);
+
+    const issueDate = dateForMonthDay(targetMonth, issueDay);
+    const dueDate = dateForMonthDay(targetMonth, dueDay);
+    const adjustedDates: string[] = [];
+    if (issueDay && Number(issueDate.slice(-2)) !== issueDay) adjustedDates.push(`emissão ajustada do dia ${issueDay} para ${Number(issueDate.slice(-2))}`);
+    if (dueDay && Number(dueDate.slice(-2)) !== dueDay) adjustedDates.push(`vencimento ajustado do dia ${dueDay} para ${Number(dueDate.slice(-2))}`);
 
     return {
       identityKey,
@@ -128,8 +168,8 @@ export const buildBillingForecastRows = (
       clientNumber: preferredText(profile?.clientNumber, latest?.clientNumber),
       groupName: preferredText(profile?.groupName, 'Sem grupo'),
       billingMethod,
-      issueDate: dateForMonthDay(targetMonth, issueDay),
-      dueDate: dateForMonthDay(targetMonth, dueDay),
+      issueDate,
+      dueDate,
       deliveryChannels,
       billingEmail,
       whatsapp,
@@ -141,9 +181,12 @@ export const buildBillingForecastRows = (
       referenceCount: matchingTransactions.length,
       referenceMonth,
       targetMonth,
+      referenceField,
       profile,
       hasReference: matchingTransactions.length > 0,
       missingFields,
+      conflicts,
+      adjustedDates,
     };
   }).sort((left, right) => {
     const groupComparison = left.groupName.localeCompare(right.groupName, 'pt-BR');
