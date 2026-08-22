@@ -351,14 +351,8 @@ const normalizeAndCacheTransactions = (
   clientRegistryResult: { entries: ClientRegistryEntry[]; available: boolean },
   loadedRange: LoadedRange | null
 ): void => {
-  let excludedIds: string[] = [];
-  try { excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]'); } catch(e) { /* Safari private mode */ }
-
   data.forEach(t => {
     try {
-      if (excludedIds.includes(t.id)) {
-        t.isExcluded = true;
-      }
       if (t.status != null) {
         const sLower = String(t.status).toLowerCase().trim();
         if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) {
@@ -591,16 +585,6 @@ export const DataService = {
 
     await FirebaseService.updateTransaction(id, updates);
 
-    try {
-      const excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]');
-      if (!excludedIds.includes(id)) {
-        excludedIds.push(id);
-        localStorage.setItem('excluded_transactions', JSON.stringify(excludedIds));
-      }
-    } catch (error) {
-      logger.warn('[DataService] Não foi possível atualizar exclusões locais.', error);
-    }
-
     const transaction = CACHED_TRANSACTIONS.find(t => t.id === id);
     if (transaction) {
       Object.assign(transaction, updates);
@@ -727,13 +711,10 @@ export const DataService = {
         ...doc.data()
       })) as Transaction[];
 
-      // Aplica normalizações (mesmo pipeline do loadData)
-      let excludedIds: string[] = [];
-      try { excludedIds = JSON.parse(localStorage.getItem('excluded_transactions') || '[]'); } catch(e) { /* Safari private mode */ }
-
+      // Aplica normalizações (mesmo pipeline do loadData). Exclusões são
+      // determinadas apenas pelo Firestore para manter todos os navegadores iguais.
       data.forEach(t => {
         try {
-          if (excludedIds.includes(t.id)) t.isExcluded = true;
           if (t.status != null) {
             const sLower = String(t.status).toLowerCase().trim();
             if (['paga', 'sim', 'recebido', 'quitado', 'ok', 'liquidado', 's'].includes(sLower)) t.status = 'Pago';

@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 
 globalThis.localStorage = {
-  getItem: () => null,
+  getItem: (key) => key === 'excluded_transactions'
+    ? JSON.stringify(['correct-april-july-due'])
+    : null,
   setItem: () => {},
   removeItem: () => {},
 };
@@ -81,6 +83,11 @@ try {
   const { result } = DataService.getTransactions({});
   const ids = (result.allData ?? result.data).map((transaction) => transaction.id);
   assert.deepEqual(ids, ['correct-april-july-due']);
+  assert.equal(
+    result.data[0].isExcluded,
+    undefined,
+    'legacy exclusions stored only in one browser must not override Firestore',
+  );
 
   const firstBounce = DataService.loadDataForFilters(
     { startDate: '2026-07-01', endDate: '2026-07-31' },
