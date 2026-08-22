@@ -14,6 +14,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 import { logger } from '../utils/logger';
 import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
 import { buildDuplicateScanFilters, findPossibleDuplicateTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
+import { WhatsAppSendModal } from '../components/WhatsAppSendModal';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -97,6 +98,7 @@ const Dashboard: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60); // segundos até próximo refresh
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [dashboardWhatsAppText, setDashboardWhatsAppText] = useState<string | null>(null);
 
   // Detecta se está no modo "Contas a Pagar" (Saída) ou "Receber" (Entrada)
   const normalizedType = normalizeText(filters.type || '');
@@ -529,16 +531,15 @@ const Dashboard: React.FC = () => {
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     const periodLabel = getPeriodText() === 'Selecione um período' ? 'Todos os períodos' : getPeriodText();
     
-    const message = `📊 *Resumo Financeiro - CashFlow Pro*%0A` +
-      `--------------------------------%0A` +
-      `🗓 Período: ${periodLabel}%0A` +
-      `✅ Entradas: ${formatBRL(kpi.totalReceived)}%0A` +
-      `🔻 Saídas: ${formatBRL(kpi.totalPaid)}%0A` +
-      `💰 *Saldo: ${formatBRL(kpi.balance)}*%0A` +
-      `--------------------------------%0A` +
-      `Gerado via Painel CashFlow Pro`;
-    
-    window.open(`https://wa.me/?text=${message}`, '_blank');
+    const message = `📊 Resumo Financeiro - SP Contábil\n` +
+      `--------------------------------\n` +
+      `🗓 Período: ${periodLabel}\n` +
+      `✅ Entradas: ${formatBRL(kpi.totalReceived)}\n` +
+      `🔻 Saídas: ${formatBRL(kpi.totalPaid)}\n` +
+      `💰 Saldo: ${formatBRL(kpi.balance)}\n` +
+      `--------------------------------\n` +
+      `Gerado pelo Painel SP Contábil`;
+    setDashboardWhatsAppText(message);
   };
 
   const handleAlertClick = (newFilters: Partial<FilterState>) => {
@@ -1153,6 +1154,13 @@ const Dashboard: React.FC = () => {
             onClose={() => setSelectedClient(null)} 
           />
         )}
+
+        <WhatsAppSendModal
+          open={Boolean(dashboardWhatsAppText)}
+          onClose={() => setDashboardWhatsAppText(null)}
+          title="Enviar resumo filtrado"
+          preparedText={dashboardWhatsAppText || ''}
+        />
 
         <div className="print:hidden">
             <AIAssistant 

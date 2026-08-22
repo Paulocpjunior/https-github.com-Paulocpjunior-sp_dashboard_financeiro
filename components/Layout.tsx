@@ -6,6 +6,7 @@ import { DataService } from '../services/dataService';
 import { KPIData } from '../types';
 import { ThemeToggle } from './ThemeToggle';
 import { logger } from '../utils/logger';
+import { WhatsAppSendModal } from './WhatsAppSendModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [globalKpi, setGlobalKpi] = useState<KPIData | null>(null);
   const [showSessionAlert, setShowSessionAlert] = useState(true);
+  const [globalWhatsAppText, setGlobalWhatsAppText] = useState<string | null>(null);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -63,16 +65,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (!globalKpi) return;
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     
-    const message = `🏢 *Resumo Financeiro Global*%0A` +
-      `--------------------------------%0A` +
-      `🗓 Data: ${new Date().toLocaleDateString('pt-BR')}%0A` +
-      `📥 A Receber (Aberto): ${formatBRL(globalKpi.totalReceived)}%0A` +
-      `📤 A Pagar (Aberto): ${formatBRL(globalKpi.totalPaid)}%0A` +
-      `💰 *Saldo em Caixa: ${formatBRL(globalKpi.balance)}*%0A` +
-      `--------------------------------%0A` +
+    const message = `🏢 Resumo Financeiro Global\n` +
+      `--------------------------------\n` +
+      `🗓 Data: ${new Date().toLocaleDateString('pt-BR')}\n` +
+      `📥 A Receber (Aberto): ${formatBRL(globalKpi.totalReceived)}\n` +
+      `📤 A Pagar (Aberto): ${formatBRL(globalKpi.totalPaid)}\n` +
+      `💰 Saldo em Caixa: ${formatBRL(globalKpi.balance)}\n` +
+      `--------------------------------\n` +
       `SP Contábil - Painel Administrativo`;
-    
-    window.open(`https://wa.me/?text=${message}`, '_blank');
+    setGlobalWhatsAppText(message);
   };
 
   const navItems = [
@@ -277,6 +278,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </main>
       </div>
+      <WhatsAppSendModal
+        open={Boolean(globalWhatsAppText)}
+        onClose={() => setGlobalWhatsAppText(null)}
+        title="Enviar resumo global"
+        preparedText={globalWhatsAppText || ''}
+      />
     </div>
   );
 };

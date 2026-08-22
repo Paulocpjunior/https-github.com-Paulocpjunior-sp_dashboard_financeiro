@@ -1,7 +1,8 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Transaction } from '../types';
 import { X, Phone, TrendingUp, TrendingDown, Clock, AlertCircle, CheckCircle2, MessageCircle, User, CreditCard } from 'lucide-react';
+import { WhatsAppSendModal } from './WhatsAppSendModal';
 
 interface ClientProfileProps {
   clientName: string;
@@ -10,6 +11,7 @@ interface ClientProfileProps {
 }
 
 export const ClientProfile: React.FC<ClientProfileProps> = ({ clientName, transactions, onClose }) => {
+  const [whatsAppText, setWhatsAppText] = useState<string | null>(null);
   const clientTransactions = useMemo(() => 
     transactions.filter(t => t.client === clientName && !t.isExcluded)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -40,14 +42,13 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientName, transa
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const handleWhatsAppShare = () => {
-    const message = `Olá ${clientName}, segue resumo do seu extrato conosco:%0A%0A` +
-      `📊 *Resumo Financeiro*%0A` +
-      `✅ Total Pago: ${formatCurrency(kpis.totalRecebido)}%0A` +
-      `⏳ Total Pendente: ${formatCurrency(kpis.totalPendente)}%0A` +
-      `⚠️ Vencido: ${formatCurrency(kpis.totalVencido)}%0A%0A` +
+    const message = `Olá ${clientName}, segue resumo do seu extrato conosco:\n\n` +
+      `📊 Resumo Financeiro\n` +
+      `✅ Total Pago: ${formatCurrency(kpis.totalRecebido)}\n` +
+      `⏳ Total Pendente: ${formatCurrency(kpis.totalPendente)}\n` +
+      `⚠️ Vencido: ${formatCurrency(kpis.totalVencido)}\n\n` +
       `Agradecemos a parceria!`;
-    
-    window.open(`https://wa.me/?text=${message}`, '_blank');
+    setWhatsAppText(message);
   };
 
   return (
@@ -153,6 +154,13 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientName, transa
             Enviar Extrato via WhatsApp
           </button>
         </div>
+        <WhatsAppSendModal
+          open={Boolean(whatsAppText)}
+          onClose={() => setWhatsAppText(null)}
+          title={`Enviar extrato para ${clientName}`}
+          preparedText={whatsAppText || ''}
+          initialContactName={clientName}
+        />
       </div>
     </div>
   );
