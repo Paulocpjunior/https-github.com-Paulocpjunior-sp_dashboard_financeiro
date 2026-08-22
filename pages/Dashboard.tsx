@@ -61,7 +61,6 @@ const Dashboard: React.FC = () => {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Transaction[]>([]);
   const [allFilteredData, setAllFilteredData] = useState<Transaction[]>([]);
-  const [duplicateScanData, setDuplicateScanData] = useState<Transaction[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [sortField, setSortField] = useState<TransactionSortField>('none');
   const [sortDirection, setSortDirection] = useState<TransactionSortDirection>('asc');
@@ -119,18 +118,16 @@ const Dashboard: React.FC = () => {
     direction: TransactionSortDirection = sortRef.current.direction,
   ) => {
     const { result, kpi: newKpi } = DataService.getTransactions(filtersToApply, pageToApply, 20, field, direction);
-    const { result: duplicateResult } = DataService.getTransactions(buildDuplicateScanFilters(filtersToApply));
     setData(result.data);
     setAllFilteredData(result.allData ?? result.data);
-    setDuplicateScanData(duplicateResult.allData ?? duplicateResult.data);
     setTotalPages(result.totalPages);
     setKpi(newKpi);
   }, []);
 
-  const possibleDuplicates = useMemo(
-    () => findPossibleDuplicateTransactions(duplicateScanData),
-    [duplicateScanData],
-  );
+  const possibleDuplicates = useMemo(() => {
+    const { result } = DataService.getTransactions(buildDuplicateScanFilters(filters));
+    return findPossibleDuplicateTransactions(result.allData ?? result.data);
+  }, [allFilteredData, filters]);
 
   // Initial Data Load
   useEffect(() => {
