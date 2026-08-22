@@ -27,7 +27,20 @@ const transaction = (id, overrides = {}) => ({
 });
 
 try {
-  const { findPossibleDuplicateTransactions, sortTransactions } = await server.ssrLoadModule('/utils/transactionTable.ts');
+  const { buildDuplicateScanFilters, findPossibleDuplicateTransactions, sortTransactions } = await server.ssrLoadModule('/utils/transactionTable.ts');
+
+  const duplicateFilters = buildDuplicateScanFilters({
+    movement: 'Saída',
+    status: 'Pendente',
+    dueDateStart: '2026-08-01',
+    dueDateEnd: '2026-08-31',
+    client: 'Doméstica',
+  });
+  assert.equal(duplicateFilters.status, '', 'status must not hide the other half of a paid/open duplicate');
+  assert.equal(duplicateFilters.movement, 'Saída', 'payables and receivables must remain separated');
+  assert.equal(duplicateFilters.dueDateStart, '2026-08-01');
+  assert.equal(duplicateFilters.dueDateEnd, '2026-08-31');
+  assert.equal(duplicateFilters.client, 'Doméstica');
 
   const manyPages = Array.from({ length: 45 }, (_, index) => transaction(`row-${index}`, {
     dueDate: `2026-09-${String(45 - index).padStart(2, '0')}`,

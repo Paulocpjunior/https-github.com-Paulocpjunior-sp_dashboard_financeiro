@@ -13,7 +13,7 @@ import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCir
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { logger } from '../utils/logger';
 import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
-import { findPossibleDuplicateTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
+import { buildDuplicateScanFilters, findPossibleDuplicateTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -61,6 +61,7 @@ const Dashboard: React.FC = () => {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Transaction[]>([]);
   const [allFilteredData, setAllFilteredData] = useState<Transaction[]>([]);
+  const [duplicateScanData, setDuplicateScanData] = useState<Transaction[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [sortField, setSortField] = useState<TransactionSortField>('none');
   const [sortDirection, setSortDirection] = useState<TransactionSortDirection>('asc');
@@ -118,15 +119,17 @@ const Dashboard: React.FC = () => {
     direction: TransactionSortDirection = sortRef.current.direction,
   ) => {
     const { result, kpi: newKpi } = DataService.getTransactions(filtersToApply, pageToApply, 20, field, direction);
+    const { result: duplicateResult } = DataService.getTransactions(buildDuplicateScanFilters(filtersToApply));
     setData(result.data);
     setAllFilteredData(result.allData ?? result.data);
+    setDuplicateScanData(duplicateResult.allData ?? duplicateResult.data);
     setTotalPages(result.totalPages);
     setKpi(newKpi);
   }, []);
 
   const possibleDuplicates = useMemo(
-    () => findPossibleDuplicateTransactions(allFilteredData),
-    [allFilteredData],
+    () => findPossibleDuplicateTransactions(duplicateScanData),
+    [duplicateScanData],
   );
 
   // Initial Data Load

@@ -1,4 +1,4 @@
-import { Transaction } from '../types';
+import { FilterState, Transaction } from '../types';
 import { getOriginalAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction } from './transactionAmounts';
 
 export type TransactionSortField = 'client' | 'clientNumber' | 'dueDate' | 'receiptDate' | 'cpfCnpj' | 'none';
@@ -15,6 +15,13 @@ export interface PossibleDuplicateScan {
   groupCount: number;
   transactionCount: number;
 }
+
+export const buildDuplicateScanFilters = (filters: Partial<FilterState>): Partial<FilterState> => ({
+  ...filters,
+  // Uma duplicidade pode ter uma linha paga e outra pendente. O status limita
+  // apenas a tabela; a comparação preserva direção, período e demais filtros.
+  status: '',
+});
 
 const normalizeText = (value: unknown): string => String(value ?? '')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
