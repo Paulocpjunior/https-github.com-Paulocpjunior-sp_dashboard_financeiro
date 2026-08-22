@@ -247,6 +247,16 @@ const getDuplicateDetailKey = (data, direction) => {
   return detail ? `detail:${detail}` : 'detail:none';
 };
 
+const isEmployeeBenefitPayable = (data) => {
+  if (canonicalMovement(data) !== 'Saida') return false;
+  const category = normalizeText(`${data.client || ''} ${data.description || ''}`);
+  const detail = normalizeText(data.observacaoAPagar || data.observacao || '');
+  return category.includes('vale refeicao')
+    || category.includes('vale transporte')
+    || category.includes('domestica vt')
+    || /^(vr|vt)\b/.test(detail);
+};
+
 const getAmount = (data, direction) => {
   const honorarios = parseMoney(data.honorarios);
   const extra = parseMoney(data.valorExtra ?? data.extras);
@@ -358,6 +368,7 @@ const addFinding = (report, severity, code, message, subject, details = {}) => {
 
 const buildDuplicateKey = (doc) => {
   const data = doc.data || {};
+  if (isEmployeeBenefitPayable(data)) return '';
   const direction = canonicalMovement(data);
   const clientKey = getClientKey(data);
   const dueDate = clean(data.dueDate);
@@ -368,6 +379,7 @@ const buildDuplicateKey = (doc) => {
 
 const buildBaseDuplicateKey = (doc) => {
   const data = doc.data || {};
+  if (isEmployeeBenefitPayable(data)) return '';
   const direction = canonicalMovement(data);
   const clientKey = getClientKey(data);
   const dueDate = clean(data.dueDate);

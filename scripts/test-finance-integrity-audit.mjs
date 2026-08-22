@@ -77,7 +77,7 @@ const backup = {
           valuePaid: 31,
           valueReceived: 0,
           totalCobranca: 0,
-          observacaoAPagar: 'VR GABRIELLE 18-05',
+          observacaoAPagar: 'VR BRUNA 18-05',
         }),
       ],
     },
@@ -105,7 +105,7 @@ assert.equal(count('PAID_AND_OPEN_DUPLICATE'), 2, 'should find paid/open duplica
 assert.equal(count('OPEN_WITH_PAYMENT_EVIDENCE'), 1, 'should find open record with payment evidence');
 assert.equal(count('MISSING_CLIENT_NUMBER'), 1, 'should find missing client number');
 assert.equal(count('CLIENT_NUMBER_CONFLICT'), 1, 'should find client number conflict');
-assert.equal(count('EXACT_ACTIVE_DUPLICATE'), 0, 'should not mark same-value payables with different observations as duplicates');
+assert.equal(count('EXACT_ACTIVE_DUPLICATE'), 0, 'should not mark employee VR/VT benefit lines as duplicates');
 assert.equal(report.counts.critical, 0, 'test data should not produce critical findings');
 assert.equal(report.counts.high, 4, 'test data should produce exactly four high findings');
 

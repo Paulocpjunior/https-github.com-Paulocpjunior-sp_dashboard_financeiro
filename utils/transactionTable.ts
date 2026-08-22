@@ -86,7 +86,18 @@ const getBusinessDetail = (transaction: Transaction, direction: 'Entrada' | 'Sai
   return candidates.map(normalizeText).find((value) => value && value !== client) || '';
 };
 
+const isEmployeeBenefitPayable = (transaction: Transaction): boolean => {
+  if (transactionDirection(transaction) !== 'Saida') return false;
+  const category = normalizeText(`${transaction.client || ''} ${transaction.description || ''}`);
+  const detail = normalizeText(transaction.observacaoAPagar || transaction.observacao || '');
+  return category.includes('vale refeicao')
+    || category.includes('vale transporte')
+    || category.includes('domestica vt')
+    || /^(vr|vt)\b/.test(detail);
+};
+
 const buildBaseDuplicateKey = (transaction: Transaction): string => {
+  if (isEmployeeBenefitPayable(transaction)) return '';
   const direction = transactionDirection(transaction);
   const identity = getIdentityKey(transaction);
   const dueDate = String(transaction.dueDate || '').trim();

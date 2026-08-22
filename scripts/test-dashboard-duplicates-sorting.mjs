@@ -47,7 +47,7 @@ try {
   ];
   const differentPayableDetails = [
     transaction('pay-a', { movement: 'Saída', type: 'Saída de Caixa / Contas a Pagar', client: 'Vale Transporte', valuePaid: 80, valorOriginal: 80, observacaoAPagar: 'Maria' }),
-    transaction('pay-b', { movement: 'Saída', type: 'Saída de Caixa / Contas a Pagar', client: 'Vale Transporte', valuePaid: 80, valorOriginal: 80, observacaoAPagar: 'João' }),
+    transaction('pay-b', { movement: 'Saída', type: 'Saída de Caixa / Contas a Pagar', client: 'Vale Transporte', valuePaid: 80, valorOriginal: 80, observacaoAPagar: 'Maria' }),
   ];
   const paidOpen = [
     transaction('shadow-open', { client: 'Cliente sombra', dueDate: '2026-08-15', valorOriginal: 700 }),
@@ -62,7 +62,7 @@ try {
   assert.equal(scan.transactionCount, 6);
   assert.equal(scan.groupCount, 3);
   assert.ok(scan.byTransactionId.has('receive-a'));
-  assert.ok(!scan.byTransactionId.has('pay-a'), 'different payable observations must not be flagged');
+  assert.ok(!scan.byTransactionId.has('pay-a'), 'employee VR/VT benefit lines must not be flagged');
   assert.ok(scan.byTransactionId.get('shadow-open').reasons.includes('paid-open'));
   assert.ok(scan.byTransactionId.get('submission-a').reasons.includes('submission'));
 
