@@ -6,7 +6,7 @@ interface WixTreasuryModalProps {
   onClose: () => void;
 }
 
-export const WIX_PAYMENTS_ACCOUNTS_URL = 'https://manage.wix.com/account/wix-payments';
+export const WIX_SP_CONTABIL_TRANSFERS_URL = 'https://manage.wix.com/wix-payments/br/dashboard/1e7a5d33-26d6-4f39-8f4c-be9452b1eb10/002/transfer-history';
 
 export const WixTreasuryModal: React.FC<WixTreasuryModalProps> = ({ open, onClose }) => {
   useEffect(() => {
@@ -23,7 +23,7 @@ export const WixTreasuryModal: React.FC<WixTreasuryModalProps> = ({ open, onClos
   if (!open) return null;
 
   const openWixTransfers = () => {
-    window.open(WIX_PAYMENTS_ACCOUNTS_URL, '_blank', 'noopener,noreferrer');
+    window.open(WIX_SP_CONTABIL_TRANSFERS_URL, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -61,20 +61,20 @@ export const WixTreasuryModal: React.FC<WixTreasuryModalProps> = ({ open, onClos
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <div>
                 <p className="font-semibold text-emerald-900 dark:text-emerald-200">Automação segura habilitada</p>
-                <p className="mt-1 text-sm leading-6 text-emerald-800 dark:text-emerald-300">O botão abre diretamente as Contas Wix Payments. Depois do login, selecione a conta e acesse <strong>Transferências</strong> para confirmar o resgate do saldo disponível.</p>
+                <p className="mt-1 text-sm leading-6 text-emerald-800 dark:text-emerald-300">O botão abre diretamente a conta <strong>SPcontabil</strong> na tela de fundos e transferências. Depois do login, basta conferir o saldo e confirmar o resgate no ambiente oficial da Wix.</p>
               </div>
             </div>
           </div>
 
           <ol className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
             <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">1</span><span>A Wix valida o usuário e as permissões da conta.</span></li>
-            <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">2</span><span>Você confere os fundos disponíveis e solicita a transferência.</span></li>
+            <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">2</span><span>A conta SPcontabil já abre na tela de fundos disponíveis e transferências.</span></li>
             <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">3</span><span>A confirmação financeira ocorre no ambiente oficial da Wix.</span></li>
           </ol>
 
           <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
             <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" />
-            <p>O SP Dashboard não recebe nem armazena sua senha Wix. A consulta automática de saldos e transferências será conectada em uma etapa separada, após a liberação da permissão da API Wix.</p>
+            <p>O SP Dashboard não recebe nem armazena sua senha Wix. A API oficial de consulta ainda não reconhece esta conta Wix Payments Brasil; por segurança, o saldo e a confirmação continuam no ambiente oficial da Wix.</p>
           </div>
         </div>
 
