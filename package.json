@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/write-build-version.mjs dist/version.json",
+    "build:wix-agent": "./scripts/build-wix-treasury-agent.sh",
+    "test:wix-agent": "npm run build:wix-agent && \".build/wix-treasury-agent/SP Wix Automação.app/Contents/MacOS/SPWixAutomation\" --self-test",
+    "install:wix-agent": "npm run build:wix-agent && ./scripts/install-wix-treasury-agent.sh",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "check": "npm run lint && npm run build && npm audit",

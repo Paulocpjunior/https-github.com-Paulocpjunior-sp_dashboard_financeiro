@@ -7,6 +7,7 @@ interface WixTreasuryModalProps {
 }
 
 export const WIX_SP_CONTABIL_TRANSFERS_URL = 'https://manage.wix.com/wix-payments/br/dashboard/1e7a5d33-26d6-4f39-8f4c-be9452b1eb10/002/transfer-history';
+export const WIX_TREASURY_AGENT_URL = 'spwix://prepare-transfer';
 
 export const WixTreasuryModal: React.FC<WixTreasuryModalProps> = ({ open, onClose }) => {
   useEffect(() => {
@@ -22,7 +23,11 @@ export const WixTreasuryModal: React.FC<WixTreasuryModalProps> = ({ open, onClos
 
   if (!open) return null;
 
-  const openWixTransfers = () => {
+  const prepareWixTransfer = () => {
+    window.location.href = WIX_TREASURY_AGENT_URL;
+  };
+
+  const openWixTransfersOnly = () => {
     window.open(WIX_SP_CONTABIL_TRANSFERS_URL, '_blank', 'noopener,noreferrer');
   };
 
@@ -60,28 +65,32 @@ export const WixTreasuryModal: React.FC<WixTreasuryModalProps> = ({ open, onClos
             <div className="flex items-start gap-3">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <div>
-                <p className="font-semibold text-emerald-900 dark:text-emerald-200">Automação segura habilitada</p>
-                <p className="mt-1 text-sm leading-6 text-emerald-800 dark:text-emerald-300">O botão abre diretamente a conta <strong>SPcontabil</strong> na tela de fundos e transferências. Depois do login, basta conferir o saldo e confirmar o resgate no ambiente oficial da Wix.</p>
+                <p className="font-semibold text-emerald-900 dark:text-emerald-200">Automação local habilitada</p>
+                <p className="mt-1 text-sm leading-6 text-emerald-800 dark:text-emerald-300">No Mac autorizado, o botão abre a conta <strong>SPcontabil</strong>, aciona <strong>Transferir</strong> e para na tela de revisão. A confirmação final continua sob seu controle.</p>
               </div>
             </div>
           </div>
 
           <ol className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
             <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">1</span><span>A Wix valida o usuário e as permissões da conta.</span></li>
-            <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">2</span><span>A conta SPcontabil já abre na tela de fundos disponíveis e transferências.</span></li>
-            <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">3</span><span>A confirmação financeira ocorre no ambiente oficial da Wix.</span></li>
+            <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">2</span><span>O agente local abre automaticamente a revisão dos fundos disponíveis.</span></li>
+            <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold dark:bg-slate-800">3</span><span>Você confere o valor e a conta bancária antes de confirmar na Wix.</span></li>
           </ol>
 
           <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
             <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" />
-            <p>O SP Dashboard não recebe nem armazena sua senha Wix. A API oficial de consulta ainda não reconhece esta conta Wix Payments Brasil; por segurança, o saldo e a confirmação continuam no ambiente oficial da Wix.</p>
+            <p>O agente reconhece somente o botão inicial <strong>Transferir</strong>. Ele nunca aciona <strong>Transferir fundos</strong>, não recebe sua senha Wix e não confirma movimentações financeiras.</p>
           </div>
         </div>
 
         <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end dark:border-slate-800 dark:bg-slate-950/40">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Cancelar</button>
-          <button type="button" onClick={openWixTransfers} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800">
-            Resgatar saldo na Wix
+          <button type="button" onClick={openWixTransfersOnly} className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+            Abrir somente na Wix
+            <ExternalLink className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={prepareWixTransfer} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800">
+            Preparar resgate no Mac
             <ArrowUpRight className="h-4 w-4" />
           </button>
         </div>
