@@ -3,10 +3,11 @@ import Layout from '../components/Layout';
 import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw, Key, Lock, Unlock } from 'lucide-react';
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
-import { User as UserType } from '../types';
+import { FinancialPermission, User as UserType } from '../types';
 import { PendingUserRecord } from '../services/userAdminService';
 import { firebaseConfig } from '../services/firebaseConfig';
 import { logger } from '../utils/logger';
+import { FINANCIAL_PERMISSION_OPTIONS } from '../utils/financialPermissions';
 
 const Admin: React.FC = () => {
   const [users, setUsers] = useState<UserType[]>([]);
@@ -193,6 +194,35 @@ const Admin: React.FC = () => {
     setSelectedUserForPass(user);
     setNewAdminPassword('');
     setShowChangePassModal(true);
+  };
+
+  const handleFinancialPermissionChange = async (
+    user: UserType,
+    permission: FinancialPermission,
+    checked: boolean,
+  ) => {
+    const currentPermissions = user.financialPermissions || [];
+    const nextPermissions = checked
+      ? Array.from(new Set([...currentPermissions, permission]))
+      : currentPermissions.filter(item => item !== permission);
+    const actionKey = `permission:${user.id}:${permission}`;
+
+    setActiveUserAction(actionKey);
+    try {
+      const result = await BackendService.updateFinancialPermissions(user.username, nextPermissions);
+      if (!result.success) {
+        alert(`Erro: ${result.message}`);
+        return;
+      }
+      setUsers(current => current.map(item => (
+        item.id === user.id ? { ...item, financialPermissions: nextPermissions } : item
+      )));
+    } catch (error) {
+      logger.error('Erro ao atualizar permissões financeiras:', error);
+      alert('Erro de conexão ao atualizar permissões financeiras.');
+    } finally {
+      setActiveUserAction(null);
+    }
   };
 
   // 3. Salvar Nova Senha
@@ -579,6 +609,7 @@ const Admin: React.FC = () => {
                     <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Usuário</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nome</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Permissões financeiras</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Perfil</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status (Bloquear)</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ações</th>
@@ -599,6 +630,35 @@ const Admin: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                         {user.name}
+                        </td>
+                        <td className="px-6 py-4 min-w-[260px]">
+                          {user.role === 'admin' ? (
+                            <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                              Acesso financeiro integral
+                            </span>
+                          ) : (
+                            <div className="space-y-2">
+                              {FINANCIAL_PERMISSION_OPTIONS.map(option => {
+                                const actionKey = `permission:${user.id}:${option.value}`;
+                                return (
+                                  <label key={option.value} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200">
+                                    <input
+                                      type="checkbox"
+                                      checked={user.financialPermissions?.includes(option.value) === true}
+                                      disabled={activeUserAction !== null}
+                                      onChange={event => handleFinancialPermissionChange(user, option.value, event.target.checked)}
+                                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span>
+                                      <span className="font-semibold">{option.label}</span>
+                                      <span className="block text-[11px] text-slate-500 dark:text-slate-400">{option.description}</span>
+                                      {activeUserAction === actionKey && <span className="text-blue-600">Salvando...</span>}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

@@ -38,6 +38,7 @@
     "test:dashboard-duplicates-sorting": "node scripts/test-dashboard-duplicates-sorting.mjs",
     "test:payment-method": "node scripts/test-payment-method.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
+    "test:financial-permissions": "node scripts/test-financial-permissions.mjs",
     "normalize:transactions": "node scripts/normalize-transactions-data.mjs",
     "fix:total-cobranca": "node scripts/fix-total-cobranca-mismatches.mjs",
     "fix:total-cobranca:apply": "node scripts/fix-total-cobranca-mismatches.mjs --apply",

@@ -1,6 +1,9 @@
 
 export type UserRole = 'admin' | 'operacional';
-export type FinancialPermission = 'wix.treasury.open';
+export type FinancialPermission =
+  | 'wix.treasury.open'
+  | 'billing.boleto-cloud.issue'
+  | 'itau.openfinance.read';
 
 export interface User {
   id: string;

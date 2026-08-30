@@ -3,9 +3,10 @@ import { collection, doc, getDoc, getDocs, getFirestore, query, setDoc, updateDo
 import { createUserWithEmailAndPassword, deleteUser, getAuth, signOut, updateProfile } from 'firebase/auth';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, firebaseConfig } from './firebaseConfig';
-import { User, UserRole } from '../types';
+import { FinancialPermission, User, UserRole } from '../types';
 import { AuthService } from './authService';
 import { logger } from '../utils/logger';
+import { sanitizeFinancialPermissions } from '../utils/financialPermissions';
 
 export interface UserFormData {
   name: string;
@@ -94,9 +95,7 @@ const sanitizeUser = (id: string, data: any): User => ({
   authUid: data.authUid,
   authEmail: data.authEmail,
   authProvider: data.authProvider,
-  financialPermissions: Array.isArray(data.financialPermissions)
-    ? data.financialPermissions.filter((permission: unknown) => permission === 'wix.treasury.open')
-    : [],
+  financialPermissions: sanitizeFinancialPermissions(data.financialPermissions),
 });
 
 const findUserDocByUsername = async (username: string) => {
@@ -261,6 +260,24 @@ export const UserAdminService = {
     });
 
     return { success: true, message: active ? 'Usuário desbloqueado com sucesso.' : 'Usuário bloqueado com sucesso.' };
+  },
+
+  updateFinancialPermissions: async (
+    username: string,
+    permissions: FinancialPermission[],
+  ): Promise<MutationResult> => {
+    if (!isCurrentUserAdmin()) return adminRequiredResult();
+
+    const userDoc = await findUserDocByUsername(username);
+    if (!userDoc) return { success: false, message: 'Usuário não encontrado.' };
+
+    const sanitizedPermissions = sanitizeFinancialPermissions(permissions);
+    await updateDoc(userDoc.ref, {
+      financialPermissions: sanitizedPermissions,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return { success: true, message: 'Permissões financeiras atualizadas.' };
   },
 
   changePassword: async (username: string, _newPassword: string): Promise<MutationResult> => {
