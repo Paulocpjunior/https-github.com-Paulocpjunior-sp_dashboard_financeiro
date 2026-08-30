@@ -1,5 +1,6 @@
 
 export type UserRole = 'admin' | 'operacional';
+export type FinancialPermission = 'wix.treasury.open';
 
 export interface User {
   id: string;
@@ -12,6 +13,7 @@ export interface User {
   authUid?: string;
   authEmail?: string;
   authProvider?: string;
+  financialPermissions?: FinancialPermission[];
 }
 
 export interface Transaction {

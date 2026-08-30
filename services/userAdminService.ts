@@ -94,6 +94,9 @@ const sanitizeUser = (id: string, data: any): User => ({
   authUid: data.authUid,
   authEmail: data.authEmail,
   authProvider: data.authProvider,
+  financialPermissions: Array.isArray(data.financialPermissions)
+    ? data.financialPermissions.filter((permission: unknown) => permission === 'wix.treasury.open')
+    : [],
 });
 
 const findUserDocByUsername = async (username: string) => {

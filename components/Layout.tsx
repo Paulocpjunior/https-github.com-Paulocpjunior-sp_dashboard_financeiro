@@ -7,6 +7,8 @@ import { KPIData } from '../types';
 import { ThemeToggle } from './ThemeToggle';
 import { logger } from '../utils/logger';
 import { WhatsAppSendModal } from './WhatsAppSendModal';
+import { WixTreasuryModal } from './WixTreasuryModal';
+import { canOpenWixTreasury } from '../utils/financialPermissions';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -17,6 +19,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [globalKpi, setGlobalKpi] = useState<KPIData | null>(null);
   const [showSessionAlert, setShowSessionAlert] = useState(true);
   const [globalWhatsAppText, setGlobalWhatsAppText] = useState<string | null>(null);
+  const [showWixTreasury, setShowWixTreasury] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -175,6 +178,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </button>
               );
             })}
+            {canOpenWixTreasury(user) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWixTreasury(true);
+                  setIsSidebarOpen(false);
+                }}
+                className="w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-200 cursor-pointer relative z-10 text-royal-200 dark:text-slate-400 hover:bg-royal-900/50 dark:hover:bg-slate-800 hover:text-white"
+                aria-haspopup="dialog"
+              >
+                <Wallet className="h-5 w-5 text-royal-300 dark:text-slate-500" />
+                <span className="font-medium">Tesouraria Wix</span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -284,6 +301,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         title="Enviar resumo global"
         preparedText={globalWhatsAppText || ''}
       />
+      <WixTreasuryModal open={showWixTreasury} onClose={() => setShowWixTreasury(false)} />
     </div>
   );
 };

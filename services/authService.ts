@@ -43,6 +43,9 @@ const buildUserFromFirestore = (id: string, data: any): User => ({
   role: (data.role || 'operacional').toLowerCase().trim() as any,
   active: data.active !== false,
   email: data.email || '',
+  financialPermissions: Array.isArray(data.financialPermissions)
+    ? data.financialPermissions.filter((permission: unknown) => permission === 'wix.treasury.open')
+    : [],
 });
 
 const loginViaFirebaseAuthEmail = async (email: string, password: string): Promise<LoginResult> => {
