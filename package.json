@@ -39,6 +39,7 @@
     "test:payment-method": "node scripts/test-payment-method.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
     "test:financial-permissions": "node scripts/test-financial-permissions.mjs",
+    "test:boleto-cloud": "node scripts/test-boleto-cloud-export.mjs",
     "normalize:transactions": "node scripts/normalize-transactions-data.mjs",
     "fix:total-cobranca": "node scripts/fix-total-cobranca-mismatches.mjs",
     "fix:total-cobranca:apply": "node scripts/fix-total-cobranca-mismatches.mjs --apply",

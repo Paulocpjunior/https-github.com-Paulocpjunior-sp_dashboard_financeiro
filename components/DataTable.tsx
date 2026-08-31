@@ -22,6 +22,7 @@ interface DataTableProps {
   selectedType?: string;
   allData?: Transaction[];
   canDelete?: boolean;
+  canExportBoletoCloud?: boolean;
   onDelete?: (id: string) => void;
   onMarkAsPaid?: (id: string) => void;
   onClientClick?: (clientName: string) => void;
@@ -111,6 +112,7 @@ const DataTable: React.FC<DataTableProps> = ({
     selectedType = '',
     allData = [],
     canDelete = false,
+    canExportBoletoCloud = false,
     onDelete,
     onClientClick,
     sortField,
@@ -341,7 +343,8 @@ const DataTable: React.FC<DataTableProps> = ({
   const pendingReceivablesData = useMemo(() => {
     const source = (allData && allData.length > 0) ? allData : data;
     return source.filter(row => 
-      (row.status === 'Pendente' || row.status === 'Agendado')
+      (row.status === 'Pendente' || row.status === 'Agendado') &&
+      !isSaidaTransaction(row)
     );
   }, [allData, data]);
 
@@ -457,31 +460,38 @@ const DataTable: React.FC<DataTableProps> = ({
 
     // 4. Função Final de Exportação (Gera CSV)
     const handleGenerateCSV = () => {
-      // Validação Final: Verificar se há documentos inválidos
+      if (!canExportBoletoCloud) {
+          alert('Seu usuário não possui permissão para preparar boletos no Boleto Cloud.');
+          return;
+      }
+
+      // Validação final bloqueante: nenhum boleto pode sair com documento inválido.
       const invalidClients = selectedExportClients.filter(client => {
-          const status = validationStatus[client]?.status;
-          const doc = clientDocs[client] || '';
-          return status === 'invalid' || !doc;
+          const clientTrx = pendingReceivablesData.find(row => row.client === client);
+          const doc = cleanDigits(clientDocs[client] || clientTrx?.cpfCnpj || '');
+          return !(doc.length === 11 ? validateCPF(doc) : doc.length === 14 ? validateCNPJ(doc) : false);
       });
 
       if (invalidClients.length > 0) {
-          const msg = `Atenção: Existem ${invalidClients.length} clientes com documentos inválidos ou vazios.\n\n` +
-                      `Exemplos: ${invalidClients.slice(0, 3).join(', ')}...\n\n` +
-                      `O arquivo pode ser rejeitado pelo banco. Deseja gerar mesmo assim?`;
-          if (!confirm(msg)) return;
+          alert(`Geração bloqueada: ${invalidClients.length} cliente(s) estão com CPF/CNPJ inválido ou vazio.\n\n` +
+                `Revise: ${invalidClients.slice(0, 3).join(', ')}${invalidClients.length > 3 ? '...' : ''}`);
+          return;
       }
 
-      if (!exportToken) {
-          if (!confirm('O Token da Conta Bancária está vazio. O arquivo pode ser rejeitado. Deseja continuar mesmo assim?')) {
-              return;
-          }
+      if (!exportToken.trim()) {
+          alert('Geração bloqueada: informe o Token da Conta Bancária do Boleto Cloud.');
+          return;
       }
 
-      // Filtrar dados baseados nos clientes selecionados e no filtro atual (allData)
-      const sourceData = (allData && allData.length > 0) ? allData : data;
-      const dataToExport = sourceData.filter(row => 
+      // Exportar apenas contas a receber ainda pendentes/agendadas.
+      const dataToExport = pendingReceivablesData.filter(row =>
         selectedExportClients.includes(row.client)
       );
+
+      if (dataToExport.length === 0) {
+          alert('Nenhuma cobrança pendente válida foi encontrada para os clientes selecionados.');
+          return;
+      }
 
       // Formato CSV Específico Solicitado (Layout Boleto)
       const headers = [
@@ -552,7 +562,7 @@ const DataTable: React.FC<DataTableProps> = ({
 
         // Mapeamento para as 19 colunas esperadas
         return [
-            exportToken, // TOKEN_CONTA_BANCARIA (Preenchido pelo usuário no modal)
+            exportToken.trim(), // TOKEN_CONTA_BANCARIA (usado apenas no arquivo atual)
             cpfCnpj,     // CPRF_PAGADOR (Específico por cliente)
             valor,       // VALOR
             vencimento,  // VENCIMENTO (DD/MM/YYYY)
@@ -592,9 +602,11 @@ const DataTable: React.FC<DataTableProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     
     setShowExportModal(false);
-    alert(`✅ Arquivo gerado com ${selectedExportClients.length} boletos.`);
+    setExportToken('');
+    alert(`✅ Arquivo preparatório gerado com ${dataToExport.length} boleto(s). Nenhum boleto foi emitido.`);
   };
 
   const formatCurrency = (val: number | string | undefined) => {
@@ -709,7 +721,7 @@ const DataTable: React.FC<DataTableProps> = ({
         )}
         
         {/* Header com botão de exportar - Apenas Contas a Receber */}
-        {isContasAReceber && (
+        {isContasAReceber && canExportBoletoCloud && (
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
               📋 Contas a Receber
@@ -732,7 +744,7 @@ const DataTable: React.FC<DataTableProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
             >
               <Download className="h-3.5 w-3.5" />
-              Exportar .CSV Boletos
+              Preparar CSV Boleto Cloud
             </button>
           </div>
         )}
@@ -1100,7 +1112,7 @@ const DataTable: React.FC<DataTableProps> = ({
                          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                      </div>
                      <div>
-                         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Exportação de Boletos</h2>
+                         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Preparação Boleto Cloud</h2>
                          <p className="text-xs text-slate-500 dark:text-slate-400">
                              {exportStep === 1 ? 'Etapa 1: Seleção de Clientes' : 'Etapa 2: Dados de Cobrança (CPF/CNPJ)'}
                          </p>
@@ -1132,6 +1144,7 @@ const DataTable: React.FC<DataTableProps> = ({
                                 onChange={(e) => handleTokenChange(e.target.value)}
                                 className="w-full text-sm bg-transparent border-0 border-b border-amber-300 dark:border-amber-700 focus:ring-0 focus:border-amber-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
                              />
+                             <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300">Usado somente neste arquivo; não é salvo pelo dashboard.</p>
                          </div>
                      </div>
 

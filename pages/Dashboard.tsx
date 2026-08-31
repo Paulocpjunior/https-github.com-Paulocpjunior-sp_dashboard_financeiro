@@ -8,6 +8,7 @@ import { AlertsBanner } from '../components/AlertsBanner';
 import { ClientProfile } from '../components/ClientProfile';
 import { DataService } from '../services/dataService';
 import { AuthService } from '../services/authService';
+import { hasFinancialPermission } from '../utils/financialPermissions';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
@@ -57,6 +58,7 @@ const getFilterScopeKey = (filters: Partial<FilterState>) => [
 const Dashboard: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
+  const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');
 
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
@@ -1129,6 +1131,7 @@ const Dashboard: React.FC = () => {
                 totalPages={totalPages}
                 onPageChange={setPage}
                 canDelete={isAdmin}
+                canExportBoletoCloud={canExportBoletoCloud}
                 onDelete={handleDeleteTransaction}
                 onMarkAsPaid={handleMarkAsPaid}
                 clientFilterValue={filters.client}
