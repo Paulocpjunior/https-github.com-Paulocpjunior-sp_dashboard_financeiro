@@ -10,6 +10,8 @@ assert.match(source, /!isSaidaTransaction\(row\)/, 'saídas não podem entrar no
 assert.match(source, /pendingReceivablesData\.filter\(row =>/, 'o arquivo deve usar somente recebíveis pendentes');
 assert.match(source, /Geração bloqueada:.*CPF\/CNPJ inválido ou vazio/s, 'documentos inválidos devem bloquear a geração');
 assert.match(source, /Geração bloqueada: informe o Token/, 'token vazio deve bloquear a geração');
+assert.match(source, /useGrouping: false/, 'o valor deve sair com duas casas e sem separador de milhar');
+assert.match(source, /const cpfCnpj = formatDocument\(/, 'o CPF/CNPJ deve sair formatado conforme o manual oficial');
 assert.match(source, /URL\.revokeObjectURL\(url\)/, 'o arquivo temporário deve liberar a URL após o download');
 assert.match(source, /Nenhum boleto foi emitido/, 'a interface deve declarar que o arquivo é apenas preparatório');
 assert.match(dashboardSource, /hasFinancialPermission\(currentUser, 'billing\.boleto-cloud\.issue'\)/, 'a tela deve respeitar a permissão financeira dedicada');

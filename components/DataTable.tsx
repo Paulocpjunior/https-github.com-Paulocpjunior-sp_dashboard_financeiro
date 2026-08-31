@@ -525,10 +525,11 @@ const DataTable: React.FC<DataTableProps> = ({
 
     const formatValueCSV = (val: number | string | undefined) => {
       const num = Number(val || 0);
-      // Formato Brasileiro: 1.234,56
+      // Manual Boleto Cloud: duas casas decimais. Sem separador de milhar para evitar ambiguidade.
       return new Intl.NumberFormat('pt-BR', { 
         minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
+        maximumFractionDigits: 2,
+        useGrouping: false,
       }).format(num);
     };
 
@@ -558,7 +559,8 @@ const DataTable: React.FC<DataTableProps> = ({
         
         // USA O DOCUMENTO DEFINIDO NO PASSO 2 (ou extraído/cacheado)
         // Se estiver vazio no input, tenta usar o documento salvo no Firebase
-        const cpfCnpj = cleanDigits(clientDocs[row.client] || row.cpfCnpj || '');
+        // O importador CSV exige CPF/CNPJ com máscara, conforme o manual oficial.
+        const cpfCnpj = formatDocument(clientDocs[row.client] || row.cpfCnpj || '');
 
         // Mapeamento para as 19 colunas esperadas
         return [
