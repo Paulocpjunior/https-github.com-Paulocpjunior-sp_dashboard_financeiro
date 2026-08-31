@@ -12,6 +12,8 @@ assert.match(source, /Geração bloqueada:.*CPF\/CNPJ inválido ou vazio/s, 'doc
 assert.match(source, /Geração bloqueada: informe o Token/, 'token vazio deve bloquear a geração');
 assert.match(source, /useGrouping: false/, 'o valor deve sair com duas casas e sem separador de milhar');
 assert.match(source, /const cpfCnpj = formatDocument\(/, 'o CPF/CNPJ deve sair formatado conforme o manual oficial');
+assert.match(source, /NOVA CONTA ITAÚ — Banco 341, agência 3145, conta 99791-6/, 'a conta autorizada deve ficar explícita no modal');
+assert.match(source, /const closeExportModal = \(\) => \{\s*setExportToken\(''\)/s, 'fechar ou cancelar deve apagar o token da memória');
 assert.match(source, /URL\.revokeObjectURL\(url\)/, 'o arquivo temporário deve liberar a URL após o download');
 assert.match(source, /Nenhum boleto foi emitido/, 'a interface deve declarar que o arquivo é apenas preparatório');
 assert.match(dashboardSource, /hasFinancialPermission\(currentUser, 'billing\.boleto-cloud\.issue'\)/, 'a tela deve respeitar a permissão financeira dedicada');

@@ -98,6 +98,8 @@ const formatDocument = (value: string): string => {
   return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
 };
 
+const BOLETO_CLOUD_ACCOUNT_LABEL = 'NOVA CONTA ITAÚ — Banco 341, agência 3145, conta 99791-6';
+
 // -----------------------------
 
 const DataTable: React.FC<DataTableProps> = ({ 
@@ -188,6 +190,11 @@ const DataTable: React.FC<DataTableProps> = ({
 
   const handleTokenChange = (val: string) => {
       setExportToken(val);
+  };
+
+  const closeExportModal = () => {
+      setExportToken('');
+      setShowExportModal(false);
   };
 
   // Atualiza o documento de um cliente específico e salva no localStorage
@@ -606,8 +613,7 @@ const DataTable: React.FC<DataTableProps> = ({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     
-    setShowExportModal(false);
-    setExportToken('');
+    closeExportModal();
     alert(`✅ Arquivo preparatório gerado com ${dataToExport.length} boleto(s). Nenhum boleto foi emitido.`);
   };
 
@@ -1120,7 +1126,7 @@ const DataTable: React.FC<DataTableProps> = ({
                          </p>
                      </div>
                  </div>
-                 <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                 <button onClick={closeExportModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                      <X className="h-5 w-5" />
                  </button>
              </div>
@@ -1131,6 +1137,9 @@ const DataTable: React.FC<DataTableProps> = ({
                  <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
                      
                      {/* Input Token da Conta (Global) */}
+                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+                         <strong>Conta de emissão:</strong> {BOLETO_CLOUD_ACCOUNT_LABEL}
+                     </div>
                      <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800">
                          <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
                              <Key className="h-4 w-4" />
@@ -1221,7 +1230,7 @@ const DataTable: React.FC<DataTableProps> = ({
                      </div>
                      <div className="flex gap-3">
                          <button 
-                            onClick={() => setShowExportModal(false)}
+                            onClick={closeExportModal}
                             className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                          >
                              Cancelar
