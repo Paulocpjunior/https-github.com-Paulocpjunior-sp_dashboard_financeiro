@@ -16,6 +16,8 @@ assert.match(source, /NOVA CONTA ITAÚ — Banco 341, agência 3145, conta 99791
 assert.match(source, /const closeExportModal = \(\) => \{\s*setExportToken\(''\)/s, 'fechar ou cancelar deve apagar o token da memória');
 assert.match(source, /const isContasAReceber = isReceivablesMode \|\|/, 'o atalho de contas a receber deve liberar o preparador');
 assert.match(source, /possibleDuplicates\?\.byTransactionId\.has\(row\.id\)/, 'lançamentos com indício de duplicidade devem bloquear a geração');
+assert.match(source, /paymentMethod\.includes\('boleto'\)/, 'somente métodos de cobrança Boleto podem entrar no arquivo');
+assert.match(source, /const boletoEligibleCount = pendingReceivablesData\.length/, 'o contador deve refletir somente boletos elegíveis');
 assert.match(source, /URL\.revokeObjectURL\(url\)/, 'o arquivo temporário deve liberar a URL após o download');
 assert.match(source, /Nenhum boleto foi emitido/, 'a interface deve declarar que o arquivo é apenas preparatório');
 assert.match(dashboardSource, /hasFinancialPermission\(currentUser, 'billing\.boleto-cloud\.issue'\)/, 'a tela deve respeitar a permissão financeira dedicada');

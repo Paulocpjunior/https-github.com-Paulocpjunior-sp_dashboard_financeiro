@@ -352,10 +352,12 @@ const DataTable: React.FC<DataTableProps> = ({
   // 1. Identificar todos os dados pendentes disponíveis (não apenas da página atual)
   const pendingReceivablesData = useMemo(() => {
     const source = (allData && allData.length > 0) ? allData : data;
-    return source.filter(row => 
-      (row.status === 'Pendente' || row.status === 'Agendado') &&
-      !isSaidaTransaction(row)
-    );
+    return source.filter(row => {
+      const paymentMethod = normalizeText(getPaymentMethod(row));
+      return (row.status === 'Pendente' || row.status === 'Agendado') &&
+        !isSaidaTransaction(row) &&
+        paymentMethod.includes('boleto');
+    });
   }, [allData, data]);
 
   // 2. Extrair clientes únicos dos pendentes
@@ -702,11 +704,7 @@ const DataTable: React.FC<DataTableProps> = ({
     </th>
   );
 
-  // Contar pendentes para mostrar no botão
-  const pendentesCount = useMemo(() => {
-    const dataToCount = (allData && allData.length > 0) ? allData : data;
-    return dataToCount.filter(row => row.status === 'Pendente' || row.status === 'Agendado').length;
-  }, [data, allData]);
+  const boletoEligibleCount = pendingReceivablesData.length;
 
   // Derivar estado do botão "Selecionar Todos" com base na busca atual
   const areAllVisibleSelected = filteredExportClients.length > 0 && filteredExportClients.every(c => selectedExportClients.includes(c));
@@ -744,22 +742,22 @@ const DataTable: React.FC<DataTableProps> = ({
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
               📋 Contas a Receber
-              {pendentesCount > 0 && (
+              {boletoEligibleCount > 0 && (
                 <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold">
-                  {pendentesCount} pendente{pendentesCount > 1 ? 's' : ''}
+                  {boletoEligibleCount} boleto{boletoEligibleCount > 1 ? 's' : ''} {boletoEligibleCount === 1 ? 'elegível' : 'elegíveis'}
                 </span>
               )}
             </span>
             <button
               onClick={() => {
-                  if (pendentesCount === 0) {
-                      alert('Nenhum boleto pendente para exportar.');
+                  if (boletoEligibleCount === 0) {
+                      alert('Nenhuma cobrança pendente com método Boleto foi encontrada.');
                       return;
                   }
                   setShowExportModal(true);
                   setExportSearchTerm('');
               }}
-              disabled={pendentesCount === 0}
+              disabled={boletoEligibleCount === 0}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
             >
               <Download className="h-3.5 w-3.5" />
@@ -1150,6 +1148,7 @@ const DataTable: React.FC<DataTableProps> = ({
                      {/* Input Token da Conta (Global) */}
                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
                          <strong>Conta de emissão:</strong> {BOLETO_CLOUD_ACCOUNT_LABEL}
+                         <div className="mt-1">Somente cobranças pendentes/agendadas cujo método contém “Boleto”.</div>
                      </div>
                      <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800">
                          <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
