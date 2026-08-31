@@ -1141,6 +1141,7 @@ const Dashboard: React.FC = () => {
                 onIdFilterChange={(val) => handleFilterChange('id', val)}
                 isLoading={isLoading}
                 selectedType={filters.type}
+                isReceivablesMode={isContasAReceber}
                 onClientClick={(name) => setSelectedClient(name)}
                 sortField={sortField}
                 sortDirection={sortDirection}

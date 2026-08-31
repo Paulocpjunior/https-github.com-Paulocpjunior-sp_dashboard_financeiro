@@ -14,10 +14,13 @@ assert.match(source, /useGrouping: false/, 'o valor deve sair com duas casas e s
 assert.match(source, /const cpfCnpj = formatDocument\(/, 'o CPF/CNPJ deve sair formatado conforme o manual oficial');
 assert.match(source, /NOVA CONTA ITAÚ — Banco 341, agência 3145, conta 99791-6/, 'a conta autorizada deve ficar explícita no modal');
 assert.match(source, /const closeExportModal = \(\) => \{\s*setExportToken\(''\)/s, 'fechar ou cancelar deve apagar o token da memória');
+assert.match(source, /const isContasAReceber = isReceivablesMode \|\|/, 'o atalho de contas a receber deve liberar o preparador');
+assert.match(source, /possibleDuplicates\?\.byTransactionId\.has\(row\.id\)/, 'lançamentos com indício de duplicidade devem bloquear a geração');
 assert.match(source, /URL\.revokeObjectURL\(url\)/, 'o arquivo temporário deve liberar a URL após o download');
 assert.match(source, /Nenhum boleto foi emitido/, 'a interface deve declarar que o arquivo é apenas preparatório');
 assert.match(dashboardSource, /hasFinancialPermission\(currentUser, 'billing\.boleto-cloud\.issue'\)/, 'a tela deve respeitar a permissão financeira dedicada');
 assert.match(dashboardSource, /canExportBoletoCloud=\{canExportBoletoCloud\}/, 'a permissão deve chegar ao componente de exportação');
+assert.match(dashboardSource, /isReceivablesMode=\{isContasAReceber\}/, 'o modo de contas a receber deve chegar ao componente de exportação');
 
 const server = await createServer({
   server: { middlewareMode: true },

@@ -20,6 +20,7 @@ interface DataTableProps {
   onIdFilterChange?: (value: string) => void;
   isLoading?: boolean;
   selectedType?: string;
+  isReceivablesMode?: boolean;
   allData?: Transaction[];
   canDelete?: boolean;
   canExportBoletoCloud?: boolean;
@@ -112,6 +113,7 @@ const DataTable: React.FC<DataTableProps> = ({
     clientOptions = [],
     isLoading = false,
     selectedType = '',
+    isReceivablesMode = false,
     allData = [],
     canDelete = false,
     canExportBoletoCloud = false,
@@ -337,7 +339,8 @@ const DataTable: React.FC<DataTableProps> = ({
                          normalizedType.includes('imposto') ||
                          normalizedType.includes('aluguel');
   
-  const isContasAReceber = normalizedType.includes('entrada') || 
+  const isContasAReceber = isReceivablesMode ||
+                           normalizedType.includes('entrada') ||
                            normalizedType.includes('receber') ||
                            normalizedType.includes('servico') ||
                            normalizedType.includes('consultoria');
@@ -497,6 +500,14 @@ const DataTable: React.FC<DataTableProps> = ({
 
       if (dataToExport.length === 0) {
           alert('Nenhuma cobrança pendente válida foi encontrada para os clientes selecionados.');
+          return;
+      }
+
+      const duplicateRows = dataToExport.filter(row => possibleDuplicates?.byTransactionId.has(row.id));
+      if (duplicateRows.length > 0) {
+          const duplicateClients = Array.from(new Set(duplicateRows.map(row => row.client))).filter(Boolean);
+          alert(`Geração bloqueada: ${duplicateRows.length} lançamento(s) selecionado(s) possuem indício de duplicidade.\n\n` +
+                `Revise: ${duplicateClients.slice(0, 3).join(', ')}${duplicateClients.length > 3 ? '...' : ''}`);
           return;
       }
 
