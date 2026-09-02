@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
+import { auth } from '../firebase';
 import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
 import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
@@ -131,8 +132,7 @@ const DataTable: React.FC<DataTableProps> = ({
   const [selectedExportClients, setSelectedExportClients] = useState<string[]>([]);
   const [exportSearchTerm, setExportSearchTerm] = useState('');
   
-  // Token sensível usado apenas na exportação atual. Não persistir no navegador.
-  const [exportToken, setExportToken] = useState('');
+  const [isGeneratingBoletoCsv, setIsGeneratingBoletoCsv] = useState(false);
 
   // Mapa de Documentos Persistente (Cliente -> CPF/CNPJ)
   const [clientDocs, setClientDocs] = useState<Record<string, string>>(() => {
@@ -190,12 +190,7 @@ const DataTable: React.FC<DataTableProps> = ({
     </button>
   );
 
-  const handleTokenChange = (val: string) => {
-      setExportToken(val);
-  };
-
   const closeExportModal = () => {
-      setExportToken('');
       setShowExportModal(false);
   };
 
@@ -471,7 +466,7 @@ const DataTable: React.FC<DataTableProps> = ({
   };
 
     // 4. Função Final de Exportação (Gera CSV)
-    const handleGenerateCSV = () => {
+    const handleGenerateCSV = async () => {
       if (!canExportBoletoCloud) {
           alert('Seu usuário não possui permissão para preparar boletos no Boleto Cloud.');
           return;
@@ -487,11 +482,6 @@ const DataTable: React.FC<DataTableProps> = ({
       if (invalidClients.length > 0) {
           alert(`Geração bloqueada: ${invalidClients.length} cliente(s) estão com CPF/CNPJ inválido ou vazio.\n\n` +
                 `Revise: ${invalidClients.slice(0, 3).join(', ')}${invalidClients.length > 3 ? '...' : ''}`);
-          return;
-      }
-
-      if (!exportToken.trim()) {
-          alert('Geração bloqueada: informe o Token da Conta Bancária do Boleto Cloud.');
           return;
       }
 
@@ -512,29 +502,6 @@ const DataTable: React.FC<DataTableProps> = ({
                 `Revise: ${duplicateClients.slice(0, 3).join(', ')}${duplicateClients.length > 3 ? '...' : ''}`);
           return;
       }
-
-      // Formato CSV Específico Solicitado (Layout Boleto)
-      const headers = [
-        'TOKEN_CONTA_BANCARIA',
-        'CPRF_PAGADOR',
-        'VALOR',
-        'VENCIMENTO',
-        'NOSSO_NUMERO',
-        'DOCUMENTO',
-        'MULTA',
-        'JUROS',
-        'DIAS_PARA_ENCARGOS',
-        'DESCONTO',
-        'DIAS_PARA_DESCONTO',
-        'TIPO_VALOR_DESCONTO',
-        'DESCONTO2',
-        'DIAS_PARA_DESCONTO2',
-        'TIPO_VALOR_DESCONTO2',
-        'DESCONTO3',
-        'DIAS_PARA_DESCONTO3',
-        'TIPO_VALOR_DESCONTO3',
-        'INFORMACAO_PAGADOR'
-      ];
 
     // FIX: Alterado para formato DD/MM/YYYY (Padrão Brasileiro para Boleto)
     const formatDateCSV = (dateStr: string) => {
@@ -582,9 +549,9 @@ const DataTable: React.FC<DataTableProps> = ({
         // O importador CSV exige CPF/CNPJ com máscara, conforme o manual oficial.
         const cpfCnpj = formatDocument(clientDocs[row.client] || row.cpfCnpj || '');
 
-        // Mapeamento para as 19 colunas esperadas
+        // As 18 colunas não sensíveis seguem para o servidor. O token é acrescentado
+        // exclusivamente no backend a partir do Google Secret Manager.
         return [
-            exportToken.trim(), // TOKEN_CONTA_BANCARIA (usado apenas no arquivo atual)
             cpfCnpj,     // CPRF_PAGADOR (Específico por cliente)
             valor,       // VALOR
             vencimento,  // VENCIMENTO (DD/MM/YYYY)
@@ -606,28 +573,47 @@ const DataTable: React.FC<DataTableProps> = ({
         ];
     });
 
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(row => row.join(';'))
-    ].join('\n');
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      alert('Geração bloqueada: sua sessão segura expirou. Entre novamente no sistema.');
+      return;
+    }
 
-    // BOM para UTF-8 no Excel
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    const hoje = toLocalISODate();
-    link.setAttribute('href', url);
-    link.setAttribute('download', `boletos_importacao_${hoje}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    closeExportModal();
-    alert(`✅ Arquivo preparatório gerado com ${dataToExport.length} boleto(s). Nenhum boleto foi emitido.`);
+    setIsGeneratingBoletoCsv(true);
+    try {
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch('/api/boleto-cloud-csv', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ rows }),
+      });
+      if (!response.ok) {
+        throw new Error(`Boleto CSV service returned ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const hoje = toLocalISODate();
+      link.setAttribute('href', url);
+      link.setAttribute('download', `boletos_importacao_${hoje}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      closeExportModal();
+      alert(`✅ Arquivo preparatório gerado com ${dataToExport.length} boleto(s). Nenhum boleto foi emitido.`);
+    } catch (error) {
+      logger.error('Erro ao gerar CSV seguro do Boleto Cloud:', error);
+      alert('Não foi possível gerar o arquivo seguro. Verifique sua sessão e tente novamente.');
+    } finally {
+      setIsGeneratingBoletoCsv(false);
+    }
   };
 
   const formatCurrency = (val: number | string | undefined) => {
@@ -1145,27 +1131,18 @@ const DataTable: React.FC<DataTableProps> = ({
                <>
                  <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
                      
-                     {/* Input Token da Conta (Global) */}
+                     {/* O token não é exposto ao navegador; o backend acrescenta-o ao CSV. */}
                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
                          <strong>Conta de emissão:</strong> {BOLETO_CLOUD_ACCOUNT_LABEL}
                          <div className="mt-1">Somente cobranças pendentes/agendadas cujo método contém “Boleto”.</div>
                      </div>
-                     <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800">
-                         <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
-                             <Key className="h-4 w-4" />
+                     <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                         <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400">
+                             <ShieldCheck className="h-4 w-4" />
                          </div>
                          <div className="flex-1">
-                             <label className="block text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Token da Conta Bancária (Boleto Cloud)</label>
-                             <input 
-                                type="password"
-                                autoComplete="off"
-                                spellCheck={false}
-                                placeholder="Insira o token de integração da conta..." 
-                                value={exportToken}
-                                onChange={(e) => handleTokenChange(e.target.value)}
-                                className="w-full text-sm bg-transparent border-0 border-b border-amber-300 dark:border-amber-700 focus:ring-0 focus:border-amber-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
-                             />
-                             <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300">Usado somente neste arquivo; não é salvo pelo dashboard.</p>
+                             <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">Token protegido no cofre</div>
+                             <p className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">Google Secret Manager. O token não é exibido nem salvo neste navegador.</p>
                          </div>
                      </div>
 
@@ -1367,10 +1344,11 @@ const DataTable: React.FC<DataTableProps> = ({
                          </button>
                          <button 
                             onClick={handleGenerateCSV}
-                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 flex items-center gap-2"
+                            disabled={isGeneratingBoletoCsv}
+                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                          >
-                             <Download className="h-4 w-4" />
-                             Gerar Arquivo
+                             {isGeneratingBoletoCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                             {isGeneratingBoletoCsv ? 'Gerando...' : 'Gerar Arquivo'}
                          </button>
                      </div>
                  </div>

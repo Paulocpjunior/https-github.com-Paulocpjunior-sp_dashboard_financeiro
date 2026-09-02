@@ -9,11 +9,14 @@ assert.match(source, /canExportBoletoCloud = false/, 'a exportação deve ser bl
 assert.match(source, /!isSaidaTransaction\(row\)/, 'saídas não podem entrar no arquivo de boletos');
 assert.match(source, /pendingReceivablesData\.filter\(row =>/, 'o arquivo deve usar somente recebíveis pendentes');
 assert.match(source, /Geração bloqueada:.*CPF\/CNPJ inválido ou vazio/s, 'documentos inválidos devem bloquear a geração');
-assert.match(source, /Geração bloqueada: informe o Token/, 'token vazio deve bloquear a geração');
+assert.match(source, /fetch\('\/api\/boleto-cloud-csv'/, 'o CSV deve ser finalizado pelo backend seguro');
+assert.match(source, /firebaseUser\.getIdToken\(\)/, 'o backend deve receber uma identidade Firebase válida');
+assert.doesNotMatch(source, /exportToken/, 'o token não pode permanecer no estado do navegador');
 assert.match(source, /useGrouping: false/, 'o valor deve sair com duas casas e sem separador de milhar');
 assert.match(source, /const cpfCnpj = formatDocument\(/, 'o CPF/CNPJ deve sair formatado conforme o manual oficial');
 assert.match(source, /NOVA CONTA ITAÚ — Banco 341, agência 3145, conta 99791-6/, 'a conta autorizada deve ficar explícita no modal');
-assert.match(source, /const closeExportModal = \(\) => \{\s*setExportToken\(''\)/s, 'fechar ou cancelar deve apagar o token da memória');
+assert.match(source, /Token protegido no cofre/, 'a interface deve informar o armazenamento protegido');
+assert.match(source, /Google Secret Manager/, 'o cofre usado deve ficar explícito na interface');
 assert.match(source, /const isContasAReceber = isReceivablesMode \|\|/, 'o atalho de contas a receber deve liberar o preparador');
 assert.match(source, /possibleDuplicates\?\.byTransactionId\.has\(row\.id\)/, 'lançamentos com indício de duplicidade devem bloquear a geração');
 assert.match(source, /paymentMethod\.includes\('boleto'\)/, 'somente métodos de cobrança Boleto podem entrar no arquivo');

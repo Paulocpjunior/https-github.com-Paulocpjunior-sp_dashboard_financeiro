@@ -32,6 +32,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/boleto-cloud-csv",
+        "run": {
+          "serviceId": "sp-pdf-download",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "/api/pdf-download",
         "run": {
           "serviceId": "sp-pdf-download",
