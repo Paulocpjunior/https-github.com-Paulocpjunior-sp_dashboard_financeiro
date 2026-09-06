@@ -2,6 +2,10 @@ import { logger } from '../utils/logger';
 import { FilterState } from "../types";
 
 const CLIENT_AI_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_CLIENT_AI === 'true';
+// Paulo, 06/09: *"precisamos alterar nosso motor em todos os apps, do gemini,
+// 3.7 para 3.8 em todos"*. Estava em `gemini-3-flash-preview` (build que a
+// Google retira sem aviso), escrito três vezes — agora um lugar só.
+const GEMINI_MODEL = 'gemini-3.8-flash';
 const CLIENT_AI_KEY = CLIENT_AI_ENABLED ? String(import.meta.env.VITE_GEMINI_API_KEY || '') : '';
 const AI_UNAVAILABLE_MESSAGE = 'IA financeira desativada neste ambiente por segurança. Configure um backend seguro para habilitar esta função em produção.';
 
@@ -59,7 +63,7 @@ export const GeminiService = {
     await waitRateLimit();
 
     try {
-      const modelId = "gemini-3-flash-preview";
+      const modelId = GEMINI_MODEL;
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
       
@@ -186,7 +190,7 @@ export const GeminiService = {
       `;
 
       const response = await client.ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: GEMINI_MODEL,
         contents: query,
         config: { systemInstruction }
       });
@@ -217,7 +221,7 @@ export const GeminiService = {
       `;
 
       const response = await client.ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: GEMINI_MODEL,
         contents: "Gere uma projeção de fluxo de caixa para os próximos 30 dias.",
         config: { systemInstruction }
       });
