@@ -15,6 +15,7 @@ const context = vm.createContext({
     update: (ref, patch) => writes.push({ ref, patch }),
   }),
 });
+vm.runInContext(ts.transpile(readFileSync('utils/masterAccount.ts', 'utf8').replace(/export /g, ''), { target: ts.ScriptTarget.ES2022 }), context);
 vm.runInContext(ts.transpile(source, { target: ts.ScriptTarget.ES2022 }) + '\nglobalThis.service = UserAdminService;', context);
 const reset = () => { profile = { username: 'ex.colaborador', role: 'operacional', active: true }; writes = []; };
 reset();
@@ -39,3 +40,21 @@ reset(); actor.role = 'admin'; profile.status = 'deleted';
 assert.equal((await context.service.deleteFormerEmployee('employee', 'ex.colaborador')).success, true);
 assert.equal(writes.length, 0);
 console.log('OK: exclusão preserva histórico, revoga permissões e rejeita alvo/ator/confirmação inválidos.');
+
+reset();
+profile.role = 'admin';
+actor = { id: 'hpdsWehGGAYE3uKCar4pBiRVxFJ3', username: 'junior', role: 'admin', active: true };
+assert.equal((await context.service.demoteAdministrator('employee', 'ex.colaborador')).success, true);
+assert.equal(writes[0].patch.role, 'operacional');
+assert.equal(writes[0].patch.financialPermissions.length, 0);
+for (const scenario of ['self', 'wrong confirmation', 'non-master', 'inactive master', 'deleted']) {
+  reset(); profile.role = 'admin';
+  actor = { id: 'hpdsWehGGAYE3uKCar4pBiRVxFJ3', username: 'junior', role: 'admin', active: true };
+  if (scenario === 'non-master') actor.id = 'other-admin';
+  if (scenario === 'inactive master') actor.active = false;
+  if (scenario === 'deleted') profile.status = 'deleted';
+  const result = await context.service.demoteAdministrator(scenario === 'self' ? actor.id : 'employee', scenario === 'wrong confirmation' ? 'wrong' : 'ex.colaborador');
+  assert.equal(result.success, false, scenario);
+  assert.equal(writes.length, 0, scenario);
+}
+console.log('OK: somente master ativo despromove outros administradores, com confirmação.');

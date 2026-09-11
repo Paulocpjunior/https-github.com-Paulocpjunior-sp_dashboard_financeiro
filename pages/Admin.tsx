@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { AuthService } from '../services/authService';
+import { MASTER_USER_ID, isMasterAccount } from '../utils/masterAccount';
 import Layout from '../components/Layout';
 import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw, Key, Lock, Unlock, Trash2 } from 'lucide-react';
 import { BackendService } from '../services/backendService';
@@ -10,6 +12,8 @@ import { logger } from '../utils/logger';
 import { FINANCIAL_PERMISSION_OPTIONS } from '../utils/financialPermissions';
 
 const Admin: React.FC = () => {
+  const isMaster = isMasterAccount(AuthService.getCurrentUser());
+  const [demotionMode, setDemotionMode] = useState(false);
   const [users, setUsers] = useState<UserType[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUserRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,13 +38,17 @@ const Admin: React.FC = () => {
     setActiveUserAction(`delete:${userToDelete.id}`);
     setDeleteError('');
     try {
-      const result = await UserAdminService.deleteFormerEmployee(userToDelete.id, deleteConfirmation);
+      const result = demotionMode
+        ? await UserAdminService.demoteAdministrator(userToDelete.id, deleteConfirmation)
+        : await UserAdminService.deleteFormerEmployee(userToDelete.id, deleteConfirmation);
       if (!result.success) { setDeleteError(result.message); return; }
-      setUsers(current => current.filter(user => user.id !== userToDelete.id));
+      setUsers(current => demotionMode
+        ? current.map(user => user.id === userToDelete.id ? { ...user, role: 'operacional', financialPermissions: [] } : user)
+        : current.filter(user => user.id !== userToDelete.id));
       setUserNotice(result.message);
       setUserToDelete(null);
     } catch {
-      setDeleteError('Não foi possível excluir. Verifique sua conexão e tente novamente.');
+      setDeleteError('Não foi possível concluir. Verifique sua conexão e tente novamente.');
     } finally {
       deleting.current = false;
       setActiveUserAction(null);
@@ -468,7 +476,7 @@ const Admin: React.FC = () => {
                           @{user.username}
                         </span>
                         <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
-                          {user.role}
+                          {user.id === MASTER_USER_ID ? 'master' : user.role}
                         </span>
                       </div>
                     </div>
@@ -697,7 +705,7 @@ const Admin: React.FC = () => {
                                 : 'bg-royal-100 text-royal-800 dark:bg-blue-900/30 dark:text-blue-300'
                         }`}>
                             {user.role === 'admin' && <Shield className="w-3 h-3 mr-1" />}
-                            {user.role}
+                            {user.id === MASTER_USER_ID ? 'master' : user.role}
                         </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -743,10 +751,16 @@ const Admin: React.FC = () => {
                                 <Key className="h-3 w-3" />
                                 Alterar Senha
                             </button>
+                            {isMaster && user.role === 'admin' && user.id !== MASTER_USER_ID && <button
+                              disabled={activeUserAction !== null}
+                              onClick={() => { setDemotionMode(true); setDeleteConfirmation(''); setDeleteError(''); setUserNotice(''); setUserToDelete(user); }}
+                              className="ml-2 rounded-md px-3 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-100 dark:text-amber-400">
+                              Despromover
+                            </button>}
                             {user.role !== 'admin' && <button
                               aria-label={`Excluir ex-colaborador ${user.username}`}
                               disabled={activeUserAction !== null}
-                              onClick={() => { setDeleteConfirmation(''); setDeleteError(''); setUserNotice(''); setUserToDelete(user); }}
+                              onClick={() => { setDemotionMode(false); setDeleteConfirmation(''); setDeleteError(''); setUserNotice(''); setUserToDelete(user); }}
                               className="ml-2 inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30">
                               <Trash2 className="h-3 w-3" /> Excluir
                             </button>}
@@ -766,9 +780,9 @@ const Admin: React.FC = () => {
           onCancel={event => { if (deleting.current) event.preventDefault(); else setUserToDelete(null); }}
           className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-black/60 dark:bg-slate-900 dark:text-white">
           <div className="p-6 space-y-4">
-            <h2 id="delete-user-title" className="flex items-center gap-2 text-lg font-bold"><Trash2 className="h-5 w-5 text-red-500" />Excluir ex-colaborador</h2>
+            <h2 id="delete-user-title" className="flex items-center gap-2 text-lg font-bold"><Trash2 className="h-5 w-5 text-red-500" />{demotionMode ? 'Despromover administrador' : 'Excluir ex-colaborador'}</h2>
             <p className="font-semibold">{userToDelete.name} <span className="font-normal text-slate-500">({userToDelete.username})</span></p>
-            <p id="delete-user-description" className="text-sm text-slate-600 dark:text-slate-300">O usuário será removido desta lista e perderá o acesso ao sistema. Os lançamentos e o histórico serão preservados. Esta exclusão não poderá ser desfeita pelo painel.</p>
+            <p id="delete-user-description" className="text-sm text-slate-600 dark:text-slate-300">{demotionMode ? 'O colaborador passará a operacional e perderá o acesso administrativo e as permissões financeiras. Depois, você poderá excluí-lo. Seu histórico será preservado.' : 'O usuário será removido desta lista e perderá o acesso ao sistema. Os lançamentos e o histórico serão preservados. Esta exclusão não poderá ser desfeita pelo painel.'}</p>
             <label className="block text-sm" htmlFor="delete-user-confirmation">Para confirmar, digite <strong>{userToDelete.username}</strong>.</label>
             <input id="delete-user-confirmation" autoComplete="off" value={deleteConfirmation} disabled={deleting.current}
               onChange={event => setDeleteConfirmation(event.target.value)}
@@ -779,7 +793,7 @@ const Admin: React.FC = () => {
             <button autoFocus disabled={deleting.current} onClick={() => setUserToDelete(null)} className="rounded-lg px-4 py-2 disabled:opacity-50">Cancelar</button>
             <button disabled={deleting.current || deleteConfirmation.trim() !== userToDelete.username} onClick={handleDeleteUser}
               className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50">
-              {deleting.current && <Loader2 className="h-4 w-4 animate-spin" />}{deleting.current ? 'Excluindo...' : 'Excluir ex-colaborador'}
+              {deleting.current && <Loader2 className="h-4 w-4 animate-spin" />}{deleting.current ? 'Salvando...' : demotionMode ? 'Despromover para operacional' : 'Excluir ex-colaborador'}
             </button>
           </div>
         </dialog>

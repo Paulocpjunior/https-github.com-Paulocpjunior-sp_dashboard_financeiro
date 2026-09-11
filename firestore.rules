@@ -23,6 +23,10 @@ service cloud.firestore {
       return isActiveUser() && profile().data.role == 'admin';
     }
 
+    function isMaster() {
+      return isAdmin() && request.auth.uid == 'hpdsWehGGAYE3uKCar4pBiRVxFJ3';
+    }
+
     function isPendingSelfRegistration(userId) {
       return signedIn()
         && request.auth.uid == userId
@@ -64,6 +68,16 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isAdmin() || isPendingSelfRegistration(userId);
       allow update: if isAdmin()
+        && (userId != 'hpdsWehGGAYE3uKCar4pBiRVxFJ3' || (isMaster()
+          && request.resource.data.role == 'admin' && request.resource.data.active == true))
+        && (request.resource.data.role == resource.data.role
+          || (isMaster() && userId != request.auth.uid
+            && resource.data.role == 'admin' && request.resource.data.role == 'operacional'
+            && request.resource.data.financialPermissions == []
+            && request.resource.data.demotedBy == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'role', 'financialPermissions', 'demotedBy', 'demotedAt', 'updatedAt'
+            ])))
         && resource.data.get('status', '') != 'deleted'
         && (request.resource.data.get('status', '') != 'deleted'
           || (userId != request.auth.uid

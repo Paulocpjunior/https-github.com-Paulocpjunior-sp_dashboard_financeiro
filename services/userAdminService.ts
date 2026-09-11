@@ -5,6 +5,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, firebaseConfig } from './firebaseConfig';
 import { FinancialPermission, User, UserRole } from '../types';
 import { AuthService } from './authService';
+import { MASTER_USER_ID, isMasterAccount } from '../utils/masterAccount';
 import { logger } from '../utils/logger';
 import { sanitizeFinancialPermissions } from '../utils/financialPermissions';
 
@@ -240,6 +241,30 @@ export const UserAdminService = {
         await deleteApp(createdAuth.secondaryApp).catch(() => {});
       }
     }
+  },
+
+  demoteAdministrator: async (userId: string, confirmation: string): Promise<MutationResult> => {
+    if (!isCurrentUserAdmin() || !isMasterAccount(getCurrentUser())) {
+      return { success: false, message: 'Somente o master pode despromover administradores.' };
+    }
+    return runTransaction(db, async (transaction) => {
+      const ref = doc(db, 'users', userId);
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists()) return { success: false, message: 'Usuário não encontrado.' };
+      const data = snapshot.data();
+      if (userId === MASTER_USER_ID || data.role !== 'admin' || data.status === 'deleted') {
+        return { success: false, message: 'Esta conta não pode ser despromovida.' };
+      }
+      if (confirmation.trim() !== data.username) {
+        return { success: false, message: 'Digite o nome de usuário exatamente como exibido.' };
+      }
+      transaction.update(ref, {
+        role: 'operacional', financialPermissions: [],
+        demotedBy: MASTER_USER_ID, demotedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      return { success: true, message: 'Colaborador despromovido para operacional. Agora você pode excluí-lo.' };
+    });
   },
 
   deleteFormerEmployee: async (userId: string, confirmation: string): Promise<MutationResult> => {
