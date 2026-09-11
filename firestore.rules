@@ -63,7 +63,17 @@ service cloud.firestore {
       allow get: if isAdmin() || (signedIn() && userId == request.auth.uid);
       allow list: if isAdmin();
       allow create: if isAdmin() || isPendingSelfRegistration(userId);
-      allow update: if isAdmin();
+      allow update: if isAdmin()
+        && resource.data.get('status', '') != 'deleted'
+        && (request.resource.data.get('status', '') != 'deleted'
+          || (userId != request.auth.uid
+            && resource.data.role == 'operacional'
+            && request.resource.data.active == false
+            && request.resource.data.financialPermissions == []
+            && request.resource.data.deletedBy == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'active', 'status', 'financialPermissions', 'deletedAt', 'deletedBy', 'updatedAt'
+            ])));
       allow delete: if false;
     }
 

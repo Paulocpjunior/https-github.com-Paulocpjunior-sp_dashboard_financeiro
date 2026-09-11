@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
-import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw, Key, Lock, Unlock } from 'lucide-react';
+import { User, Shield, CheckCircle, XCircle, Loader2, Database, Save, RotateCcw, AlertTriangle, UserPlus, Clock, Mail, Phone, X, Eye, EyeOff, RefreshCw, Key, Lock, Unlock, Trash2 } from 'lucide-react';
 import { BackendService } from '../services/backendService';
 import { DataService } from '../services/dataService';
 import { FinancialPermission, User as UserType } from '../types';
-import { PendingUserRecord } from '../services/userAdminService';
+import { PendingUserRecord, UserAdminService } from '../services/userAdminService';
 import { firebaseConfig } from '../services/firebaseConfig';
 import { logger } from '../utils/logger';
 import { FINANCIAL_PERMISSION_OPTIONS } from '../utils/financialPermissions';
@@ -17,6 +17,36 @@ const Admin: React.FC = () => {
   const [loadingPending, setLoadingPending] = useState(false);
   const [activeUserAction, setActiveUserAction] = useState<string | null>(null);
   
+  const [userToDelete, setUserToDelete] = useState<UserType | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [userNotice, setUserNotice] = useState('');
+  const deleteDialog = useRef<HTMLDialogElement>(null);
+  const deleting = useRef(false);
+
+  useEffect(() => {
+    if (userToDelete) deleteDialog.current?.showModal();
+  }, [userToDelete]);
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete || deleting.current || deleteConfirmation.trim() !== userToDelete.username) return;
+    deleting.current = true;
+    setActiveUserAction(`delete:${userToDelete.id}`);
+    setDeleteError('');
+    try {
+      const result = await UserAdminService.deleteFormerEmployee(userToDelete.id, deleteConfirmation);
+      if (!result.success) { setDeleteError(result.message); return; }
+      setUsers(current => current.filter(user => user.id !== userToDelete.id));
+      setUserNotice(result.message);
+      setUserToDelete(null);
+    } catch {
+      setDeleteError('Não foi possível excluir. Verifique sua conexão e tente novamente.');
+    } finally {
+      deleting.current = false;
+      setActiveUserAction(null);
+    }
+  };
+
   // Database Config State
   const [firebaseProjectId, setFirebaseProjectId] = useState('');
   const [isSavingDb, setIsSavingDb] = useState(false);
@@ -713,6 +743,13 @@ const Admin: React.FC = () => {
                                 <Key className="h-3 w-3" />
                                 Alterar Senha
                             </button>
+                            {user.role !== 'admin' && <button
+                              aria-label={`Excluir ex-colaborador ${user.username}`}
+                              disabled={activeUserAction !== null}
+                              onClick={() => { setDeleteConfirmation(''); setDeleteError(''); setUserNotice(''); setUserToDelete(user); }}
+                              className="ml-2 inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30">
+                              <Trash2 className="h-3 w-3" /> Excluir
+                            </button>}
                         </td>
                     </tr>
                     ))}
@@ -723,7 +760,30 @@ const Admin: React.FC = () => {
         </div>
       </div>
       
-      {/* ... (Modals omitted for brevity, they are unchanged) ... */}
+      {userNotice && <p role="status" className="mt-4 rounded-lg bg-green-100 p-3 text-green-800 dark:bg-green-900/30 dark:text-green-300">{userNotice}</p>}
+      {userToDelete && (
+        <dialog ref={deleteDialog} aria-labelledby="delete-user-title" aria-describedby="delete-user-description"
+          onCancel={event => { if (deleting.current) event.preventDefault(); else setUserToDelete(null); }}
+          className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-black/60 dark:bg-slate-900 dark:text-white">
+          <div className="p-6 space-y-4">
+            <h2 id="delete-user-title" className="flex items-center gap-2 text-lg font-bold"><Trash2 className="h-5 w-5 text-red-500" />Excluir ex-colaborador</h2>
+            <p className="font-semibold">{userToDelete.name} <span className="font-normal text-slate-500">({userToDelete.username})</span></p>
+            <p id="delete-user-description" className="text-sm text-slate-600 dark:text-slate-300">O usuário será removido desta lista e perderá o acesso ao sistema. Os lançamentos e o histórico serão preservados. Esta exclusão não poderá ser desfeita pelo painel.</p>
+            <label className="block text-sm" htmlFor="delete-user-confirmation">Para confirmar, digite <strong>{userToDelete.username}</strong>.</label>
+            <input id="delete-user-confirmation" autoComplete="off" value={deleteConfirmation} disabled={deleting.current}
+              onChange={event => setDeleteConfirmation(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800" />
+            {deleteError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>}
+          </div>
+          <div className="flex justify-end gap-3 border-t border-slate-200 p-4 dark:border-slate-700">
+            <button autoFocus disabled={deleting.current} onClick={() => setUserToDelete(null)} className="rounded-lg px-4 py-2 disabled:opacity-50">Cancelar</button>
+            <button disabled={deleting.current || deleteConfirmation.trim() !== userToDelete.username} onClick={handleDeleteUser}
+              className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50">
+              {deleting.current && <Loader2 className="h-4 w-4 animate-spin" />}{deleting.current ? 'Excluindo...' : 'Excluir ex-colaborador'}
+            </button>
+          </div>
+        </dialog>
+      )}
       {/* Modal Alterar Senha */}
       {showChangePassModal && selectedUserForPass && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in">

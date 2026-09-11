@@ -38,6 +38,7 @@
     "test:dashboard-duplicates-sorting": "node scripts/test-dashboard-duplicates-sorting.mjs",
     "test:payment-method": "node scripts/test-payment-method.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
+    "test:user-deletion": "node scripts/test-user-deletion.mjs",
     "test:financial-permissions": "node scripts/test-financial-permissions.mjs",
     "test:boleto-cloud": "node scripts/test-boleto-cloud-export.mjs",
     "normalize:transactions": "node scripts/normalize-transactions-data.mjs",
