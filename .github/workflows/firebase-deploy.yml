@@ -25,6 +25,16 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      - name: Validar funcionalidades financeiras antes de publicar
+        run: |
+          npm run lint
+          npm run test:financial-permissions
+          npm run test:billing-forecast
+          npm run test:boleto-cloud
+          npm run test:dashboard-duplicates-sorting
+          npm run test:data-loading
+          npm run test:payment-method
+
       - name: Build do projeto
         env:
           # Gate de departamento em BLOQUEIO (Paulo, 08/08, após teste):

@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firesto
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { logger } from '../utils/logger';
+import { sanitizeFinancialPermissions } from '../utils/financialPermissions';
 
 const AUTH_STORAGE_KEY = 'sp_contabil_auth';
 
@@ -43,6 +44,7 @@ const buildUserFromFirestore = (id: string, data: any): User => ({
   role: (data.role || 'operacional').toLowerCase().trim() as any,
   active: data.active !== false,
   email: data.email || '',
+  financialPermissions: sanitizeFinancialPermissions(data.financialPermissions),
 });
 
 const loginViaFirebaseAuthEmail = async (email: string, password: string): Promise<LoginResult> => {

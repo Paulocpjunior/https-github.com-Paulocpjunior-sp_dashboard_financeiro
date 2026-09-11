@@ -1,5 +1,9 @@
 
 export type UserRole = 'admin' | 'operacional';
+export type FinancialPermission =
+  | 'wix.treasury.open'
+  | 'billing.boleto-cloud.issue'
+  | 'itau.openfinance.read';
 
 export interface User {
   id: string;
@@ -12,6 +16,7 @@ export interface User {
   authUid?: string;
   authEmail?: string;
   authProvider?: string;
+  financialPermissions?: FinancialPermission[];
 }
 
 export interface Transaction {
@@ -22,23 +27,103 @@ export interface Transaction {
   bankAccount: string;
   type: string;
   description: string; // Movimentação original
-  status: 'Pago' | 'Pendente' | 'Agendado';
+  status: 'Pago' | 'Pendente' | 'Agendado' | 'Paga' | 'Recebido' | 'Vencida';
   client: string; // Name/Creditor
   paidBy: string;
   movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
   valuePaid: number;
   valueReceived: number;
+  valorOriginal?: number | string;
   // Campos específicos para 'Entrada de Caixa / Contas a Receber'
   honorarios?: number;
+  cobrancaExtra?: string;
   valorExtra?: number;
   totalCobranca?: number;
+  metodoPagamento?: string; // Campo original gravado pelo Jotform
   paymentMethod?: string;
+  method?: string;
+  source?: string;
+  wixInvoiceNumber?: string;
+  wixEntityId?: string;
   cpfCnpj?: string; // Campo vindo do Jotform/Firebase
   clientNumber?: number | string;
   observacaoAPagar?: string; // Observação do contas a pagar
+  observacaoReceber?: string;
+  observacao?: string;
+  numeroDocumento?: string;
+  parcela?: string | number;
+  submissionId?: string;
   isExcluded?: boolean; // Marcação de exclusão lógica
+  exclusionReason?: string;
+  excludedAt?: string;
+  excludedBy?: string;
+  excludedByName?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface ClientRegistryEntry {
+  id: string;
+  key: string;
+  keyType: 'cpf' | 'cnpj' | 'name' | string;
+  cpfCnpjDigits?: string;
+  client?: string;
+  clientNormalized?: string;
+  clientNumber?: string;
+  clientNumberNormalized?: string;
+  status?: 'ready' | 'conflict' | 'missing_client_number' | string;
+  confidence?: 'high' | 'medium' | string;
+}
+
+export type BillingDeliveryChannel = 'email' | 'whatsapp' | 'printed';
+
+export interface BillingProfile {
+  id: string;
+  identityKey: string;
+  client: string;
+  cpfCnpj?: string;
+  clientNumber?: string;
+  groupName?: string;
+  billingMethod?: string;
+  issueDay?: number;
+  dueDay?: number;
+  deliveryChannels: BillingDeliveryChannel[];
+  billingEmail?: string;
+  whatsapp?: string;
+  printedDeliveryDetails?: string;
+  billingInstructions?: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface BillingForecastRow {
+  identityKey: string;
+  client: string;
+  cpfCnpj: string;
+  clientNumber: string;
+  groupName: string;
+  billingMethod: string;
+  issueDate: string;
+  dueDate: string;
+  deliveryChannels: BillingDeliveryChannel[];
+  billingEmail: string;
+  whatsapp: string;
+  printedDeliveryDetails: string;
+  billingInstructions: string;
+  honorarios: number;
+  extras: number;
+  referenceAmount: number;
+  referenceCount: number;
+  referenceMonth: string;
+  targetMonth: string;
+  referenceField: 'date' | 'dueDate';
+  profile?: BillingProfile;
+  hasReference: boolean;
+  missingFields: string[];
+  conflicts: string[];
+  adjustedDates: string[];
 }
 
 export interface FilterState {

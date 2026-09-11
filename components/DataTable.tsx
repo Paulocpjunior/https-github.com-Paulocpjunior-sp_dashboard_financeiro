@@ -1,9 +1,13 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Transaction } from '../types';
-import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, Key, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, X, CheckSquare, Square, CheckCircle2, Filter, FileText, Save, ArrowRight, ShieldCheck, Ban, Info } from 'lucide-react';
+import { auth } from '../firebase';
 import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
+import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
+import { getPaymentMethod } from '../utils/paymentMethod';
+import { PossibleDuplicateScan, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 interface DataTableProps {
   data: Transaction[];
@@ -17,14 +21,18 @@ interface DataTableProps {
   onIdFilterChange?: (value: string) => void;
   isLoading?: boolean;
   selectedType?: string;
+  isReceivablesMode?: boolean;
   allData?: Transaction[];
+  canDelete?: boolean;
+  canExportBoletoCloud?: boolean;
   onDelete?: (id: string) => void;
   onMarkAsPaid?: (id: string) => void;
   onClientClick?: (clientName: string) => void;
+  sortField: TransactionSortField;
+  sortDirection: TransactionSortDirection;
+  onSortChange: (field: TransactionSortField, direction: TransactionSortDirection) => void;
+  possibleDuplicates?: PossibleDuplicateScan;
 }
-
-type SortField = 'client' | 'dueDate' | 'receiptDate' | 'cpfCnpj' | 'none';
-type SortDirection = 'asc' | 'desc';
 
 // --- VALIDAÇÕES E MÁSCARAS ---
 
@@ -92,6 +100,8 @@ const formatDocument = (value: string): string => {
   return clean.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
 };
 
+const BOLETO_CLOUD_ACCOUNT_LABEL = 'NOVA CONTA ITAÚ — Banco 341, agência 3145, conta 99791-6';
+
 // -----------------------------
 
 const DataTable: React.FC<DataTableProps> = ({ 
@@ -104,12 +114,17 @@ const DataTable: React.FC<DataTableProps> = ({
     clientOptions = [],
     isLoading = false,
     selectedType = '',
+    isReceivablesMode = false,
     allData = [],
+    canDelete = false,
+    canExportBoletoCloud = false,
     onDelete,
-    onClientClick
+    onClientClick,
+    sortField,
+    sortDirection,
+    onSortChange,
+    possibleDuplicates,
 }) => {
-  const [sortField, setSortField] = useState<SortField>('none');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
@@ -117,8 +132,7 @@ const DataTable: React.FC<DataTableProps> = ({
   const [selectedExportClients, setSelectedExportClients] = useState<string[]>([]);
   const [exportSearchTerm, setExportSearchTerm] = useState('');
   
-  // Token sensível usado apenas na exportação atual. Não persistir no navegador.
-  const [exportToken, setExportToken] = useState('');
+  const [isGeneratingBoletoCsv, setIsGeneratingBoletoCsv] = useState(false);
 
   // Mapa de Documentos Persistente (Cliente -> CPF/CNPJ)
   const [clientDocs, setClientDocs] = useState<Record<string, string>>(() => {
@@ -147,22 +161,37 @@ const DataTable: React.FC<DataTableProps> = ({
       }
   }, []);
 
-  const handleSort = (field: SortField) => {
+  const handleSort = (field: TransactionSortField) => {
     if (sortField === field) {
       if (sortDirection === 'asc') {
-        setSortDirection('desc');
+        onSortChange(field, 'desc');
       } else {
-        setSortField('none');
-        setSortDirection('asc');
+        onSortChange('none', 'asc');
       }
     } else {
-      setSortField(field);
-      setSortDirection('asc');
+      onSortChange(field, 'asc');
     }
   };
 
-  const handleTokenChange = (val: string) => {
-      setExportToken(val);
+  const canUseDelete = canDelete && Boolean(onDelete);
+
+  const renderDeleteButton = (id: string) => (
+    <button
+      onClick={() => canUseDelete && onDelete?.(id)}
+      disabled={!canUseDelete}
+      className={`p-1 transition-colors rounded-md ${
+        canUseDelete
+          ? 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
+          : 'text-slate-300 dark:text-slate-700 opacity-50 cursor-not-allowed'
+      }`}
+      title={canUseDelete ? 'Excluir' : 'Apenas administradores podem excluir'}
+    >
+      <Ban className="h-4 w-4" />
+    </button>
+  );
+
+  const closeExportModal = () => {
+      setShowExportModal(false);
   };
 
   // Atualiza o documento de um cliente específico e salva no localStorage
@@ -278,7 +307,7 @@ const DataTable: React.FC<DataTableProps> = ({
       handleClientDocChange(clientName, formatDocument(clean));
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => {
+  const SortIcon = ({ field }: { field: TransactionSortField }) => {
     if (sortField !== field) {
       return <ChevronsUpDown className="h-3 w-3 text-slate-400" />;
     }
@@ -291,6 +320,12 @@ const DataTable: React.FC<DataTableProps> = ({
     return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   };
 
+  const getClientNumber = (row: Transaction): string => {
+    const rawValue = row.clientNumber;
+    if (rawValue === null || rawValue === undefined || rawValue === '') return '-';
+    return String(rawValue).trim() || '-';
+  };
+
   const normalizedType = normalizeText(selectedType || '');
   
   const isContasAPagar = normalizedType.includes('saida') || 
@@ -299,7 +334,8 @@ const DataTable: React.FC<DataTableProps> = ({
                          normalizedType.includes('imposto') ||
                          normalizedType.includes('aluguel');
   
-  const isContasAReceber = normalizedType.includes('entrada') || 
+  const isContasAReceber = isReceivablesMode ||
+                           normalizedType.includes('entrada') ||
                            normalizedType.includes('receber') ||
                            normalizedType.includes('servico') ||
                            normalizedType.includes('consultoria');
@@ -311,9 +347,12 @@ const DataTable: React.FC<DataTableProps> = ({
   // 1. Identificar todos os dados pendentes disponíveis (não apenas da página atual)
   const pendingReceivablesData = useMemo(() => {
     const source = (allData && allData.length > 0) ? allData : data;
-    return source.filter(row => 
-      (row.status === 'Pendente' || row.status === 'Agendado')
-    );
+    return source.filter(row => {
+      const paymentMethod = normalizeText(getPaymentMethod(row));
+      return (row.status === 'Pendente' || row.status === 'Agendado') &&
+        !isSaidaTransaction(row) &&
+        paymentMethod.includes('boleto');
+    });
   }, [allData, data]);
 
   // 2. Extrair clientes únicos dos pendentes
@@ -427,55 +466,42 @@ const DataTable: React.FC<DataTableProps> = ({
   };
 
     // 4. Função Final de Exportação (Gera CSV)
-    const handleGenerateCSV = () => {
-      // Validação Final: Verificar se há documentos inválidos
+    const handleGenerateCSV = async () => {
+      if (!canExportBoletoCloud) {
+          alert('Seu usuário não possui permissão para preparar boletos no Boleto Cloud.');
+          return;
+      }
+
+      // Validação final bloqueante: nenhum boleto pode sair com documento inválido.
       const invalidClients = selectedExportClients.filter(client => {
-          const status = validationStatus[client]?.status;
-          const doc = clientDocs[client] || '';
-          return status === 'invalid' || !doc;
+          const clientTrx = pendingReceivablesData.find(row => row.client === client);
+          const doc = cleanDigits(clientDocs[client] || clientTrx?.cpfCnpj || '');
+          return !(doc.length === 11 ? validateCPF(doc) : doc.length === 14 ? validateCNPJ(doc) : false);
       });
 
       if (invalidClients.length > 0) {
-          const msg = `Atenção: Existem ${invalidClients.length} clientes com documentos inválidos ou vazios.\n\n` +
-                      `Exemplos: ${invalidClients.slice(0, 3).join(', ')}...\n\n` +
-                      `O arquivo pode ser rejeitado pelo banco. Deseja gerar mesmo assim?`;
-          if (!confirm(msg)) return;
+          alert(`Geração bloqueada: ${invalidClients.length} cliente(s) estão com CPF/CNPJ inválido ou vazio.\n\n` +
+                `Revise: ${invalidClients.slice(0, 3).join(', ')}${invalidClients.length > 3 ? '...' : ''}`);
+          return;
       }
 
-      if (!exportToken) {
-          if (!confirm('O Token da Conta Bancária está vazio. O arquivo pode ser rejeitado. Deseja continuar mesmo assim?')) {
-              return;
-          }
-      }
-
-      // Filtrar dados baseados nos clientes selecionados e no filtro atual (allData)
-      const sourceData = (allData && allData.length > 0) ? allData : data;
-      const dataToExport = sourceData.filter(row => 
+      // Exportar apenas contas a receber ainda pendentes/agendadas.
+      const dataToExport = pendingReceivablesData.filter(row =>
         selectedExportClients.includes(row.client)
       );
 
-      // Formato CSV Específico Solicitado (Layout Boleto)
-      const headers = [
-        'TOKEN_CONTA_BANCARIA',
-        'CPRF_PAGADOR',
-        'VALOR',
-        'VENCIMENTO',
-        'NOSSO_NUMERO',
-        'DOCUMENTO',
-        'MULTA',
-        'JUROS',
-        'DIAS_PARA_ENCARGOS',
-        'DESCONTO',
-        'DIAS_PARA_DESCONTO',
-        'TIPO_VALOR_DESCONTO',
-        'DESCONTO2',
-        'DIAS_PARA_DESCONTO2',
-        'TIPO_VALOR_DESCONTO2',
-        'DESCONTO3',
-        'DIAS_PARA_DESCONTO3',
-        'TIPO_VALOR_DESCONTO3',
-        'INFORMACAO_PAGADOR'
-      ];
+      if (dataToExport.length === 0) {
+          alert('Nenhuma cobrança pendente válida foi encontrada para os clientes selecionados.');
+          return;
+      }
+
+      const duplicateRows = dataToExport.filter(row => possibleDuplicates?.byTransactionId.has(row.id));
+      if (duplicateRows.length > 0) {
+          const duplicateClients = Array.from(new Set(duplicateRows.map(row => row.client))).filter(Boolean);
+          alert(`Geração bloqueada: ${duplicateRows.length} lançamento(s) selecionado(s) possuem indício de duplicidade.\n\n` +
+                `Revise: ${duplicateClients.slice(0, 3).join(', ')}${duplicateClients.length > 3 ? '...' : ''}`);
+          return;
+      }
 
     // FIX: Alterado para formato DD/MM/YYYY (Padrão Brasileiro para Boleto)
     const formatDateCSV = (dateStr: string) => {
@@ -486,10 +512,11 @@ const DataTable: React.FC<DataTableProps> = ({
 
     const formatValueCSV = (val: number | string | undefined) => {
       const num = Number(val || 0);
-      // Formato Brasileiro: 1.234,56
+      // Manual Boleto Cloud: duas casas decimais. Sem separador de milhar para evitar ambiguidade.
       return new Intl.NumberFormat('pt-BR', { 
         minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
+        maximumFractionDigits: 2,
+        useGrouping: false,
       }).format(num);
     };
 
@@ -505,7 +532,7 @@ const DataTable: React.FC<DataTableProps> = ({
     };
 
     const rows = dataToExport.map(row => {
-        const valor = formatValueCSV(row.totalCobranca || row.honorarios);
+        const valor = formatValueCSV(getOriginalAmount(row));
         const vencimento = formatDateCSV(row.dueDate);
         
         // Truncar descrição para máximo 20 caracteres (limite do layout Boleto Cloud)
@@ -519,11 +546,12 @@ const DataTable: React.FC<DataTableProps> = ({
         
         // USA O DOCUMENTO DEFINIDO NO PASSO 2 (ou extraído/cacheado)
         // Se estiver vazio no input, tenta usar o documento salvo no Firebase
-        const cpfCnpj = cleanDigits(clientDocs[row.client] || row.cpfCnpj || '');
+        // O importador CSV exige CPF/CNPJ com máscara, conforme o manual oficial.
+        const cpfCnpj = formatDocument(clientDocs[row.client] || row.cpfCnpj || '');
 
-        // Mapeamento para as 19 colunas esperadas
+        // As 18 colunas não sensíveis seguem para o servidor. O token é acrescentado
+        // exclusivamente no backend a partir do Google Secret Manager.
         return [
-            exportToken, // TOKEN_CONTA_BANCARIA (Preenchido pelo usuário no modal)
             cpfCnpj,     // CPRF_PAGADOR (Específico por cliente)
             valor,       // VALOR
             vencimento,  // VENCIMENTO (DD/MM/YYYY)
@@ -545,62 +573,48 @@ const DataTable: React.FC<DataTableProps> = ({
         ];
     });
 
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map(row => row.join(';'))
-    ].join('\n');
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      alert('Geração bloqueada: sua sessão segura expirou. Entre novamente no sistema.');
+      return;
+    }
 
-    // BOM para UTF-8 no Excel
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    const hoje = toLocalISODate();
-    link.setAttribute('href', url);
-    link.setAttribute('download', `boletos_importacao_${hoje}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    setShowExportModal(false);
-    alert(`✅ Arquivo gerado com ${selectedExportClients.length} boletos.`);
-  };
-
-  const sortedData = useMemo(() => {
-    if (sortField === 'none') return data;
-
-    return [...data].sort((a, b) => {
-      let comparison = 0;
-
-      switch (sortField) {
-        case 'client':
-          const clientA = (a.client || '').toLowerCase();
-          const clientB = (b.client || '').toLowerCase();
-          comparison = clientA.localeCompare(clientB, 'pt-BR');
-          break;
-        case 'dueDate':
-          const dateA = new Date(a.dueDate || '1970-01-01').getTime();
-          const dateB = new Date(b.dueDate || '1970-01-01').getTime();
-          comparison = dateA - dateB;
-          break;
-        case 'receiptDate':
-          // Using paymentDate as substitute for receiptDate since it's the effective date
-          const recA = new Date(a.paymentDate || '1970-01-01').getTime();
-          const recB = new Date(b.paymentDate || '1970-01-01').getTime();
-          comparison = recA - recB;
-          break;
-        case 'cpfCnpj':
-          const docA = (a.cpfCnpj || '').toLowerCase();
-          const docB = (b.cpfCnpj || '').toLowerCase();
-          comparison = docA.localeCompare(docB, 'pt-BR');
-          break;
+    setIsGeneratingBoletoCsv(true);
+    try {
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch('/api/boleto-cloud-csv', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ rows }),
+      });
+      if (!response.ok) {
+        throw new Error(`Boleto CSV service returned ${response.status}`);
       }
 
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [data, sortField, sortDirection]);
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const hoje = toLocalISODate();
+      link.setAttribute('href', url);
+      link.setAttribute('download', `boletos_importacao_${hoje}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      closeExportModal();
+      alert(`✅ Arquivo preparatório gerado com ${dataToExport.length} boleto(s). Nenhum boleto foi emitido.`);
+    } catch (error) {
+      logger.error('Erro ao gerar CSV seguro do Boleto Cloud:', error);
+      alert('Não foi possível gerar o arquivo seguro. Verifique sua sessão e tente novamente.');
+    } finally {
+      setIsGeneratingBoletoCsv(false);
+    }
+  };
 
   const formatCurrency = (val: number | string | undefined) => {
     const num = Number(val || 0);
@@ -627,9 +641,7 @@ const DataTable: React.FC<DataTableProps> = ({
   // Cálculo Robusto de Dias em Atraso
   const calcDiasAtraso = (dueDate: string, status: string) => {
     // 1. Normalizar status para ignorar pagos
-    const st = (status || '').toLowerCase().trim();
-    const isPaid = st === 'pago' || st === 'recebido' || st === 'liquidado';
-    if (isPaid) return 0;
+    if (isPaidStatus(status)) return 0;
 
     // 2. Verificar se data existe
     if (!dueDate || dueDate === '1970-01-01') return 0;
@@ -660,18 +672,13 @@ const DataTable: React.FC<DataTableProps> = ({
     return diffDays;
   };
 
-  const calcSaldoRestante = (total: number, recebido: number) => {
-    const saldo = (total || 0) - (recebido || 0);
-    return saldo > 0 ? saldo : 0;
-  };
-
   const getColSpan = () => {
     if (isContasAPagar) return 8;
     if (isContasAReceber) return 12;
     return 6;
   };
 
-  const SortableHeader = ({ field, label, className = '' }: { field: SortField; label: string; className?: string }) => (
+  const SortableHeader = ({ field, label, className = '' }: { field: TransactionSortField; label: string; className?: string }) => (
     <th 
       className={`px-2 py-2 font-medium text-slate-500 dark:text-slate-400 uppercase cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors select-none ${className}`}
       onClick={() => handleSort(field)}
@@ -683,45 +690,64 @@ const DataTable: React.FC<DataTableProps> = ({
     </th>
   );
 
-  // Contar pendentes para mostrar no botão
-  const pendentesCount = useMemo(() => {
-    const dataToCount = (allData && allData.length > 0) ? allData : data;
-    return dataToCount.filter(row => row.status === 'Pendente' || row.status === 'Agendado').length;
-  }, [data, allData]);
+  const boletoEligibleCount = pendingReceivablesData.length;
 
   // Derivar estado do botão "Selecionar Todos" com base na busca atual
   const areAllVisibleSelected = filteredExportClients.length > 0 && filteredExportClients.every(c => selectedExportClients.includes(c));
   const isSelectionEmpty = selectedExportClients.length === 0;
 
+  const renderDuplicateBadge = (row: Transaction) => {
+    const signal = possibleDuplicates?.byTransactionId.get(row.id);
+    if (!signal) return null;
+    const highRisk = signal.reasons.includes('paid-open') || signal.reasons.includes('submission');
+    return (
+      <span
+        className={`ml-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-bold ${highRisk ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}
+        title="Possível duplicidade: revise os lançamentos antes de qualquer ação"
+      >
+        <AlertTriangle className="h-2.5 w-2.5" />
+        DUPLICIDADE
+      </span>
+    );
+  };
+
   return (
     <>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors relative">
+        {possibleDuplicates && possibleDuplicates.transactionCount > 0 && (
+          <div className="px-3 py-2 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="text-xs font-medium">
+              {possibleDuplicates.transactionCount} lançamentos em {possibleDuplicates.groupCount} grupo{possibleDuplicates.groupCount === 1 ? '' : 's'} com indício de duplicidade. A comparação considera pagos e pendentes dentro dos demais filtros. Revise antes de baixar ou excluir; nenhuma correção é automática.
+            </span>
+          </div>
+        )}
         
         {/* Header com botão de exportar - Apenas Contas a Receber */}
-        {isContasAReceber && (
+        {isContasAReceber && canExportBoletoCloud && (
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
               📋 Contas a Receber
-              {pendentesCount > 0 && (
+              {boletoEligibleCount > 0 && (
                 <span className="ml-2 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold">
-                  {pendentesCount} pendente{pendentesCount > 1 ? 's' : ''}
+                  {boletoEligibleCount} boleto{boletoEligibleCount > 1 ? 's' : ''} {boletoEligibleCount === 1 ? 'elegível' : 'elegíveis'}
                 </span>
               )}
             </span>
             <button
               onClick={() => {
-                  if (pendentesCount === 0) {
-                      alert('Nenhum boleto pendente para exportar.');
+                  if (boletoEligibleCount === 0) {
+                      alert('Nenhuma cobrança pendente com método Boleto foi encontrada.');
                       return;
                   }
                   setShowExportModal(true);
                   setExportSearchTerm('');
               }}
-              disabled={pendentesCount === 0}
+              disabled={boletoEligibleCount === 0}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
             >
               <Download className="h-3.5 w-3.5" />
-              Exportar .CSV Boletos
+              Preparar CSV Boleto Cloud
             </button>
           </div>
         )}
@@ -800,7 +826,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         )}
                       </div>
                     </th>
-                    <SortableHeader field="client" label="N.Cliente" className="text-center" />
+                    <SortableHeader field="clientNumber" label="N.Cliente" className="text-center" />
                     <SortableHeader field="cpfCnpj" label="CPF/CNPJ" className="text-left" />
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Honor.</th>
@@ -862,25 +888,23 @@ const DataTable: React.FC<DataTableProps> = ({
                     </div>
                   </td>
                 </tr>
-              ) : sortedData.length === 0 ? (
+              ) : data.length === 0 ? (
                 <tr>
                   <td colSpan={getColSpan()} className="px-6 py-10 text-center text-slate-500">
                     Nenhum registro encontrado.
                   </td>
                 </tr>
               ) : (
-                sortedData.map((row, rowIndex) => {
-                  const rowType = normalizeText(row.type || '');
-                  const isRowSaida = rowType.includes('saida') || rowType.includes('pagar') || row.valuePaid > 0;
-                  const isPending = row.status === 'Pendente' || row.status === 'Agendado';
+                data.map((row) => {
+                  const isRowSaida = isSaidaTransaction(row);
+                  const isPago = isPaidStatus(row.status);
+                  const isPending = !isPago;
                   const diasAtraso = calcDiasAtraso(row.dueDate, row.status);
-                  const saldoRestante = calcSaldoRestante(row.totalCobranca, row.valueReceived);
+                  const saldoRestante = getOutstandingAmount(row);
                   const isVencido = diasAtraso > 0;
-                  // Fix: Cast 'Recebido' since it's not in the Transaction.status type union but might come from data
-                  const isPago = row.status === 'Pago' || (row.status as string) === 'Recebido';
 
                   return (
-                    <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
+                    <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${possibleDuplicates?.byTransactionId.has(row.id) ? 'bg-amber-50/70 dark:bg-amber-900/15 ring-1 ring-inset ring-amber-300/60' : isVencido ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
                       
                       {isContasAPagar && (
                         <>
@@ -896,6 +920,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             onClick={() => onClientClick && onClientClick(row.client)}
                           >
                             {row.description || row.client || '-'}
+                            {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                             {row.cpfCnpj || '-'}
@@ -909,19 +934,13 @@ const DataTable: React.FC<DataTableProps> = ({
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
-                            {isPending ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                            {isPending ? formatCurrency(getOriginalAmount(row)) : 'R$ 0,00'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                            {isPago ? formatCurrency(row.valuePaid) : 'R$ 0,00'}
+                            {isPago ? formatCurrency(getPaidAmount(row)) : 'R$ 0,00'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
-                            <button 
-                              onClick={() => onDelete && onDelete(row.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
-                              title="Excluir"
-                            >
-                              <Ban className="h-4 w-4" />
-                            </button>
+                            {renderDeleteButton(row.id)}
                           </td>
                         </>
                       )}
@@ -956,9 +975,10 @@ const DataTable: React.FC<DataTableProps> = ({
                             onClick={() => onClientClick && onClientClick(row.client)}
                           >
                             {row.client || '-'}
+                            {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center text-xs font-bold text-blue-600 dark:text-blue-400">
-                            {rowIndex + 1}
+                            {getClientNumber(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                             {row.cpfCnpj || '-'}
@@ -979,10 +999,10 @@ const DataTable: React.FC<DataTableProps> = ({
                             {formatCurrency(row.valorExtra)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-blue-600 dark:text-blue-400 font-semibold">
-                            {formatCurrency(row.totalCobranca)}
+                            {formatCurrency(getOriginalAmount(row))}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                            {formatCurrency(row.valueReceived)}
+                            {formatCurrency(getPaidAmount(row))}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right">
                             {saldoRestante > 0 ? (
@@ -995,17 +1015,11 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">
-                              {row.paymentMethod || 'Pix'}
+                              {getPaymentMethod(row) || '-'}
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
-                            <button 
-                              onClick={() => onDelete && onDelete(row.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
-                              title="Excluir"
-                            >
-                              <Ban className="h-4 w-4" />
-                            </button>
+                            {renderDeleteButton(row.id)}
                           </td>
                         </>
                       )}
@@ -1026,6 +1040,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             onClick={() => onClientClick && onClientClick(row.client)}
                           >
                             {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                            {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                             {row.cpfCnpj || '-'}
@@ -1042,23 +1057,17 @@ const DataTable: React.FC<DataTableProps> = ({
                             {isRowSaida ? (
                               <span className="text-red-600 dark:text-red-400 flex items-center justify-end gap-0.5 font-medium">
                                 <ArrowDownCircle className="h-3 w-3" />
-                                {formatCurrency(row.valuePaid)}
+                                {formatCurrency(getOriginalAmount(row))}
                               </span>
                             ) : (
                               <span className="text-green-600 dark:text-green-400 flex items-center justify-end gap-0.5 font-medium">
                                 <ArrowUpCircle className="h-3 w-3" />
-                                {formatCurrency(row.totalCobranca || row.valueReceived)}
+                                {formatCurrency(getOriginalAmount(row))}
                               </span>
                             )}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
-                            <button 
-                              onClick={() => onDelete && onDelete(row.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
-                              title="Excluir"
-                            >
-                              <Ban className="h-4 w-4" />
-                            </button>
+                            {renderDeleteButton(row.id)}
                           </td>
                         </>
                       )}
@@ -1106,13 +1115,13 @@ const DataTable: React.FC<DataTableProps> = ({
                          <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                      </div>
                      <div>
-                         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Exportação de Boletos</h2>
+                         <h2 className="text-lg font-bold text-slate-800 dark:text-white">Preparação Boleto Cloud</h2>
                          <p className="text-xs text-slate-500 dark:text-slate-400">
                              {exportStep === 1 ? 'Etapa 1: Seleção de Clientes' : 'Etapa 2: Dados de Cobrança (CPF/CNPJ)'}
                          </p>
                      </div>
                  </div>
-                 <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                 <button onClick={closeExportModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
                      <X className="h-5 w-5" />
                  </button>
              </div>
@@ -1122,22 +1131,18 @@ const DataTable: React.FC<DataTableProps> = ({
                <>
                  <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-4">
                      
-                     {/* Input Token da Conta (Global) */}
-                     <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-100 dark:border-amber-800">
-                         <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
-                             <Key className="h-4 w-4" />
+                     {/* O token não é exposto ao navegador; o backend acrescenta-o ao CSV. */}
+                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+                         <strong>Conta de emissão:</strong> {BOLETO_CLOUD_ACCOUNT_LABEL}
+                         <div className="mt-1">Somente cobranças pendentes/agendadas cujo método contém “Boleto”.</div>
+                     </div>
+                     <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                         <div className="p-1.5 bg-white dark:bg-slate-800 rounded border border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400">
+                             <ShieldCheck className="h-4 w-4" />
                          </div>
                          <div className="flex-1">
-                             <label className="block text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Token da Conta Bancária (Boleto Cloud)</label>
-                             <input 
-                                type="password"
-                                autoComplete="off"
-                                spellCheck={false}
-                                placeholder="Insira o token de integração da conta..." 
-                                value={exportToken}
-                                onChange={(e) => handleTokenChange(e.target.value)}
-                                className="w-full text-sm bg-transparent border-0 border-b border-amber-300 dark:border-amber-700 focus:ring-0 focus:border-amber-500 px-0 py-1 text-slate-800 dark:text-white placeholder:text-slate-400"
-                             />
+                             <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">Token protegido no cofre</div>
+                             <p className="mt-1 text-[10px] text-emerald-700 dark:text-emerald-300">Google Secret Manager. O token não é exibido nem salvo neste navegador.</p>
                          </div>
                      </div>
 
@@ -1212,7 +1217,7 @@ const DataTable: React.FC<DataTableProps> = ({
                      </div>
                      <div className="flex gap-3">
                          <button 
-                            onClick={() => setShowExportModal(false)}
+                            onClick={closeExportModal}
                             className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                          >
                              Cancelar
@@ -1339,10 +1344,11 @@ const DataTable: React.FC<DataTableProps> = ({
                          </button>
                          <button 
                             onClick={handleGenerateCSV}
-                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 flex items-center gap-2"
+                            disabled={isGeneratingBoletoCsv}
+                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-lg shadow-emerald-600/30 text-sm font-medium transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                          >
-                             <Download className="h-4 w-4" />
-                             Gerar Arquivo
+                             {isGeneratingBoletoCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                             {isGeneratingBoletoCsv ? 'Gerando...' : 'Gerar Arquivo'}
                          </button>
                      </div>
                  </div>

@@ -1,0 +1,110 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createServer } from 'vite';
+
+const server = await createServer({
+  server: { middlewareMode: true },
+  optimizeDeps: { noDiscovery: true },
+  appType: 'custom',
+  logLevel: 'error',
+});
+
+try {
+  const {
+    addMonths,
+    buildBillingForecastRows,
+    dateForMonthDay,
+    getBillingIdentityKey,
+    sortBillingForecastRows,
+  } = await server.ssrLoadModule('/utils/billingForecast.ts');
+
+  assert.equal(addMonths('2026-12', 1), '2027-01');
+  assert.equal(dateForMonthDay('2027-02', 31), '2027-02-28');
+  assert.equal(getBillingIdentityKey({ client: 'Empresa A', cpfCnpj: '11.111.111/0001-11' }), 'doc-11111111000111');
+
+  const rows = buildBillingForecastRows([
+    {
+      id: 'jotform-1', date: '2026-08-20', dueDate: '2026-08-31', bankAccount: 'Itaú',
+      type: 'Entrada de Caixa / Contas a Receber', description: 'Empresa A', status: 'Pendente',
+      client: 'Empresa A', paidBy: '', movement: 'Entrada', valuePaid: 0, valueReceived: 0,
+      cpfCnpj: '11.111.111/0001-11', honorarios: 1000, valorExtra: 100, totalCobranca: 1100,
+      metodoPagamento: '11-Boleto ITAU',
+    },
+  ], [{
+    id: 'doc-11111111000111', identityKey: 'doc-11111111000111', client: 'Empresa A',
+    cpfCnpj: '11.111.111/0001-11', groupName: 'Grupo Alfa', billingMethod: 'Boleto Itaú',
+    issueDay: 25, dueDay: 31, deliveryChannels: ['email', 'whatsapp'], billingEmail: 'financeiro@empresa.com',
+    whatsapp: '11999999999', active: true,
+  }], '2026-08', '2026-09');
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].groupName, 'Grupo Alfa');
+  assert.equal(rows[0].referenceAmount, 1100);
+  assert.equal(rows[0].issueDate, '2026-09-25');
+  assert.equal(rows[0].dueDate, '2026-09-30');
+  assert.equal(rows[0].referenceField, 'date');
+  assert.deepEqual(rows[0].adjustedDates, ['vencimento ajustado do dia 31 para 30']);
+  assert.deepEqual(rows[0].missingFields, []);
+
+  const profileOnly = buildBillingForecastRows([], [{
+    id: 'manual', identityKey: 'name-sem-canal', client: 'Sem Canal', deliveryChannels: [], active: true,
+  }], '2026-08', '2026-09');
+  assert.equal(profileOnly.length, 0, 'uma regra manual não deve criar empresa fora da base do Jotform');
+
+  const missing = buildBillingForecastRows([{
+    id: 'jotform-sem-canal', date: '2026-08-10', dueDate: '', type: 'Entrada de Caixa / Contas a Receber',
+    description: 'Sem Canal', status: 'Pendente', client: 'Sem Canal', movement: 'Entrada',
+    valuePaid: 0, valueReceived: 0, cpfCnpj: '33.333.333/0001-33', totalCobranca: 300,
+    metodoPagamento: '', bankAccount: '', paidBy: '', source: 'jotform',
+  }], [], '2026-08', '2026-09')[0];
+  assert.equal(missing.hasReference, true);
+  assert.ok(missing.missingFields.includes('meio de envio'));
+  assert.ok(missing.missingFields.includes('método de cobrança'));
+
+  const inferred = buildBillingForecastRows([
+    {
+      id: 'method-a', date: '2026-08-20', dueDate: '2026-08-31', type: 'Entrada de Caixa / Contas a Receber',
+      description: 'Empresa Conflito', status: 'Pendente', client: 'Empresa Conflito', movement: 'Entrada',
+      valuePaid: 0, valueReceived: 0, cpfCnpj: '22.222.222/0001-22', totalCobranca: 500,
+      metodoPagamento: '11-Boleto ITAU', bankAccount: '', paidBy: '',
+    },
+    {
+      id: 'method-b', date: '2026-08-21', dueDate: '2026-08-15', type: 'Entrada de Caixa / Contas a Receber',
+      description: 'Empresa Conflito', status: 'Pendente', client: 'Empresa Conflito', movement: 'Entrada',
+      valuePaid: 0, valueReceived: 0, cpfCnpj: '22.222.222/0001-22', totalCobranca: 600,
+      metodoPagamento: '3- Pix -ITAU', bankAccount: '', paidBy: '',
+    },
+  ], [], '2026-08', '2026-09', 'date')[0];
+  assert.equal(inferred.billingMethod, '3- Pix -ITAU', 'deve preservar o método mais recente quando a origem estiver divergente');
+  assert.ok(inferred.conflicts.includes('métodos de cobrança divergentes'));
+  assert.ok(inferred.conflicts.includes('dias de emissão divergentes'));
+  assert.ok(inferred.conflicts.includes('dias de vencimento divergentes'));
+  assert.ok(inferred.missingFields.includes('confirmar método de cobrança'));
+  assert.ok(inferred.missingFields.includes('métodos de cobrança divergentes'));
+
+  const { buildBillingForecastPDF, createBillingForecastPDFFile } = await server.ssrLoadModule('/services/billingReportService.ts');
+  const pdf = buildBillingForecastPDF(rows, { id: '1', username: 'teste', name: 'Teste', role: 'admin', active: true });
+  const pdfBytes = new Uint8Array(pdf.output('arraybuffer'));
+  assert.equal(new TextDecoder().decode(pdfBytes.slice(0, 5)), '%PDF-', 'o arquivo gerado deve conter um PDF real');
+
+  const pdfFile = createBillingForecastPDFFile(rows, { id: '1', username: 'teste', name: 'Teste', role: 'admin', active: true });
+  assert.equal(pdfFile.name, 'base-faturamento-2026-09.pdf');
+  assert.equal(pdfFile.type, 'application/pdf');
+  const fileBytes = new Uint8Array(await pdfFile.arrayBuffer());
+  assert.equal(new TextDecoder().decode(fileBytes.slice(0, 5)), '%PDF-');
+
+  const secondRow = { ...rows[0], identityKey: 'doc-2', client: 'Empresa B', clientNumber: '2', referenceAmount: 900, dueDate: '2026-09-10', missingFields: ['e-mail'] };
+  assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'referenceAmount', 'asc').map(row => row.identityKey), ['doc-2', 'doc-11111111000111']);
+  assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'dueDate', 'desc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
+  assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'status', 'asc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
+
+  const billingReportSource = readFileSync(new URL('../services/billingReportService.ts', import.meta.url), 'utf8');
+  const financialReportSource = readFileSync(new URL('../services/reportService.ts', import.meta.url), 'utf8');
+  assert.match(financialReportSource, /savePDF\(doc, fileName\)/, 'o relatório financeiro deve usar a base compartilhada de download PDF');
+  assert.match(billingReportSource, /preparePDFDownload\(doc, fileName\)/, 'a base de faturamento deve reutilizar a base compartilhada de download PDF');
+  assert.doesNotMatch(billingReportSource, /downloadPDFThroughServer/, 'o PDF não deve depender de servidor externo');
+
+  console.log('OK: base de faturamento agrupa empresas, projeta datas e gera um PDF real.');
+} finally {
+  await server.close();
+}

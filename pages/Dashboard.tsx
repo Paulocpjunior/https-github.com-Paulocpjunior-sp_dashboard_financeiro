@@ -9,11 +9,15 @@ import { ClientProfile } from '../components/ClientProfile';
 import { DataService } from '../services/dataService';
 import { buscarCadastroCentral, conferirTransacoes, ConferenciaFinanceiro } from '../services/cadastroCentralConferencia';
 import { auth } from '../services/firebaseConfig';
+import { AuthService } from '../services/authService';
+import { hasFinancialPermission } from '../utils/financialPermissions';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { logger } from '../utils/logger';
 import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
+import { buildDuplicateScanFilters, findPossibleDuplicateTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
+import { WhatsAppSendModal } from '../components/WhatsAppSendModal';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -42,7 +46,22 @@ const normalizeText = (text: string) => {
     .replace(/[\u0300-\u036f]/g, '');
 };
 
+const getFilterScopeKey = (filters: Partial<FilterState>) => [
+  filters.startDate || '',
+  filters.endDate || '',
+  filters.dueDateStart || '',
+  filters.dueDateEnd || '',
+  filters.paymentDateStart || '',
+  filters.paymentDateEnd || '',
+  filters.receiptDateStart || '',
+  filters.receiptDateEnd || '',
+].join('|');
+
 const Dashboard: React.FC = () => {
+  const currentUser = AuthService.getCurrentUser();
+  const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
+  const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');
+
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Transaction[]>([]);
@@ -65,6 +84,8 @@ const Dashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFilteredData]);
   const [totalPages, setTotalPages] = useState(1);
+  const [sortField, setSortField] = useState<TransactionSortField>('none');
+  const [sortDirection, setSortDirection] = useState<TransactionSortDirection>('asc');
   const [kpi, setKpi] = useState<KPIData>({ totalPaid: 0, totalReceived: 0, balance: 0 });
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [showAdvancedDates, setShowAdvancedDates] = useState(false);
@@ -87,14 +108,18 @@ const Dashboard: React.FC = () => {
   // Refs para manter filtros/página atuais acessíveis no callback do onRefresh
   const filtersRef = useRef(filters);
   const pageRef = useRef(page);
+  const sortRef = useRef({ field: sortField, direction: sortDirection });
+  const loadedScopeRef = useRef('');
   filtersRef.current = filters;
   pageRef.current = page;
+  sortRef.current = { field: sortField, direction: sortDirection };
 
   // Refresh States
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60); // segundos até próximo refresh
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [dashboardWhatsAppText, setDashboardWhatsAppText] = useState<string | null>(null);
 
   // Detecta se está no modo "Contas a Pagar" (Saída) ou "Receber" (Entrada)
   const normalizedType = normalizeText(filters.type || '');
@@ -109,19 +134,40 @@ const Dashboard: React.FC = () => {
                           normalizedType.includes('servico') ||
                           filters.movement === 'Entrada';
 
-  const applyTransactionResult = useCallback((filtersToApply: Partial<FilterState>, pageToApply: number) => {
-    const { result, kpi: newKpi } = DataService.getTransactions(filtersToApply, pageToApply);
+  const applyTransactionResult = useCallback((
+    filtersToApply: Partial<FilterState>,
+    pageToApply: number,
+    field: TransactionSortField = sortRef.current.field,
+    direction: TransactionSortDirection = sortRef.current.direction,
+  ) => {
+    const { result, kpi: newKpi } = DataService.getTransactions(filtersToApply, pageToApply, 20, field, direction);
     setData(result.data);
     setAllFilteredData(result.allData ?? result.data);
     setTotalPages(result.totalPages);
     setKpi(newKpi);
   }, []);
 
+  const possibleDuplicates = useMemo(() => {
+    const { result } = DataService.getTransactions(buildDuplicateScanFilters(filters));
+    return findPossibleDuplicateTransactions(result.allData ?? result.data);
+  }, [allFilteredData, filters]);
+
   // Initial Data Load
   useEffect(() => {
     const load = async () => {
       try {
-        await DataService.loadData();
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        const initialFilters = {
+          ...INITIAL_FILTERS,
+          startDate: toLocalISODate(start),
+          endDate: toLocalISODate(end)
+        };
+
+        await DataService.loadDataForFilters(initialFilters);
+        loadedScopeRef.current = getFilterScopeKey(initialFilters);
         
         // Populate filter options dynamically from the loaded data
         setOptions({
@@ -135,17 +181,6 @@ const Dashboard: React.FC = () => {
 
         // Registrar timestamp da primeira carga
         setLastUpdated(DataService.getLastUpdatedAt());
-
-        // Aplicar filtro "Este Mês" por padrão
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        
-        const initialFilters = {
-          ...INITIAL_FILTERS,
-          startDate: toLocalISODate(start),
-          endDate: toLocalISODate(end)
-        };
         
         setFilters(initialFilters);
 
@@ -182,7 +217,7 @@ const Dashboard: React.FC = () => {
       // ★ FIX: Também atualizar tabela e KPIs com os dados mais recentes do cache
       const currentFilters = filtersRef.current;
       const currentPage = pageRef.current;
-      applyTransactionResult(currentFilters, currentPage);
+      applyTransactionResult(currentFilters, currentPage, sortRef.current.field, sortRef.current.direction);
     });
 
     // Iniciar auto-refresh
@@ -215,7 +250,7 @@ const Dashboard: React.FC = () => {
       setRefreshCountdown(60);
       
       // Recarregar dados com filtros atuais
-      applyTransactionResult(filters, page);
+      applyTransactionResult(filters, page, sortField, sortDirection);
 
       // Atualizar opções de filtro
       setOptions({
@@ -231,14 +266,65 @@ const Dashboard: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [filters, page, isRefreshing, applyTransactionResult]);
+  }, [filters, page, sortField, sortDirection, isRefreshing, applyTransactionResult]);
 
   // Handle Filter Changes
   useEffect(() => {
     if (!isLoading && !initError) {
-      applyTransactionResult(filters, page);
+      applyTransactionResult(filters, page, sortField, sortDirection);
     }
-  }, [filters, page, isLoading, initError, applyTransactionResult]);
+  }, [filters, page, sortField, sortDirection, isLoading, initError, applyTransactionResult]);
+
+  useEffect(() => {
+    if (isLoading || initError) return;
+
+    const scopeKey = getFilterScopeKey(filters);
+    if (!scopeKey || scopeKey === loadedScopeRef.current) return;
+
+    let cancelled = false;
+    const loadSelectedScope = async () => {
+      setIsRefreshing(true);
+      try {
+        await DataService.loadDataForFilters(filters, true);
+        if (cancelled) return;
+
+        loadedScopeRef.current = scopeKey;
+        setLastUpdated(DataService.getLastUpdatedAt());
+        setOptions({
+          bankAccounts: DataService.getUniqueValues('bankAccount'),
+          types: DataService.getUniqueValues('type'),
+          statuses: DataService.getUniqueValues('status'),
+          movements: DataService.getUniqueValues('movement'),
+          clients: DataService.getUniqueValues('client'),
+          paidBys: DataService.getUniqueValues('paidBy'),
+        });
+        applyTransactionResult(filtersRef.current, pageRef.current);
+      } catch (e: any) {
+        logger.error('Erro ao carregar período selecionado:', e);
+        if (!cancelled) setInitError(e.message || 'Erro ao conectar com o Banco de Dados Oficial.');
+      } finally {
+        if (!cancelled) setIsRefreshing(false);
+      }
+    };
+
+    loadSelectedScope();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    filters.startDate,
+    filters.endDate,
+    filters.dueDateStart,
+    filters.dueDateEnd,
+    filters.paymentDateStart,
+    filters.paymentDateEnd,
+    filters.receiptDateStart,
+    filters.receiptDateEnd,
+    isLoading,
+    initError,
+    applyTransactionResult,
+  ]);
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => {
@@ -282,6 +368,12 @@ const Dashboard: React.FC = () => {
       return updated;
     });
     setPage(1); // Reset to page 1 on filter change
+  };
+
+  const handleSortChange = (field: TransactionSortField, direction: TransactionSortDirection) => {
+    setSortField(field);
+    setSortDirection(direction);
+    setPage(1);
   };
 
   const clearFilters = () => {
@@ -421,10 +513,25 @@ const Dashboard: React.FC = () => {
     window.print();
   };
   
-  const handleDeleteTransaction = (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta transação? Ela será removida dos cálculos e da visualização principal.')) {
-      DataService.toggleExclusion(id);
-      // O DataService notificará os ouvintes, o que disparará o recarregamento no Dashboard via useEffect
+  const handleDeleteTransaction = async (id: string) => {
+    if (!isAdmin) {
+      window.alert('Ação permitida apenas para administradores.');
+      return;
+    }
+
+    const reason = window.prompt(
+      'Motivo da exclusão do lançamento:',
+      'Excluído do Jotform / cobrança indevida'
+    );
+    if (reason === null) return;
+
+    if (window.confirm('Confirmar exclusão deste lançamento? Ele será removido dos cálculos e da visualização principal para todos os usuários.')) {
+      try {
+        await DataService.excludeTransaction(id, reason);
+      } catch (error) {
+        logger.error('Erro ao excluir transação:', error);
+        window.alert(error instanceof Error ? error.message : 'Não foi possível excluir o lançamento.');
+      }
     }
   };
 
@@ -445,16 +552,15 @@ const Dashboard: React.FC = () => {
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     const periodLabel = getPeriodText() === 'Selecione um período' ? 'Todos os períodos' : getPeriodText();
     
-    const message = `📊 *Resumo Financeiro - CashFlow Pro*%0A` +
-      `--------------------------------%0A` +
-      `🗓 Período: ${periodLabel}%0A` +
-      `✅ Entradas: ${formatBRL(kpi.totalReceived)}%0A` +
-      `🔻 Saídas: ${formatBRL(kpi.totalPaid)}%0A` +
-      `💰 *Saldo: ${formatBRL(kpi.balance)}*%0A` +
-      `--------------------------------%0A` +
-      `Gerado via Painel CashFlow Pro`;
-    
-    window.open(`https://wa.me/?text=${message}`, '_blank');
+    const message = `📊 Resumo Financeiro - SP Contábil\n` +
+      `--------------------------------\n` +
+      `🗓 Período: ${periodLabel}\n` +
+      `✅ Entradas: ${formatBRL(kpi.totalReceived)}\n` +
+      `🔻 Saídas: ${formatBRL(kpi.totalPaid)}\n` +
+      `💰 Saldo: ${formatBRL(kpi.balance)}\n` +
+      `--------------------------------\n` +
+      `Gerado pelo Painel SP Contábil`;
+    setDashboardWhatsAppText(message);
   };
 
   const handleAlertClick = (newFilters: Partial<FilterState>) => {
@@ -1064,6 +1170,8 @@ const Dashboard: React.FC = () => {
                 page={page}
                 totalPages={totalPages}
                 onPageChange={setPage}
+                canDelete={isAdmin}
+                canExportBoletoCloud={canExportBoletoCloud}
                 onDelete={handleDeleteTransaction}
                 onMarkAsPaid={handleMarkAsPaid}
                 clientFilterValue={filters.client}
@@ -1073,7 +1181,12 @@ const Dashboard: React.FC = () => {
                 onIdFilterChange={(val) => handleFilterChange('id', val)}
                 isLoading={isLoading}
                 selectedType={filters.type}
+                isReceivablesMode={isContasAReceber}
                 onClientClick={(name) => setSelectedClient(name)}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSortChange={handleSortChange}
+                possibleDuplicates={possibleDuplicates}
               />
            </div>
         </div>
@@ -1085,6 +1198,13 @@ const Dashboard: React.FC = () => {
             onClose={() => setSelectedClient(null)} 
           />
         )}
+
+        <WhatsAppSendModal
+          open={Boolean(dashboardWhatsAppText)}
+          onClose={() => setDashboardWhatsAppText(null)}
+          title="Enviar resumo filtrado"
+          preparedText={dashboardWhatsAppText || ''}
+        />
 
         <div className="print:hidden">
             <AIAssistant 

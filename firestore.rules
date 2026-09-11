@@ -80,6 +80,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /clientRegistry/{entryId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /billingProfiles/{profileId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

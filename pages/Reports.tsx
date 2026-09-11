@@ -1,18 +1,88 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Layout from '../components/Layout';
 import { DataService } from '../services/dataService';
 import { ReportService } from '../services/reportService';
 import { AuthService } from '../services/authService';
 import { TRANSACTION_TYPES, BANK_ACCOUNTS, STATUSES } from '../constants';
-import { Transaction, KPIData } from '../types';
+import { Transaction, KPIData, FilterState } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { formatISODateBR } from '../utils/dateUtils';
+import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { formatExtraChargeDescription, hasExtraCharge } from '../utils/extraCharges';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
 type SortField = 'date' | 'dueDate' | 'paymentDate' | 'valorOriginal' | 'valorPago' | 'status' | 'client' | 'clientNumber';
 type SortDirection = 'asc' | 'desc';
+
+const getClientNumberSortKey = (value: unknown) => {
+  const text = String(value ?? '').trim();
+  if (!text || text === '-') return { missing: true, number: Number.POSITIVE_INFINITY, text: '' };
+
+  const digits = text.replace(/\D/g, '');
+  const parsed = digits ? Number(digits) : Number.NaN;
+
+  return {
+    missing: false,
+    number: Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY,
+    text,
+  };
+};
+
+const compareClientNumber = (a: Transaction, b: Transaction): number => {
+  const left = getClientNumberSortKey(a.clientNumber);
+  const right = getClientNumberSortKey(b.clientNumber);
+
+  if (left.missing && right.missing) return 0;
+  if (left.missing) return 1;
+  if (right.missing) return -1;
+  if (left.number !== right.number) return left.number - right.number;
+
+  return left.text.localeCompare(right.text, 'pt-BR', { numeric: true });
+};
+
+const getCurrentMonthDateRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+};
+
+const buildScopedLoadFilters = (
+  dateFilterType: DateFilterType,
+  startDate: string,
+  endDate: string
+): Partial<FilterState> => {
+  const range = startDate || endDate ? { startDate, endDate } : getCurrentMonthDateRange();
+
+  if (dateFilterType === 'dueDate') {
+    return { dueDateStart: range.startDate, dueDateEnd: range.endDate };
+  }
+
+  if (dateFilterType === 'paymentDate') {
+    return { paymentDateStart: range.startDate, paymentDateEnd: range.endDate };
+  }
+
+  return range;
+};
+
+const getScopedLoadKey = (dateFilterType: DateFilterType, startDate: string, endDate: string) => {
+  const filters = buildScopedLoadFilters(dateFilterType, startDate, endDate);
+  return [
+    dateFilterType,
+    filters.startDate || '',
+    filters.endDate || '',
+    filters.dueDateStart || '',
+    filters.dueDateEnd || '',
+    filters.paymentDateStart || '',
+    filters.paymentDateEnd || '',
+  ].join('|');
+};
 
 // Interface estendida localmente para detalhar Pendente vs Pago
 interface DetailedKPI extends KPIData {
@@ -37,10 +107,13 @@ const Reports: React.FC = () => {
   const [selectedBank, setSelectedBank] = useState<string>(''); 
   const [selectedMovement, setSelectedMovement] = useState<string>(''); 
   const [selectedClient, setSelectedClient] = useState<string>(''); // Novo estado para Cliente
+  const [extraChargesOnly, setExtraChargesOnly] = useState(false);
+  const [wixInvoicesOnly, setWixInvoicesOnly] = useState(false);
   
   // Sort States
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const loadedScopeRef = useRef('');
   
   // Report Mode
   const [reportMode, setReportMode] = useState<ReportMode>('general');
@@ -70,8 +143,13 @@ const Reports: React.FC = () => {
              const { result } = DataService.getTransactions({});
              setAllTransactions(result.allData ?? result.data);
         } else {
-             // Tenta carregar. Se falhar, vai cair no catch
-             await DataService.loadData();
+             const initialRange = getCurrentMonthDateRange();
+             setStartDate(initialRange.startDate);
+             setEndDate(initialRange.endDate);
+             loadedScopeRef.current = getScopedLoadKey(dateFilterType, initialRange.startDate, initialRange.endDate);
+             await DataService.loadDataForFilters(
+               buildScopedLoadFilters(dateFilterType, initialRange.startDate, initialRange.endDate)
+             );
              const { result } = DataService.getTransactions({});
              setAllTransactions(result.allData ?? result.data);
         }
@@ -94,6 +172,40 @@ const Reports: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!DataService.isDataLoaded) return;
+
+    const scopeKey = getScopedLoadKey(dateFilterType, startDate, endDate);
+    if (loadedScopeRef.current === scopeKey) return;
+
+    let cancelled = false;
+
+    const loadScope = async () => {
+      try {
+        setLoading(true);
+        setInitError('');
+        await DataService.loadDataForFilters(buildScopedLoadFilters(dateFilterType, startDate, endDate), true);
+        if (cancelled) return;
+        loadedScopeRef.current = scopeKey;
+        const { result } = DataService.getTransactions({});
+        setAllTransactions(result.allData ?? result.data);
+      } catch (e: any) {
+        if (!cancelled) {
+          logger.error("Erro ao carregar período em Relatórios:", e);
+          setInitError(e.message || 'Falha na conexão com os dados.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadScope();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dateFilterType, startDate, endDate]);
 
   // Compute available types dynamically
   const availableTypes = useMemo(() => {
@@ -130,6 +242,8 @@ const Reports: React.FC = () => {
 
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
+    setExtraChargesOnly(false);
+    setWixInvoicesOnly(false);
     
     // Reset filters before applying new mode specifics to avoid conflicts
     setSelectedStatus('');
@@ -138,14 +252,14 @@ const Reports: React.FC = () => {
     
     if (mode === 'payables') {
       setSelectedMovement('Saída');
-      setSelectedTypes([]); 
+      setSelectedTypes(['Saída de Caixa / Contas a Pagar']);
       setDateFilterType('dueDate');
       setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
       setSortField('dueDate'); // Ordenar por vencimento
       setSortDirection('asc');
     } else if (mode === 'receivables') {
       setSelectedMovement('Entrada');
-      setSelectedTypes([]); 
+      setSelectedTypes(['Entrada de Caixa / Contas a Receber']);
       setDateFilterType('dueDate'); 
       setSelectedStatus('Pendente'); // FORÇA STATUS PENDENTE (Apenas em aberto)
       setSortField('dueDate'); // Ordenar por vencimento
@@ -211,7 +325,7 @@ const Reports: React.FC = () => {
     if (selectedStatus) {
       const normalizeStatus = (s: string): string => {
         const v = (s || '').toLowerCase().trim();
-        if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's', 'pago'].includes(v)) return 'Pago';
+        if (['sim', 'recebido', 'quitado', 'ok', 'liquidado', 's', 'pago', 'paga'].includes(v)) return 'Pago';
         if (['agendado', 'programado'].includes(v)) return 'Agendado';
         return 'Pendente';
       };
@@ -231,7 +345,17 @@ const Reports: React.FC = () => {
       result = result.filter(t => (t.client || '').toLowerCase().includes(search));
     }
 
-    // 7. Sorting
+    // 7. Cobranças extras (exclusivo do modo Contas a Receber)
+    if (reportMode === 'receivables' && extraChargesOnly) {
+      result = result.filter(hasExtraCharge);
+    }
+
+    // 8. Faturas Wix (exclusivo do modo Contas a Receber)
+    if (reportMode === 'receivables' && wixInvoicesOnly) {
+      result = result.filter(isWixInvoice);
+    }
+
+    // 9. Sorting
     result = [...result].sort((a, b) => {
       let valA: any;
       let valB: any;
@@ -250,19 +374,13 @@ const Reports: React.FC = () => {
           valB = b.paymentDate || '';
           break;
         case 'valorOriginal': {
-          const isEntryA = a.movement === 'Entrada' || (a.valueReceived > 0 && a.valuePaid === 0);
-          const isEntryB = b.movement === 'Entrada' || (b.valueReceived > 0 && b.valuePaid === 0);
-          valA = isEntryA ? a.valueReceived : a.valuePaid;
-          valB = isEntryB ? b.valueReceived : b.valuePaid;
+          valA = getOriginalAmount(a);
+          valB = getOriginalAmount(b);
           break;
         }
         case 'valorPago': {
-          const isPaidA = a.status === 'Pago';
-          const isPaidB = b.status === 'Pago';
-          const isEA = a.movement === 'Entrada' || (a.valueReceived > 0 && a.valuePaid === 0);
-          const isEB = b.movement === 'Entrada' || (b.valueReceived > 0 && b.valuePaid === 0);
-          valA = isPaidA ? (isEA ? a.valueReceived : a.valuePaid) : 0;
-          valB = isPaidB ? (isEB ? b.valueReceived : b.valuePaid) : 0;
+          valA = getPaidAmount(a);
+          valB = getPaidAmount(b);
           break;
         }
         case 'status':
@@ -274,9 +392,7 @@ const Reports: React.FC = () => {
           valB = (b.client || '').toLowerCase();
           break;
         case 'clientNumber':
-          valA = a.clientNumber || 0;
-          valB = b.clientNumber || 0;
-          break;
+          return sortDirection === 'asc' ? compareClientNumber(a, b) : compareClientNumber(b, a);
         default:
           valA = a.date || '';
           valB = b.date || '';
@@ -292,23 +408,16 @@ const Reports: React.FC = () => {
     // Calculate Detailed KPIs
     const newKpi = result.reduce(
       (acc, curr) => {
-        const isPaid = curr.status === 'Pago';
-        const isPending = curr.status === 'Pendente' || curr.status === 'Agendado';
+        const isPaid = isPaidStatus(curr.status);
 
         // Detalhamento Saídas (Contas a Pagar)
-        if (curr.movement === 'Saída' || curr.valuePaid > 0) {
-            if (isPaid) acc.settledPayables += curr.valuePaid;
-            if (isPending) acc.pendingPayables += curr.valuePaid;
+        if (isSaidaTransaction(curr)) {
+            if (isPaid) acc.settledPayables += getPaidAmount(curr);
         }
 
         // Detalhamento Entradas (Contas a Receber)
-        if (curr.movement === 'Entrada' || curr.valueReceived > 0) {
-            if (isPaid) acc.settledReceivables += curr.valueReceived;
-            if (isPending) {
-                // Se estiver pendente, preferir totalCobranca se existir, senão valueReceived
-                const val = (curr.totalCobranca && curr.totalCobranca > 0) ? curr.totalCobranca : curr.valueReceived;
-                acc.pendingReceivables += val;
-            }
+        if (isEntradaTransaction(curr)) {
+            if (isPaid) acc.settledReceivables += getPaidAmount(curr);
         }
 
         return acc;
@@ -320,19 +429,29 @@ const Reports: React.FC = () => {
       }
     );
 
-    newKpi.totalPaid = newKpi.settledPayables + newKpi.pendingPayables;
-    newKpi.totalReceived = newKpi.settledReceivables + newKpi.pendingReceivables;
+    // Mesma fórmula usada pelo Painel Principal: total original menos valor efetivado.
+    // Isso preserva no saldo eventuais diferenças de registros marcados como pagos.
+    newKpi.totalPaid = result
+      .filter(isSaidaTransaction)
+      .reduce((total, transaction) => total + getOriginalAmount(transaction), 0);
+    newKpi.totalReceived = result
+      .filter(isEntradaTransaction)
+      .reduce((total, transaction) => total + getOriginalAmount(transaction), 0);
+    newKpi.pendingPayables = Math.max(0, newKpi.totalPaid - newKpi.settledPayables);
+    newKpi.pendingReceivables = Math.max(0, newKpi.totalReceived - newKpi.settledReceivables);
     newKpi.balance = newKpi.totalReceived - newKpi.totalPaid;
 
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient, reportMode, extraChargesOnly, wixInvoicesOnly]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
-    setReportMode('general'); 
+    setReportMode('general');
+    setExtraChargesOnly(false);
+    setWixInvoicesOnly(false);
   };
 
   const selectAllTypes = () => setSelectedTypes([...availableTypes]);
@@ -360,16 +479,18 @@ const Reports: React.FC = () => {
         client: selectedClient,
         dateContext: dateLabelMap[dateFilterType],
         sortField,
-        sortDirection
+        sortDirection,
+        extraChargesOnly: reportMode === 'receivables' && extraChargesOnly,
+        wixInvoicesOnly: reportMode === 'receivables' && wixInvoicesOnly
     };
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         if (snapshotData.length === 0) {
           alert('Nenhum registro encontrado com os filtros aplicados. Ajuste os filtros e tente novamente.');
           return;
         }
-        ReportService.generatePDF(
+        await ReportService.generatePDF(
           snapshotData, 
           snapshotKpi, 
           snapshotFilters,
@@ -419,6 +540,7 @@ const Reports: React.FC = () => {
 
   const isEntrada = selectedMovement === 'Entrada' || selectedTypes.includes('Entrada de Caixa / Contas a Receber');
   const isSaida = selectedMovement === 'Saída' || selectedTypes.includes('Saída de Caixa / Contas a Pagar');
+  const extraChargesFilterActive = reportMode === 'receivables' && extraChargesOnly;
 
   return (
     <Layout>
@@ -520,7 +642,7 @@ const Reports: React.FC = () => {
                         </div>
                         <div>
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><ArrowLeftRight className="h-4 w-4" /> Movimentação</label>
-                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); }}>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); setWixInvoicesOnly(false); }}>
                                 <option value="">Todas</option>
                                 <option value="Entrada">Entradas / Receitas</option>
                                 <option value="Saída">Saídas / Despesas</option>
@@ -557,6 +679,48 @@ const Reports: React.FC = () => {
                                 )}
                             </div>
                         </div>
+                        {reportMode === 'receivables' && (
+                          <>
+                            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${extraChargesOnly ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={extraChargesOnly}
+                                    onChange={(e) => {
+                                      setExtraChargesOnly(e.target.checked);
+                                      if (e.target.checked) setWixInvoicesOnly(false);
+                                    }}
+                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                        Somente lançamentos com Cobranças Extras
+                                    </span>
+                                    <span className="block mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                        No PDF, a coluna Lanç. será substituída por Cobrança Extra; CPF/CNPJ será preservado e o valor cobrado continuará na coluna Extras.
+                                    </span>
+                                </span>
+                            </label>
+                            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${wixInvoicesOnly ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={wixInvoicesOnly}
+                                    onChange={(e) => {
+                                      setWixInvoicesOnly(e.target.checked);
+                                      if (e.target.checked) setExtraChargesOnly(false);
+                                    }}
+                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                                        Somente Faturas Wix
+                                    </span>
+                                    <span className="block mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                        Exibe apenas as faturas emitidas pelo Wix, preservando as datas originais de lançamento, vencimento e recebimento.
+                                    </span>
+                                </span>
+                            </label>
+                          </>
+                        )}
                     </div>
             </div>
 
@@ -731,32 +895,37 @@ const Reports: React.FC = () => {
                           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-[10px]">
                              <thead className="bg-slate-50 dark:bg-slate-800">
                                 <tr>
-                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Data</th>
+                                   <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">{extraChargesFilterActive ? 'Cobrança Extra' : 'Data'}</th>
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Venc.</th>
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Cliente</th>
                                    {isEntrada && <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">N.Cliente</th>}
                                    {isSaida && <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Observação - A Pagar</th>}
                                    <th className="px-3 py-2 text-left font-medium text-slate-500 uppercase">Status</th>
-                                   <th className="px-3 py-2 text-right font-medium text-slate-500 uppercase">Valor</th>
+                                   <th className="px-3 py-2 text-right font-medium text-slate-500 uppercase">{extraChargesFilterActive ? 'Valor Extra' : 'Valor'}</th>
                                 </tr>
                              </thead>
                              <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
                                 {filteredData.slice(0, 50).map((row) => (
                                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                      <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400">{formatDate(row.date)}</td>
+                                      <td
+                                          className={`px-3 py-2 text-slate-600 dark:text-slate-400 ${extraChargesFilterActive ? 'truncate max-w-[180px]' : 'whitespace-nowrap'}`}
+                                          title={extraChargesFilterActive ? formatExtraChargeDescription(row.cobrancaExtra) : undefined}
+                                      >
+                                          {extraChargesFilterActive ? formatExtraChargeDescription(row.cobrancaExtra) || '-' : formatDate(row.date)}
+                                      </td>
                                       <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium">{formatDate(row.dueDate)}</td>
                                       <td className="px-3 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[150px]">{row.client || '-'}</td>
                                       {isEntrada && <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-slate-500">{row.clientNumber ?? '-'}</td>}
                                       {isSaida && <td className="px-3 py-2 text-slate-500 dark:text-slate-500 truncate max-w-[150px]">{row.observacaoAPagar || '-'}</td>}
                                       <td className="px-3 py-2 whitespace-nowrap">
                                          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium ${
-                                            row.status === 'Pago' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                            isPaidStatus(row.status) ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
                                          }`}>
                                             {row.status}
                                          </span>
                                       </td>
                                       <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-slate-700 dark:text-slate-300">
-                                         {formatCurrency(row.valuePaid || row.totalCobranca || 0)}
+                                         {formatCurrency(extraChargesFilterActive ? parseMoneyValue(row.valorExtra) : getOriginalAmount(row))}
                                       </td>
                                    </tr>
                                 ))}

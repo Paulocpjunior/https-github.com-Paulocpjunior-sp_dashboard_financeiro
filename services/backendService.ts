@@ -1,4 +1,4 @@
-import { Transaction, User } from '../types';
+import { FinancialPermission, Transaction, User } from '../types';
 import { FirebaseService } from './firebaseService';
 import { PendingUserRecord, UserAdminService, UserFormData } from './userAdminService';
 import { logger } from '../utils/logger';
@@ -32,6 +32,13 @@ export const BackendService = {
 
   toggleUserStatus: async (username: string, newStatus: boolean): Promise<MutationResult> => {
     return UserAdminService.toggleUserStatus(username, newStatus);
+  },
+
+  updateFinancialPermissions: async (
+    username: string,
+    permissions: FinancialPermission[],
+  ): Promise<MutationResult> => {
+    return UserAdminService.updateFinancialPermissions(username, permissions);
   },
 
   adminChangePassword: async (username: string, newPassword: string): Promise<MutationResult> => {
