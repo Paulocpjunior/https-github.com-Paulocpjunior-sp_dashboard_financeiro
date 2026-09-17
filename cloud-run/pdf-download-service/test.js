@@ -95,3 +95,17 @@ test('rejects Boleto Cloud CSV generation without Firebase authentication', asyn
     server.close();
   }
 });
+
+test('Itaú HTTP routes require authentication and never cache bank data', async () => {
+  const server = createServer().listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    const { port } = server.address();
+    for (const [path, method] of [['statements?start=2026-09-01&end=2026-09-17','GET'],['preview','POST'],['import','POST']]) {
+      const response = await fetch(`http://127.0.0.1:${port}/api/itau/${path}`, { method });
+      assert.equal(response.status, 401);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.match((await response.json()).error, /Entre novamente/);
+    }
+  } finally { server.close(); }
+});

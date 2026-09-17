@@ -56,7 +56,8 @@
     "deploy:hosting": "npm run build && firebase deploy --only hosting --project gen-lang-client-0888019226",
     "deploy:rules": "firebase deploy --only firestore:rules --project gen-lang-client-0888019226",
     "deploy:rules:dry-run": "firebase deploy --only firestore:rules --dry-run --project gen-lang-client-0888019226",
-    "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226"
+    "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226",
+    "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js"
   },
   "dependencies": {
     "@google/genai": "0.14.1",

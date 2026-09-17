@@ -7,6 +7,7 @@ const Login = React.lazy(() => import('./pages/Login'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 const BillingForecast = React.lazy(() => import('./pages/BillingForecast'));
+const ItauStatement = React.lazy(() => import('./pages/ItauStatement'));
 const Admin = React.lazy(() => import('./pages/Admin'));
 
 const App: React.FC = () => {
@@ -48,6 +49,7 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/extrato-itau" element={<ProtectedRoute><ItauStatement /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

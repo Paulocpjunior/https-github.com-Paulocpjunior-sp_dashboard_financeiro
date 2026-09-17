@@ -38,6 +38,7 @@ jobs:
           node scripts/guard-production.mjs --check
           node scripts/test-production-guard.mjs
           npm run lint
+          npm run test:itau-statements
           npm run test:financial-permissions
           npm run test:billing-forecast
           npm run test:boleto-cloud

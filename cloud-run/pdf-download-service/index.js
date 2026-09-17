@@ -1,4 +1,5 @@
 const http = require('node:http');
+const { createStatementHandler } = require('./itau-statements');
 const { randomUUID } = require('node:crypto');
 const { getApps, initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
@@ -132,6 +133,8 @@ function createServer() {
       response.end();
       return;
     }
+
+    if (await createStatementHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
 
     if (request.method === 'POST' && request.url === '/api/boleto-cloud-csv') {
       try {
