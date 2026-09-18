@@ -40,8 +40,10 @@ export const sanitizeFinancialPermissions = (value: unknown): FinancialPermissio
 );
 
 export const hasFinancialPermission = (user: User | null, permission: FinancialPermission): boolean => {
-  if (!user || user.active === false) return false;
+  if (!user || user.active !== true) return false;
   if ((user.role || '').toLowerCase().trim() === 'admin') return true;
+  // Operacional acessa apenas recebíveis, mesmo com permissões antigas.
+  if (permission !== 'billing.boleto-cloud.issue') return false;
   return user.financialPermissions?.includes(permission) === true;
 };
 

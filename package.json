@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/write-build-version.mjs dist/version.json",
     "build:wix-agent": "./scripts/build-wix-treasury-agent.sh",
-    "test:wix-agent": "npm run build:wix-agent && \".build/wix-treasury-agent/SP Wix Automação.app/Contents/MacOS/SPWixAutomation\" --self-test",
+    "test:wix-agent": "npm run build:wix-agent && \".build/wix-treasury-agent/SP Wix Automa\u00e7\u00e3o.app/Contents/MacOS/SPWixAutomation\" --self-test",
     "install:wix-agent": "npm run build:wix-agent && ./scripts/install-wix-treasury-agent.sh",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
@@ -57,7 +57,8 @@
     "deploy:rules": "firebase deploy --only firestore:rules --project gen-lang-client-0888019226",
     "deploy:rules:dry-run": "firebase deploy --only firestore:rules --dry-run --project gen-lang-client-0888019226",
     "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226",
-    "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js"
+    "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js",
+    "test:receivables-rules": "firebase emulators:exec --config firebase.test.json --only firestore --project demo-financeiro-receivables 'node scripts/test-receivables-rules.mjs'"
   },
   "dependencies": {
     "@google/genai": "0.14.1",
@@ -72,6 +73,7 @@
     "recharts": "2.12.3"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/vite": "^4.2.1",
     "@types/node": "^22.14.0",
     "@types/react": "^18.3.28",

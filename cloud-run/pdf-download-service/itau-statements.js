@@ -1,9 +1,10 @@
+const { handleReconciliation } = require('./reconciliation');
 const { ACCOUNT, StatementError, parseOfx, classifyRows } = require('./itau-ofx');
 const READ = 'itau.openfinance.read';
 const IMPORT = 'itau.statement.import';
 function permitted(profile, permission) {
   return profile?.active === true && profile.status !== 'deleted' && profile.status !== 'blocked' &&
-    (profile.role === 'admin' || (Array.isArray(profile.financialPermissions) && profile.financialPermissions.includes(permission)));
+    profile.role === 'admin';
 }
 function interval(start, end) {
   const valid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -15,10 +16,11 @@ function createStatementHandler({ getServices, readBody, sendJson }) {
     if (!url.pathname.startsWith('/api/itau/')) return false;
     let userId;
     try {
+      const isReconciliation = ['GET', 'POST'].includes(request.method) && url.pathname === '/api/itau/reconciliation';
       const isRead = request.method === 'GET' && url.pathname === '/api/itau/statements';
       const isPreview = request.method === 'POST' && url.pathname === '/api/itau/preview';
       const isCommit = request.method === 'POST' && url.pathname === '/api/itau/import';
-      if (!isRead && !isPreview && !isCommit) throw new StatementError('Rota não encontrada.', 404);
+      if (!isRead && !isPreview && !isCommit && !isReconciliation) throw new StatementError('Rota não encontrada.', 404);
       const { adminAuth, adminDb: db } = getServices();
       const bearer = String(request.headers.authorization || '').match(/^Bearer (\S+)$/);
       if (!bearer) throw new StatementError('Entre novamente para consultar o extrato.', 401);
@@ -31,7 +33,11 @@ function createStatementHandler({ getServices, readBody, sendJson }) {
       const account = db.collection('bankStatements').doc(ACCOUNT);
       const audit = db.collection('bankStatementAudit');
       const actor = { userId, accountId: ACCOUNT, at: new Date().toISOString() };
-      if (isRead) {
+      if (isReconciliation) {
+        if (request.method === 'GET') interval(url.searchParams.get('start'), url.searchParams.get('end'));
+        const result = await handleReconciliation({ request, url, db, userId, readBody, allowed, actor });
+        sendJson(request, response, 200, result);
+      } else if (isRead) {
         const start = url.searchParams.get('start'), end = url.searchParams.get('end');
         interval(start, end);
         const [transactions, imports] = await Promise.all([

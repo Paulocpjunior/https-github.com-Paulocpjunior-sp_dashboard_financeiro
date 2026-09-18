@@ -54,10 +54,10 @@ test('permissions default deny, require explicit active state and separate read/
   assert.throws(()=>interval('2026-01-01','2026-09-30'));
 });
 
-function harness(profile = operator) {
+function harness(profile = { ...operator, role: 'admin' }) {
   const store = new Map([['users/u1',profile]]);
   let sequence = 0, queryCount = 0, queue = Promise.resolve();
-  const snap = ref => ({ exists:store.has(ref.path), data:()=>store.get(ref.path) });
+  const snap = ref => ({ id:ref.path.split('/').pop(), exists:store.has(ref.path), data:()=>store.get(ref.path) });
   const doc = path => ({ path, get:async()=>snap({path}), collection:name=>collection(`${path}/${name}`) });
   const query = (path, filters = [], order = '', direction = 'asc', limit = 100000) => ({
     where:(key,op,value)=>query(path,[...filters,[key,op,value]],order,direction,limit),
@@ -65,10 +65,10 @@ function harness(profile = operator) {
     limit:n=>query(path,filters,order,direction,n),
     get:async()=>{
       queryCount++;
-      const rows=[...store.entries()].filter(([key])=>key.startsWith(`${path}/`) && key.slice(path.length+1).indexOf('/')===-1).map(([,v])=>v)
-        .filter(r=>filters.every(([key,op,value])=>op==='>='?r[key]>=value:r[key]<=value))
+      const rows=[...store.entries()].filter(([key])=>key.startsWith(`${path}/`) && key.slice(path.length+1).indexOf('/')===-1).map(([path,v])=>({...v,__mockId:path.split('/').pop()}))
+        .filter(r=>filters.every(([key,op,value])=>op==='=='?r[key]===value:op==='>='?r[key]>=value:r[key]<=value))
         .sort((a,b)=>String(a[order]).localeCompare(String(b[order]))*(direction==='desc'?-1:1)).slice(0,limit);
-      return {size:rows.length,docs:rows.map(r=>({data:()=>r}))};
+      return {size:rows.length,docs:rows.map(({__mockId,...r})=>({id:__mockId,data:()=>r}))};
     },
   });
   const collection = path => ({ ...query(path), doc:(id)=>doc(`${path}/${id || `audit-${++sequence}`}`), add:async data=>store.set(`${path}/audit-${++sequence}`, data) });
@@ -78,9 +78,9 @@ function harness(profile = operator) {
     runTransaction: fn => {
       const run = queue.then(async()=>{
         const writes=[];
-        const result=await fn({ get:async ref=>snap(ref), getAll:async(...refs)=>refs.map(snap), create:(ref,data)=>writes.push([ref.path,data]) });
-        for(const [path] of writes) assert.equal(store.has(path),false,'create must not overwrite');
-        writes.forEach(([path,data])=>store.set(path,data));
+        const result=await fn({ get:async ref=>snap(ref), getAll:async(...refs)=>refs.map(snap), create:(ref,data)=>writes.push([ref.path,data,'create']),set:(ref,data)=>writes.push([ref.path,data,'set']),update:(ref,data)=>writes.push([ref.path,{...store.get(ref.path),...data},'set']),delete:ref=>writes.push([ref.path,null,'delete']) });
+        for(const [path,,mode] of writes) if(mode==='create') assert.equal(store.has(path),false,'create must not overwrite');
+        writes.forEach(([path,data,mode])=>mode==='delete'?store.delete(path):store.set(path,data));
         return result;
       });
       queue=run.catch(()=>{}); return run;
@@ -127,7 +127,7 @@ test('overlap adds only new FITIDs; conflict blocks entire import; access revoke
 });
 
 test('consultation filters dates, audits reads and refuses truncated results',async()=>{
-  const h=harness({...operator,financialPermissions:['itau.openfinance.read']});
+  const h=harness({...operator,role:'admin',financialPermissions:['itau.openfinance.read']});
   h.store.set(`bankStatements/${ACCOUNT}/entries/a`,{date:'2026-09-15',amountCents:100});
   h.store.set(`bankStatements/${ACCOUNT}/entries/b`,{date:'2026-08-15',amountCents:200});
   const result=await h.call('statements?start=2026-09-01&end=2026-09-30',null,'valid','GET');
@@ -140,4 +140,65 @@ test('consultation filters dates, audits reads and refuses truncated results',as
 test('rejects bank error status and unclosed duplicate statement block',()=>{
   assert.throws(()=>parse(ofx().replace('<STMTTRNRS>','<STMTTRNRS><STATUS><CODE>2000<SEVERITY>ERROR</STATUS>')));
   assert.throws(()=>parse(ofx().replace('</OFX>','<STMTRS></OFX>')));
+});
+
+test('operational users cannot read bank data even with legacy permissions', async()=>{
+  const h=harness(operator);
+  for(const route of ['statements?start=2026-09-01&end=2026-09-30','reconciliation?start=2026-09-01&end=2026-09-30']) assert.equal((await h.call(route,null,'valid','GET')).status,403);
+  for(const route of ['preview','import','reconciliation']) assert.equal((await h.call(route,file())).status,403);
+  assert.equal(h.getQueryCount(),0);
+});
+
+const { source, suggest } = require('./reconciliation');
+const receivable={movement:'Entrada',type:'Entrada de Caixa / Contas a Receber',dueDate:'2026-09-15',date:'2026-09-01',client:'Cliente teste',totalCobranca:120.50,valueReceived:120.50,status:'Pendente'};
+test('suggestions preserve direction, cents, ambiguity and require dated source evidence',()=>{
+  const a=source(receivable,'a'), b=source(receivable,'b');
+  assert.equal(a.amountCents,12050);
+  assert.equal(source({...receivable,dueDate:''},'missing'),null);
+  assert.equal(source({...receivable,isExcluded:true},'excluded'),null);
+  assert.equal(source({...receivable,type:'Saída de Caixa / Contas a Pagar'},'conflict'),null);
+  assert.equal(source({...receivable,totalCobranca:0,valueReceived:0},'empty'),null);
+  assert.equal(suggest({date:'2026-09-15',amountCents:12050},[a,b]).length,2);
+  assert.equal(suggest({date:'2026-09-15',amountCents:-12050},[a,b]).length,0);
+  assert.equal(suggest({date:'2026-09-20',amountCents:12050},[a]).length,0);
+  const c=source({...receivable,cpfCnpj:'12.345.678/0001-90'},'c');
+  const suggestions=suggest({date:'2026-09-15',amountCents:12500,memo:'CNPJ 12.345.678/0001-90'},[c]);
+  assert.equal(suggestions[0].differenceCents,450);
+});
+async function reconciliationSetup(){
+  const h=harness(); const f=file(ofx(entry('FIT-1','120.50')+entry('FIT-2','120.50')));
+  const p=await h.call('preview',f);await h.call('import',{...f,confirmHash:p.body.fileHash});
+  h.store.set('transactions/receipt',structuredClone(receivable));
+  return h;
+}
+const readReconciliation=h=>h.call('reconciliation?start=2026-09-01&end=2026-09-30',null,'valid','GET');
+const confirmation=row=>({action:'confirm',entryId:row.id,transactionId:row.candidates[0].id,bankFingerprint:row.bankFingerprint,sourceFingerprint:row.candidates[0].fingerprint,reason:'Conferido com o comprovante'});
+test('reconciliation requires review, prevents concurrent double links and never changes financial source',async()=>{
+  const h=await reconciliationSetup(); const before=structuredClone(h.store.get('transactions/receipt'));
+  const list=await readReconciliation(h);assert.equal(list.status,200);
+  assert.equal(list.body.rows[0].link,null);
+  const [a,b]=await Promise.all(list.body.rows.map(row=>h.call('reconciliation',confirmation(row))));
+  assert.deepEqual([a.status,b.status].sort(),[200,409]);
+  assert.deepEqual(h.store.get('transactions/receipt'),before);
+  let result=await readReconciliation(h);const linked=result.body.rows.find(r=>r.link);
+  assert.equal(result.body.rows.filter(r=>r.link).length,1);
+  assert.equal(result.body.rows.find(r=>!r.link).candidates.length,0);
+  h.store.set('transactions/receipt',{...before,totalCobranca:130});
+  result=await readReconciliation(h);assert.equal(result.body.rows.find(r=>r.link).stale,true);
+  assert.equal((await h.call('reconciliation',{action:'undo',entryId:linked.id,reason:'Valor alterado na origem'})).status,200);
+  assert.equal([...h.store.keys()].filter(k=>k.startsWith('bankReconciliationLocks/')).length,0);
+  assert.ok([...h.store.values()].some(v=>v.action==='reconciliation-undo'));
+});
+test('changed source, excluded rows, differences and forged confirmations are rejected',async()=>{
+  const h=await reconciliationSetup();const list=await readReconciliation(h);const payload=confirmation(list.body.rows[0]);
+  assert.equal((await h.call('reconciliation',{...payload,reason:''})).status,400);
+  h.store.set('transactions/receipt',{...receivable,totalCobranca:200});
+  assert.equal((await h.call('reconciliation',payload)).status,409);
+  const changed=source(h.store.get('transactions/receipt'),'receipt');
+  assert.equal((await h.call('reconciliation',{...payload,sourceFingerprint:changed.fingerprint})).status,409);
+  h.store.set('transactions/receipt',{...receivable,isExcluded:true});
+  assert.equal((await h.call('reconciliation',payload)).status,409);
+  h.store.set('users/u1',{...operator});
+  assert.equal((await h.call('reconciliation',payload)).status,403);
+  assert.equal([...h.store.keys()].filter(k=>k.startsWith('bankReconciliationLocks/')).length,0);
 });

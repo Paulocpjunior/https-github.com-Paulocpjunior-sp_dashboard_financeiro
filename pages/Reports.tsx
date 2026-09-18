@@ -93,6 +93,7 @@ interface DetailedKPI extends KPIData {
 }
 
 const Reports: React.FC = () => {
+  const receivablesOnly = AuthService.getCurrentUser()?.role !== 'admin';
   const [loading, setLoading] = useState(true);
   const [initError, setInitError] = useState(''); // Estado de erro adicionado
   const [generating, setGenerating] = useState(false);
@@ -102,10 +103,10 @@ const Reports: React.FC = () => {
   const [dateFilterType, setDateFilterType] = useState<DateFilterType>('date'); 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(receivablesOnly ? ['Entrada de Caixa / Contas a Receber'] : []);
   const [selectedStatus, setSelectedStatus] = useState<string>(''); 
   const [selectedBank, setSelectedBank] = useState<string>(''); 
-  const [selectedMovement, setSelectedMovement] = useState<string>(''); 
+  const [selectedMovement, setSelectedMovement] = useState<string>(receivablesOnly ? 'Entrada' : '');
   const [selectedClient, setSelectedClient] = useState<string>(''); // Novo estado para Cliente
   const [extraChargesOnly, setExtraChargesOnly] = useState(false);
   const [wixInvoicesOnly, setWixInvoicesOnly] = useState(false);
@@ -116,7 +117,7 @@ const Reports: React.FC = () => {
   const loadedScopeRef = useRef('');
   
   // Report Mode
-  const [reportMode, setReportMode] = useState<ReportMode>('general');
+  const [reportMode, setReportMode] = useState<ReportMode>(receivablesOnly ? 'receivables' : 'general');
 
   // Preview Data
   const [filteredData, setFilteredData] = useState<Transaction[]>([]);
@@ -209,6 +210,7 @@ const Reports: React.FC = () => {
 
   // Compute available types dynamically
   const availableTypes = useMemo(() => {
+    if (receivablesOnly) return ['Entrada de Caixa / Contas a Receber'];
     const mandatoryTypes = [
       'Entrada de Caixa / Contas a Receber', 
       'Saída de Caixa / Contas a Pagar'
@@ -236,11 +238,12 @@ const Reports: React.FC = () => {
   const availableBanks = useMemo(() => {
     const banksFromData = Array.from(new Set(allTransactions.map(t => t.bankAccount).filter(Boolean)));
     // Combinar com constantes para garantir que apareçam opções mesmo sem dados
-    const combined = new Set([...BANK_ACCOUNTS, ...banksFromData]);
+    const combined = new Set([...(receivablesOnly ? [] : BANK_ACCOUNTS), ...banksFromData]);
     return Array.from(combined).sort();
   }, [allTransactions]);
 
   const handleModeChange = (mode: ReportMode) => {
+    if (receivablesOnly) mode = 'receivables';
     setReportMode(mode);
     setExtraChargesOnly(false);
     setWixInvoicesOnly(false);
@@ -555,7 +558,7 @@ const Reports: React.FC = () => {
 
         {/* Quick Report Mode Selector */}
         <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-2">
-            <button
+            {!receivablesOnly && <><button
                 onClick={() => handleModeChange('general')}
                 className={`flex-1 py-3 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
                 ${reportMode === 'general' 
@@ -574,7 +577,7 @@ const Reports: React.FC = () => {
             >
                 <ArrowDownCircle className="h-4 w-4" />
                 Contas a Pagar (Vencimento)
-            </button>
+            </button></>}
             <button
                 onClick={() => handleModeChange('receivables')}
                 className={`flex-1 py-3 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
@@ -636,16 +639,16 @@ const Reports: React.FC = () => {
                         <div>
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><Landmark className="h-4 w-4" /> Conta Bancária</label>
                              <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)}>
-                                <option value="">Todas</option>
+                                {!receivablesOnly && <option value="">Todas</option>}
                                 {availableBanks.map(b => <option key={b} value={b}>{b}</option>)}
                              </select>
                         </div>
                         <div>
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><ArrowLeftRight className="h-4 w-4" /> Movimentação</label>
-                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); setWixInvoicesOnly(false); }}>
-                                <option value="">Todas</option>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" disabled={receivablesOnly} value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); setWixInvoicesOnly(false); }}>
+                                {!receivablesOnly && <option value="">Todas</option>}
                                 <option value="Entrada">Entradas / Receitas</option>
-                                <option value="Saída">Saídas / Despesas</option>
+                                {!receivablesOnly && <option value="Saída">Saídas / Despesas</option>}
                              </select>
                         </div>
                          {/* NOVO CAMPO: SELETOR DE CLIENTES */}
@@ -833,7 +836,7 @@ const Reports: React.FC = () => {
                        
                        <hr className="border-slate-100 dark:border-slate-800" />
 
-                       {/* SAÍDAS */}
+                       {!receivablesOnly && <> {/* SAÍDAS */}
                        <div className="space-y-1">
                            <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 px-1">
                                <span>Saídas Efetivadas</span>
@@ -862,7 +865,7 @@ const Reports: React.FC = () => {
                           <span className={`font-bold text-lg ${kpi.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
                              {formatCurrency(kpi.balance)}
                           </span>
-                       </div>
+                       </div></>}
                     </div>
 
                     <div className="space-y-3">

@@ -676,7 +676,7 @@ const Admin: React.FC = () => {
                             </span>
                           ) : (
                             <div className="space-y-2">
-                              {FINANCIAL_PERMISSION_OPTIONS.map(option => {
+                              {FINANCIAL_PERMISSION_OPTIONS.filter(option => user.role === 'admin' || option.value === 'billing.boleto-cloud.issue').map(option => {
                                 const actionKey = `permission:${user.id}:${option.value}`;
                                 return (
                                   <label key={option.value} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200">

@@ -1,5 +1,5 @@
 import { ClientRegistryEntry, FilterState, KPIData, PaginatedResult, Transaction } from '../types';
-import { FirebaseService } from './firebaseService';
+import { FirebaseService, transactionScope } from './firebaseService';
 import type { TransactionRangeField, TransactionsFingerprint } from './firebaseService';
 import { AuthService } from './authService';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
@@ -699,7 +699,7 @@ export const DataService = {
 
     logger.info('[DataService] Iniciando listener em tempo real do Firebase...');
 
-    const q = query(collection(db, 'transactions'), orderBy('date', 'desc'));
+    const q = query(collection(db, 'transactions'), ...transactionScope(), orderBy('date', 'desc'));
 
     firebaseUnsubscribe = onSnapshot(q, (snapshot) => {
       if (!isDataLoaded) return; // Aguarda carregamento inicial

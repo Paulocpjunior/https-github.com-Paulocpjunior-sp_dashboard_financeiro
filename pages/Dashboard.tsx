@@ -70,7 +70,8 @@ const Dashboard: React.FC = () => {
   // Falha do túnel não acende nada — vigilância, não pré-requisito.
   const [confCentral, setConfCentral] = useState<ConferenciaFinanceiro | null>(null);
   useEffect(() => {
-    if (!allFilteredData.length) { setConfCentral(null); return; }
+    setConfCentral(null);
+    if (!allFilteredData.length) return;
     let vivo = true;
     buscarCadastroCentral(async () => {
       const u = auth.currentUser;
@@ -767,20 +768,19 @@ const Dashboard: React.FC = () => {
         {confCentral && confCentral.foraDoCadastro.length > 0 && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm">
             <div className="font-extrabold text-red-800 mb-1">
-              🧭 Cadastro central: {confCentral.foraDoCadastro.length} CNPJ(s) que o Consultor Fiscal não conhece
+              🧭 Cadastro central: {confCentral.foraDoCadastro.length} CNPJ(s) sem correspondência na consulta ao Consultor Fiscal
             </div>
             <p className="text-xs text-slate-600 mb-2">
-              Ou o CNPJ foi digitado errado no Jotform (e a cobrança bate no cliente errado), ou o cliente está
-              fora do cadastro central — e de todos os módulos. Quem arruma é gente, na fonte.
+              A lista consultada não retornou correspondência para estes CNPJs. Confira os registros na fonte antes de corrigir: isso não comprova erro na cobrança ou ausência em outros módulos.
               {confCentral.pessoasFisicas > 0 && ` (${confCentral.pessoasFisicas} transação(ões) de pessoa física ficam fora desta conferência.)`}
             </p>
-            {confCentral.foraDoCadastro.slice(0, 8).map((f) => (
+            {confCentral.foraDoCadastro.map((f) => (
               <div key={f.cnpj} className="text-xs py-0.5 text-slate-700">
                 <strong>{f.cnpj}</strong> — {f.nomes.join(' / ') || 'sem nome'} · {f.transacoes} transação(ões)
               </div>
             ))}
             {confCentral.foraDoCadastro.length > 8 && (
-              <div className="text-xs text-slate-500">mostrando 8 de {confCentral.foraDoCadastro.length}</div>
+              <div className="text-xs text-slate-500">mostrando todos os {confCentral.foraDoCadastro.length} casos</div>
             )}
           </div>
         )}

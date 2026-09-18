@@ -38,6 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Load Global Financial Data for Header
   useEffect(() => {
     const updateHeaderKpi = () => {
+      if (user?.role !== 'admin') { setGlobalKpi(null); return; }
       // Check if data is loaded in the service
       if (DataService.isDataLoaded) {
         // Usa a nova função que calcula especificamente (Pendentes para E/S e Realizado para Saldo)
@@ -80,12 +81,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const navItems = [
-    { path: '/', label: 'Painel Principal', icon: LayoutDashboard },
+    { path: '/', label: user?.role === 'admin' ? 'Painel Principal' : 'Contas a Receber', icon: LayoutDashboard },
     { path: '/relatorios', label: 'Relatórios', icon: FileText },
     { path: '/faturamento', label: 'Base de Faturamento', icon: FileSpreadsheet },
     ...(hasFinancialPermission(user, 'itau.openfinance.read') ? [{ path: '/extrato-itau', label: 'Extrato Itaú', icon: Building2 }] : []),
     // Verificação Case-Insensitive para Admin
-    ...((user?.role || '').toLowerCase() === 'admin' ? [{ path: '/admin', label: 'Usuários', icon: Users }] : []),
+    ...((user?.role || '').toLowerCase() === 'admin' ? [{ path: '/conciliacao', label: 'Conciliação', icon: FileSpreadsheet }, { path: '/admin', label: 'Usuários', icon: Users }] : []),
   ];
 
   return (
@@ -239,7 +240,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="max-w-7xl mx-auto">
             
             {/* Global Financial Header Summary */}
-            {globalKpi && (
+            {user?.role === 'admin' && globalKpi && (
               <div className="mb-8 grid grid-cols-1 sm:grid-cols-4 gap-0 sm:gap-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-slideUp print:border-slate-300 transition-colors relative">
                  <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-3">
                      <div className="flex items-center gap-4 p-4 border-b sm:border-b-0 border-slate-100 dark:border-slate-800">
