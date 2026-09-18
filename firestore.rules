@@ -16,7 +16,8 @@ service cloud.firestore {
     }
 
     function isActiveUser() {
-      return hasProfile() && profile().data.active == true;
+      return hasProfile() && profile().data.active == true
+        && !(profile().data.get('status', '') in ['deleted', 'blocked']);
     }
 
     function isAdmin() {
@@ -55,6 +56,8 @@ service cloud.firestore {
 
     function isLimitedPaymentUpdate() {
       return isActiveUser()
+        && resource.data.movement == 'Entrada'
+        && resource.data.type == 'Entrada de Caixa / Contas a Receber'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status',
           'paymentDate',
@@ -98,7 +101,9 @@ service cloud.firestore {
     }
 
     match /transactions/{transactionId} {
-      allow read: if isActiveUser();
+      allow read: if isAdmin() || (isActiveUser()
+        && resource.data.movement == 'Entrada'
+        && resource.data.type == 'Entrada de Caixa / Contas a Receber');
       allow create: if isAdmin();
       allow update: if isAdmin() || isLimitedPaymentUpdate();
       allow delete: if isAdmin();

@@ -31,6 +31,7 @@ export const ReportService = {
     currentUser: User | null
   ) => {
     try {
+      if (currentUser?.role !== 'admin' && transactions.some(t => t.movement !== 'Entrada' || t.type !== 'Entrada de Caixa / Contas a Receber')) throw new Error('Relatório restrito a contas a receber.');
       const safeNum = (val: any) => parseMoneyValue(val);
 
       const safeStr = (val: any) => val ? String(val) : '';
@@ -111,6 +112,7 @@ export const ReportService = {
       doc.text(`- Já Recebido: ${fmt(kpi.settledReceivables)}`, kpiXStart, kpiYLine + 5);
       doc.text(`- Pendente: ${fmt(kpi.pendingReceivables)}`, kpiXStart, kpiYLine + 9);
       
+      if (currentUser?.role === 'admin') {
       // 2. Saídas
       doc.setFontSize(9);
       doc.setTextColor(220, 38, 38);
@@ -130,6 +132,7 @@ export const ReportService = {
       doc.setFont('helvetica', 'bold');
       doc.text(`Saldo Previsto: ${fmt(kpi.balance)}`, kpiXStart + (colGap * 2), kpiYLine + 5);
 
+      }
       yPos = 80;
       doc.setTextColor(80, 80, 80);
       doc.setFontSize(9);
@@ -418,7 +421,7 @@ export const ReportService = {
           doc.setTextColor(150, 150, 150);
           doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
           doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
-          doc.text(`SP Contábil - Relatório de Contas a Pagar/Receber`, 14, pageHeight - 8);
+          doc.text(currentUser?.role === 'admin' ? 'SP Contábil - Relatório de Contas a Pagar/Receber' : 'SP Contábil - Relatório de Contas a Receber', 14, pageHeight - 8);
       }
 
       const fileName = `Relatorio_Financeiro_${new Date().toISOString().slice(0,10)}.pdf`;

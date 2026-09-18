@@ -35,7 +35,7 @@ try {
     id: 'op', username: 'operador', name: 'Operador', role: 'operacional', active: true,
     financialPermissions: ['itau.openfinance.read'],
   };
-  assert.equal(hasFinancialPermission(operator, 'itau.openfinance.read'), true);
+  assert.equal(hasFinancialPermission(operator, 'itau.openfinance.read'), false);
   assert.equal(hasFinancialPermission(operator, 'billing.boleto-cloud.issue'), false);
   assert.equal(canOpenWixTreasury(operator), false);
   assert.equal(hasFinancialPermission({ ...operator, active: false }, 'itau.openfinance.read'), false);

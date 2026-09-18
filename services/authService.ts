@@ -151,7 +151,7 @@ export const AuthService = {
   logout: (): void => {
     try {
       localStorage.removeItem(AUTH_STORAGE_KEY);
-      void signOut(auth).catch(() => {});
+      void signOut(auth).finally(() => window.location.assign('/login'));
     } catch {}
   },
 

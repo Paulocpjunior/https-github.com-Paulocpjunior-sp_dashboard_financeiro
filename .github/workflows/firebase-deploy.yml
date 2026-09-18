@@ -4,6 +4,8 @@ on:
   # Push valida, mas nunca publica. Publicação exige autorização por commit.
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       approved_commit:
@@ -45,6 +47,15 @@ jobs:
           npm run test:dashboard-duplicates-sorting
           npm run test:data-loading
           npm run test:payment-method
+
+      - name: Instalar Java para testar regras de acesso
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Validar isolamento de recebíveis no emulador
+        run: npx --yes --package firebase-tools@15.13.0 -- npm run test:receivables-rules
 
       - name: Build do projeto
         env:

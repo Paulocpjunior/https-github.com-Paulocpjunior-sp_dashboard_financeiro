@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { AuthService } from '../services/authService';
-import { auth } from '../services/firebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, db } from '../services/firebaseConfig';
 import { consultarGateDepartamento, type GateDepartamento } from '../services/departamentoGate';
+import { sanitizeFinancialPermissions } from '../utils/financialPermissions';
 import { logger } from '../utils/logger';
 
 interface ProtectedRouteProps {
@@ -11,6 +14,31 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles }) => {
+  const [profileReady, setProfileReady] = useState(false);
+  const [sessionDenied, setSessionDenied] = useState(false);
+  useEffect(() => {
+    let stopProfile = () => {};
+    const stopAuth = onAuthStateChanged(auth, account => {
+      stopProfile();
+      setProfileReady(false);
+      if (!account) { setSessionDenied(true); return; }
+      stopProfile = onSnapshot(doc(db, 'users', account.uid), { includeMetadataChanges: true }, snapshot => {
+        if (snapshot.metadata.fromCache) { setProfileReady(false); return; }
+        const data = snapshot.data();
+        if (!data || data.active !== true || ['deleted', 'blocked'].includes(data.status)) {
+          setProfileReady(false); setSessionDenied(true); return;
+        }
+        const previous = AuthService.getCurrentUser();
+        AuthService.updateCurrentUser({ id: account.uid, username: data.username || account.uid, name: data.name || data.username || '', role: data.role, active: true, email: data.email || '', financialPermissions: sanitizeFinancialPermissions(data.financialPermissions) });
+        if (previous && (previous.id !== account.uid || previous.role !== data.role)) {
+          // A fresh document clears all in-memory data from the previous access scope.
+          window.location.reload(); return;
+        }
+        setSessionDenied(false); setProfileReady(true);
+      }, () => { setProfileReady(false); setSessionDenied(true); });
+    });
+    return () => { stopAuth(); stopProfile(); };
+  }, []);
   const isAuthenticated = AuthService.isAuthenticated();
   const user = AuthService.getCurrentUser();
 
@@ -36,9 +64,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user?.email]);
 
-  if (!isAuthenticated) {
+  if (sessionDenied || !isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
+  if (!profileReady) return <div role="status" className="p-6">Verificando acesso…</div>;
 
   if (roles && user) {
     // Normalização para garantir comparação correta (Admin vs admin)

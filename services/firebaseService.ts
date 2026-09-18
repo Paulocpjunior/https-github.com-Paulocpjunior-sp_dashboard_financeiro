@@ -17,7 +17,16 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { BillingProfile, ClientRegistryEntry, Transaction, FilterState, KPIData } from '../types';
+import { AuthService } from './authService';
 import { logger } from '../utils/logger';
+
+// Security rules enforce the same constraints. Never fetch payables for operators.
+export const transactionScope = (): QueryConstraint[] =>
+  AuthService.getCurrentUser()?.role === 'admin' ? [] : [
+    where('movement', '==', 'Entrada'),
+    where('type', '==', 'Entrada de Caixa / Contas a Receber'),
+  ];
+const transactionsQuery = () => query(collection(db, 'transactions'), ...transactionScope());
 
 const FIRESTORE_LIGHT_FETCH_TIMEOUT_MS = 15000;
 const FIRESTORE_FULL_FETCH_TIMEOUT_MS = 60000;
@@ -94,7 +103,7 @@ export const FirebaseService = {
     // Nota: Firestore requer índices compostos para múltiplos filtros com orderBy.
     // Para simplificar a implementação inicial, usamos um limite baseado na página.
     const q = query(
-      collection(db, 'transactions'),
+      transactionsQuery(),
       ...constraints,
       orderBy('date', 'desc'),
       limit(pageSize * page)
@@ -123,7 +132,7 @@ export const FirebaseService = {
    * Assina atualizações em tempo real para os KPIs globais.
    */
   subscribeToKPIs: (callback: (kpi: KPIData) => void) => {
-    return onSnapshot(collection(db, 'transactions'), (snapshot) => {
+    return onSnapshot(transactionsQuery(), (snapshot) => {
       let totalPaid = 0;
       let totalReceived = 0;
       
@@ -148,7 +157,7 @@ export const FirebaseService = {
    * Obtém a lista única de empresas/clientes.
    */
   getCompanies: async (): Promise<string[]> => {
-    const snapshot = await getDocs(collection(db, 'transactions'));
+    const snapshot = await getDocs(transactionsQuery());
     const companies = new Set<string>();
     snapshot.docs.forEach(doc => {
       const data = doc.data() as Transaction;
@@ -161,12 +170,14 @@ export const FirebaseService = {
    * Obtém todas as transações (usado para compatibilidade com o DataService atual)
    */
   fetchTransactions: async (timeoutMs = FIRESTORE_FULL_FETCH_TIMEOUT_MS): Promise<Transaction[]> => {
-    const q = query(collection(db, 'transactions'), orderBy('date', 'desc'));
+    const q = query(transactionsQuery(), orderBy('date', 'desc'));
 
     try {
       const snapshot = await withTimeout(getDocsFromServer(q), timeoutMs);
       return mapTransactionSnapshot(snapshot);
     } catch (serverError) {
+      // Do not reuse a previous user's local documents when authorization fails.
+      if ((serverError as { code?: string }).code === 'permission-denied' || AuthService.getCurrentUser()?.role !== 'admin') throw serverError;
       logger.warn('[FirebaseService] Busca no servidor falhou. Tentando cache local do Firestore...', serverError);
 
       try {
@@ -194,7 +205,7 @@ export const FirebaseService = {
     if (endDate) constraints.push(where(field, '<=', endDate));
 
     const q = query(
-      collection(db, 'transactions'),
+      transactionsQuery(),
       ...constraints,
       orderBy(field, 'desc')
     );
@@ -203,6 +214,8 @@ export const FirebaseService = {
       const snapshot = await withTimeout(getDocsFromServer(q), timeoutMs);
       return mapTransactionSnapshot(snapshot);
     } catch (serverError) {
+      // Do not reuse a previous user's local documents when authorization fails.
+      if ((serverError as { code?: string }).code === 'permission-denied' || AuthService.getCurrentUser()?.role !== 'admin') throw serverError;
       logger.warn(`[FirebaseService] Busca por periodo (${field}) falhou. Tentando cache local...`, serverError);
 
       try {
@@ -223,7 +236,7 @@ export const FirebaseService = {
    * Consulta leve para detectar se a coleção mudou antes de baixar todos os documentos.
    */
   fetchTransactionsFingerprint: async (timeoutMs = FIRESTORE_LIGHT_FETCH_TIMEOUT_MS): Promise<TransactionsFingerprint> => {
-    const transactionsRef = collection(db, 'transactions');
+    const transactionsRef = transactionsQuery();
     const latestUpdateQuery = query(transactionsRef, orderBy('updatedAt', 'desc'), limit(1));
 
     const [countSnapshot, latestUpdateSnapshot] = await Promise.all([
