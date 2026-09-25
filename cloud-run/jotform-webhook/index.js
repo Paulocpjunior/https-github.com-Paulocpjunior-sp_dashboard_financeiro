@@ -198,6 +198,13 @@ function findRawDate(raw, ...patterns) {
   return parseJotformDate(value);
 }
 
+function isContasReceberPayload(raw) {
+  const tipo = String(raw?.q4_tipoDe || '').toUpperCase();
+  if (tipo.includes('CONTAS A PAGAR')) return false;
+  if (tipo.includes('CONTAS A RECEBER')) return true;
+  return Boolean(raw?.q169_nomeEmpresa) || Boolean(raw?.q262_dataVencimentoreceber?.day);
+}
+
 function pickPositiveMoney(primary, fallback) {
   const primaryNum = parseValor(primary);
   const fallbackNum = parseValor(fallback);
@@ -993,8 +1000,7 @@ app.post('/', upload.any(), async (req, res) => {
     const submissionId = raw.submissionID || topBody.submissionID ||
                          raw.submission_id || topBody.submission_id || null;
 
-    const isContasReceber = !!raw.q314_docpago314 || !!raw.q169_nomeEmpresa ||
-      !!(raw.q262_dataVencimentoreceber && raw.q262_dataVencimentoreceber.day);
+    const isContasReceber = isContasReceberPayload(raw);
 
     console.log('Formulário:', isContasReceber ? 'Contas a Receber' : 'Contas a Pagar');
     console.log('submissionId:', submissionId);
@@ -1671,6 +1677,7 @@ module.exports = {
   getReceberTotal,
   extractContasReceber,
   extractContasPagar,
+  isContasReceberPayload,
   isEmptyContasPagar,
   jotformDateToEpoch,
 };

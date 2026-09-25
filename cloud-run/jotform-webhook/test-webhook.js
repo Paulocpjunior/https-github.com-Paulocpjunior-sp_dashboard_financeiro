@@ -4,6 +4,7 @@ const path = require('node:path');
 const {
   WEBHOOK_VERSION,
   extractContasPagar,
+  isContasReceberPayload,
   jotformDateToEpoch,
   toBrDate,
 } = require('./index');
@@ -39,6 +40,15 @@ assert.equal(paidWithJotformDateObjects.dataLancISO, '2026-09-25');
 assert.equal(paidWithJotformDateObjects.dueDateISO, '2026-09-28');
 assert.equal(paidWithJotformDateObjects.dataPgto, '25/09/2026');
 assert.equal(toBrDate({ day: '25', month: '09', year: '2026' }), '2026-09-25');
+assert.equal(isContasReceberPayload({
+  q4_tipoDe: 'Saída de Caixa / Contas a Pagar',
+  q314_docpago314: 'NÃO',
+  q44_movimentacao44: '26- Certificados Digitais',
+}), false);
+assert.equal(isContasReceberPayload({
+  q4_tipoDe: 'Entrada de Caixa / Contas a Receber',
+  q314_docpago314: 'SIM',
+}), true);
 
 const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
 assert.ok(!source.includes('Fallback Pagar RELAXADO match'));
