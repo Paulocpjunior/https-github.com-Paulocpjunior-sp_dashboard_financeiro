@@ -37,7 +37,8 @@ try {
   };
   assert.equal(hasFinancialPermission(operator, 'itau.openfinance.read'), true);
   assert.equal(hasFinancialPermission(operator, 'billing.boleto-cloud.issue'), false);
-  assert.equal(canOpenWixTreasury(operator), false);
+  assert.equal(canOpenWixTreasury(operator), true);
+  assert.equal(canOpenWixTreasury({ ...operator, active: false }), false);
   assert.equal(hasFinancialPermission({ ...operator, active: false }, 'itau.openfinance.read'), false);
   assert.equal(hasFinancialPermission({ ...operator, role: 'admin', financialPermissions: [] }, 'billing.boleto-cloud.issue'), true);
 

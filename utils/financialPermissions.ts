@@ -8,7 +8,7 @@ export const FINANCIAL_PERMISSION_OPTIONS: Array<{
   {
     value: 'wix.treasury.open',
     label: 'Tesouraria Wix',
-    description: 'Abrir o fluxo seguro de transferência Wix.',
+    description: 'Legado: usuários ativos já possuem acesso à Tesouraria Wix no Dashboard.',
   },
   {
     value: 'billing.boleto-cloud.issue',
@@ -41,5 +41,7 @@ export const hasFinancialPermission = (user: User | null, permission: FinancialP
 };
 
 export const canOpenWixTreasury = (user: User | null): boolean => {
-  return hasFinancialPermission(user, 'wix.treasury.open');
+  // A conta Wix é compartilhada pela equipe financeira; o Dashboard só abre a
+  // página oficial e não executa nenhuma operação financeira.
+  return Boolean(user && user.active !== false);
 };
