@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle, ReceiptText } from 'lucide-react';
 import { AuthService } from '../services/authService';
 import { DataService } from '../services/dataService';
 import { KPIData } from '../types';
@@ -82,7 +82,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navItems = [
     { path: '/', label: 'Painel Principal', icon: LayoutDashboard },
     { path: '/relatorios', label: 'Relatórios', icon: FileText },
-    { path: '/faturamento', label: 'Base de Faturamento', icon: FileSpreadsheet },
+    { path: '/faturamento', label: 'Faturamento', accessibleLabel: 'Base de Faturamento', icon: ReceiptText },
     // Verificação Case-Insensitive para Admin
     ...((user?.role || '').toLowerCase() === 'admin' ? [{ path: '/admin', label: 'Usuários', icon: Users }] : []),
   ];
@@ -167,14 +167,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     setIsSidebarOpen(false);
                   }}
                   className={`
-                    w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-200 cursor-pointer relative z-10
+                    w-full min-h-12 flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer relative z-10 text-left
                     ${isActive 
                         ? 'bg-royal-800 dark:bg-blue-900/50 text-white shadow-md border border-royal-700/50' 
                         : 'text-royal-200 dark:text-slate-400 hover:bg-royal-900/50 dark:hover:bg-slate-800 hover:text-white'}
                   `}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={item.accessibleLabel || item.label}
+                  title={item.accessibleLabel || item.label}
                 >
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-royal-300 dark:text-slate-500'}`} />
-                  <span className="font-medium">{item.label}</span>
+                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-white' : 'text-royal-300 dark:text-slate-500'}`} />
+                  <span className="min-w-0 truncate whitespace-nowrap font-medium">{item.label}</span>
                 </button>
               );
             })}
@@ -185,11 +188,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   setShowWixTreasury(true);
                   setIsSidebarOpen(false);
                 }}
-                className="w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-200 cursor-pointer relative z-10 text-royal-200 dark:text-slate-400 hover:bg-royal-900/50 dark:hover:bg-slate-800 hover:text-white"
+                className="w-full min-h-12 flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer relative z-10 text-left text-royal-200 dark:text-slate-400 hover:bg-royal-900/50 dark:hover:bg-slate-800 hover:text-white"
                 aria-haspopup="dialog"
               >
-                <Wallet className="h-5 w-5 text-royal-300 dark:text-slate-500" />
-                <span className="font-medium">Tesouraria Wix</span>
+                <Wallet className="h-5 w-5 shrink-0 text-royal-300 dark:text-slate-500" />
+                <span className="min-w-0 truncate whitespace-nowrap font-medium">Tesouraria Wix</span>
               </button>
             )}
           </nav>
