@@ -8,7 +8,7 @@ const unauthorized = spawnSync(process.execPath, ['scripts/guard-production.mjs'
 });
 assert.notEqual(unauthorized.status, 0);
 assert.match(unauthorized.stderr, /PUBLICAÇÃO BLOQUEADA.*FINANCEIRO_APPROVED_COMMIT/);
-for (const marker of ['Tesouraria Wix', 'Base de Faturamento', 'Preparar resgate no Mac', 'path="/faturamento"', '/api/boleto-cloud-csv']) {
+for (const marker of ['Tesouraria Wix', 'Base de Faturamento', 'Disponível em qualquer computador', 'path="/faturamento"', '/api/boleto-cloud-csv']) {
   // Simula remoções em memória: não modifica arquivos nem dados reais.
   const code = `
     import fs from 'node:fs';

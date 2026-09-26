@@ -59,18 +59,19 @@
     "deploy:rules": "firebase deploy --only firestore:rules --project gen-lang-client-0888019226",
     "deploy:rules:dry-run": "firebase deploy --only firestore:rules --dry-run --project gen-lang-client-0888019226",
     "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226",
-    "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js"
+    "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js",
+    "test:production-guard": "node scripts/test-production-guard.mjs"
   },
   "dependencies": {
-    "@google/genai": "0.14.1",
+    "@google/genai": "^2.24.0",
     "firebase": "^12.10.0",
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.7",
     "lucide-react": "0.344.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-router": "^6.30.3",
-    "react-router-dom": "^6.30.3",
+    "react-router": "^7.18.4",
+    "react-router-dom": "^7.18.4",
     "recharts": "2.12.3"
   },
   "devDependencies": {

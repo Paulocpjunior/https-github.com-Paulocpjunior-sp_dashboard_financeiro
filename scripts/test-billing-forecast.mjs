@@ -12,7 +12,8 @@ const server = await createServer({
 try {
   const {
     addMonths,
-    buildBillingForecastRows,
+  buildBillingForecastRows,
+  getBillingProfileCompletenessErrors,
     dateForMonthDay,
     getBillingIdentityKey,
     sortBillingForecastRows,
@@ -96,7 +97,13 @@ try {
   const secondRow = { ...rows[0], identityKey: 'doc-2', client: 'Empresa B', clientNumber: '2', referenceAmount: 900, dueDate: '2026-09-10', missingFields: ['e-mail'] };
   assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'referenceAmount', 'asc').map(row => row.identityKey), ['doc-2', 'doc-11111111000111']);
   assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'dueDate', 'desc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
-  assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'status', 'asc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
+assert.deepEqual(sortBillingForecastRows([rows[0], secondRow], 'status', 'asc').map(row => row.identityKey), ['doc-11111111000111', 'doc-2']);
+assert.deepEqual(getBillingProfileCompletenessErrors({
+  billingMethod: 'Boleto Itaú', issueDay: 5, dueDay: 10, deliveryChannels: ['email'], billingEmail: 'financeiro@example.com',
+}), []);
+assert.deepEqual(getBillingProfileCompletenessErrors({
+  billingMethod: 'Boleto Itaú', issueDay: 5, dueDay: 10, deliveryChannels: ['whatsapp'], whatsapp: '',
+}), ['WhatsApp']);
 
   const billingReportSource = readFileSync(new URL('../services/billingReportService.ts', import.meta.url), 'utf8');
   const financialReportSource = readFileSync(new URL('../services/reportService.ts', import.meta.url), 'utf8');

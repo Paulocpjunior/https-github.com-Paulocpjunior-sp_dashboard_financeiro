@@ -11,7 +11,7 @@ const source = (path) => readFileSync(path, 'utf8');
 git('merge-base', '--is-ancestor', baseline, 'HEAD');
 for (const [path, markers] of [
   ['components/Layout.tsx', ['Base de Faturamento', 'Tesouraria Wix', '<WixTreasuryModal', 'setShowWixTreasury(true)']],
-  ['components/WixTreasuryModal.tsx', ['Preparar resgate no Mac', 'Abrir somente na Wix']],
+  ['components/WixTreasuryModal.tsx', ['Disponível em qualquer computador', 'Abrir Tesouraria Wix', 'WIX_SP_CONTABIL_TRANSFERS_URL']],
   ['App.tsx', ['path="/faturamento"', '<BillingForecast']],
 ]) {
   for (const marker of markers) requireCondition(source(path).includes(marker), `${path}: recurso protegido ausente (${marker})`);

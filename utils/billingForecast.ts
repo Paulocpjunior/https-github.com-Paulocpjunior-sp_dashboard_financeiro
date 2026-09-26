@@ -89,6 +89,20 @@ const isConfirmedBillingMethod = (value: string): boolean => [
   'Outro',
 ].includes(value);
 
+export const getBillingProfileCompletenessErrors = (profile: Pick<BillingProfile,
+  'billingMethod' | 'issueDay' | 'dueDay' | 'deliveryChannels' | 'billingEmail' | 'whatsapp' | 'printedDeliveryDetails'
+>): string[] => {
+  const errors: string[] = [];
+  if (!isConfirmedBillingMethod(canonicalBillingMethod(profile.billingMethod))) errors.push('método de cobrança');
+  if (!Number.isInteger(profile.issueDay) || Number(profile.issueDay) < 1 || Number(profile.issueDay) > 31) errors.push('dia de emissão');
+  if (!Number.isInteger(profile.dueDay) || Number(profile.dueDay) < 1 || Number(profile.dueDay) > 31) errors.push('dia de vencimento');
+  if (!profile.deliveryChannels?.length) errors.push('meio de envio');
+  if (profile.deliveryChannels?.includes('email') && !String(profile.billingEmail || '').trim()) errors.push('e-mail de faturamento');
+  if (profile.deliveryChannels?.includes('whatsapp') && !String(profile.whatsapp || '').trim()) errors.push('WhatsApp');
+  if (profile.deliveryChannels?.includes('printed') && !String(profile.printedDeliveryDetails || '').trim()) errors.push('detalhes da entrega física');
+  return errors;
+};
+
 export const buildBillingForecastRows = (
   transactions: Transaction[],
   profiles: BillingProfile[],

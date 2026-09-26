@@ -9,6 +9,7 @@ import {
   buildBillingForecastRows,
   formatDeliveryChannels,
   getBillingIdentityKey,
+  getBillingProfileCompletenessErrors,
   getMonthRange,
   makeBillingProfileId,
   sortBillingForecastRows,
@@ -228,6 +229,10 @@ const BillingForecast: React.FC = () => {
         updatedBy: user?.name || user?.username || '',
         active: true,
       };
+      const completenessErrors = getBillingProfileCompletenessErrors(profile);
+      if (completenessErrors.length > 0) {
+        throw new Error(`Complete os campos obrigatórios: ${completenessErrors.join(', ')}.`);
+      }
       await FirebaseService.upsertBillingProfile(profile);
       setProfiles(current => [...current.filter(item => item.id !== profile.id), profile]);
       setEditingProfile(null);
