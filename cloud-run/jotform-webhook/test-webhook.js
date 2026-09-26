@@ -18,7 +18,7 @@ const pending = extractContasPagar({
   q284_identificacaoUnica: 'SP-CX46267',
 });
 
-assert.equal(WEBHOOK_VERSION, '6.12-reconcile-created-and-updated');
+assert.equal(WEBHOOK_VERSION, '6.13-structured-payload-classification');
 assert.equal(pending.docPago, 'NÃO');
 assert.equal(pending.valorNum, 449.98);
 assert.equal(pending.dataLancISO, '2026-08-03');
@@ -49,6 +49,13 @@ assert.equal(isContasReceberPayload({
   q4_tipoDe: 'Entrada de Caixa / Contas a Receber',
   q314_docpago314: 'SIM',
 }), true);
+assert.equal(isContasReceberPayload({
+  q4_tipoDe: { answer: 'Saída de Caixa / Contas a Pagar' },
+  q44_movimentacao44: '26- Certificados Digitais',
+}), false);
+assert.equal(isContasReceberPayload({
+  q4_tipoDe: ['Entrada de Caixa', 'Contas a Receber'],
+}), true);
 
 const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
 assert.ok(!source.includes('Fallback Pagar RELAXADO match'));
@@ -56,5 +63,6 @@ assert.ok(source.includes("if (cp.docPago === 'SIM')"));
 assert.ok(source.includes("app.post('/reconcile-jotform'"));
 assert.ok(source.includes("fetchOrdered('created_at')"));
 assert.ok(source.includes("fetchOrdered('updated_at')"));
+assert.ok(source.includes('function payloadText(value)'));
 
 console.log('webhook regression tests: ok');

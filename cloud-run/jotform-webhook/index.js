@@ -9,7 +9,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'gen-lang-client-0888019226';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-const WEBHOOK_VERSION = '6.12-reconcile-created-and-updated';
+const WEBHOOK_VERSION = '6.13-structured-payload-classification';
 const JOTFORM_FORM_ID = process.env.JOTFORM_FORM_ID || '210020525580845';
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -198,8 +198,19 @@ function findRawDate(raw, ...patterns) {
   return parseJotformDate(value);
 }
 
+function payloadText(value) {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map(payloadText).join(' ');
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .map(([key, nestedValue]) => `${key} ${payloadText(nestedValue)}`)
+      .join(' ');
+  }
+  return String(value);
+}
+
 function isContasReceberPayload(raw) {
-  const tipo = String(raw?.q4_tipoDe || '').toUpperCase();
+  const tipo = payloadText(raw?.q4_tipoDe).toUpperCase();
   if (tipo.includes('CONTAS A PAGAR')) return false;
   if (tipo.includes('CONTAS A RECEBER')) return true;
   return Boolean(raw?.q169_nomeEmpresa) || Boolean(raw?.q262_dataVencimentoreceber?.day);
