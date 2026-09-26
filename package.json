@@ -39,6 +39,7 @@
     "test:dashboard-duplicates-sorting": "node scripts/test-dashboard-duplicates-sorting.mjs",
     "test:payment-method": "node scripts/test-payment-method.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
+    "test:user-deletion": "node scripts/test-user-deletion.mjs",
     "test:financial-permissions": "node scripts/test-financial-permissions.mjs",
     "test:boleto-cloud": "node scripts/test-boleto-cloud-export.mjs",
     "normalize:transactions": "node scripts/normalize-transactions-data.mjs",
@@ -57,7 +58,8 @@
     "deploy:hosting": "npm run build && firebase deploy --only hosting --project gen-lang-client-0888019226",
     "deploy:rules": "firebase deploy --only firestore:rules --project gen-lang-client-0888019226",
     "deploy:rules:dry-run": "firebase deploy --only firestore:rules --dry-run --project gen-lang-client-0888019226",
-    "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226"
+    "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226",
+    "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js"
   },
   "dependencies": {
     "@google/genai": "0.14.1",

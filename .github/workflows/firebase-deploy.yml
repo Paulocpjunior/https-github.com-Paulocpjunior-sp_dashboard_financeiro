@@ -1,7 +1,19 @@
 name: Deploy to Firebase Hosting
 
 on:
+  # Push valida, mas nunca publica. Publicação exige autorização por commit.
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      approved_commit:
+        description: 'SHA completo autorizado por Paulo para publicar'
+        required: true
+        type: string
+
+concurrency:
+  group: financeiro-production
+  cancel-in-progress: false
 
 jobs:
   build_and_deploy:
@@ -9,6 +21,8 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Instalar Node.js
         uses: actions/setup-node@v4
@@ -19,10 +33,30 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      - name: Validar funcionalidades financeiras antes de publicar
+        run: |
+          node scripts/guard-production.mjs --check
+          node scripts/test-production-guard.mjs
+          npm run lint
+          npm run test:itau-statements
+          npm run test:financial-permissions
+          npm run test:billing-forecast
+          npm run test:boleto-cloud
+          npm run test:dashboard-duplicates-sorting
+          npm run test:data-loading
+          npm run test:payment-method
+
       - name: Build do projeto
+        env:
+          # Gate de departamento em BLOQUEIO (Paulo, 08/08, após teste):
+          # app estático — o modo entra no build.
+          VITE_DEPARTAMENTO_GATE_MODO: bloqueio
         run: npm run build
 
       - name: Deploy no Firebase Hosting
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        env:
+          FINANCEIRO_APPROVED_COMMIT: '${{ inputs.approved_commit }}'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'

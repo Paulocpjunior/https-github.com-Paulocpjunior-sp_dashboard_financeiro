@@ -1,10 +1,11 @@
 import { deleteApp, initializeApp } from 'firebase/app';
-import { collection, doc, getDoc, getDocs, getFirestore, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, getFirestore, query, runTransaction, setDoc, updateDoc, where } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, deleteUser, getAuth, signOut, updateProfile } from 'firebase/auth';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, firebaseConfig } from './firebaseConfig';
 import { FinancialPermission, User, UserRole } from '../types';
 import { AuthService } from './authService';
+import { MASTER_USER_ID, isMasterAccount } from '../utils/masterAccount';
 import { logger } from '../utils/logger';
 import { sanitizeFinancialPermissions } from '../utils/financialPermissions';
 
@@ -147,7 +148,7 @@ export const UserAdminService = {
     return snapshot.docs
       .filter((docSnap) => {
         const status = String(docSnap.data().status || '').toLowerCase().trim();
-        return status !== 'pending' && status !== 'pendente' && status !== 'aguardando' && status !== 'rejected';
+        return status !== 'pending' && status !== 'pendente' && status !== 'aguardando' && status !== 'rejected' && status !== 'deleted';
       })
       .map((docSnap) => sanitizeUser(docSnap.id, docSnap.data()))
       .sort((a, b) => a.username.localeCompare(b.username, 'pt-BR'));
@@ -240,6 +241,57 @@ export const UserAdminService = {
         await deleteApp(createdAuth.secondaryApp).catch(() => {});
       }
     }
+  },
+
+  demoteAdministrator: async (userId: string, confirmation: string): Promise<MutationResult> => {
+    if (!isCurrentUserAdmin() || !isMasterAccount(getCurrentUser())) {
+      return { success: false, message: 'Somente o master pode despromover administradores.' };
+    }
+    return runTransaction(db, async (transaction) => {
+      const ref = doc(db, 'users', userId);
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists()) return { success: false, message: 'Usuário não encontrado.' };
+      const data = snapshot.data();
+      if (userId === MASTER_USER_ID || data.role !== 'admin' || data.status === 'deleted') {
+        return { success: false, message: 'Esta conta não pode ser despromovida.' };
+      }
+      if (confirmation.trim() !== data.username) {
+        return { success: false, message: 'Digite o nome de usuário exatamente como exibido.' };
+      }
+      transaction.update(ref, {
+        role: 'operacional', financialPermissions: [],
+        demotedBy: MASTER_USER_ID, demotedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      return { success: true, message: 'Colaborador despromovido para operacional. Agora você pode excluí-lo.' };
+    });
+  },
+
+  deleteFormerEmployee: async (userId: string, confirmation: string): Promise<MutationResult> => {
+    if (!isCurrentUserAdmin()) return adminRequiredResult();
+    const actor = getCurrentUser();
+    return runTransaction(db, async (transaction) => {
+      const ref = doc(db, 'users', userId);
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists()) return { success: false, message: 'Usuário não encontrado.' };
+      const data = snapshot.data();
+      if (actor?.id === userId || normalizeRole(data.role) === 'admin') {
+        return { success: false, message: 'Contas de administrador não podem ser excluídas por este fluxo.' };
+      }
+      if (confirmation.trim() !== data.username) {
+        return { success: false, message: 'Digite o nome de usuário exatamente como exibido.' };
+      }
+      if (data.status === 'deleted') return { success: true, message: 'Usuário já excluído.' };
+      transaction.update(ref, {
+        active: false,
+        status: 'deleted',
+        financialPermissions: [],
+        deletedAt: new Date().toISOString(),
+        deletedBy: actor!.id,
+        updatedAt: new Date().toISOString(),
+      });
+      return { success: true, message: 'Ex-colaborador excluído. Histórico preservado.' };
+    });
   },
 
   toggleUserStatus: async (username: string, active: boolean): Promise<MutationResult> => {

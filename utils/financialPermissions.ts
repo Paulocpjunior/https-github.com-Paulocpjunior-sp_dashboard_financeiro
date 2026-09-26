@@ -18,7 +18,12 @@ export const FINANCIAL_PERMISSION_OPTIONS: Array<{
   {
     value: 'itau.openfinance.read',
     label: 'Consultar Itaú',
-    description: 'Consultar saldo e extrato, sem movimentar a conta.',
+    description: 'Consultar extrato Itaú da agência 3145 / conta 99791-6.',
+  },
+  {
+    value: 'itau.statement.import',
+    label: 'Importar OFX Itaú',
+    description: 'Importar extrato da conta 3145 / 99791-6. Exige também Consultar Itaú.',
   },
 ];
 

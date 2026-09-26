@@ -1,5 +1,16 @@
 {
   "hosting": {
+    "predeploy": [
+      "node scripts/guard-production.mjs",
+      "npm run lint",
+      "npm run test:financial-permissions",
+      "npm run test:billing-forecast",
+      "npm run test:boleto-cloud",
+      "npm run test:dashboard-duplicates-sorting",
+      "npm run test:data-loading",
+      "npm run test:payment-method",
+      "npm run test:itau-statements"
+    ],
     "public": "dist",
     "headers": [
       {
@@ -31,6 +42,13 @@
       }
     ],
     "rewrites": [
+      {
+        "source": "/api/itau/**",
+        "run": {
+          "serviceId": "sp-pdf-download",
+          "region": "us-central1"
+        }
+      },
       {
         "source": "/api/boleto-cloud-csv",
         "run": {
