@@ -9,7 +9,8 @@
       "npm run test:dashboard-duplicates-sorting",
       "npm run test:data-loading",
       "npm run test:payment-method",
-      "npm run test:itau-statements"
+      "npm run test:itau-statements",
+      "npm run test:financial-ai"
     ],
     "public": "dist",
     "headers": [
@@ -42,6 +43,13 @@
       }
     ],
     "rewrites": [
+      {
+        "source": "/api/financial-ai/**",
+        "run": {
+          "serviceId": "sp-financial-ai",
+          "region": "us-central1"
+        }
+      },
       {
         "source": "/api/itau/**",
         "run": {

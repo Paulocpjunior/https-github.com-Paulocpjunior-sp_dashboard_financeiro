@@ -708,7 +708,8 @@ export const DataService = {
 
       const data: Transaction[] = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        firestoreId: doc.id,
       })) as Transaction[];
 
       // Aplica normalizações (mesmo pipeline do loadData). Exclusões são

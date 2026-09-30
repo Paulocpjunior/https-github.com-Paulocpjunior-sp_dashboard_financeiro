@@ -22,6 +22,7 @@ export interface User {
 
 export interface Transaction {
   id: string;
+  firestoreId?: string; // Identidade oficial do documento, independente de ids legados no conteúdo.
   date: string; // Data de Emissão/Lançamento (YYYY-MM-DD)
   dueDate: string; // Data de Vencimento (YYYY-MM-DD)
   paymentDate?: string; // Data de Baixa/Pagamento/Recebimento efetivo (YYYY-MM-DD)

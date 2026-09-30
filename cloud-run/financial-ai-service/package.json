@@ -1,0 +1,21 @@
+{
+  "name": "sp-financial-ai-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test *.test.js"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "14.5.0"
+  },
+  "overrides": {
+    "gaxios": {
+      "uuid": "11.1.1"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+.git
+**/node_modules
+dist
+.firebase
+.build
+.tmp
+outputs
+migration-backups
+**/.env
+**/.env.*
+**/*.local
+**/*.log
