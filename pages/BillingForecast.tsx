@@ -1,5 +1,6 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
+import BillingCompletenessReview from '../components/BillingCompletenessReview';
 import { AuthService } from '../services/authService';
 import { BillingReportService } from '../services/billingReportService';
 import { FirebaseService } from '../services/firebaseService';
@@ -332,6 +333,8 @@ const BillingForecast: React.FC = () => {
             <div><p className="text-xl font-black text-blue-600">{summary.groups}</p><p className="text-[10px] uppercase text-slate-500">Grupos</p></div>
           </div>
         </div>
+
+        <BillingCompletenessReview />
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col xl:flex-row gap-3 xl:items-center">
           <div className="relative flex-1">
