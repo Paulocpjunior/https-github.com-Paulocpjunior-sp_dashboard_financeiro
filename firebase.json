@@ -4,6 +4,7 @@
       "node scripts/guard-production.mjs",
       "npm run lint",
       "npm run test:financial-permissions",
+      "npm run test:billing-completeness",
       "npm run test:billing-forecast",
       "npm run test:boleto-cloud",
       "npm run test:dashboard-duplicates-sorting",
