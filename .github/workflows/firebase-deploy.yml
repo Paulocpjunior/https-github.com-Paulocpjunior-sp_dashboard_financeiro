@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, codex/consultor-financeiro-etapas-1-2]
   workflow_dispatch:
     inputs:
       approved_commit:
@@ -47,6 +47,7 @@ jobs:
           npm run test:financial-ai-http
           npm audit --omit=dev --prefix cloud-run/financial-ai-service
           npm run test:financial-permissions
+          npm run test:billing-completeness
           npm run test:billing-forecast
           npm run test:boleto-cloud
           npm run test:dashboard-duplicates-sorting
