@@ -4,6 +4,8 @@ on:
   # Push valida, mas nunca publica. Publicação exige autorização por commit.
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       approved_commit:
@@ -12,7 +14,7 @@ on:
         type: string
 
 concurrency:
-  group: financeiro-production
+  group: financeiro-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'production' }}
   cancel-in-progress: false
 
 jobs:
