@@ -27,11 +27,13 @@ jobs:
       - name: Instalar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Instalar dependências
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix cloud-run/financial-ai-service
 
       - name: Validar funcionalidades financeiras antes de publicar
         run: |
@@ -39,6 +41,9 @@ jobs:
           node scripts/test-production-guard.mjs
           npm run lint
           npm run test:itau-statements
+          npm run test:financial-ai
+          npm run test:financial-ai-http
+          npm audit --omit=dev --prefix cloud-run/financial-ai-service
           npm run test:financial-permissions
           npm run test:billing-forecast
           npm run test:boleto-cloud

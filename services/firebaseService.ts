@@ -52,7 +52,8 @@ const withTimeout = async <T,>(
 const mapTransactionSnapshot = (snapshot: { docs: Array<{ id: string; data: () => Record<string, unknown> }> }): Transaction[] => {
   return snapshot.docs.map(doc => ({
     id: doc.id,
-    ...doc.data()
+    ...doc.data(),
+    firestoreId: doc.id,
   })) as Transaction[];
 };
 
@@ -103,7 +104,8 @@ export const FirebaseService = {
     return onSnapshot(q, (snapshot) => {
       const allDocs = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        firestoreId: doc.id,
       })) as Transaction[];
       
       // Paginação manual no cliente para o snapshot atual

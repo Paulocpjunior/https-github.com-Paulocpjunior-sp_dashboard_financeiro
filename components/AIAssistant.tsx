@@ -1,7 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, X, Sparkles, Loader2, Bot, User, ChevronRight, BarChart3, TrendingUp, Filter } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
+import { FinancialAIService, FinancialAIStatus } from '../services/financialAIService';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase';
 import { FilterState, Transaction } from '../types';
 
 interface Message {
@@ -19,7 +21,7 @@ const SUGGESTIONS = [
   "Contas a pagar deste mês",
   "Qual cliente deve mais?",
   "Previsão de caixa para 30 dias",
-  "Resumo das entradas de ontem",
+  "Resumo dos lançamentos selecionados",
   "Mostrar gastos com impostos"
 ];
 
@@ -27,15 +29,39 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const isAIAvailable = GeminiService.isAvailable();
-  const [messages, setMessages] = useState<Message[]>(() => [
-    {
-      role: 'assistant',
-      content: isAIAvailable
-        ? 'Olá! Sou seu assistente CashFlow Pro. Como posso ajudar com suas finanças hoje?'
-        : 'IA financeira desativada neste ambiente por segurança. Os filtros manuais seguem disponíveis normalmente.',
-    },
-  ]);
+  const [status, setStatus] = useState<FinancialAIStatus | null>(null);
+  const [statusError, setStatusError] = useState('');
+  const [scope, setScope] = useState<'all' | 'selection'>('selection');
+  const [sessionUid, setSessionUid] = useState(auth.currentUser?.uid || '');
+  const welcome = 'Olá! Posso consultar os lançamentos e preparar uma projeção de vencimentos. Escolha abaixo toda a base ou os filtros atuais.';
+  const [messages, setMessages] = useState<Message[]>([{ role: 'assistant', content: welcome }]);
+  const pendingRequest = useRef<AbortController | null>(null);
+  const requestVersion = useRef(0);
+  const isAIAvailable = status?.available === true;
+
+  useEffect(() => onAuthStateChanged(auth, user => {
+    requestVersion.current++;
+    pendingRequest.current?.abort();
+    setMessages([{ role: 'assistant', content: welcome }]);
+    setIsLoading(false);
+    setStatus(null);
+    setSessionUid(user?.uid || '');
+  }), []);
+
+  useEffect(() => {
+    if (!isOpen || !sessionUid) return;
+    const controller = new AbortController();
+    setStatus(null);
+    setStatusError('');
+    FinancialAIService.status(controller.signal).then(result => {
+      if (!controller.signal.aborted) setStatus(result);
+    }).catch(error => {
+      if (!controller.signal.aborted) setStatusError(error.message || 'Consulta indisponível.');
+    });
+    return () => controller.abort();
+  }, [isOpen, sessionUid]);
+
+  useEffect(() => () => { requestVersion.current++; pendingRequest.current?.abort(); }, []);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +75,11 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
 
   const handleSend = async (textOverride?: string) => {
     const textToProcess = textOverride || query;
-    if (!textToProcess.trim() || isLoading) return;
+    if (!textToProcess.trim() || isLoading || !isAIAvailable) return;
+
+    const version = ++requestVersion.current;
+    const controller = new AbortController();
+    pendingRequest.current = controller;
 
     const userMessage: Message = { role: 'user', content: textToProcess };
     setMessages(prev => [...prev, userMessage]);
@@ -57,28 +87,17 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
     setIsLoading(true);
 
     try {
-      const mode = await GeminiService.detectMode(textToProcess);
-      let assistantMessage: Message = { role: 'assistant', content: '', mode };
-
-      if (mode === 'forecast') {
-        const forecast = await GeminiService.forecastCashFlow(transactions);
-        assistantMessage.content = forecast;
-      } else if (mode === 'analysis') {
-        const analysis = await GeminiService.analyzeData(textToProcess, transactions);
-        assistantMessage.content = analysis;
-      } else {
-        const result = await GeminiService.interpretQuery(textToProcess);
-        assistantMessage.content = result.explanation;
-        if (Object.keys(result.filters).length > 0) {
-          onApplyFilters(result.filters);
-        }
-      }
-
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Desculpe, tive um problema ao processar sua solicitação.' }]);
+      const mode = FinancialAIService.detectMode(textToProcess);
+      const result = await FinancialAIService.query(textToProcess, mode, scope === 'all'
+        ? { kind: 'all' }
+        : { kind: 'selection', transactionIds: transactions.map(transaction => transaction.firestoreId || transaction.id) }, controller.signal);
+      if (version !== requestVersion.current) return;
+      setMessages(prev => [...prev, { role: 'assistant', content: result.answer, mode }]);
+      if (result.filters && Object.keys(result.filters).length) onApplyFilters(result.filters);
+    } catch (error: any) {
+      if (version === requestVersion.current && !controller.signal.aborted) setMessages(prev => [...prev, { role: 'assistant', content: error.message || 'Não foi possível concluir a consulta.' }]);
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
   };
 
@@ -98,7 +117,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
                 <div className="flex items-center gap-1">
                   <span className={`w-1.5 h-1.5 rounded-full ${isAIAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-amber-300'}`}></span>
                   <span className="text-[10px] text-blue-100 font-medium">
-                    {isAIAvailable ? 'Online e pronta' : 'Configuração segura pendente'}
+                    {isAIAvailable ? (status?.languageModelAvailable ? 'Consultas e interpretação disponíveis' : 'Cálculos disponíveis') : 'Consulta indisponível'}
                   </span>
                 </div>
               </div>
@@ -106,6 +125,19 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
             <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white transition-colors">
               <X className="h-5 w-5" />
             </button>
+          </div>
+
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 space-y-2">
+            <label className="text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between gap-2">
+              Consultar
+              <select aria-label="Escopo da consulta financeira" value={scope} onChange={event => setScope(event.target.value as 'all' | 'selection')} disabled={isLoading} className="rounded-lg border border-slate-300 bg-white dark:bg-slate-800 p-1 text-xs">
+                <option value="selection">Filtros atuais ({transactions.length} lançamentos)</option>
+                <option value="all">Toda a base financeira da SP</option>
+              </select>
+            </label>
+            <p className="text-xs text-slate-500">Consultas e projeções. Nenhum pagamento ou cobrança é executado.</p>
+            {statusError && <p role="status" className="text-xs text-amber-700 dark:text-amber-300">{statusError} Os filtros manuais continuam disponíveis.</p>}
+            {status && !status.available && <p role="status" className="text-xs text-amber-700 dark:text-amber-300">Consultor Financeiro ainda não habilitado. Os filtros manuais continuam disponíveis.</p>}
           </div>
 
           {/* Messages */}
@@ -163,6 +195,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
                   <button 
                     key={i} 
                     onClick={() => handleSend(s)}
+                    disabled={!isAIAvailable || (!status?.languageModelAvailable && FinancialAIService.detectMode(s) === 'filter')}
                     className="text-[11px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 flex items-center gap-1"
                   >
                     {s} <ChevronRight className="h-3 w-3" />
@@ -185,7 +218,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
               />
               <button 
                 onClick={() => handleSend()}
-                disabled={!query.trim() || isLoading}
+                disabled={!query.trim() || isLoading || !isAIAvailable}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 <Send className="h-4 w-4" />

@@ -8,6 +8,9 @@ export default defineConfig(() => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: process.env.FINANCIAL_AI_DEV_TARGET ? {
+          '/api/financial-ai': process.env.FINANCIAL_AI_DEV_TARGET,
+        } : undefined,
       },
       plugins: [react(), tailwindcss()],
       resolve: {

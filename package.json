@@ -11,7 +11,7 @@
     "install:wix-agent": "npm run build:wix-agent && ./scripts/install-wix-treasury-agent.sh",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "check": "npm run lint && npm run build && npm audit",
+    "check": "npm run lint && npm run test:financial-ai && npm run build && npm audit",
     "audit:auth": "node scripts/audit-firestore-auth.mjs",
     "audit:auth:with-export": "node scripts/audit-firestore-auth.mjs --export-auth",
     "audit:auth:cleanup": "node scripts/audit-firestore-auth.mjs --export-auth --cleanup-legacy-password-fields",
@@ -60,7 +60,9 @@
     "deploy:rules:dry-run": "firebase deploy --only firestore:rules --dry-run --project gen-lang-client-0888019226",
     "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226",
     "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js",
-    "test:production-guard": "node scripts/test-production-guard.mjs"
+    "test:production-guard": "node scripts/test-production-guard.mjs",
+    "test:financial-ai": "node scripts/test-financial-ai.mjs",
+    "test:financial-ai-http": "node cloud-run/financial-ai-service/http.test.js"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
@@ -83,5 +85,9 @@
     "tailwindcss": "^4.2.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.5",
+    "dompurify": "3.4.16"
   }
 }
