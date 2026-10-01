@@ -1,3 +1,4 @@
+import { BillingReviewService } from './billingReviewService';
 import {
   collection,
   query, 
@@ -74,10 +75,7 @@ const mapBillingProfilesSnapshot = (snapshot: { docs: Array<{ id: string; data: 
 export const FirebaseService = {
   /** Conferência mensal exige dados do servidor; cache e recortes não provam ausência. */
   fetchTransactionsForBillingReview: async (): Promise<Transaction[]> => {
-    const snapshot = await withTimeout(getDocsFromServer(query(collection(db, 'transactions'), limit(20001))), FIRESTORE_FULL_FETCH_TIMEOUT_MS);
-    if (snapshot.size > 20000) throw new Error('A conferência excedeu 20.000 registros. Nenhum resultado parcial será apresentado.');
-    // A conferência usa o ID oficial do documento, mesmo em registros com ID legado no payload.
-    return snapshot.docs.map(document => ({ ...document.data(), id: document.id })) as Transaction[];
+    return (await BillingReviewService.fetch()).transactions;
   },
   /**
    * Assina atualizações em tempo real para transações com filtros e paginação.

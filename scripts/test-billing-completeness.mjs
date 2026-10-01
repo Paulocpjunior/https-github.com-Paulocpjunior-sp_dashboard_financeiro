@@ -37,6 +37,27 @@ try {
   const multiple = review([tx('old', '2026-08'), tx('new1', '2026-09', { valorOriginal: 500 }), tx('new2', '2026-09', { valorOriginal: 500 })], '2026-09', 'date');
   assert.ok(multiple.rows[0].issues.some(issue => issue.includes('Múltiplos')));
   assert.throws(() => review([], '2026-13', 'date'), /inválido/);
+  const { readBillingReview } = await server.ssrLoadModule('/services/billingReviewReader.ts');
+  let calls = 0;
+  const root = 'projects/test/databases/(default)/documents/transactions/';
+  const readTime = '2026-10-01T12:00:00.000000Z';
+  const fetcher = async (_url, request) => {
+    const query = JSON.parse(request.body); calls++;
+    if (calls > 1) { assert.equal(query.readTime, readTime); assert.ok(query.structuredQuery.startAt); }
+    const start = (calls-1)*1000;
+    const count = Math.min(1000, 20001-start);
+    return { ok: true, json: async () => Array.from({ length: count }, (_, i) => ({ readTime,
+      document: { name: root+String(start+i).padStart(6,'0'), fields: { id: { stringValue: 'legacy-id' }, client: { stringValue: 'Teste' } } } })) };
+  };
+  const full = await readBillingReview({ projectId: 'test', token: 'test-only', checkSession() {}, fetcher });
+  assert.equal(full.documentCount, 20001, 'base maior que o limite antigo deve ser lida integralmente');
+  assert.equal(full.transactions[0].id, '000000', 'usar ID oficial, não ID legado do payload');
+  let failedPage = 0;
+  await assert.rejects(readBillingReview({ projectId: 'test', token: 'test-only', checkSession() {}, fetcher: async () => {
+    failedPage++;
+    return failedPage === 1 ? { ok: true, json: async () => Array.from({ length: 1000 }, (_, i) => ({ readTime, document: { name: root+i, fields: {} } })) }
+      : { ok: false, status: 403 };
+  } }), /permissão/, 'falha posterior nunca entrega parte da base');
   console.log('OK: conferência mensal cobre omissão, identificação, valores, datas, exclusão, duplicidade e ausência de prova contratual/emissão.');
 } finally {
   await server.close();
