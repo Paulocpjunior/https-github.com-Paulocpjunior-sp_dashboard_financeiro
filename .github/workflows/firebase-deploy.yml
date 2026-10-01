@@ -1,34 +1,95 @@
-name: Diagnóstico de implantação checklist
+name: Checklist — validação online
 on:
   workflow_dispatch:
 jobs:
-  diagnose:
+  preview:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 55ad6b10ccd656bdc47a8655e7bb61de040d56bf
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Verificar código e recursos preservados
+        run: |
+          test "$(git rev-parse HEAD)" = "55ad6b10ccd656bdc47a8655e7bb61de040d56bf"
+          node scripts/guard-production.mjs --check
+          npm run lint
+          npm run test:billing-completeness
+      - name: Build
+        env:
+          VITE_DEPARTAMENTO_GATE_MODO: bloqueio
+        run: npm run build
       - run: pip install google-auth requests
-      - name: Verificar permissões e configuração sem expor credenciais
+      - name: Publicar somente canal de validação com a tag existente
         env:
           GCP_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           python - <<'PY'
-          import os,json,requests
+          import os,json,gzip,hashlib,pathlib,datetime,requests
+          from concurrent.futures import ThreadPoolExecutor
           from google.oauth2 import service_account
           from google.auth.transport.requests import Request
-          creds=service_account.Credentials.from_service_account_info(json.loads(os.environ["GCP_CREDENTIALS"]),scopes=["https://www.googleapis.com/auth/cloud-platform"])
-          creds.refresh(Request())
-          headers={"Authorization":"Bearer "+creds.token}
-          project="gen-lang-client-0888019226"
-          p=requests.post("https://cloudresourcemanager.googleapis.com/v1/projects/"+project+":testIamPermissions",headers=headers,json={"permissions":["run.services.get","run.services.update","run.services.create","cloudbuild.builds.create","storage.buckets.create","artifactregistry.repositories.uploadArtifacts"]},timeout=30)
-          print("Deploy permissions:",p.status_code,p.json().get("permissions",[]))
-          r=requests.get("https://southamerica-east1-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/"+project+"/services/jotform-webhook",headers=headers,timeout=30)
-          print("Service lookup:",r.status_code)
-          if r.status_code==200:
-           d=r.json()
-           print("Region:",d.get("metadata",{}).get("labels",{}).get("cloud.googleapis.com/location"))
-           print("Service URL:",d.get("status",{}).get("url"))
-           spec=d.get("spec",{}).get("template",{}).get("spec",{})
-           print("Runtime identity:",spec.get("serviceAccountName"))
-           print("Image:",spec.get("containers",[{}])[0].get("image"))
-           print("Jotform credential binding exists:",any(e.get("name")=="JOTFORM_API_KEY" for e in spec.get("containers",[{}])[0].get("env",[])))
+          SITE='gen-lang-client-0888019226'
+          CHANNEL='checklist-homologacao'
+          assert CHANNEL != 'live'
+          ROOT='https://firebasehosting.googleapis.com/v1beta1/'
+          credentials=service_account.Credentials.from_service_account_info(json.loads(os.environ['GCP_CREDENTIALS']),scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          credentials.refresh(Request())
+          headers={'Authorization':'Bearer '+credentials.token}
+          def api(method,path,body=None):
+           r=requests.request(method,ROOT+path,headers=headers,json=body,timeout=60)
+           if not r.ok:raise RuntimeError('Hosting '+str(r.status_code)+' '+r.json().get('error',{}).get('message','Falha'))
+           return r.json() if r.content else {}
+          def production():
+           r=requests.get('https://'+SITE+'.web.app/version.json',params={'preview_check':datetime.datetime.now().isoformat()},timeout=30);r.raise_for_status();return r.json()['commit']
+          before=production();assert before=='7cf27ef', 'Produção mudou; rever versão.'
+          version=json.loads(pathlib.Path('dist/version.json').read_text());assert version['commit']=='55ad6b1'
+          service=requests.get('https://southamerica-east1-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/'+SITE+'/services/jotform-webhook',headers=headers,timeout=30)
+          service.raise_for_status()
+          traffic=service.json().get('status',{}).get('traffic',[])
+          assert any(t.get('tag')=='checklist-preview' and t.get('revisionName')=='jotform-webhook-00083-cat' and t.get('percent',0)==0 for t in traffic), 'Tag de teste não corresponde à revisão homologável.'
+          cfg=json.loads(pathlib.Path('firebase.json').read_text())['hosting']
+          rewrites=[]
+          for r in cfg['rewrites']:
+           out={'glob':r['source']}
+           if 'destination' in r:out['path']=r['destination']
+           if 'run' in r:out['run']=dict(r['run'])
+           if r['source']=='/api/billing-checklist/**':
+            assert out['run']['serviceId']=='jotform-webhook'
+            out['run']['tag']='checklist-preview'
+           rewrites.append(out)
+          for path in ['/api/pdf-download','/api/pdf-download/**','/api/boleto-cloud-csv']:
+           assert any(r['glob']==path and r.get('run',{}).get('serviceId')=='sp-pdf-download' for r in rewrites)
+          config={'rewrites':rewrites,'headers':[{'glob':h['source'],'headers':{v['key']:v['value'] for v in h['headers']}} for h in cfg['headers']]}
+          name=api('POST','sites/'+SITE+'/versions',{'config':config})['name']
+          blobs={};files={}
+          for file in pathlib.Path('dist').rglob('*'):
+           if not file.is_file():continue
+           data=gzip.compress(file.read_bytes(),mtime=0);digest=hashlib.sha256(data).hexdigest();blobs[digest]=data
+           files['/'+file.relative_to('dist').as_posix()]=digest
+          pop=api('POST',name+':populateFiles',{'files':files})
+          def upload(digest):
+           r=requests.post(pop['uploadUrl']+'/'+digest,headers={**headers,'Content-Type':'application/octet-stream'},data=blobs[digest],timeout=120)
+           if not r.ok:raise RuntimeError('Upload falhou: '+str(r.status_code))
+          with ThreadPoolExecutor(max_workers=4) as pool:list(pool.map(upload,pop.get('uploadRequiredHashes',[])))
+          final=api('PATCH',name+'?updateMask=status',{'status':'FINALIZED'})
+          assert final.get('config',{}).get('rewrites')==config['rewrites'], 'Rotas finalizadas divergem da configuração.'
+          channel_path='sites/'+SITE+'/channels/'+CHANNEL
+          r=requests.get(ROOT+channel_path,headers=headers,timeout=30)
+          if r.status_code==404:channel=api('POST','sites/'+SITE+'/channels?channelId='+CHANNEL,{'ttl':'604800s'})
+          else:r.raise_for_status();channel=r.json()
+          assert channel['name']==channel_path
+          assert production()==before, 'Produção mudou durante preparação.'
+          api('POST',channel_path+'/releases?versionName='+name,{'message':'Checklist online — revisão de teste sem promoção do tráfego normal'})
+          channel=api('GET',channel_path)
+          assert production()==before
+          print('PREVIEW_URL='+channel['url'])
+          print('PREVIEW_COMMIT='+version['commit'])
+          print('PRODUCTION_COMMIT_UNCHANGED='+before)
           
           PY

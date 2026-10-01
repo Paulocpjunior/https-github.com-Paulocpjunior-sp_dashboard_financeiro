@@ -1,6 +1,7 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import BillingCompletenessReview from '../components/BillingCompletenessReview';
+import ChecklistReview from '../components/ChecklistReview';
 import { AuthService } from '../services/authService';
 import { BillingReportService } from '../services/billingReportService';
 import { FirebaseService } from '../services/firebaseService';
@@ -335,6 +336,7 @@ const BillingForecast: React.FC = () => {
         </div>
 
         <BillingCompletenessReview />
+        <ChecklistReview />
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col xl:flex-row gap-3 xl:items-center">
           <div className="relative flex-1">
