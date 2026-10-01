@@ -45,6 +45,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/billing-checklist/**",
+        "run": {
+          "serviceId": "jotform-webhook",
+          "region": "southamerica-east1"
+        }
+      },
+      {
         "source": "/api/itau/**",
         "run": {
           "serviceId": "sp-pdf-download",
