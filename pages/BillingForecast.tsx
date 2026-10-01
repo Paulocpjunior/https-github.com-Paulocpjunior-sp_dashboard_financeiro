@@ -2,6 +2,7 @@ import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import BillingCompletenessReview from '../components/BillingCompletenessReview';
 import ChecklistReview from '../components/ChecklistReview';
+import BillingObligationsReview from '../components/BillingObligationsReview';
 import { AuthService } from '../services/authService';
 import { BillingReportService } from '../services/billingReportService';
 import { FirebaseService } from '../services/firebaseService';
@@ -335,6 +336,7 @@ const BillingForecast: React.FC = () => {
           </div>
         </div>
 
+        <BillingObligationsReview />
         <BillingCompletenessReview />
         <ChecklistReview />
 

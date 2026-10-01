@@ -1,6 +1,7 @@
 import { auth } from './firebaseConfig';
 
 export interface ChecklistRecord {
+  document?: string; sourceCreatedAt?: string | null;
   submissionId: string; identity: string; client: string | null; clientNumber: string | null;
   amount: number | null; entryDate: string | null; exitDate: string | null; suspensionDate: string | null;
   status: string | null; notes: string | null; issues: string[]; observationsRequireReview: boolean;
