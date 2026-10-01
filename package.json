@@ -61,7 +61,8 @@
     "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226",
     "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js",
     "test:production-guard": "node scripts/test-production-guard.mjs",
-    "test:billing-completeness": "node scripts/test-billing-completeness.mjs"
+    "test:billing-completeness": "node scripts/test-billing-completeness.mjs",
+    "test:accumulated-balances": "node scripts/test-accumulated-balances.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

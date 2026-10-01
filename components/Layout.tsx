@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle, ReceiptText } from 'lucide-react';
 import { AuthService } from '../services/authService';
 import { DataService } from '../services/dataService';
 import { KPIData } from '../types';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../services/firebaseConfig';
+import { AccumulatedBalancesService } from '../services/accumulatedBalancesService';
 import { ThemeToggle } from './ThemeToggle';
 import { logger } from '../utils/logger';
 import { WhatsAppSendModal } from './WhatsAppSendModal';
@@ -17,6 +20,10 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [globalKpi, setGlobalKpi] = useState<KPIData | null>(null);
+  const [balancesError, setBalancesError] = useState('');
+  const [balancesLoading, setBalancesLoading] = useState(true);
+  const [balancesReadTime, setBalancesReadTime] = useState('');
+  const summaryRequest = useRef(0);
   const [showSessionAlert, setShowSessionAlert] = useState(true);
   const [globalWhatsAppText, setGlobalWhatsAppText] = useState<string | null>(null);
   const [showWixTreasury, setShowWixTreasury] = useState(false);
@@ -35,30 +42,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
-  // Load Global Financial Data for Header
-  useEffect(() => {
-    const updateHeaderKpi = () => {
-      // Check if data is loaded in the service
-      if (DataService.isDataLoaded) {
-        // Usa a nova função que calcula especificamente (Pendentes para E/S e Realizado para Saldo)
-        const stats = DataService.getGlobalStats();
-        setGlobalKpi(stats);
-      }
-    };
-
-    updateHeaderKpi();
-    
-    // Poll for updates every 2 seconds to keep header in sync with Dashboard changes
-    const interval = setInterval(updateHeaderKpi, 2000);
-    
-    // Auto-dismiss session alert
-    const timer = setTimeout(() => setShowSessionAlert(false), 5000);
-
-    return () => {
-        clearInterval(interval);
-        clearTimeout(timer);
-    };
+  const loadAccumulatedBalances = useCallback(async (force = false) => {
+    const request = ++summaryRequest.current;
+    setBalancesLoading(true);
+    setBalancesError('');
+    try {
+      const summary = await AccumulatedBalancesService.fetch(force);
+      if (request !== summaryRequest.current) return;
+      setGlobalKpi(summary.kpi);
+      setBalancesReadTime(summary.readTime);
+    } catch (error) {
+      if (request !== summaryRequest.current) return;
+      setGlobalKpi(null);
+      setBalancesReadTime('');
+      setBalancesError(error instanceof Error ? error.message : 'Saldos acumulados indisponíveis.');
+    } finally {
+      if (request === summaryRequest.current) setBalancesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, currentUser => {
+      ++summaryRequest.current;
+      setGlobalKpi(null);
+      setBalancesReadTime('');
+      if (currentUser) void loadAccumulatedBalances();
+      else {
+        setBalancesLoading(false);
+        setBalancesError('Entre novamente para consultar os saldos acumulados.');
+      }
+    });
+    const unsubscribeData = DataService.onRefresh(() => {
+      if (auth.currentUser) void loadAccumulatedBalances();
+    });
+    const interval = setInterval(() => {
+      if (auth.currentUser) void loadAccumulatedBalances(true);
+    }, 10 * 60 * 1000);
+    const timer = setTimeout(() => setShowSessionAlert(false), 5000);
+    return () => {
+      ++summaryRequest.current;
+      unsubscribeAuth();
+      unsubscribeData();
+      clearInterval(interval);
+      clearTimeout(timer);
+    };
+  }, [loadAccumulatedBalances]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -73,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       `🗓 Data: ${new Date().toLocaleDateString('pt-BR')}\n` +
       `📥 A Receber (Aberto): ${formatBRL(globalKpi.totalReceived)}\n` +
       `📤 A Pagar (Aberto): ${formatBRL(globalKpi.totalPaid)}\n` +
-      `💰 Saldo em Caixa: ${formatBRL(globalKpi.balance)}\n` +
+      `💰 Saldo acumulado dos lançamentos pagos: ${formatBRL(globalKpi.balance)}\n` +
       `--------------------------------\n` +
       `SP Contábil - Painel Administrativo`;
     setGlobalWhatsAppText(message);
@@ -241,6 +269,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <main className="flex-1 overflow-auto p-4 lg:p-8 bg-slate-50/50 dark:bg-slate-950/50 print:bg-white print:p-0 transition-colors relative z-0">
           <div className="max-w-7xl mx-auto">
             
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <p>Saldos acumulados de todo o histórico: contas anteriores continuam em aberto até a baixa. {balancesReadTime && `Apurado em ${new Date(balancesReadTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`}</p>
+              <button type="button" disabled={balancesLoading} onClick={() => void loadAccumulatedBalances(true)} className="rounded border px-3 py-1.5 disabled:opacity-50">{balancesLoading ? 'Apurando saldos...' : 'Atualizar saldos acumulados'}</button>
+            </div>
+            {balancesLoading && !globalKpi && <p role="status" className="mb-4 text-sm text-slate-600 dark:text-slate-300">Lendo o histórico completo para apurar os saldos acumulados...</p>}
+            {balancesError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">Saldos acumulados indisponíveis: {balancesError}</p>}
             {/* Global Financial Header Summary */}
             {globalKpi && (
               <div className="mb-8 grid grid-cols-1 sm:grid-cols-4 gap-0 sm:gap-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-slideUp print:border-slate-300 transition-colors relative">
@@ -272,7 +306,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                            <DollarSign className="h-5 w-5" />
                         </div>
                         <div>
-                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saldo Real (Caixa)</p>
+                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Saldo Acumulado (Pagos)</p>
                            <p className={`text-lg font-bold ${globalKpi.balance >= 0 ? 'text-royal-700 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>
                               {formatCurrency(globalKpi.balance)}
                            </p>
