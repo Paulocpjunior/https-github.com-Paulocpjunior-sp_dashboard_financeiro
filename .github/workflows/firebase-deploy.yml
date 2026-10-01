@@ -20,7 +20,7 @@ jobs:
           project="gen-lang-client-0888019226"
           p=requests.post("https://cloudresourcemanager.googleapis.com/v1/projects/"+project+":testIamPermissions",headers=headers,json={"permissions":["run.services.get","run.services.update","run.services.create","cloudbuild.builds.create","storage.buckets.create","artifactregistry.repositories.uploadArtifacts"]},timeout=30)
           print("Deploy permissions:",p.status_code,p.json().get("permissions",[]))
-          r=requests.get("https://us-central1-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/"+project+"/services/jotform-webhook",headers=headers,timeout=30)
+          r=requests.get("https://southamerica-east1-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/"+project+"/services/jotform-webhook",headers=headers,timeout=30)
           print("Service lookup:",r.status_code)
           if r.status_code==200:
            d=r.json()
