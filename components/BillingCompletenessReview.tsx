@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Transaction } from '../types';
-import { FirebaseService } from '../services/firebaseService';
+import { BillingReviewService } from '../services/billingReviewService';
 import { BillingPeriodField, buildBillingCompleteness } from '../utils/billingCompleteness';
 
 const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -13,6 +13,7 @@ export default function BillingCompletenessReview() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [readAt, setReadAt] = useState('');
+  const [documentCount, setDocumentCount] = useState(0);
   const [onlyIssues, setOnlyIssues] = useState(true);
   const request = useRef(0);
   useEffect(() => () => { request.current++; }, []);
@@ -25,10 +26,11 @@ export default function BillingCompletenessReview() {
     setReadAt('');
     setLoading(true);
     try {
-      const result = await FirebaseService.fetchTransactionsForBillingReview();
+      const result = await BillingReviewService.fetch();
       if (request.current !== version) return;
-      setTransactions(result);
-      setReadAt(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
+      setTransactions(result.transactions);
+      setDocumentCount(result.documentCount);
+      setReadAt(new Date(result.readTime).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
     } catch (failure) {
       if (request.current === version) setError(failure instanceof Error ? failure.message : 'Não foi possível consultar os lançamentos atuais.');
     } finally {
@@ -54,7 +56,7 @@ export default function BillingCompletenessReview() {
     </div>
     {error && <p role="alert" className="text-red-700 dark:text-red-300">Conferência indisponível: {error} O mês não foi validado.</p>}
     {review && <>
-      <p className="text-xs text-slate-500">Comparação {review.previousMonth} → {review.targetMonth}. Dados consultados em {readAt} (Brasília). Atualize após corrigir os lançamentos.</p>
+      <p className="text-xs text-slate-500">Comparação {review.previousMonth} → {review.targetMonth}. {documentCount.toLocaleString('pt-BR')} registros do histórico lidos integralmente. Dados consultados em {readAt} (Brasília). Atualize após corrigir os lançamentos.</p>
       <div className="grid sm:grid-cols-4 gap-3 text-sm">
         <p><strong>{review.previousClients}</strong> clientes no mês anterior</p>
         <p><strong>{review.missingClients}</strong> sem lançamento atual</p>
@@ -62,7 +64,7 @@ export default function BillingCompletenessReview() {
         <p><strong>{review.postingCoverage === null ? 'Sem base anterior' : review.postingCoverage.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })}</strong> cobertura de lançamentos</p>
       </div>
       <p role="status" className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-900 dark:text-amber-200"><strong>Mês ainda não validado para fechamento.</strong> Checklist contratual e confirmação de emissão dos boletos ainda não estão integrados nesta conferência. Cobertura de lançamentos não comprova cobrança emitida. Saídas de clientes precisam da data da última cobrança e da evidência do contrato.</p>
-      {review.sourceIssues.length > 0 && <details className="text-sm text-red-700 dark:text-red-300"><summary>{review.sourceIssues.length} lançamentos a receber com data ausente ou inválida: revisar antes de concluir</summary><ul className="list-disc pl-5">{review.sourceIssues.map((issue, i) => <li key={i}>{issue}</li>)}</ul></details>}
+      {review.sourceIssues.length > 0 && <details className="text-sm text-red-700 dark:text-red-300"><summary>{review.sourceIssues.length} lançamentos a receber com data ausente ou inválida: revisar antes de concluir</summary><ul className="list-disc pl-5">{review.sourceIssues.slice(0, 100).map((issue, i) => <li key={i}>{issue}</li>)}</ul>{review.sourceIssues.length > 100 && <p>Mostrando os primeiros 100 problemas; a contagem inclui todos os registros lidos.</p>}</details>}
       <label className="flex gap-2 text-sm"><input type="checkbox" checked={onlyIssues} onChange={event => setOnlyIssues(event.target.checked)} /> Mostrar somente pendências</label>
       <div className="overflow-x-auto max-h-96"><table className="w-full text-sm text-left"><thead><tr><th className="p-2">Cliente</th><th className="p-2">Mês anterior</th><th className="p-2">Mês atual</th><th className="p-2">Conferência</th></tr></thead><tbody>
         {displayed.map(row => <tr key={row.identity} className="border-t border-slate-200 dark:border-slate-700"><td className="p-2">{row.client}<span className="block text-xs text-slate-500">{row.identity}</span></td><td className="p-2">{money(row.previousAmount)} ({row.previousIds.length})</td><td className="p-2">{money(row.currentAmount)} ({row.currentIds.length})</td><td className="p-2">{row.issues.length ? row.issues.join(' ') : 'Lançamento localizado; emissão e contrato ainda precisam ser conferidos.'}</td></tr>)}
