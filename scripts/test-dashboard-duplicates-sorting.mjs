@@ -27,6 +27,30 @@ const transaction = (id, overrides = {}) => ({
 });
 
 try {
+  const { filtersForDashboardView } = await server.ssrLoadModule('/utils/dashboardViewFilters.ts');
+  const september = {
+    startDate: '2026-09-01', endDate: '2026-09-30',
+    dueDateStart: '', dueDateEnd: '', paymentDateStart: '', paymentDateEnd: '', receiptDateStart: '', receiptDateEnd: '',
+    client: 'Cliente teste', bankAccount: 'Itaú', search: 'honorários', movement: '', type: '', status: '',
+  };
+  const payables = filtersForDashboardView(september, 'payables');
+  const receivables = filtersForDashboardView(payables, 'receivables');
+  const general = filtersForDashboardView(receivables, 'general');
+  assert.equal(payables.dueDateStart, '2026-09-01');
+  assert.equal(receivables.dueDateEnd, '2026-09-30');
+  assert.equal(general.startDate, '2026-09-01', 'voltar à Visão Geral não pode trocar setembro pelo mês atual');
+  assert.equal(general.endDate, '2026-09-30');
+  assert.equal(general.dueDateStart, '');
+  assert.equal(general.movement, '');
+  assert.equal(general.status, '');
+  assert.equal(general.client, september.client);
+  assert.equal(general.bankAccount, september.bankAccount);
+  assert.equal(general.search, september.search);
+  const custom = filtersForDashboardView({ ...payables, dueDateStart: '', dueDateEnd: '2026-08-17' }, 'general');
+  assert.equal(custom.startDate, '', 'intervalo sem início deve permanecer aberto');
+  assert.equal(custom.endDate, '2026-08-17');
+  assert.equal(payables.status, 'Pendente');
+  assert.equal(receivables.movement, 'Entrada');
   const { buildDuplicateScanFilters, findPossibleDuplicateTransactions, sortTransactions } = await server.ssrLoadModule('/utils/transactionTable.ts');
 
   const duplicateFilters = buildDuplicateScanFilters({
