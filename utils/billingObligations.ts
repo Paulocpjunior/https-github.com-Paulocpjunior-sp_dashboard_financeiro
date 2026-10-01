@@ -1,3 +1,4 @@
+import type { IdentityLink } from '../services/billingConfirmationService';
 import type { Transaction } from '../types';
 import type { ChecklistRecord } from '../services/checklistReviewService';
 import { buildBillingCompleteness, type BillingPeriodField } from './billingCompleteness';
@@ -12,7 +13,7 @@ export const obligationSituationLabels: Record<ObligationSituation, string> = {
 export interface ObligationReviewRow {
   identity: string; client: string; previousAmount: number; currentAmount: number;
   previousIds: string[]; currentIds: string[]; checklist: ChecklistRecord[];
-  situation: ObligationSituation; issues: string[];
+  situation: ObligationSituation; issues: string[]; financialSource?: string;
 }
 const documentKey = (value: unknown) => {
   const digits = String(value || '').replace(/\D/g, '');
@@ -25,7 +26,15 @@ const numberKey = (value: unknown) => {
 };
 
 /** Lista de conferência, sem concluir vigência, obrigação validada ou dispensa. */
-export function buildBillingObligations(transactions: Transaction[], records: ChecklistRecord[], month: string, field: BillingPeriodField) {
+export function buildBillingObligations(transactions: Transaction[], records: ChecklistRecord[], month: string, field: BillingPeriodField, linksSaved: IdentityLink[] = []) {
+  const aliases = new Map(linksSaved.map(link => [link.sourceIdentity, link.targetIdentity]));
+  const apply = (sourceIdentity: string, document: string | undefined, number: unknown) => {
+    if (documentKey(document) || numberKey(number)) return { document, number };
+    const target = aliases.get(sourceIdentity);
+    return target?.startsWith('doc:') ? {document:target.slice(4),number} : target?.startsWith('number:') ? {document,number:target.slice(7)} : {document,number};
+  };
+  transactions = transactions.map(item => { const target=apply(`unidentified:${item.id}`,item.cpfCnpj,item.clientNumber); return {...item,cpfCnpj:target.document,clientNumber:target.number as string}; });
+  records = records.map(item => { const target=apply(`checklist-unidentified:${item.submissionId}`,item.document,item.clientNumber); return {...item,document:target.document,clientNumber:target.number as string}; });
   const links = new Map<string, Set<string>>();
   const receivables = transactions.filter(item => !item.isExcluded && isEntradaTransaction(item));
   const addLink = (number: string, document: string) => {
@@ -55,6 +64,7 @@ export function buildBillingObligations(transactions: Transaction[], records: Ch
       previousIds: [], currentIds: [], checklist: [], situation: 'identificacao' as const, issues: [] };
     row.checklist.push(record); rows.set(identity, row);
   });
+  const byId=new Map(transactions.map(item=>[item.id,item]));
   const result = [...rows.values()].map(row => {
     const number = row.identity.startsWith('number:') ? row.identity.slice(7) : '';
     const conflicted = (links.get(number)?.size || 0) > 1 || conflictedDocuments.has(row.identity);
@@ -75,7 +85,8 @@ export function buildBillingObligations(transactions: Transaction[], records: Ch
     if (!row.previousIds.length && !row.currentIds.length) row.issues.push('Evento do checklist sem base financeira nos dois meses; confirmar se há cobrança devida para a competência.');
     row.issues = row.issues.map(issue => issue === 'Sem lançamento no mês atual: cobrar ou comprovar a dispensa contratual.' ? 'Sem lançamento com data válida no mês atual: conferir competência, contrato e eventual dispensa.' : issue);
     row.issues.push('Contrato, emissão e eventual dispensa ainda dependem de validação.');
-    return { ...row, issues: [...new Set(row.issues)] };
+    const ids=new Set([...row.previousIds,...row.currentIds]);
+    return { ...row, financialSource:JSON.stringify([...ids].sort().map(id=>byId.get(id))), issues: [...new Set(row.issues)] };
   });
   const order: ObligationSituation[] = ['identificacao', 'possivel_ausencia', 'checklist_sem_lancamento', 'lancamento_localizado'];
   result.sort((a,b) => order.indexOf(a.situation)-order.indexOf(b.situation) || a.client.localeCompare(b.client, 'pt-BR'));

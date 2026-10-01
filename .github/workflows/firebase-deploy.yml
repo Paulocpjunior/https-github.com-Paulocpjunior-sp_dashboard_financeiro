@@ -43,6 +43,7 @@ jobs:
           npm run test:itau-statements
           npm run test:financial-permissions
           npm run test:accumulated-balances
+          npm run test:billing-confirmation
           npm run test:billing-obligations
           npm run test:checklist-status
           npm run test:billing-completeness
@@ -55,12 +56,41 @@ jobs:
           npm run test:data-loading
           npm run test:payment-method
 
+      - name: Preparar Java para testes de regras isolados
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verificar permissões e histórico das conferências
+        run: |
+          node -e 'require("fs").writeFileSync("/tmp/billing-rules-emulator.json", JSON.stringify({firestore:{rules:process.cwd()+"/firestore.rules"},emulators:{firestore:{port:8080},ui:{enabled:false},singleProjectMode:true}}))'
+          npx --yes firebase-tools@14.27.0 emulators:exec --only firestore --project demo-financeiro-reviews --config /tmp/billing-rules-emulator.json "node scripts/test-billing-review-rules.mjs"
+
       - name: Build do projeto
         env:
           # Gate de departamento em BLOQUEIO (Paulo, 08/08, após teste):
           # app estático — o modo entra no build.
           VITE_DEPARTAMENTO_GATE_MODO: bloqueio
         run: npm run build
+
+      - name: Publicar regras das conferências com preservação e backup
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        env:
+          FINANCEIRO_APPROVED_COMMIT: '${{ inputs.approved_commit }}'
+          GCP_CREDENTIALS: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+        run: |
+          pip install google-auth requests
+          python scripts/audit-billing-source-readonly.py
+          python scripts/publish-billing-review-rules.py
+
+      - name: Preservar backup das regras anteriores
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: regras-antes-conferencia-${{ github.sha }}
+          path: rules-backup/
+          retention-days: 30
 
       - name: Deploy no Firebase Hosting
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
