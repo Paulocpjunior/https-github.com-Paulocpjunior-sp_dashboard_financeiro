@@ -1,0 +1,23 @@
+# Regras e obrigações confirmadas por cliente e competência
+
+## Entrega dos itens 1 a 5
+
+1. **Validação automatizada:** regressões de leitura e cruzamento, propostas verificadas em respostas reais de entrada/encerramento/suspensão, auditoria agregada de somente leitura do histórico real no fluxo oficial e testes de permissão em emulador isolado no GitHub. Não há certificação automática de contratos.
+2. **Identificação:** associações estáveis por CPF/CNPJ ou Nosso Número permanecem automáticas. Um administrador pode registrar, com evidência, vínculo de item sem identificação a uma identidade estável. O vínculo é separado dos lançamentos e possui revisões. Números associados a documentos diferentes continuam bloqueados, exigindo correção comprovada na fonte.
+3. **Observações:** extração determinística de propostas de honorários, CNPJ/CPF, início da responsabilidade, dia e última cobrança. Valores divergentes permanecem múltiplos; propostas não são aprovações.
+4. **Obrigações mensais:** conferência por identidade e competência, com valor, vencimento, início da responsabilidade, dia, última cobrança, evento definido pelo STATUS e evidência. Administrador pode confirmar uma obrigação; colaborador ativo pode salvar revisão pendente. Saída/suspensão exige última cobrança para confirmar obrigação.
+5. **Persistência:** coleções próprias `billingMonthlyReviews` e `billingIdentityLinks`. Cada gravação atualiza o registro e cria revisão histórica atomicamente. Responsável é o UID autenticado, data vem do servidor, e a revisão otimista impede sobrescrever silenciosamente outra alteração. As regras negam atualização e exclusão das revisões e exclusão dos registros principais.
+
+## Uso
+
+Em Faturamento, gerar a lista mensal e abrir **Registrar conferência** ou **Conferir identificação**. Revisar propostas e evidência, preencher condições e salvar como revisão pendente ou obrigação confirmada. Informações das fontes são novamente consultadas antes de salvar; diferenças exigem recarregar. Ao gerar nova lista, assinatura diferente sinaliza revalidação; registros cujo item desapareceu também são contabilizados como pendentes.
+
+**Consultar histórico** mostra até 50 revisões recentes, com responsável, data, condições e evidência. Todas as revisões permanecem armazenadas. Vínculos existentes podem ser revisados por administrador, com evidência e controle de concorrência.
+
+## Limites e próximos passos
+
+Esta entrega não cria transações, não altera respostas Jotform, não emite boletos nem aprova dispensas. Datas e valores sem evidência suficiente continuam pendentes. A assinatura e a nova consulta são controles de revisão; não substituem a futura revalidação no servidor para fechamento mensal. Fila com prazos, dispensas aprovadas, provas de emissão/envio, trava de fechamento e sincronização incremental continuam pendentes.
+
+## Publicação e segurança
+
+O fluxo oficial compara as regras atualmente publicadas com a base homologada e bloqueia divergência. Só adiciona os dois namespaces de conferência; regras anteriores permanecem intactas. Backup das regras anteriores e auditoria agregada, sem dados individuais, ficam no artefato de publicação. Não é um backup completo do banco. Nenhum cliente real é usado para teste de escrita.

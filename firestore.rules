@@ -115,6 +115,89 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Conferências independentes: não dão permissão para modificar transações.
+    function validReviewBase(d) {
+      return d.schemaVersion == 1 && d.revision is int && d.revision > 0
+        && d.actorUid == request.auth.uid && d.updatedAt == request.time
+        && d.auditId is string && d.auditId.size() == 20
+        && d.evidence is string && d.evidence.size() > 0 && d.evidence.size() <= 4000;
+    }
+    function stableBillingIdentity(value) {
+      return value is string && value.matches('^(doc:[0-9]{11}|doc:[0-9]{14}|number:[0-9]+)$');
+    }
+    function reviewDate(value) {
+      return value is string && (value == '' || value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'));
+    }
+    function validMonthlyReview(d) {
+      return validReviewBase(d) && d.keys().hasOnly([
+        'schemaVersion','revision','auditId','actorUid','createdAt','updatedAt',
+        'month','identity','client','decision','amount','dueDate','startDate',
+        'billingDay','lastChargeDate','evidence','event','sourceFingerprint'
+      ]) && d.month.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
+        && stableBillingIdentity(d.identity) && d.client is string && d.client.size() > 0
+        && d.sourceFingerprint.matches('^[a-f0-9]{64}$')
+        && d.decision in ['needs_review','charge']
+        && d.event in ['entrada','saida','alteracao','suspensao','recorrencia','pendente','multiplos']
+        && (d.amount == null || (d.amount is number && d.amount > 0))
+        && d.billingDay is int && d.billingDay >= 0 && d.billingDay <= 31
+        && reviewDate(d.dueDate) && reviewDate(d.startDate) && reviewDate(d.lastChargeDate)
+        && (d.decision == 'needs_review' || (isAdmin() && d.amount is number && d.amount > 0
+          && d.dueDate != '' && d.startDate != '' && d.billingDay > 0
+          && !(d.event in ['pendente','multiplos'])
+          && (!(d.event in ['saida','suspensao']) || d.lastChargeDate != '')));
+    }
+    match /billingMonthlyReviews/{reviewId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser() && validMonthlyReview(request.resource.data)
+        && reviewId == request.resource.data.month + '_' + request.resource.data.identity
+        && request.resource.data.revision == 1 && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/billingMonthlyReviews/$(reviewId)/revisions/$(request.resource.data.auditId)).data == request.resource.data;
+      allow update: if isActiveUser() && validMonthlyReview(request.resource.data)
+        && (isAdmin() || resource.data.decision == 'needs_review')
+        && request.resource.data.identity == resource.data.identity
+        && request.resource.data.month == resource.data.month
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.auditId != resource.data.auditId
+        && getAfter(/databases/$(database)/documents/billingMonthlyReviews/$(reviewId)/revisions/$(request.resource.data.auditId)).data == request.resource.data;
+      allow delete: if false;
+      match /revisions/{revisionId} {
+        allow read: if isActiveUser();
+        allow create: if isActiveUser()
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.auditId == revisionId
+          && getAfter(/databases/$(database)/documents/billingMonthlyReviews/$(reviewId)).data == request.resource.data;
+        allow update, delete: if false;
+      }
+    }
+    function validIdentityLink(d) {
+      return validReviewBase(d) && d.keys().hasOnly([
+        'schemaVersion','revision','auditId','actorUid','createdAt','updatedAt',
+        'sourceIdentity','targetIdentity','evidence'
+      ]) && d.sourceIdentity.matches('^(unidentified|checklist-unidentified):.+$')
+        && stableBillingIdentity(d.targetIdentity);
+    }
+    match /billingIdentityLinks/{linkId} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin() && validIdentityLink(request.resource.data)
+        && request.resource.data.createdAt == request.time && request.resource.data.revision == 1
+        && getAfter(/databases/$(database)/documents/billingIdentityLinks/$(linkId)/revisions/$(request.resource.data.auditId)).data == request.resource.data;
+      allow update: if isAdmin() && validIdentityLink(request.resource.data)
+        && request.resource.data.sourceIdentity == resource.data.sourceIdentity
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.auditId != resource.data.auditId
+        && getAfter(/databases/$(database)/documents/billingIdentityLinks/$(linkId)/revisions/$(request.resource.data.auditId)).data == request.resource.data;
+      allow delete: if false;
+      match /revisions/{revisionId} {
+        allow read: if isActiveUser();
+        allow create: if isAdmin() && request.resource.data.updatedAt == request.time
+          && request.resource.data.auditId == revisionId
+          && getAfter(/databases/$(database)/documents/billingIdentityLinks/$(linkId)).data == request.resource.data;
+        allow update, delete: if false;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
