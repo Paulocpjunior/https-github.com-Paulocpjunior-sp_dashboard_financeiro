@@ -659,7 +659,7 @@ const Dashboard: React.FC = () => {
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div className="print:hidden">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Visão Geral</h1>
-            <p className="text-slate-500 dark:text-slate-400">Acompanhe o fluxo de caixa da sua empresa.</p>
+            <p className="text-slate-500 dark:text-slate-400">Movimentos do período selecionado. Os saldos em aberto e o acumulado histórico permanecem no resumo acima.</p>
           </div>
           
           <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -797,6 +797,10 @@ const Dashboard: React.FC = () => {
             onBucketClick={handleBucketClick} 
           />
         )}
+
+        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Período da tabela: {getPeriodText()}</p>
+
+        {!isRefreshing && data.length === 0 && <p role="status" className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">Nenhum lançamento neste filtro. As pendências de meses anteriores continuam nos saldos acumulados acima.</p>}
 
         {/* Filters Panel - REDESENHADO */}
         {isFilterMenuOpen && (
@@ -1109,19 +1113,19 @@ const Dashboard: React.FC = () => {
           ) : (
             <>
               <KpiCard
-                title="Total Entradas"
+                title="Entradas no Período"
                 value={kpi.totalReceived}
                 icon={ArrowUp}
                 color="green"
               />
               <KpiCard
-                title="Total Saídas"
+                title="Saídas no Período"
                 value={kpi.totalPaid}
                 icon={ArrowDown}
                 color="red"
               />
               <KpiCard
-                title="Saldo Líquido"
+                title="Variação do Período"
                 value={kpi.balance}
                 icon={DollarSign}
                 color={kpi.balance >= 0 ? 'blue' : 'red'}

@@ -42,6 +42,7 @@ jobs:
           npm run lint
           npm run test:itau-statements
           npm run test:financial-permissions
+          npm run test:accumulated-balances
           npm run test:billing-completeness
           npm run test:billing-forecast
           npm run test:boleto-cloud
