@@ -43,6 +43,7 @@ jobs:
           npm run test:itau-statements
           npm run test:financial-permissions
           npm run test:accumulated-balances
+          npm run test:checklist-status
           npm run test:billing-completeness
           npm ci --prefix cloud-run/jotform-webhook
           npm test --prefix cloud-run/jotform-webhook
