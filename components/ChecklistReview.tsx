@@ -1,16 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChecklistReview as Review, fetchChecklistReview } from '../services/checklistReviewService';
+import { readableChecklistNotes } from '../utils/checklistNotes';
 import { checklistEvent, checklistEventLabels, checklistEventGuidance, checklistStatusDates } from '../utils/checklistStatus';
 
-function readableNotes(value: string | null) {
-  if (!value) return 'Sem observações.';
-  const plain = value.replace(/<(script|style|iframe|object)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<br\s*\/?\s*>|<\/(?:div|p|li)\s*>/gi, '\n').replace(/<[^>]*>/g, '');
-  const decoder = document.createElement('textarea');
-  // Remove tags before decoding entities; render the result only as React text.
-  decoder.innerHTML = plain;
-  return decoder.value.trim() || 'Sem observações.';
-}
 const displayDate = (value: string | null) => value ? value.split('-').reverse().join('/') : 'Não informada';
 
 export default function ChecklistReview() {
@@ -61,7 +53,7 @@ export default function ChecklistReview() {
           <td className="p-2">{row.client || 'Nome ausente'}<span className="block text-xs">{row.identity || 'Identificação pendente'}</span><span className="block text-xs">Resposta {row.submissionId} • {row.status || 'Status não informado'}</span></td>
           <td className="p-2">{row.amount == null ? 'Conferir nas observações' : row.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
           <td className="p-2"><strong>{checklistEventLabels[dates.event]}</strong><br/>{dates.event === 'entrada' && <>Cadastro: {displayDate(dates.registrationDate)}<br/>Início da responsabilidade: conferir observações.</>}{dates.event === 'saida' && <>Saída informada: {displayDate(dates.exitDate)}</>}{dates.event === 'suspensao' && <>Suspensão informada: {displayDate(dates.suspensionDate)}</>}{dates.event === 'alteracao' && <>Vigência: conferir observações.</>}{dates.event === 'pendente' && <>Confirmar STATUS na fonte.</>}</td>
-          <td className="p-2"><p>{checklistEventGuidance[dates.event]}</p><details><summary>Conferência dos campos originais</summary><p>{row.issues.join('; ') || 'Campos lidos; contrato ainda precisa de validação.'}</p><p>Cadastro: {displayDate(row.entryDate)}<br/>Saída: {displayDate(row.exitDate)}<br/>Suspensão: {displayDate(row.suspensionDate)}</p><p>Datas da fonte, sem validação contratual. Campos incompatíveis com o STATUS não definem o evento.</p></details><details><summary>Observações da fonte</summary><p className="whitespace-pre-wrap max-w-xl">{readableNotes(row.notes)}</p></details></td>
+          <td className="p-2"><p>{checklistEventGuidance[dates.event]}</p><details><summary>Conferência dos campos originais</summary><p>{row.issues.join('; ') || 'Campos lidos; contrato ainda precisa de validação.'}</p><p>Cadastro: {displayDate(row.entryDate)}<br/>Saída: {displayDate(row.exitDate)}<br/>Suspensão: {displayDate(row.suspensionDate)}</p><p>Datas da fonte, sem validação contratual. Campos incompatíveis com o STATUS não definem o evento.</p></details><details><summary>Observações da fonte</summary><p className="whitespace-pre-wrap max-w-xl">{readableChecklistNotes(row.notes)}</p></details></td>
         </tr>; })}
       </tbody></table></div>
       {!matches.length && <p className="text-sm">Nenhuma resposta neste filtro.</p>}

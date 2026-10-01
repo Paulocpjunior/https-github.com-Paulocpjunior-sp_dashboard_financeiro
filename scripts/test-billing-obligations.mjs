@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'vite';
+const server = await createServer({ server: { middlewareMode: true }, optimizeDeps: { noDiscovery: true }, appType: 'custom', logLevel: 'error' });
+try {
+  const { buildBillingObligations: build } = await server.ssrLoadModule('/utils/billingObligations.ts');
+  const tx = (id, month, extra={}) => ({ id, client: 'Empresa', clientNumber: '0269', cpfCnpj: '', date: `${month}-01`, dueDate: `${month}-10`, movement: 'Entrada', type: 'Contas a Receber', status: 'Pago', valorOriginal: 100, ...extra });
+  const checklist = (id, extra={}) => ({ submissionId: String(id), identity: 'number:269', client: 'Empresa', clientNumber: '269', document: '', status: 'CLIENTE NOVO', amount: null, entryDate: '2026-09-01', exitDate: '2026-09-01', suspensionDate: '2026-09-01', notes: 'Mensalidade nas observações', issues: [], observationsRequireReview: true, sourceCreatedAt: '2026-09-01 12:00:00', contractValidated: false, ...extra });
+  const inputs = [tx('old','2026-08')]; const source = [checklist(1)];
+  const original = JSON.stringify([inputs,source]);
+  const missing = build(inputs,source,'2026-09','dueDate');
+  assert.equal(missing.rows.length,1); assert.equal(missing.rows[0].checklist.length,1);
+  assert.equal(missing.counts.possivel_ausencia,1); assert.equal(missing.canCloseMonth,false);
+  assert.equal(missing.validatedObligations,null); assert.equal(JSON.stringify([inputs,source]),original);
+  const matched = build([...inputs,tx('new','2026-09')],source,'2026-09','dueDate');
+  assert.equal(matched.counts.lancamento_localizado,1);
+  const newClient = build([],source,'2026-09','dueDate');
+  assert.equal(newClient.counts.checklist_sem_lancamento,1,'entrada sem lançamentos aparece para conferência');
+  const exit = build(inputs,[checklist(1,{status:'CLIENTE SAIDA'})],'2026-09','dueDate');
+  assert.equal(exit.counts.possivel_ausencia,1,'saída não dispensa automaticamente');
+  assert.ok(exit.rows[0].issues.some(s=>s.includes('última cobrança')));
+  const suspended = build(inputs,[checklist(1,{status:'CLIENTE SUSPENSO'})],'2026-09','dueDate');
+  assert.equal(suspended.counts.possivel_ausencia,1);
+  const sameName = build([tx('anonymous','2026-08',{clientNumber:''})],[checklist(1,{clientNumber:'',identity:''})],'2026-09','dueDate');
+  assert.equal(sameName.rows.length,2,'nome igual não une fontes'); assert.equal(sameName.counts.identificacao,2);
+  const document = '11111111000111';
+  const linked = build([tx('old','2026-08',{cpfCnpj:document})],source,'2026-09','dueDate');
+  assert.equal(linked.rows.length,1); assert.equal(linked.rows[0].identity,`doc:${document}`);
+  const registryLink = build(inputs,[checklist(1,{document})],'2026-09','dueDate');
+  assert.equal(registryLink.rows.length,1); assert.equal(registryLink.rows[0].identity,`doc:${document}`);
+  const conflict = build([tx('doc-old','2026-08',{cpfCnpj:document}),tx('number-now','2026-09')],
+    [checklist(1,{document:'22222222000122'})],'2026-09','dueDate');
+  assert.equal(conflict.rows.length,3,'documentos e número ambíguo permanecem separados');
+  assert.equal(conflict.counts.identificacao,3);
+  assert.equal(conflict.rows.find(r=>r.identity===`doc:${document}`).currentIds.length,0,'não resolver número só pela fonte financeira');
+  const events = build(inputs,[checklist(1),checklist(2,{status:'CLIENTE ALTERAÇÃO'}),checklist(3,{status:'CLIENTE SAIDA',sourceCreatedAt:'2026-10-01 10:00:00'})],'2026-09','dueDate');
+  assert.equal(events.rows[0].checklist.length,3,'preservar todos os eventos');
+  assert.ok(events.rows[0].issues.some(s=>s.includes('após o mês')));
+  const excluded = build([tx('excluded','2026-09',{isExcluded:true}),tx('payable','2026-09',{movement:'Saída',type:'Contas a Pagar'})],source,'2026-09','dueDate');
+  assert.equal(excluded.counts.checklist_sem_lancamento,1);
+  assert.throws(()=>build([],[],'2026-13','date'),/inválido/);
+  console.log('OK: lista mensal une identificações estáveis, inclui entradas sem lançamento, preserva eventos e bloqueia associações ambíguas; saídas não dispensam cobrança.');
+} finally { await server.close(); }
