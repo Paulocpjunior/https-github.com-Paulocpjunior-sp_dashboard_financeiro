@@ -18,6 +18,7 @@ import { logger } from '../utils/logger';
 import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
 import { buildDuplicateScanFilters, findPossibleDuplicateTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 import { WhatsAppSendModal } from '../components/WhatsAppSendModal';
+import { filtersForDashboardView } from '../utils/dashboardViewFilters';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -391,36 +392,7 @@ const Dashboard: React.FC = () => {
   };
 
   const applyViewMode = (mode: 'general' | 'payables' | 'receivables') => {
-      const now = new Date();
-      // Padrão: Mês atual
-      const start = toLocalISODate(new Date(now.getFullYear(), now.getMonth(), 1));
-      const end = toLocalISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-      
-      setActivePeriod('thisMonth');
-
-      if (mode === 'payables') {
-          setFilters(prev => ({
-              ...INITIAL_FILTERS,
-              movement: 'Saída',
-              status: 'Pendente',
-              dueDateStart: start,
-              dueDateEnd: end
-          }));
-      } else if (mode === 'receivables') {
-          setFilters(prev => ({
-              ...INITIAL_FILTERS,
-              movement: 'Entrada',
-              status: 'Pendente',
-              dueDateStart: start,
-              dueDateEnd: end
-          }));
-      } else {
-          setFilters(prev => ({
-              ...INITIAL_FILTERS,
-              startDate: start,
-              endDate: end
-          }));
-      }
+      setFilters(prev => filtersForDashboardView(prev, mode));
       setPage(1);
   };
 
@@ -504,7 +476,7 @@ const Dashboard: React.FC = () => {
       return `${formatDateDisplay(filters.dueDateStart)} até ${formatDateDisplay(filters.dueDateEnd)} (Vencimento)`;
     }
     if (filters.startDate && filters.endDate) {
-      return `${formatDateDisplay(filters.startDate)} até ${formatDateDisplay(filters.endDate)}`;
+      return `${formatDateDisplay(filters.startDate)} até ${formatDateDisplay(filters.endDate)} (Lançamento)`;
     }
     return 'Selecione um período';
   };
