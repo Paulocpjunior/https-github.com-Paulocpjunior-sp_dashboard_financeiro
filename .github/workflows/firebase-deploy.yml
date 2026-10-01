@@ -70,3 +70,12 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           channelId: live
           projectId: gen-lang-client-0888019226
+
+      - name: Fixar a consulta do checklist na revisão implantada
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        env:
+          FINANCEIRO_APPROVED_COMMIT: '${{ inputs.approved_commit }}'
+          GCP_CREDENTIALS: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+        run: |
+          pip install google-auth requests
+          python scripts/activate-checklist-route.py
