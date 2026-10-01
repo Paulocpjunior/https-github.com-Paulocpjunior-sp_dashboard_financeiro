@@ -1,42 +1,43 @@
-name: Diagnostico de leitura Firestore
+name: Verificar atualizacao de arquivos Hosting
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  check_database:
+  prepare_static_update:
     runs-on: ubuntu-latest
     steps:
       - run: python -m pip install google-auth requests
-      - name: Verificar banco e contagens sem alterar dados
+      - name: Validar copia sem publicar
         env:
           GCP_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, time
           from google.oauth2.service_account import Credentials
           from google.auth.transport.requests import AuthorizedSession
-          credentials = Credentials.from_service_account_info(json.loads(os.environ['GCP_CREDENTIALS']), scopes=['https://www.googleapis.com/auth/cloud-platform'])
-          session = AuthorizedSession(credentials)
-          project = 'gen-lang-client-0888019226'
-          root = 'https://firestore.googleapis.com/v1/projects/' + project + '/databases/(default)'
-          response = session.get(root, timeout=30)
-          print('DATABASE_HTTP:', response.status_code)
-          if response.ok:
-              data = response.json()
-              print('DATABASE_METADATA:', json.dumps({key: data.get(key) for key in ['name','locationId','type','deleteProtectionState','pointInTimeRecoveryEnablement','earliestVersionTime'] }))
-          else: print('DATABASE_ERROR:', response.json().get('error', {}).get('message'))
-          for label, collection, start, end in [('ALL_TRANSACTIONS','transactions',None,None),('SEPTEMBER_2026','transactions','2026-09-01','2026-09-30'),('OCTOBER_2026','transactions','2026-10-01','2026-10-31'),('USERS','users',None,None)]:
-              query = {'from':[{'collectionId':collection}]}
-              if start:
-                  query['where']={'compositeFilter':{'op':'AND','filters':[{'fieldFilter':{'field':{'fieldPath':'date'},'op':'GREATER_THAN_OR_EQUAL','value':{'stringValue':start}}},{'fieldFilter':{'field':{'fieldPath':'date'},'op':'LESS_THAN_OR_EQUAL','value':{'stringValue':end}}}]}}
-              body={'structuredAggregationQuery':{'structuredQuery':query,'aggregations':[{'alias':'records','count':{}}]}}
-              response=session.post(root+'/documents:runAggregationQuery',json=body,timeout=45)
-              print(label+'_HTTP:', response.status_code)
-              if response.ok:
-                  result=response.json()
-                  for row in result:
-                      if 'result' in row: print(label+'_COUNT:',row['result'].get('aggregateFields',{}).get('records',{}).get('integerValue'))
-              else: print(label+'_ERROR:', response.json().get('error',{}).get('message'))
-          print('READ_ONLY_DATABASE_CHECK_COMPLETE')
+          session=AuthorizedSession(Credentials.from_service_account_info(json.loads(os.environ['GCP_CREDENTIALS']),scopes=['https://www.googleapis.com/auth/cloud-platform']))
+          api='https://firebasehosting.googleapis.com/v1beta1/'
+          site='sites/gen-lang-client-0888019226'
+          def request(method,path,**kwargs):
+              response=session.request(method,api+path,timeout=30,**kwargs)
+              if not response.ok: raise RuntimeError(str(response.status_code)+' '+response.json().get('error',{}).get('message',''))
+              return response.json()
+          releases=request('GET',site+'/releases',params={'pageSize':1})
+          source=releases['releases'][0]['version']['name']
+          original=request('GET',source)
+          print('ORIGINAL_VERSION:',source)
+          operation=request('POST',site+'/versions:clone',json={'sourceVersion':source,'finalize':False})
+          for _ in range(30):
+              if operation.get('done'):break
+              time.sleep(1)
+              operation=request('GET',operation['name'])
+          if not operation.get('done') or operation.get('error'):raise RuntimeError('Clone não concluiu: '+str(operation.get('error')))
+          version=operation['response']['name']
+          cloned=request('GET',version)
+          assert cloned.get('config')==original.get('config'),'Configuração divergente'
+          result=request('PATCH',version,params={'updateMask':'status'},json={'status':'FINALIZED'})
+          assert result.get('config')==original.get('config'),'Configuração divergente ao finalizar'
+          print('STATIC_CONFIG_PRESERVED_AND_FINALIZED:',result['status'])
+          print('Nenhuma release criada. Produção e dados financeiros não alterados.')
           PY
