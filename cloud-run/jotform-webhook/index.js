@@ -11,6 +11,7 @@ const PROJECT_ID = process.env.GCP_PROJECT_ID || 'gen-lang-client-0888019226';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const WEBHOOK_VERSION = '6.13-structured-payload-classification';
 const JOTFORM_FORM_ID = process.env.JOTFORM_FORM_ID || '210020525580845';
+require('./checklist').installChecklistRoute(app, google, PROJECT_ID);
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 

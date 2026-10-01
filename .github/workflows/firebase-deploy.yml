@@ -44,6 +44,9 @@ jobs:
           npm run test:financial-permissions
           npm run test:accumulated-balances
           npm run test:billing-completeness
+          npm ci --prefix cloud-run/jotform-webhook
+          npm test --prefix cloud-run/jotform-webhook
+          node cloud-run/jotform-webhook/test-checklist.js
           npm run test:billing-forecast
           npm run test:boleto-cloud
           npm run test:dashboard-duplicates-sorting
