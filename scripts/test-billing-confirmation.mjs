@@ -5,8 +5,8 @@ if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const server=await createServer({server:{middlewareMode:true},optimizeDeps:{noDiscovery:true},appType:'custom',logLevel:'error'});
 try {
  const {proposeChecklistTerms:propose,validateMonthlyTerms:validate,fingerprintMonthlyRow:fingerprint}=await server.ssrLoadModule('/utils/billingConfirmation.ts');
- const proposal=propose('<div>Valor da mensalidade: R$ 2.093,50</div><div>CNPJ: 05.160.632/0001-36</div><div>Responsabilidade a partir de <b>01/10/2026</b>. Cobrar dia 10. Última cobrança em 10/09/2026.</div>');
- assert.equal(proposal.amounts[0].value,2093.5);assert.equal(proposal.startDates[0].value,'2026-10-01');assert.equal(proposal.documents[0].value,'05160632000136');assert.equal(proposal.automaticallyConfirmed,false);
+ const proposal=propose('<div>Valor da mensalidade: R$ 1.250,50</div><div>CNPJ: 11.111.111/0001-11</div><div>Responsabilidade a partir de <b>01/10/2026</b>. Cobrar dia 10. Última cobrança em 10/09/2026.</div>');
+ assert.equal(proposal.amounts[0].value,1250.5);assert.equal(proposal.startDates[0].value,'2026-10-01');assert.equal(proposal.documents[0].value,'11111111000111');assert.equal(proposal.automaticallyConfirmed,false);
  assert.equal(propose('Mensalidade: R$ 500,00. Honorários: R$ 600,00.').amounts.length,2,'não escolher valor divergente');
  assert.equal(propose('Responsabilidade a partir de 31/09/2026').startDates.length,0);
  const value={month:'2026-10',identity:'number:123',client:'Teste',decision:'charge',amount:500,dueDate:'2026-10-10',startDate:'2026-10-01',billingDay:10,lastChargeDate:'',evidence:'Contrato conferido',event:'entrada',sourceFingerprint:'a'.repeat(64)};
