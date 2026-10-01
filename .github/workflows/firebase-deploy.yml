@@ -1,43 +1,34 @@
-name: Verificar atualizacao de arquivos Hosting
+name: Diagnóstico de implantação checklist
 on:
   workflow_dispatch:
-permissions:
-  contents: read
 jobs:
-  prepare_static_update:
+  diagnose:
     runs-on: ubuntu-latest
     steps:
-      - run: python -m pip install google-auth requests
-      - name: Validar copia sem publicar
+      - run: pip install google-auth requests
+      - name: Verificar permissões e configuração sem expor credenciais
         env:
           GCP_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           python - <<'PY'
-          import json, os, time
-          from google.oauth2.service_account import Credentials
-          from google.auth.transport.requests import AuthorizedSession
-          session=AuthorizedSession(Credentials.from_service_account_info(json.loads(os.environ['GCP_CREDENTIALS']),scopes=['https://www.googleapis.com/auth/cloud-platform']))
-          api='https://firebasehosting.googleapis.com/v1beta1/'
-          site='sites/gen-lang-client-0888019226'
-          def request(method,path,**kwargs):
-              response=session.request(method,api+path,timeout=30,**kwargs)
-              if not response.ok: raise RuntimeError(str(response.status_code)+' '+response.json().get('error',{}).get('message',''))
-              return response.json()
-          releases=request('GET',site+'/releases',params={'pageSize':1})
-          source=releases['releases'][0]['version']['name']
-          original=request('GET',source)
-          print('ORIGINAL_VERSION:',source)
-          operation=request('POST',site+'/versions:clone',json={'sourceVersion':source,'finalize':False})
-          for _ in range(30):
-              if operation.get('done'):break
-              time.sleep(1)
-              operation=request('GET',operation['name'])
-          if not operation.get('done') or operation.get('error'):raise RuntimeError('Clone não concluiu: '+str(operation.get('error')))
-          version=operation['response']['name']
-          cloned=request('GET',version)
-          assert cloned.get('config')==original.get('config'),'Configuração divergente'
-          result=request('PATCH',version,params={'updateMask':'status'},json={'status':'FINALIZED'})
-          assert result.get('config')==original.get('config'),'Configuração divergente ao finalizar'
-          print('STATIC_CONFIG_PRESERVED_AND_FINALIZED:',result['status'])
-          print('Nenhuma release criada. Produção e dados financeiros não alterados.')
+          import os,json,requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          creds=service_account.Credentials.from_service_account_info(json.loads(os.environ["GCP_CREDENTIALS"]),scopes=["https://www.googleapis.com/auth/cloud-platform"])
+          creds.refresh(Request())
+          headers={"Authorization":"Bearer "+creds.token}
+          project="gen-lang-client-0888019226"
+          p=requests.post("https://cloudresourcemanager.googleapis.com/v1/projects/"+project+":testIamPermissions",headers=headers,json={"permissions":["run.services.get","run.services.update","run.services.create","cloudbuild.builds.create","storage.buckets.create","artifactregistry.repositories.uploadArtifacts"]},timeout=30)
+          print("Deploy permissions:",p.status_code,p.json().get("permissions",[]))
+          r=requests.get("https://run.googleapis.com/v1/namespaces/"+project+"/services/jotform-webhook",headers=headers,timeout=30)
+          print("Service lookup:",r.status_code)
+          if r.status_code==200:
+           d=r.json()
+           print("Region:",d.get("metadata",{}).get("labels",{}).get("cloud.googleapis.com/location"))
+           print("Service URL:",d.get("status",{}).get("url"))
+           spec=d.get("spec",{}).get("template",{}).get("spec",{})
+           print("Runtime identity:",spec.get("serviceAccountName"))
+           print("Image:",spec.get("containers",[{}])[0].get("image"))
+           print("Jotform credential binding exists:",any(e.get("name")=="JOTFORM_API_KEY" for e in spec.get("containers",[{}])[0].get("env",[])))
+          
           PY

@@ -18,6 +18,7 @@ import { logger } from '../utils/logger';
 import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
 import { buildDuplicateScanFilters, findPossibleDuplicateTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 import { WhatsAppSendModal } from '../components/WhatsAppSendModal';
+import { filtersForDashboardView } from '../utils/dashboardViewFilters';
 
 const INITIAL_FILTERS: FilterState = {
   id: '',
@@ -391,36 +392,7 @@ const Dashboard: React.FC = () => {
   };
 
   const applyViewMode = (mode: 'general' | 'payables' | 'receivables') => {
-      const now = new Date();
-      // Padrão: Mês atual
-      const start = toLocalISODate(new Date(now.getFullYear(), now.getMonth(), 1));
-      const end = toLocalISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-      
-      setActivePeriod('thisMonth');
-
-      if (mode === 'payables') {
-          setFilters(prev => ({
-              ...INITIAL_FILTERS,
-              movement: 'Saída',
-              status: 'Pendente',
-              dueDateStart: start,
-              dueDateEnd: end
-          }));
-      } else if (mode === 'receivables') {
-          setFilters(prev => ({
-              ...INITIAL_FILTERS,
-              movement: 'Entrada',
-              status: 'Pendente',
-              dueDateStart: start,
-              dueDateEnd: end
-          }));
-      } else {
-          setFilters(prev => ({
-              ...INITIAL_FILTERS,
-              startDate: start,
-              endDate: end
-          }));
-      }
+      setFilters(prev => filtersForDashboardView(prev, mode));
       setPage(1);
   };
 
@@ -504,7 +476,7 @@ const Dashboard: React.FC = () => {
       return `${formatDateDisplay(filters.dueDateStart)} até ${formatDateDisplay(filters.dueDateEnd)} (Vencimento)`;
     }
     if (filters.startDate && filters.endDate) {
-      return `${formatDateDisplay(filters.startDate)} até ${formatDateDisplay(filters.endDate)}`;
+      return `${formatDateDisplay(filters.startDate)} até ${formatDateDisplay(filters.endDate)} (Lançamento)`;
     }
     return 'Selecione um período';
   };
@@ -659,7 +631,7 @@ const Dashboard: React.FC = () => {
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div className="print:hidden">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Visão Geral</h1>
-            <p className="text-slate-500 dark:text-slate-400">Acompanhe o fluxo de caixa da sua empresa.</p>
+            <p className="text-slate-500 dark:text-slate-400">Movimentos do período selecionado. Os saldos em aberto e o acumulado histórico permanecem no resumo acima.</p>
           </div>
           
           <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -797,6 +769,10 @@ const Dashboard: React.FC = () => {
             onBucketClick={handleBucketClick} 
           />
         )}
+
+        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Período da tabela: {getPeriodText()}</p>
+
+        {!isRefreshing && data.length === 0 && <p role="status" className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">Nenhum lançamento neste filtro. As pendências de meses anteriores continuam nos saldos acumulados acima.</p>}
 
         {/* Filters Panel - REDESENHADO */}
         {isFilterMenuOpen && (
@@ -1109,19 +1085,19 @@ const Dashboard: React.FC = () => {
           ) : (
             <>
               <KpiCard
-                title="Total Entradas"
+                title="Entradas no Período"
                 value={kpi.totalReceived}
                 icon={ArrowUp}
                 color="green"
               />
               <KpiCard
-                title="Total Saídas"
+                title="Saídas no Período"
                 value={kpi.totalPaid}
                 icon={ArrowDown}
                 color="red"
               />
               <KpiCard
-                title="Saldo Líquido"
+                title="Variação do Período"
                 value={kpi.balance}
                 icon={DollarSign}
                 color={kpi.balance >= 0 ? 'blue' : 'red'}
