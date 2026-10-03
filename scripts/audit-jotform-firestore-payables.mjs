@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { classifyFinancialMatches } from './lib/payables-match-classification.mjs';
+import { reviewPayableDocuments } from './lib/payables-document-review.mjs';
 
 const args = process.argv.slice(2);
 const arg = (name, fallback = '') => {
@@ -140,6 +141,7 @@ const legacyFinancialMatches = [];
 const ambiguousFinancialMatches = [];
 const excludedActive = [];
 const mismatches = [];
+const duplicateActiveSubmissions = [];
 for (const payable of payables) {
   const documents = bySubmission.get(payable.submissionId) || [];
   if (documents.length === 0) {
@@ -162,27 +164,9 @@ for (const payable of payables) {
     excludedActive.push({ ...payable, firestoreIds: documents.map(document => document.id) });
     continue;
   }
-  const document = active[0];
-  const data = document.data || {};
-  const expectedStatus = payable.docPago === 'SIM' ? 'PAGO' : 'PENDENTE';
-  const fields = [];
-  if (String(data.dueDate || '') !== payable.dueDate) fields.push('dueDate');
-  if (Math.abs(Number(data.valuePaid || data.valorOriginal || 0) - payable.amount) > 0.01) fields.push('amount');
-  if (normalize(data.status) !== expectedStatus) fields.push('status');
-  if (normalize(data.description) !== normalize(payable.description)) fields.push('description');
-  if (fields.length > 0) {
-    mismatches.push({
-      ...payable,
-      firestoreId: document.id,
-      fields,
-      firestore: {
-        dueDate: data.dueDate || '',
-        amount: Number(data.valuePaid || data.valorOriginal || 0),
-        status: data.status || '',
-        description: data.description || '',
-      },
-    });
-  }
+  const review = reviewPayableDocuments(payable, documents);
+  mismatches.push(...review.mismatches);
+  if (review.duplicate) duplicateActiveSubmissions.push(review.duplicate);
 }
 
 const report = {
@@ -199,7 +183,10 @@ const report = {
     legacyFinancialMatchesWithoutSubmissionId: legacyFinancialMatches.length,
     ambiguousFinancialMatches: ambiguousFinancialMatches.length,
     activeInJotformButExcluded: excludedActive.length,
-    fieldMismatches: mismatches.length,
+    fieldMismatches: new Set(mismatches.map(item => item.submissionId)).size,
+    fieldMismatchDocuments: mismatches.length,
+    duplicateActiveSubmissions: duplicateActiveSubmissions.length,
+    mismatchDocumentsRequiringIdentityReview: mismatches.filter(item => item.requiresIdentityReview).length,
   },
   missing,
   legacyFinancialMatches,
@@ -207,6 +194,7 @@ const report = {
   invalidPayables,
   excludedActive,
   mismatches,
+  duplicateActiveSubmissions,
 };
 
 const jsonPath = path.resolve(out);
@@ -218,6 +206,7 @@ const mdRows = missing.map(item => `| ${item.submissionId} | ${item.identificaca
 writeFileSync(mdPath, [
   '# Auditoria Jotform x Firestore - Contas a Pagar', '',
   `- Gerado em: ${report.generatedAt}`,
+  `- Backup Firestore: ${report.input}`,
   `- Atualizados desde: ${updatedSince}`,
   `- Contas a pagar validos no Jotform: ${payables.length}`,
   `- Contas a pagar ativos com campos invalidos: ${invalidPayables.length}`,
@@ -225,11 +214,23 @@ writeFileSync(mdPath, [
   `- Correspondencias financeiras legadas sem submissionId: ${legacyFinancialMatches.length}`,
   `- Correspondencias ambiguas (outro submissionId ou multiplos candidatos): ${ambiguousFinancialMatches.length}`,
   `- Ativos no Jotform, mas excluidos no Firestore: ${excludedActive.length}`,
-  `- Divergencias de campos: ${mismatches.length}`, '',
+  `- Lancamentos com divergencias de campos: ${report.counts.fieldMismatches}`,
+  `- Documentos com divergencias: ${mismatches.length}`,
+  `- SubmissionIds com multiplos documentos ativos: ${duplicateActiveSubmissions.length}`,
+  `- Documentos divergentes que exigem revisao do vinculo: ${report.counts.mismatchDocumentsRequiringIdentityReview}`, '',
   '## Ausentes no Firestore', '',
   '| Submission ID | Identificacao | Lancamento | Vencimento | Movimentacao | Observacao | Valor | Doc.Pago |',
   '|---|---|---|---|---|---|---:|---|',
   ...(mdRows.length ? mdRows : ['| - | - | - | - | Nenhum | - | 0,00 | - |']), '',
+  '## Divergencias para revisao', '',
+  'Divergencia nao autoriza sobrescrita. Os motivos abaixo indicam a necessidade de confirmar o vinculo, nao uma identidade incorreta comprovada.', '',
+  '| Submission ID | Documento Firestore | Campos divergentes | Motivos para revisar o vinculo |',
+  '|---|---|---|---|',
+  ...mismatches.map(item => `| ${item.submissionId} | ${item.firestoreId} | ${item.fields.join(', ')} | ${item.identityReviewReasons.join(', ') || 'Sem alerta de vinculo; ainda requer validacao da alteracao'} |`), '',
+  'MULTIPLE_ACTIVE_DOCUMENTS: mais de um documento ativo. PAYABLE_LINKED_TO_RECEIVABLE: conta a pagar vinculada a uma entrada. UNIQUE_IDENTITY_CONFLICT: identificacoes unicas diferentes. LEGACY_LINK_WITHOUT_UNIQUE_IDENTITY: documento legado sem identificacao unica suficiente para corroborar o vinculo.', '',
+  '## SubmissionIds com multiplos documentos ativos', '',
+  ...duplicateActiveSubmissions.map(item => `- ${item.submissionId}: ${item.firestoreIds.join(', ')}`),
+  ...(duplicateActiveSubmissions.length ? [] : ['Nenhum no recorte auditado.']), '',
 ].join('\n'));
 
 const csvEscape = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
