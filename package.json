@@ -26,6 +26,7 @@
     "audit:integrity:fail-high": "node scripts/audit-finance-integrity.mjs --fail-on high",
     "test:integrity": "node scripts/test-finance-integrity-audit.mjs",
     "test:jotform-events": "node scripts/test-jotform-events-audit.mjs",
+    "test:payables-matches": "node scripts/test-payables-match-classification.mjs",
     "registry:clients": "node scripts/build-client-registry.mjs",
     "registry:clients:apply": "node scripts/build-client-registry.mjs --apply-registry",
     "registry:clients:backfill": "node scripts/build-client-registry.mjs --apply-registry --apply-transactions",

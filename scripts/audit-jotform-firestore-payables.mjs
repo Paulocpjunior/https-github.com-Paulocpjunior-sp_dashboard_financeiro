@@ -3,6 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { classifyFinancialMatches } from './lib/payables-match-classification.mjs';
 
 const args = process.argv.slice(2);
 const arg = (name, fallback = '') => {
@@ -136,13 +137,17 @@ for (const document of transactions) {
 
 const missing = [];
 const legacyFinancialMatches = [];
+const ambiguousFinancialMatches = [];
 const excludedActive = [];
 const mismatches = [];
 for (const payable of payables) {
   const documents = bySubmission.get(payable.submissionId) || [];
   if (documents.length === 0) {
     const financialMatches = byFinancialIdentity.get(financialKey(payable.description, payable.dueDate, payable.amount)) || [];
-    if (financialMatches.length > 0) {
+    const classification = classifyFinancialMatches(financialMatches);
+    if (classification === 'ambiguous') {
+      ambiguousFinancialMatches.push({ ...payable, firestoreIds: financialMatches.map(document => document.id) });
+    } else if (classification === 'legacy') {
       legacyFinancialMatches.push({
         ...payable,
         firestoreIds: financialMatches.map(document => document.id),
@@ -192,11 +197,13 @@ const report = {
     invalidActivePayables: invalidPayables.length,
     missingInFirestore: missing.length,
     legacyFinancialMatchesWithoutSubmissionId: legacyFinancialMatches.length,
+    ambiguousFinancialMatches: ambiguousFinancialMatches.length,
     activeInJotformButExcluded: excludedActive.length,
     fieldMismatches: mismatches.length,
   },
   missing,
   legacyFinancialMatches,
+  ambiguousFinancialMatches,
   invalidPayables,
   excludedActive,
   mismatches,
@@ -216,6 +223,7 @@ writeFileSync(mdPath, [
   `- Contas a pagar ativos com campos invalidos: ${invalidPayables.length}`,
   `- Ausentes no Firestore: ${missing.length}`,
   `- Correspondencias financeiras legadas sem submissionId: ${legacyFinancialMatches.length}`,
+  `- Correspondencias ambiguas (outro submissionId ou multiplos candidatos): ${ambiguousFinancialMatches.length}`,
   `- Ativos no Jotform, mas excluidos no Firestore: ${excludedActive.length}`,
   `- Divergencias de campos: ${mismatches.length}`, '',
   '## Ausentes no Firestore', '',
