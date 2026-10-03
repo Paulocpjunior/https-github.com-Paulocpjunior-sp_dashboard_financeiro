@@ -9,7 +9,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'gen-lang-client-0888019226';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-const WEBHOOK_VERSION = '6.13-structured-payload-classification';
+const WEBHOOK_VERSION = '6.14-explicit-zero-honorarios';
 const JOTFORM_FORM_ID = process.env.JOTFORM_FORM_ID || '210020525580845';
 require('./checklist').installChecklistRoute(app, google, PROJECT_ID);
 
@@ -874,6 +874,8 @@ function extractContasReceber(raw) {
     dataVenc,
     dataReceb,
     honorarios: parseValor(honorariosRaw),
+    // A missing/invalid answer must not erase a previously confirmed amount.
+    hasHonorarios: honorariosRaw !== null && (parseValor(honorariosRaw) > 0 || /^(?:R\$\s*)?0+(?:[.,]0+)?$/.test(String(honorariosRaw).trim())),
     extras:     parseValor(extrasRaw),
     nCliente:   nClienteRaw ? (parseInt(String(nClienteRaw).trim().replace(/\D/g,''),10) || String(nClienteRaw).trim()) : '',
     cnpj:       cnpjRaw     ? String(cnpjRaw).trim()    : '',
@@ -944,7 +946,7 @@ function buildContasReceberFields(cr, submissionId) {
   };
 
   // Campos extras — só grava se tiver valor
-  if (cr.honorarios > 0)  obj.honorarios  = cr.honorarios;
+  if (cr.hasHonorarios || cr.honorarios > 0) obj.honorarios = cr.honorarios;
   obj.valorExtra = cr.extras || 0;
   obj.extras = cr.extras || 0;
   if (cr.nCliente)        obj.clientNumber = cr.nCliente;
@@ -1396,7 +1398,7 @@ app.post('/', upload.any(), async (req, res) => {
         updatedAt:     new Date().toISOString(),
       };
       // Campos extras capturados
-      if (cr.honorarios > 0) docData.honorarios   = cr.honorarios;
+      if (cr.hasHonorarios || cr.honorarios > 0) docData.honorarios = cr.honorarios;
       docData.valorExtra = cr.extras || 0;
       docData.extras = cr.extras || 0;
       if (cr.nCliente)       docData.clientNumber  = cr.nCliente;
@@ -1688,6 +1690,7 @@ module.exports = {
   sortRowsForCanonicalUpdate,
   getReceberTotal,
   extractContasReceber,
+  buildContasReceberFields,
   extractContasPagar,
   isContasReceberPayload,
   isEmptyContasPagar,
