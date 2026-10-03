@@ -14,6 +14,6 @@ A tabela mostra as datas compatíveis com o STATUS. As demais continuam acessív
 
 Os contadores por STATUS contam respostas/eventos, não contratos ativos únicos. Respostas históricas não são substituídas automaticamente. Honorários ausentes no campo estruturado recebem indicação de conferência nas observações; nenhum valor é deduzido ou gravado automaticamente.
 
-Esta entrega publica a interpretação na interface, usando a consulta protegida existente. Não muda registros Jotform, transações, regras de autenticação, cobranças ou fechamento mensal. Validação de contratos, propostas a partir das observações, aprovação de dispensas e trava no servidor permanecem pendentes.
+Esta entrega publica a interpretação na interface, usando a consulta protegida existente. Não muda registros Jotform, transações, regras de autenticação, cobranças ou fechamento mensal. Atualização de acompanhamento em 03/10/2026: propostas a partir das observações e conferências com histórico foram entregues posteriormente, conforme `confirmacoes-mensais.md`. Certificação de contratos, aprovação de dispensas e trava de fechamento no servidor permanecem pendentes; consultar a fila consolidada em `pendencias-financeiro.md`.
 
 Validação: `npm run lint`, `npm run test:checklist-status`, regressões do fluxo oficial e confirmação online da versão e da rota autenticada após deploy.
