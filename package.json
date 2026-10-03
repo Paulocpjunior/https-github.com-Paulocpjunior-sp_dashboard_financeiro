@@ -65,7 +65,7 @@
     "deploy:all": "npm run build && firebase deploy --only hosting,firestore:rules --project gen-lang-client-0888019226",
     "test:itau-statements": "node --test cloud-run/pdf-download-service/itau-statements.test.js",
     "test:production-guard": "node scripts/test-production-guard.mjs",
-    "test:billing-confirmation": "node scripts/test-billing-confirmation.mjs",
+    "test:billing-confirmation": "node scripts/test-billing-confirmation.mjs && node scripts/test-billing-confirmation-lifecycle.mjs",
     "test:billing-obligations": "node scripts/test-billing-obligations.mjs",
     "test:checklist-status": "node scripts/test-checklist-status.mjs",
     "test:checklist-response": "node scripts/test-checklist-response.mjs",

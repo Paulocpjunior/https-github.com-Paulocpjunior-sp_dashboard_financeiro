@@ -16,6 +16,8 @@ O filtro **Conferência** separa itens sem conferência salva, revisões pendent
 
 **Consultar histórico** mostra até 50 revisões recentes, com responsável, data, condições e evidência. Todas as revisões permanecem armazenadas. Vínculos existentes podem ser revisados por administrador, com evidência e controle de concorrência.
 
+O histórico indica carregamento e permite nova tentativa após erro ou 30 segundos sem resposta; isso não cancela uma escrita. Cliques simultâneos no salvamento são bloqueados. Durante a gravação, os campos ficam desabilitados; editar condições antes de salvar exige marcar novamente a confirmação de revisão. Sair da tela durante a revalidação bloqueia o início da gravação, e a transação volta a conferir a operação após a leitura. Uma gravação já enviada ao servidor pode concluir: fechar a tela não equivale a desfazer o registro. Respostas de telas encerradas não atualizam a nova tela.
+
 ## Limites e próximos passos
 
 A assinatura versão 2 inclui também nome, identificação original, CPF/CNPJ, Nosso Número, situação da linha e alertas do checklist. Alterações nesses campos exigem revalidação mesmo quando a fonte mantém a data de atualização. A ordem dos eventos e dos alertas não muda a assinatura. Após publicar esta versão, conferências com assinatura anterior aparecerão para revalidação; seus registros e históricos não são apagados nem regravados automaticamente.
