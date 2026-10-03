@@ -41,6 +41,19 @@ const events = (collection.documents || [])
   .sort((left, right) => Date.parse(right.receivedAt || right.updatedAt || 0) - Date.parse(left.receivedAt || left.updatedAt || 0));
 const failures = events.filter(isFailure);
 const successes = events.filter(isSuccess);
+// A later success for the exact submission resolves the processing incident,
+// not the financial integrity of the resulting transaction.
+const latestSuccess = new Map();
+for (const event of successes) {
+  const id = String(event.submissionId || '').trim();
+  const at = asDate(event.receivedAt || event.updatedAt);
+  if (id && at && (!latestSuccess.has(id) || at > latestSuccess.get(id))) latestSuccess.set(id, at);
+}
+const recoveryDate = event => {
+  const at = latestSuccess.get(String(event.submissionId || '').trim());
+  return at && at > asDate(event.receivedAt || event.updatedAt) ? at : '';
+};
+const recoveredFailures = failures.filter(event => recoveryDate(event));
 const byReason = failures.reduce((counts, event) => {
   const reason = String(event.error || event.reason || event.action || 'sem_motivo');
   counts[reason] = (counts[reason] || 0) + 1;
@@ -56,6 +69,8 @@ const report = {
     events: events.length,
     successful: successes.length,
     failed: failures.length,
+    recoveredFailures: recoveredFailures.length,
+    unresolvedFailures: failures.length - recoveredFailures.length,
     unclassified: events.length - successes.length - failures.length,
   },
   failuresByReason: byReason,
@@ -71,6 +86,7 @@ const report = {
     dueDate: event.dueDate || '',
     amount: Number(event.amount || 0),
     docPago: event.docPago || '',
+    recoveredAt: recoveryDate(event),
   })),
 };
 
@@ -87,6 +103,9 @@ writeFileSync(mdPath, [
   `- Eventos analisados: ${report.counts.events}`,
   `- Sucessos: ${report.counts.successful}`,
   `- Falhas: ${report.counts.failed}`,
+  `- Falhas com sucesso posterior: ${report.counts.recoveredFailures}`,
+  `- Falhas sem sucesso posterior: ${report.counts.unresolvedFailures}`,
+  '- Sucesso posterior indica recuperação do processamento; não certifica os dados financeiros.',
   `- Sem classificacao: ${report.counts.unclassified}`, '',
   '## Falhas por motivo', '',
   ...(Object.keys(byReason).length ? Object.entries(byReason).map(([reason, count]) => `- ${reason}: ${count}`) : ['- Nenhuma']), '',
@@ -95,7 +114,7 @@ writeFileSync(mdPath, [
   '|---|---|---|---|---|---:|---|',
   ...(report.failures.length ? report.failures.map(event => `| ${event.receivedAt} | ${event.submissionId || '-'} | ${event.action || '-'} | ${(event.error || event.reason || '-').replace(/\|/g, '/')} | ${event.movimentacao.replace(/\|/g, '/')} | ${event.amount.toFixed(2)} | ${event.docPago || '-'} |`) : ['| - | - | - | Nenhuma | - | 0.00 | - |']), '',
 ].join('\n'));
-const columns = ['eventId', 'receivedAt', 'submissionId', 'action', 'status', 'reason', 'error', 'movimentacao', 'dueDate', 'amount', 'docPago'];
+const columns = ['eventId', 'receivedAt', 'submissionId', 'action', 'status', 'reason', 'error', 'movimentacao', 'dueDate', 'amount', 'docPago', 'recoveredAt'];
 writeFileSync(csvPath, `${columns.join(',')}\n${report.failures.map(event => columns.map(column => csvEscape(event[column])).join(',')).join('\n')}\n`);
 
 console.log(JSON.stringify({ jsonPath, mdPath, csvPath, counts: report.counts, failuresByReason: byReason }, null, 2));

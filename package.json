@@ -25,6 +25,7 @@
     "audit:integrity:fresh": "npm run backup:firestore && npm run audit:integrity",
     "audit:integrity:fail-high": "node scripts/audit-finance-integrity.mjs --fail-on high",
     "test:integrity": "node scripts/test-finance-integrity-audit.mjs",
+    "test:jotform-events": "node scripts/test-jotform-events-audit.mjs",
     "registry:clients": "node scripts/build-client-registry.mjs",
     "registry:clients:apply": "node scripts/build-client-registry.mjs --apply-registry",
     "registry:clients:backfill": "node scripts/build-client-registry.mjs --apply-registry --apply-transactions",
