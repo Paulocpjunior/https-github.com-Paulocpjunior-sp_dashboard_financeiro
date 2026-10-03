@@ -3,10 +3,12 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const DEFAULT_PROJECT_ID = 'gen-lang-client-0888019226';
 const DEFAULT_DATABASE = '(default)';
-const DEFAULT_COLLECTIONS = ['users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents'];
+export const DEFAULT_COLLECTIONS = ['users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents', 'billingMonthlyReviews', 'billingIdentityLinks'];
+const REVISIONED_COLLECTIONS = new Set(['billingMonthlyReviews', 'billingIdentityLinks']);
 const REPORT_DIR = 'migration-backups';
 
 const usage = `
@@ -20,6 +22,7 @@ Options:
   --help                Show this help.
 
 This script exports Firestore data to local JSON only. It does not modify Firebase.
+Billing review and identity-link collections include their revisions, including histories whose parent document is missing.
 `;
 
 const parseArgs = (argv) => {
@@ -76,6 +79,7 @@ const parseFirestoreDocument = (document) => ({
   path: document.name,
   createTime: document.createTime,
   updateTime: document.updateTime,
+  ...(!document.createTime && !document.updateTime ? { missing: true } : {}),
   data: Object.fromEntries(
     Object.entries(document.fields || {}).map(([key, value]) => [key, parseFirestoreValue(value)]),
   ),
@@ -102,13 +106,15 @@ const requestJson = async (url, token) => {
   return response.json();
 };
 
-const listCollection = async (projectId, collection, token) => {
+export const listCollection = async (projectId, collection, token, { showMissing = false } = {}) => {
   const docs = [];
   let pageToken = '';
   do {
     const params = new URLSearchParams({ pageSize: '300' });
+    if (showMissing) params.set('showMissing', 'true');
     if (pageToken) params.set('pageToken', pageToken);
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${encodeURIComponent(DEFAULT_DATABASE)}/documents/${collection}?${params.toString()}`;
+    const collectionPath = collection.split('/').map(encodeURIComponent).join('/');
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${encodeURIComponent(DEFAULT_DATABASE)}/documents/${collectionPath}?${params.toString()}`;
     const payload = await requestJson(url, token);
     docs.push(...(payload.documents || []).map(parseFirestoreDocument));
     pageToken = payload.nextPageToken || '';
@@ -117,6 +123,27 @@ const listCollection = async (projectId, collection, token) => {
   docs.sort((left, right) => left.id.localeCompare(right.id, 'pt-BR'));
   return docs;
 };
+
+export async function collectBackupCollections(projectId, names, token, list = listCollection) {
+  const collections = new Map();
+  for (const name of names) {
+    const revisioned = REVISIONED_COLLECTIONS.has(name);
+    const parents = await list(projectId, name, token, { showMissing: revisioned });
+    const documents = parents.filter(document => !document.missing);
+    collections.set(name, { name, count: documents.length, documents });
+    if (revisioned) {
+      for (const parent of parents) {
+        // Use the original document path, not the display id (which is decoded).
+        const prefix = `projects/${projectId}/databases/${DEFAULT_DATABASE}/documents/`;
+        if (!parent.path.startsWith(`${prefix}${name}/`)) throw new Error('Unexpected billing parent path');
+        const revisionPath = `${parent.path.slice(prefix.length)}/revisions`;
+        const revisions = await list(projectId, revisionPath, token);
+        collections.set(revisionPath, { name: revisionPath, count: revisions.length, documents: revisions });
+      }
+    }
+  }
+  return [...collections.values()];
+}
 
 const buildMarkdown = (backup) => {
   const lines = [
@@ -148,15 +175,7 @@ const main = async () => {
   mkdirSync(dirname(outPath), { recursive: true });
 
   const token = getAccessToken();
-  const collections = [];
-  for (const collection of args.collections) {
-    const documents = await listCollection(args.projectId, collection, token);
-    collections.push({
-      name: collection,
-      count: documents.length,
-      documents,
-    });
-  }
+  const collections = await collectBackupCollections(args.projectId, args.collections, token);
 
   const backup = {
     generatedAt: new Date().toISOString(),
@@ -180,7 +199,7 @@ const main = async () => {
   }
 };
 
-main().catch((error) => {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch((error) => {
   console.error(error.message || error);
   process.exit(1);
 });
