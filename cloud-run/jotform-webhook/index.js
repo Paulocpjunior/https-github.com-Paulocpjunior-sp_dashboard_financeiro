@@ -1,6 +1,7 @@
 const express = require('express');
 const { google } = require('googleapis');
 const multer = require('multer');
+const { assertExistingIdentity } = require('./identity-guard');
 
 const app = express();
 const upload = multer();
@@ -9,7 +10,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'gen-lang-client-0888019226';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-const WEBHOOK_VERSION = '6.14-explicit-zero-honorarios';
+const WEBHOOK_VERSION = '6.15-identity-conflict-guard';
 const JOTFORM_FORM_ID = process.env.JOTFORM_FORM_ID || '210020525580845';
 require('./checklist').installChecklistRoute(app, google, PROJECT_ID);
 
@@ -1066,6 +1067,12 @@ app.post('/', upload.any(), async (req, res) => {
       const existingArr = await queryBySubmissionId(submissionId, fallbackLookup);
 
       if (existingArr && existingArr.length > 0) {
+        // Must precede both the primary patch and any duplicate exclusion.
+        assertExistingIdentity(existingArr, {
+          kind: isContasReceber ? 'receber' : 'pagar',
+          submissionId,
+          identificacaoUnica: raw.q284_identificacaoUnica,
+        });
         const orderedExistingArr = sortRowsForCanonicalUpdate(existingArr, fallbackLookup || {});
         const primary = orderedExistingArr[0];
         const duplicates = orderedExistingArr.slice(1);

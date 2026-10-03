@@ -20,7 +20,7 @@ const pending = extractContasPagar({
   q284_identificacaoUnica: 'SP-CX46267',
 });
 
-assert.equal(WEBHOOK_VERSION, '6.14-explicit-zero-honorarios');
+assert.equal(WEBHOOK_VERSION, '6.15-identity-conflict-guard');
 assert.equal(pending.docPago, 'NÃO');
 assert.equal(pending.valorNum, 449.98);
 assert.equal(pending.dataLancISO, '2026-08-03');
@@ -84,3 +84,4 @@ assert.ok(source.includes("fetchOrdered('updated_at')"));
 assert.ok(source.includes('function payloadText(value)'));
 
 console.log('webhook regression tests: ok');
+require('./test-identity-guard');
