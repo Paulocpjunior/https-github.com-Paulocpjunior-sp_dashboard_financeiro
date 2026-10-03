@@ -1,5 +1,18 @@
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const workflow = readFileSync('.github/workflows/firebase-deploy.yml', 'utf8');
+assert.match(workflow, /workflow_dispatch:\s+inputs:\s+approved_commit:/);
+const steps = workflow.split(/\n {6}- name: /);
+for (const marker of ['publish-billing-review-rules.py', 'action-hosting-deploy@', 'activate-checklist-route.py']) {
+  const matches = steps.filter(step => step.includes(marker));
+  assert.equal(matches.length, 1, `Etapa de publicação ausente ou duplicada: ${marker}`);
+  assert.match(matches[0], /if: github.event_name == 'workflow_dispatch' && github.ref == 'refs\/heads\/main'\n/,
+    `Push não pode executar publicação: ${marker}`);
+  assert.ok(matches[0].includes("FINANCEIRO_APPROVED_COMMIT: '${{ inputs.approved_commit }}'"),
+    `Publicação deve receber o SHA autorizado: ${marker}`);
+}
 
 const valid = spawnSync(process.execPath, ['scripts/guard-production.mjs', '--check'], { encoding: 'utf8' });
 assert.equal(valid.status, 0, valid.stderr);
