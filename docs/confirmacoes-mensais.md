@@ -12,6 +12,8 @@
 
 Em Faturamento, gerar a lista mensal e abrir **Registrar conferência** ou **Conferir identificação**. Revisar propostas e evidência, preencher condições e salvar como revisão pendente ou obrigação confirmada. Informações das fontes são novamente consultadas antes de salvar; diferenças exigem recarregar. Ao gerar nova lista, assinatura diferente sinaliza revalidação; registros cujo item desapareceu também são contabilizados como pendentes.
 
+O filtro **Conferência** separa itens sem conferência salva, revisões pendentes, obrigações confirmadas e fontes alteradas que exigem revalidação. Funciona junto da busca e da situação, começando com todos os itens. Mudar o filtro retorna à primeira página; os totais e as revisões sem item correspondente não são filtrados nem apagados. O filtro não registra decisões ou cobranças.
+
 **Consultar histórico** mostra até 50 revisões recentes, com responsável, data, condições e evidência. Todas as revisões permanecem armazenadas. Vínculos existentes podem ser revisados por administrador, com evidência e controle de concorrência.
 
 ## Limites e próximos passos

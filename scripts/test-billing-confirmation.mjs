@@ -5,6 +5,23 @@ if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const server=await createServer({server:{middlewareMode:true},optimizeDeps:{noDiscovery:true},appType:'custom',logLevel:'error'});
 try {
  const {proposeChecklistTerms:propose,validateMonthlyTerms:validate,fingerprintMonthlyRow:fingerprint}=await server.ssrLoadModule('/utils/billingConfirmation.ts');
+ const {billingReviewStatus:reviewStatus,billingReviewStatusLabels:statusLabels,matchesBillingReviewFilter:matches}=await server.ssrLoadModule('/utils/billingReviewStatus.ts');
+ const savedStatus={decision:'charge',sourceFingerprint:'a'.repeat(64)};
+ assert.equal(reviewStatus(undefined,'a'.repeat(64)),'unreviewed');
+ assert.equal(reviewStatus(savedStatus,'a'.repeat(64)),'confirmed');
+ assert.equal(reviewStatus({...savedStatus,decision:'needs_review'},'a'.repeat(64)),'pending');
+ for(const decision of ['charge','needs_review']) {
+   for(const fingerprint of ['b'.repeat(64),'',undefined]) assert.equal(reviewStatus({...savedStatus,decision},fingerprint),'revalidate');
+ }
+ assert.equal(reviewStatus({...savedStatus,sourceFingerprint:''},''),'revalidate');
+ assert.deepEqual(Object.keys(statusLabels).sort(),['confirmed','pending','revalidate','unreviewed']);
+ const filterRow={identity:'number:123',client:'Empresa Teste',situation:'lancamento_localizado'};
+ const filters={status:'confirmed',situation:'lancamento_localizado',search:'EMPRESA'};
+ assert.equal(matches(filterRow,savedStatus,savedStatus.sourceFingerprint,filters),true);
+ assert.equal(matches(filterRow,savedStatus,savedStatus.sourceFingerprint,{...filters,search:'number:123'}),true);
+ for(const patch of [{status:'pending'},{situation:'possivel_ausencia'},{search:'Inexistente'}]) assert.equal(matches(filterRow,savedStatus,savedStatus.sourceFingerprint,{...filters,...patch}),false);
+ assert.equal(matches(filterRow,undefined,undefined,{status:'',situation:'',search:''}),true,'padrão preserva todos os itens');
+ assert.equal(matches(filterRow,savedStatus,'changed',{status:'revalidate',situation:'',search:''}),true);
  const proposal=propose('<div>Valor da mensalidade: R$ 1.250,50</div><div>CNPJ: 11.111.111/0001-11</div><div>Responsabilidade a partir de <b>01/10/2026</b>. Cobrar dia 10. Última cobrança em 10/09/2026.</div>');
  assert.equal(proposal.amounts[0].value,1250.5);assert.equal(proposal.startDates[0].value,'2026-10-01');assert.equal(proposal.documents[0].value,'11111111000111');assert.equal(proposal.automaticallyConfirmed,false);
  assert.equal(propose('Mensalidade: R$ 500,00. Honorários: R$ 600,00.').amounts.length,2,'não escolher valor divergente');
