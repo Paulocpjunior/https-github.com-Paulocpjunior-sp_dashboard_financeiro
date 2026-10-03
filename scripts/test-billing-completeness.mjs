@@ -58,6 +58,23 @@ try {
     return failedPage === 1 ? { ok: true, json: async () => Array.from({ length: 1000 }, (_, i) => ({ readTime, document: { name: root+i, fields: {} } })) }
       : { ok: false, status: 403 };
   } }), /permissão/, 'falha posterior nunca entrega parte da base');
+  const readRows = (rows, overrides = {}) => readBillingReview({projectId:'test',token:'synthetic-only',checkSession(){},fetcher:async()=>({ok:true,json:async()=>rows}),...overrides});
+  assert.equal((await readRows([{readTime}])).documentCount,0,'resposta vazia explícita é válida');
+  for (const rows of [[{readTime},{error:{message:'partial'}}],[{readTime,error:null}],[{readTime,document:null}],[{readTime,document:[]}],[{readTime},{}],[{readTime},null],[{readTime: 'invalid'}]]) {
+    await assert.rejects(readRows(rows),/incompleta|versão/,'resposta incompleta não comprova lista vazia');
+  }
+  for (const name of [root,root+'parent/children/nested',root.replace('/transactions/','/users/')+'1']) {
+    await assert.rejects(readRows([{readTime,document:{name,fields:{}}}]),/Paginação/);
+  }
+  await assert.rejects(readRows([{readTime,document:{name:root+'1',fields:{}}},{readTime,document:{name:root+'1',fields:{}}}]),/Paginação/);
+  const cancelled = new AbortController(); cancelled.abort();
+  let requests = 0;
+  await assert.rejects(readRows([{readTime}],{signal:cancelled.signal,fetcher:async()=>{requests++;throw new Error('não deve consultar');}}),{name:'AbortError'});
+  assert.equal(requests,0);
+  const duringBody = new AbortController();
+  await assert.rejects(readRows([],{signal:duringBody.signal,fetcher:async()=>({ok:true,json:async()=>{duringBody.abort();return [{readTime}];}})}),{name:'AbortError'});
+  let sessionChanged = false;
+  await assert.rejects(readRows([],{checkSession(){if(sessionChanged)throw new Error('Sessão alterada');},fetcher:async()=>({ok:true,json:async()=>{sessionChanged=true;return [{readTime}];}})}),/Sessão alterada/);
   console.log('OK: conferência mensal cobre omissão, identificação, valores, datas, exclusão, duplicidade e ausência de prova contratual/emissão.');
 } finally {
   await server.close();
