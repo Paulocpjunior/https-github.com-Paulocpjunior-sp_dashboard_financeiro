@@ -22,6 +22,17 @@ try {
  const a=await fingerprint(row,'2026-10','dueDate'); assert.equal(a.length,64);
  assert.notEqual(a,await fingerprint({...row,financialSource:'snapshot2'},'2026-10','dueDate'));
  assert.notEqual(a,await fingerprint(row,'2026-11','dueDate'));
+ const checklist={submissionId:'synthetic-1',identity:'number:123',document:'11111111000111',clientNumber:'123',client:'Teste',status:'entrada',amount:500,entryDate:'2026-10-01',exitDate:null,suspensionDate:null,notes:'Contrato',sourceUpdatedAt:'2026-10-01 10:00:00',sourceCreatedAt:'2026-10-01 10:00:00',issues:['Aviso B','Aviso A'],observationsRequireReview:false,contractValidated:false};
+ const sourceRow={...row,situation:'lancamento_localizado',checklist:[checklist,{...checklist,submissionId:'synthetic-2'}]};
+ const before=JSON.stringify(sourceRow);
+ const baseline=await fingerprint(sourceRow,'2026-10','dueDate');
+ for(const patch of [{identity:'number:456'},{document:'22222222000122'},{clientNumber:'456'},{client:'Outro cliente'},{issues:['Novo alerta']},{observationsRequireReview:true}]) {
+   assert.notEqual(baseline,await fingerprint({...sourceRow,checklist:[{...checklist,...patch},sourceRow.checklist[1]]},'2026-10','dueDate'),'alteração cadastral ou de alerta exige revalidação mesmo sem mudança em updatedAt');
+ }
+ assert.notEqual(baseline,await fingerprint({...sourceRow,client:'Nome atualizado'},'2026-10','dueDate'));
+ assert.notEqual(baseline,await fingerprint({...sourceRow,situation:'identificacao'},'2026-10','dueDate'));
+ assert.equal(baseline,await fingerprint({...sourceRow,checklist:[...sourceRow.checklist].reverse().map(r=>({...r,issues:[...r.issues].reverse()}))},'2026-10','dueDate'),'ordem da resposta e dos avisos não altera assinatura');
+ assert.equal(JSON.stringify(sourceRow),before,'assinatura não modifica as fontes');
  const {buildBillingObligations:build}=await server.ssrLoadModule('/utils/billingObligations.ts');
  const tx={id:'old',client:'Teste',clientNumber:'',cpfCnpj:'',dueDate:'2026-09-10',date:'2026-09-01',movement:'Entrada',type:'Contas a Receber',status:'Pago',valorOriginal:500};
  const result=build([tx],[],'2026-10','dueDate',[{sourceIdentity:'unidentified:old',targetIdentity:'number:123',evidence:'Documento',revision:1}]);

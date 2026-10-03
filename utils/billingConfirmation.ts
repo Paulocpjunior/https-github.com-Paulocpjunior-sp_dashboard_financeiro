@@ -41,9 +41,15 @@ export function validateMonthlyTerms(value: MonthlyTerms, isAdmin: boolean) {
   return errors;
 }
 export async function fingerprintMonthlyRow(row: ObligationReviewRow, month: string, field: string) {
-  const text=JSON.stringify({month,field,identity:row.identity,previousAmount:row.previousAmount,currentAmount:row.currentAmount,
+  const text=JSON.stringify({fingerprintVersion:2,month,field,identity:row.identity,client:row.client,situation:row.situation,previousAmount:row.previousAmount,currentAmount:row.currentAmount,
     previousIds:[...row.previousIds].sort(),currentIds:[...row.currentIds].sort(),
-    events:[...row.checklist].sort((a,b)=>a.submissionId.localeCompare(b.submissionId)).map(r=>[r.submissionId,r.status,r.amount,r.entryDate,r.exitDate,r.suspensionDate,r.notes,r.sourceUpdatedAt,r.sourceCreatedAt]),
+    // Include identity and review warnings even when amounts, dates and the
+    // source's updatedAt remain unchanged. Sort copies, never source arrays.
+    events:[...row.checklist].sort((a,b)=>a.submissionId.localeCompare(b.submissionId)).map(r=>[
+      r.submissionId,r.identity,r.document,r.clientNumber,r.client,r.status,r.amount,
+      r.entryDate,r.exitDate,r.suspensionDate,r.notes,r.sourceUpdatedAt,r.sourceCreatedAt,
+      [...r.issues].sort(),r.observationsRequireReview,r.contractValidated,
+    ]),
     financialSource:row.financialSource, issues:[...row.issues].sort()});
   const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
   return [...new Uint8Array(bytes)].map(n=>n.toString(16).padStart(2,'0')).join('');
