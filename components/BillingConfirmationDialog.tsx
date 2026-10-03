@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ObligationReviewRow } from '../utils/billingObligations';
 import { proposeChecklistTerms, validateMonthlyTerms, type MonthlyTerms, type SavedMonthlyTerms } from '../utils/billingConfirmation';
 import { checklistEvent, checklistEventLabels } from '../utils/checklistStatus';
-import { saveMonthlyTerms, saveIdentityLink, fetchMonthlyHistory, type IdentityLink } from '../services/billingConfirmationService';
+import { saveMonthlyTerms, saveIdentityLink, fetchMonthlyHistoryPage, type MonthlyHistoryCursor, type IdentityLink } from '../services/billingConfirmationService';
 import { createBillingOperationGate } from '../utils/billingAsync';
 import { auth } from '../services/firebaseConfig';
 
@@ -20,6 +20,7 @@ export default function BillingConfirmationDialog({row,month,fingerprint,saved,i
   const [history,setHistory]=useState<SavedMonthlyTerms[]>([]);
   const [historyBusy,setHistoryBusy]=useState(false);
   const [historyLoaded,setHistoryLoaded]=useState(false);
+  const [historyCursor,setHistoryCursor]=useState<MonthlyHistoryCursor|null>(null);
   const [historyError,setHistoryError]=useState('');
   const saveGate=useRef(createBillingOperationGate());
   const historyGate=useRef(createBillingOperationGate());
@@ -29,10 +30,12 @@ export default function BillingConfirmationDialog({row,month,fingerprint,saved,i
   },[]);
   const [checked,setChecked]=useState(false);const [busy,setBusy]=useState(false);const [error,setError]=useState('');
   const update=(key:keyof MonthlyTerms,value:unknown)=>{setTerms(t=>({...t,[key]:value}));setChecked(false);};
-  const loadHistory=async()=>{
+  const loadHistory=async(older=false)=>{
+    if(older&&!historyCursor)return;
     const operation=historyGate.current.start();if(!operation)return;
-    setHistoryBusy(true);setHistoryError('');setHistoryLoaded(false);setHistory([]);
-    try{const result=await fetchMonthlyHistory(month,row.identity);if(operation.isCurrent()){setHistory(result);setHistoryLoaded(true);}}
+    setHistoryBusy(true);setHistoryError('');
+    if(!older){setHistoryLoaded(false);setHistory([]);setHistoryCursor(null);}
+    try{const result=await fetchMonthlyHistoryPage(month,row.identity,older?historyCursor:null);if(operation.isCurrent()){setHistory(previous=>older?[...previous,...result.items]:result.items);setHistoryCursor(result.nextCursor);setHistoryLoaded(true);}}
     catch(e){if(operation.isCurrent())setHistoryError(e instanceof Error?e.message:'Não foi possível consultar o histórico.');}
     finally{if(operation.isCurrent())setHistoryBusy(false);operation.finish();}
   };
@@ -52,7 +55,7 @@ export default function BillingConfirmationDialog({row,month,fingerprint,saved,i
     <p className="text-sm">{row.identity}. Registro separado dos lançamentos. A confirmação registra obrigação para esta competência; não emite boleto nem aprova dispensa.</p>
     {saved&&<p className="text-sm">Última revisão: {saved.revision}, responsável {saved.actorUid}. {saved.sourceFingerprint!==fingerprint?'As fontes mudaram: a confirmação anterior exige nova revisão.':'Fontes correspondem à revisão salva.'}</p>}
     <details><summary>Propostas extraídas das observações — precisam de revisão</summary>{proposals.map(p=><div key={p.id} className="text-sm py-2"><strong>Resposta {p.id}</strong>{[...p.amounts,...p.documents,...p.startDates,...p.lastDates,...p.days].map((x,i)=><p key={i}>{x.excerpt}</p>)}</div>)}<p className="text-sm">Valor anterior de referência: {row.previousAmount.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}. Valores divergentes não são escolhidos automaticamente.</p></details>
-    {saved&&<div className="text-sm" aria-busy={historyBusy}><button type="button" disabled={historyBusy||busy} className="underline disabled:opacity-50" onClick={()=>void loadHistory()}>{historyBusy?'Consultando histórico...':'Consultar histórico (até 50 revisões recentes)'}</button>{historyError&&<p role="alert" className="text-red-600">{historyError}</p>}{historyLoaded&&!history.length&&<p role="status">Nenhuma revisão retornada. Isso não comprova inexistência de histórico; confira o registro antes de concluir.</p>}{history.map(h=><details key={h.revision}><summary>Revisão {h.revision} • {h.decision==='charge'?'Obrigação confirmada':'Revisão pendente'} • {h.actorUid}</summary><p>Valor: {h.amount??'Não informado'}; vencimento: {h.dueDate||'Não informado'}.</p><p>{h.evidence}</p><p>Data: {(h.updatedAt as {seconds?:number})?.seconds?new Date(Number((h.updatedAt as {seconds:number}).seconds)*1000).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'Indisponível'}</p></details>)}</div>}
+    {saved&&<div className="text-sm" aria-busy={historyBusy}><button type="button" disabled={historyBusy||busy} className="underline disabled:opacity-50" onClick={()=>void loadHistory()}>{historyBusy?'Consultando histórico...':'Consultar histórico (50 revisões por página)'}</button>{historyError&&<p role="alert" className="text-red-600">{historyError}</p>}{historyLoaded&&!history.length&&<p role="status">Nenhuma revisão retornada. Isso não comprova inexistência de histórico; confira o registro antes de concluir.</p>}{history.map(h=><details key={h.revision}><summary>Revisão {h.revision} • {h.decision==='charge'?'Obrigação confirmada':'Revisão pendente'} • {h.actorUid}</summary><p>Valor: {h.amount??'Não informado'}; vencimento: {h.dueDate||'Não informado'}.</p><p>{h.evidence}</p><p>Data: {(h.updatedAt as {seconds?:number})?.seconds?new Date(Number((h.updatedAt as {seconds:number}).seconds)*1000).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}):'Indisponível'}</p></details>)}{historyLoaded&&history.length>0&&<p role="status">{history.length} revisões carregadas. {historyCursor?'Há revisões anteriores.':'Fim das revisões retornadas nesta consulta.'}</p>}{historyCursor&&<button type="button" disabled={historyBusy||busy} className="underline disabled:opacity-50" onClick={()=>void loadHistory(true)}>Carregar revisões anteriores</button>}</div>}
     <fieldset disabled={busy} className="min-w-0 space-y-3">
     {unresolved?<div className="space-y-3"><p className="text-sm">Vincular somente com evidência inequívoca. Números associados a documentos diferentes exigem correção na fonte.</p><label className="block text-sm">Identificação comprovada<select className={input} value={target.startsWith('number:')?'number':'doc'} onChange={e=>setTarget(e.target.value+':'+(target.split(':')[1]||''))}><option value="doc">CPF / CNPJ</option><option value="number">Nosso Número</option></select><input className={input} value={target.split(':')[1]||''} onChange={e=>setTarget((target.startsWith('number:')?'number:':'doc:')+e.target.value.replace(/\D/g,''))} placeholder="Informe a identificação comprovada"/></label><label className="block text-sm">Evidência do vínculo<textarea className={input} maxLength={4000} value={linkEvidence} onChange={e=>setLinkEvidence(e.target.value)}/></label></div>:<>
       <div className="grid sm:grid-cols-2 gap-3">

@@ -1,4 +1,4 @@
-import { collection, doc, getDocsFromServer, query, where, orderBy, limit, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocsFromServer, query, where, orderBy, limit, startAfter, runTransaction, serverTimestamp, type QueryDocumentSnapshot, type DocumentData, type QueryConstraint } from 'firebase/firestore';
 import { db, auth } from './firebaseConfig';
 import { validateMonthlyTerms, monthlyTermsId, type MonthlyTerms, type SavedMonthlyTerms } from '../utils/billingConfirmation';
 import { withBillingReadTimeout as limited } from '../utils/billingAsync';
@@ -39,8 +39,18 @@ async function saveRevision(name:string,id:string,value:object,expectedRevision:
 }
 
 export async function fetchMonthlyHistory(month:string,identity:string) {
+  return (await fetchMonthlyHistoryPage(month,identity)).items;
+}
+
+export interface MonthlyHistoryCursor { month:string; identity:string; snapshot:QueryDocumentSnapshot<DocumentData> }
+export async function fetchMonthlyHistoryPage(month:string,identity:string,cursor:MonthlyHistoryCursor|null=null) {
+  if(cursor&&(cursor.month!==month||cursor.identity!==identity))throw new Error('Histórico de outra competência ou identificação. Consulte novamente.');
   const user=await actor();
-  const snapshot=await limited(getDocsFromServer(query(collection(db,'billingMonthlyReviews',monthlyTermsId(month,identity),'revisions'),orderBy('revision','desc'),limit(50))));
+  const constraints:QueryConstraint[]=[orderBy('revision','desc')];
+  if(cursor)constraints.push(startAfter(cursor.snapshot));
+  constraints.push(limit(51));
+  const snapshot=await limited(getDocsFromServer(query(collection(db,'billingMonthlyReviews',monthlyTermsId(month,identity),'revisions'),...constraints)));
   if(auth.currentUser!==user)throw new Error('Sessão alterada.');
-  return snapshot.docs.map(d=>d.data() as SavedMonthlyTerms);
+  const page=snapshot.docs.slice(0,50);
+  return {items:page.map(d=>d.data() as SavedMonthlyTerms),nextCursor:snapshot.docs.length>50?{month,identity,snapshot:page[page.length-1]}:null};
 }

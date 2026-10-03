@@ -20,9 +20,10 @@ const server = await createServer({server:{middlewareMode:true},ssr:{noExternal:
       export const collection=(...args)=>({kind:'collection',args});
       export const doc=(...args)=>({kind:'doc',args,id:'synthetic-audit'});
       export const query=(...args)=>({args});
-      export const where=(...args)=>args, orderBy=(...args)=>args, limit=(...args)=>args;
+      export const where=(...args)=>args, orderBy=(...args)=>({orderBy:args}), limit=(...args)=>({limit:args});
+      export const startAfter=(snapshot)=>({startAfter:snapshot});
       export const serverTimestamp=()=>({syntheticServerTime:true});
-      export async function getDocsFromServer(){return state.historyRead();}
+      export async function getDocsFromServer(request){return state.historyRead(request);}
       export async function runTransaction(db,callback){
         state.transactions++;
         const staged=[];
@@ -33,7 +34,7 @@ const server = await createServer({server:{middlewareMode:true},ssr:{noExternal:
   },
 }]});
 try {
-  const {saveMonthlyTerms,saveIdentityLink,fetchMonthlyHistory}=await server.ssrLoadModule('/services/billingConfirmationService.ts');
+  const {saveMonthlyTerms,saveIdentityLink,fetchMonthlyHistory,fetchMonthlyHistoryPage}=await server.ssrLoadModule('/services/billingConfirmationService.ts');
   const {createBillingOperationGate}=await server.ssrLoadModule('/utils/billingAsync.ts');
   const terms={month:'2026-10',identity:'number:123',client:'Synthetic',decision:'charge',amount:500,dueDate:'2026-10-10',startDate:'2026-10-01',billingDay:10,lastChargeDate:'',evidence:'Synthetic evidence',event:'entrada',sourceFingerprint:'a'.repeat(64)};
   const link={sourceIdentity:'unidentified:synthetic',targetIdentity:'number:123',evidence:'Synthetic evidence'};
@@ -65,5 +66,37 @@ try {
   assert.deepEqual(await fetchMonthlyHistory('2026-10','number:123'),[state.writes[1].value]);
   state.historyRead=async()=>{state.auth.currentUser={uid:'new-reader'};return {docs:[]};};
   await assert.rejects(fetchMonthlyHistory('2026-10','number:123'),/Sessão alterada/);
+  const snapshots=Array.from({length:120},(_,i)=>({id:`audit-${120-i}`,data:()=>({...terms,revision:120-i})}));
+  let reads=0;
+  state.historyRead=async request=>{
+    reads++;
+    assert.deepEqual(request.args.find(c=>c.orderBy)?.orderBy,['revision','desc']);
+    assert.deepEqual(request.args.find(c=>c.limit)?.limit,[51]);
+    const cursor=request.args.find(c=>c.startAfter)?.startAfter;
+    const offset=cursor?snapshots.indexOf(cursor)+1:0;
+    return {docs:snapshots.slice(offset,offset+51)};
+  };
+  const firstPage=await fetchMonthlyHistoryPage('2026-10','number:123');
+  assert.equal(firstPage.items.length,50);assert.equal(firstPage.nextCursor.snapshot,snapshots[49]);
+  const readCount=reads;
+  await assert.rejects(fetchMonthlyHistoryPage('2026-11','number:123',firstPage.nextCursor),/outra competência/);
+  await assert.rejects(fetchMonthlyHistoryPage('2026-10','number:456',firstPage.nextCursor),/outra competência/);
+  assert.equal(reads,readCount,'cursor de outro cliente/mês não consulta a base');
+  const pagedReader=state.historyRead;
+  state.historyRead=async()=>{throw new Error('Falha de página simulada');};
+  await assert.rejects(fetchMonthlyHistoryPage('2026-10','number:123',firstPage.nextCursor),/Falha de página/);
+  assert.equal(firstPage.items.length,50,'falha não modifica página anterior');
+  state.historyRead=pagedReader;
+  // A new latest revision between requests must not duplicate or skip old rows.
+  snapshots.unshift({id:'audit-121',data:()=>({...terms,revision:121})});
+  const secondPage=await fetchMonthlyHistoryPage('2026-10','number:123',firstPage.nextCursor);
+  const lastPage=await fetchMonthlyHistoryPage('2026-10','number:123',secondPage.nextCursor);
+  assert.equal(lastPage.nextCursor,null);
+  assert.deepEqual([...firstPage.items,...secondPage.items,...lastPage.items].map(r=>r.revision),Array.from({length:120},(_,i)=>120-i));
+  state.historyRead=async()=>({docs:snapshots.slice(0,50)});
+  assert.equal((await fetchMonthlyHistoryPage('2026-10','number:123')).nextCursor,null,'50 exatos não indicam uma página inexistente');
+  state.historyRead=async()=>({docs:[]});
+  assert.deepEqual(await fetchMonthlyHistoryPage('2026-10','number:123'),{items:[],nextCursor:null});
+  assert.equal(state.writes.length,2,'consultas paginadas não escrevem registros');
   console.log('OK: service blocks stale operations, changed sessions and revisions; successful write preserves atomic audit history (synthetic Firebase only).');
 } finally { await server.close(); delete globalThis.__billingLifecycleTest; globalThis.fetch=originalFetch; }
