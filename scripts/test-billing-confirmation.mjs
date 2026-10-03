@@ -5,6 +5,12 @@ if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const server=await createServer({server:{middlewareMode:true},optimizeDeps:{noDiscovery:true},appType:'custom',logLevel:'error'});
 try {
  const {proposeChecklistTerms:propose,validateMonthlyTerms:validate,fingerprintMonthlyRow:fingerprint}=await server.ssrLoadModule('/utils/billingConfirmation.ts');
+ const {validateBillingTask,billingTaskOverdue,billingTaskId}=await server.ssrLoadModule('/utils/billingTasks.ts');
+ const task={month:'2026-10',identity:'unidentified:synthetic',client:'Synthetic',assigneeUid:'uid',assigneeName:'Synthetic operator',deadline:'2026-10-05',state:'open',evidence:'Conferir documentos'};
+ assert.deepEqual(validateBillingTask(task),[]);assert.equal(billingTaskId(task.month,task.identity),'2026-10_unidentified:synthetic');
+ for(const patch of [{deadline:''},{deadline:'2026-02-29'},{deadline:'2026-04-31'},{assigneeUid:''},{identity:'unidentified:a/b'},{state:'paid'},{evidence:' '}])assert.ok(validateBillingTask({...task,...patch}).length);
+ assert.deepEqual(validateBillingTask({...task,deadline:'2028-02-29'}),[]);
+ assert.equal(billingTaskOverdue(task,'2026-10-05'),false);assert.equal(billingTaskOverdue(task,'2026-10-06'),true);assert.equal(billingTaskOverdue({...task,state:'done'},'2026-10-06'),false);
  const {createBillingOperationGate:gateFactory,withBillingReadTimeout:withTimeout}=await server.ssrLoadModule('/utils/billingAsync.ts');
  const gate=gateFactory();const first=gate.start();assert.ok(first);
  assert.equal(gate.start(),null,'clique duplo é bloqueado antes do próximo render');

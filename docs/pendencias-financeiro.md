@@ -10,7 +10,7 @@
 
 ## Próximas entregas, na ordem de dependência
 
-1. **Fila operacional de conferências:** acrescentar responsável e prazo definidos pelo usuário, histórico das alterações e filtros de acompanhamento. O filtro de situação já existe; atribuição e prazos ainda não. Não inventar vencimentos contratuais nem notificar colaboradores automaticamente.
+1. **Fila operacional de conferências:** implementação preparada, ainda não publicada: responsável ativo e prazo definidos pelo administrador, motivo/resultado obrigatório, conclusão/reabertura do acompanhamento, filtros de responsável/situação e histórico imutável. Usuários ativos consultam; somente administrador altera. Armazenamento em `billingFollowUps`, separado dos lançamentos, com revisões incluídas no backup. Concluir tarefa não baixa cobrança nem libera fechamento. Implantação exige testes de regras, backup das regras vigentes e autorização específica do commit. Não inventar vencimentos contratuais nem notificar colaboradores automaticamente.
 2. **Evidências de emissão e envio:** registrar referência do boleto/fatura e comprovação de envio, separadas do lançamento e da obrigação. Localizar um lançamento ou exportar CSV não comprova emissão, registro bancário ou entrega.
 3. **Dispensas documentadas:** definir motivos, evidência, vigência e aprovação administrativa antes de implementar. Saída/suspensão de cliente não elimina automaticamente cobrança ou saldo.
 4. **Fechamento mensal no servidor:** revalidar fontes, obrigações, evidências e dispensas; bloquear fechamento incompleto. Hoje a lista é preparatória e retorna `canCloseMonth: false`; não existe liberação de fechamento nesta entrega.
@@ -37,6 +37,10 @@ Paulo ou a equipe precisam confirmar os dados faltantes. Para encerrar cada item
 Evidência local: `migration-backups/payables-reviewed-post-repair-20261003T111222Z.json`. Os dados representam a auditoria de 03/10/2026; conferir novamente antes de qualquer correção futura.
 
 ## Demais itens em revisão
+
+### Dependências — análise de segurança pendente
+
+Em 03/10/2026, `npm audit` identificou 6 alertas (5 high e 1 low), incluindo propagação pela cadeia Firebase de avisos em `@grpc/grpc-js` e um aviso em `dompurify`. A contagem não representa seis falhas independentes. O impacto nos caminhos utilizados em produção ainda precisa ser avaliado. A sugestão automática inclui downgrade incompatível do Firebase; não foi aplicada. Próximo passo: identificar versões corrigidas compatíveis e validar autenticação, Firestore, PDFs e testes antes de propor publicação. Nenhuma dependência foi alterada nesta entrega da fila operacional.
 
 A auditoria de 03/10/2026 também registra 64 divergências históricas, 92 ausentes, 31 correspondências ambíguas e 21 ativos no Jotform marcados como excluídos no Firestore. Esses grupos continuam em investigação; a similaridade financeira não autoriza recriação, restauração ou associação automática.
 

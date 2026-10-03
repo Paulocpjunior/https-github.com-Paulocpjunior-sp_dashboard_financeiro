@@ -4,7 +4,7 @@ import { doc, collection, setDoc, getDoc, deleteDoc, writeBatch, serverTimestamp
 if(!process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:')&&!process.env.FIRESTORE_EMULATOR_HOST?.startsWith('localhost:'))throw new Error('Teste exige emulador isolado, nunca produção.');
 const env=await initializeTestEnvironment({projectId:'demo-financeiro-reviews',firestore:{rules:readFileSync('firestore.rules','utf8')}});
 try {
- await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'users/admin-test'),{active:true,role:'admin'});await setDoc(doc(db,'users/operator-test'),{active:true,role:'operacional'});await setDoc(doc(db,'users/inactive-test'),{active:false,role:'admin'});});
+ await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'users/admin-test'),{active:true,role:'admin'});await setDoc(doc(db,'users/operator-test'),{active:true,role:'operacional',name:'Operador sintético'});await setDoc(doc(db,'users/inactive-test'),{active:false,role:'admin'});});
  const admin=env.authenticatedContext('admin-test').firestore();const operator=env.authenticatedContext('operator-test').firestore();const inactive=env.authenticatedContext('inactive-test').firestore();
  const base={schemaVersion:1,month:'2026-10',identity:'number:123',client:'Cliente sintético',decision:'charge',amount:500,dueDate:'2026-10-10',startDate:'2026-10-01',billingDay:10,lastChargeDate:'',evidence:'Contrato sintético',event:'entrada',sourceFingerprint:'a'.repeat(64)};
  async function write(db,uid,id,data,old) {
@@ -29,5 +29,31 @@ try {
  const link=doc(admin,'billingIdentityLinks','synthetic-link');const linkAudit=doc(collection(link,'revisions'));const linkData={schemaVersion:1,sourceIdentity:'unidentified:synthetic',targetIdentity:'number:123',evidence:'Documento sintético',revision:1,auditId:linkAudit.id,actorUid:'admin-test',createdAt:serverTimestamp(),updatedAt:serverTimestamp()};const batch=writeBatch(admin);batch.set(link,linkData);batch.set(linkAudit,linkData);await assertSucceeds(batch.commit());
  await assertFails(setDoc(doc(operator,'billingIdentityLinks','operator-link'),linkData));
  await assertFails(setDoc(doc(operator,'transactions','synthetic'),{status:'Pendente'}));
+ const taskBase={schemaVersion:1,month:'2026-10',identity:'number:123',client:'Cliente sintético',assigneeUid:'operator-test',assigneeName:'Operador sintético',deadline:'2026-10-10',state:'open',evidence:'Conferir cadastro'};
+ async function taskWrite(db,uid,data=taskBase,old,id=data.month+'_'+data.identity){
+  const parent=doc(db,'billingFollowUps',id),audit=doc(collection(parent,'revisions'));
+  const record={...data,actorUid:uid,revision:(old?.revision||0)+1,auditId:audit.id,createdAt:old?.createdAt||serverTimestamp(),updatedAt:serverTimestamp()};
+  const batch=writeBatch(db);batch.set(parent,record);batch.set(audit,record);return batch.commit();
+ }
+ await assertFails(taskWrite(operator,'operator-test'));
+ await assertFails(taskWrite(inactive,'inactive-test'));
+ await assertFails(taskWrite(admin,'admin-test',{...taskBase,assigneeUid:'inactive-test'}));
+ await assertFails(taskWrite(admin,'admin-test',{...taskBase,assigneeUid:'nonexistent'}));
+ await assertFails(taskWrite(admin,'admin-test',{...taskBase,assigneeName:'Nome inventado'}));
+ await assertFails(taskWrite(admin,'admin-test',taskBase,undefined,'wrong-id'));
+ for(const deadline of ['','2026-02-29','2026-02-31','2026-04-31'])await assertFails(taskWrite(admin,'admin-test',{...taskBase,deadline}));
+ await assertSucceeds(taskWrite(admin,'admin-test',{...taskBase,deadline:'2028-02-29'}));
+ const taskRef=doc(admin,'billingFollowUps','2026-10_number:123');const taskSaved=(await getDoc(taskRef)).data();
+ await assertSucceeds(getDoc(doc(operator,'billingFollowUps','2026-10_number:123')));
+ await assertFails(getDoc(doc(inactive,'billingFollowUps','2026-10_number:123')));
+ await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'billingFollowUps','2026-10_number:123')));
+ await assertFails(taskWrite(operator,'operator-test',{...taskBase,state:'done'},taskSaved));
+ await assertFails(taskWrite(admin,'admin-test',{...taskBase,identity:'number:456'},taskSaved,'2026-10_number:123'));
+ await assertFails(setDoc(taskRef,{...taskSaved,state:'done',revision:2,updatedAt:serverTimestamp()}));
+ await assertSucceeds(taskWrite(admin,'admin-test',{...taskBase,state:'done',evidence:'Conferência concluída'},taskSaved));
+ await assertFails(taskWrite(admin,'admin-test',taskBase,taskSaved));
+ await assertFails(deleteDoc(taskRef));
+ const oldAudit=doc(admin,'billingFollowUps','2026-10_number:123','revisions',taskSaved.auditId);
+ await assertFails(deleteDoc(oldAudit));await assertFails(setDoc(oldAudit,{...taskSaved,evidence:'Alterado'}));
  console.log('OK: confirmação só por administrador; rascunho operacional; revisão atomicamente auditada; histórico imutável; dados sintéticos em projeto demo.');
 } finally {await env.cleanup();}

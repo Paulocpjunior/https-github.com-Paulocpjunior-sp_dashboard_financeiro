@@ -20,6 +20,12 @@ O histórico indica carregamento e permite nova tentativa após erro ou 30 segun
 
 ## Limites e próximos passos
 
+### Fila operacional preparada (aguardando publicação)
+
+Após gerar a lista mensal, o bloco **Acompanhamento das pendências** permite consultar por responsável e situação (em aberto, prazo ultrapassado, concluído ou todos). O prazo é de acompanhamento, não vencimento financeiro. Administradores selecionam um item da leitura, usuário ativo e data; nenhuma atribuição é automática. Alterar ou concluir exige novo motivo/resultado. Itens que desaparecem da leitura permanecem na fila para revisão.
+
+Cada salvamento na coleção independente `billingFollowUps` exige revisão esperada e grava o histórico na mesma transação. A disponibilidade do responsável é conferida novamente. Usuários ativos consultam; administradores ativos alteram; exclusão e alteração do histórico são negadas. Histórico da fila mostra 50 revisões recentes; todas são armazenadas e incluídas no backup. Não há notificações, emissão, baixa, dispensa ou fechamento associado ao acompanhamento. A publicação precisa incluir primeiro as regras específicas da nova coleção, preservando integralmente as regras anteriores, e depois a interface.
+
 A assinatura versão 2 inclui também nome, identificação original, CPF/CNPJ, Nosso Número, situação da linha e alertas do checklist. Alterações nesses campos exigem revalidação mesmo quando a fonte mantém a data de atualização. A ordem dos eventos e dos alertas não muda a assinatura. Após publicar esta versão, conferências com assinatura anterior aparecerão para revalidação; seus registros e históricos não são apagados nem regravados automaticamente.
 
 A leitura do checklist valida também o formato de cada registro, a unicidade dos submissionIds e a correspondência entre registros e contagens de avisos. Respostas incompletas ou inconsistentes não geram lista parcial. Isso não elimina registros com pendências legítimas: valores nulos, identificação ausente e alertas da fonte continuam disponíveis para revisão. A sessão é conferida novamente após a leitura do corpo da resposta. Os testes desta validação e das conferências mensais integram o CI e o predeploy, sem dispensar a autorização por commit.

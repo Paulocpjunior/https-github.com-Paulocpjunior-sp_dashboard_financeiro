@@ -7,8 +7,8 @@ import { pathToFileURL } from 'node:url';
 
 const DEFAULT_PROJECT_ID = 'gen-lang-client-0888019226';
 const DEFAULT_DATABASE = '(default)';
-export const DEFAULT_COLLECTIONS = ['users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents', 'billingMonthlyReviews', 'billingIdentityLinks'];
-const REVISIONED_COLLECTIONS = new Set(['billingMonthlyReviews', 'billingIdentityLinks']);
+export const DEFAULT_COLLECTIONS = ['users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents', 'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps'];
+const REVISIONED_COLLECTIONS = new Set(['billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps']);
 const REPORT_DIR = 'migration-backups';
 
 const usage = `

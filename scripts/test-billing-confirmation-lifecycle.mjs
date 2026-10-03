@@ -11,7 +11,7 @@ const server = await createServer({server:{middlewareMode:true},ssr:{noExternal:
   name:'isolated-billing-firebase',enforce:'pre',
   resolveId(source,importer){
     if(source==='firebase/firestore')return '\0billing-firestore';
-    if(source==='./firebaseConfig'&&importer?.endsWith('/billingConfirmationService.ts'))return '\0billing-config';
+    if(source==='./firebaseConfig'&&(importer?.endsWith('/billingConfirmationService.ts')||importer?.endsWith('/billingTaskService.ts')))return '\0billing-config';
   },
   load(id){
     if(id==='\0billing-config')return 'export const db={}; export const auth=globalThis.__billingLifecycleTest.auth;';
@@ -27,7 +27,7 @@ const server = await createServer({server:{middlewareMode:true},ssr:{noExternal:
       export async function runTransaction(db,callback){
         state.transactions++;
         const staged=[];
-        await callback({get:async()=>{await state.beforeRead();return {data:()=>state.previous};},set:(ref,value)=>staged.push({ref,value})});
+        await callback({get:async(ref)=>{await state.beforeRead();const value=ref.args[1]==='users'?state.assignee:state.previous;return {data:()=>value,exists:()=>value!==undefined};},set:(ref,value)=>staged.push({ref,value})});
         state.writes.push(...staged);
       }
     `;
@@ -98,5 +98,18 @@ try {
   state.historyRead=async()=>({docs:[]});
   assert.deepEqual(await fetchMonthlyHistoryPage('2026-10','number:123'),{items:[],nextCursor:null});
   assert.equal(state.writes.length,2,'consultas paginadas não escrevem registros');
+  const {saveBillingTask}=await server.ssrLoadModule('/services/billingTaskService.ts');
+  const task={month:'2026-10',identity:'unidentified:synthetic',client:'Synthetic',assigneeUid:'operator',assigneeName:'Old name',deadline:'2026-10-05',state:'open',evidence:'Conferir cadastro'};
+  state.assignee={active:false,name:'Current name'};
+  await assert.rejects(saveBillingTask(task,0,()=>{}),/não está ativo/);
+  assert.equal(state.writes.length,2);
+  state.assignee={active:true,status:'blocked',name:'Current name'};
+  await assert.rejects(saveBillingTask(task,0,()=>{}),/não está ativo/);
+  state.assignee={active:true,name:'Current name'};
+  await assert.rejects(saveBillingTask(task,0,()=>{throw new Error('Tela encerrada');}),/encerrada/);
+  state.previous={revision:1};await assert.rejects(saveBillingTask(task,0,()=>{}),/outro usuário/);
+  state.previous=undefined;await saveBillingTask(task,0,()=>{});
+  assert.equal(state.writes.length,4);assert.deepEqual(state.writes[2].value,state.writes[3].value);
+  assert.equal(state.writes[2].value.assigneeName,'Current name','nome vem do perfil relido');
   console.log('OK: service blocks stale operations, changed sessions and revisions; successful write preserves atomic audit history (synthetic Firebase only).');
 } finally { await server.close(); delete globalThis.__billingLifecycleTest; globalThis.fetch=originalFetch; }
