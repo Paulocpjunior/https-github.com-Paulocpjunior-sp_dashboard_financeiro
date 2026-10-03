@@ -1,4 +1,5 @@
 import { auth } from './firebaseConfig';
+import { assertChecklistResponse } from '../utils/checklistResponse';
 
 export interface ChecklistRecord {
   document?: string; sourceCreatedAt?: string | null;
@@ -23,14 +24,8 @@ export async function fetchChecklistReview(signal: AbortSignal): Promise<Checkli
   });
   if (auth.currentUser !== user) throw new Error('Sessão alterada durante a consulta.');
   const data = await response.json().catch(() => null);
+  if (auth.currentUser !== user) throw new Error('Sessão alterada durante a consulta.');
   if (!response.ok) throw new Error(data?.error || 'Leitura do checklist indisponível.');
-  const counts = ['expected','received','active','excluded','validRecords','conflictRecords','observationsToReview'];
-  if (data?.complete !== true || data?.canCloseMonth !== false || data?.formId !== '210135417457653' ||
-      !Array.isArray(data?.records) || counts.some(key => !Number.isSafeInteger(data[key]) || data[key] < 0) ||
-      data.expected !== data.received || data.active + data.excluded !== data.received ||
-      data.validRecords + data.conflictRecords !== data.active || data.records.length !== data.active ||
-      typeof data.sourceFingerprint !== 'string' || !Number.isFinite(Date.parse(data.readAt))) {
-    throw new Error('A fonte não confirmou uma leitura completa e válida.');
-  }
+  assertChecklistResponse(data);
   return data;
 }

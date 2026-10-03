@@ -18,6 +18,8 @@ Em Faturamento, gerar a lista mensal e abrir **Registrar conferência** ou **Con
 
 A assinatura versão 2 inclui também nome, identificação original, CPF/CNPJ, Nosso Número, situação da linha e alertas do checklist. Alterações nesses campos exigem revalidação mesmo quando a fonte mantém a data de atualização. A ordem dos eventos e dos alertas não muda a assinatura. Após publicar esta versão, conferências com assinatura anterior aparecerão para revalidação; seus registros e históricos não são apagados nem regravados automaticamente.
 
+A leitura do checklist valida também o formato de cada registro, a unicidade dos submissionIds e a correspondência entre registros e contagens de avisos. Respostas incompletas ou inconsistentes não geram lista parcial. Isso não elimina registros com pendências legítimas: valores nulos, identificação ausente e alertas da fonte continuam disponíveis para revisão. A sessão é conferida novamente após a leitura do corpo da resposta. Os testes desta validação e das conferências mensais integram o CI e o predeploy, sem dispensar a autorização por commit.
+
 Esta entrega não cria transações, não altera respostas Jotform, não emite boletos nem aprova dispensas. Datas e valores sem evidência suficiente continuam pendentes. A assinatura e a nova consulta são controles de revisão; não substituem a futura revalidação no servidor para fechamento mensal. Fila com prazos, dispensas aprovadas, provas de emissão/envio, trava de fechamento e sincronização incremental continuam pendentes.
 
 ## Publicação e segurança

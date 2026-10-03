@@ -68,6 +68,7 @@
     "test:billing-confirmation": "node scripts/test-billing-confirmation.mjs",
     "test:billing-obligations": "node scripts/test-billing-obligations.mjs",
     "test:checklist-status": "node scripts/test-checklist-status.mjs",
+    "test:checklist-response": "node scripts/test-checklist-response.mjs",
     "test:billing-completeness": "node scripts/test-billing-completeness.mjs",
     "test:accumulated-balances": "node scripts/test-accumulated-balances.mjs"
   },
