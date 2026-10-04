@@ -184,6 +184,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
 
           <nav className="space-y-1.5">
+            {(user?.role || "").toLowerCase() === "admin" && <a href="https://consultor-fiscal-inteligente-631239634290.us-west1.run.app/?painel=comunicacao&departamento=financeiro" target="_blank" rel="noopener noreferrer" className="w-full min-h-12 flex items-center px-4 py-3 rounded-xl text-royal-200 dark:text-slate-400 hover:bg-royal-900/50" title="Abrir administração central de comunicação (acesso de admin no CFI)">Templates e agendamentos ↗</a>}
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
