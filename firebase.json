@@ -48,6 +48,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/boleto-cloud/**",
+        "run": {
+          "serviceId": "sp-pdf-download",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "/api/billing-checklist/**",
         "run": {
           "serviceId": "jotform-webhook",

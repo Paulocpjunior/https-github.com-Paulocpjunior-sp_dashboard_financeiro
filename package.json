@@ -45,7 +45,7 @@
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
     "test:user-deletion": "node scripts/test-user-deletion.mjs",
     "test:financial-permissions": "node scripts/test-financial-permissions.mjs",
-    "test:boleto-cloud": "node scripts/test-boleto-cloud-export.mjs",
+    "test:boleto-cloud": "node scripts/test-boleto-cloud-export.mjs && node --test cloud-run/pdf-download-service/boleto-cloud.test.js",
     "normalize:transactions": "node scripts/normalize-transactions-data.mjs",
     "fix:total-cobranca": "node scripts/fix-total-cobranca-mismatches.mjs",
     "fix:total-cobranca:apply": "node scripts/fix-total-cobranca-mismatches.mjs --apply",

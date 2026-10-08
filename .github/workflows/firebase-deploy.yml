@@ -56,6 +56,8 @@ jobs:
           npm test --prefix cloud-run/jotform-webhook
           node cloud-run/jotform-webhook/test-checklist.js
           npm run test:billing-forecast
+          npm ci --prefix cloud-run/pdf-download-service
+          npm test --prefix cloud-run/pdf-download-service
           npm run test:boleto-cloud
           npm run test:dashboard-duplicates-sorting
           npm run test:data-loading
