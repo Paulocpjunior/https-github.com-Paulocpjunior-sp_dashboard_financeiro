@@ -71,6 +71,7 @@
     "test:checklist-response": "node scripts/test-checklist-response.mjs",
     "test:billing-completeness": "node scripts/test-billing-completeness.mjs",
     "test:accumulated-balances": "node scripts/test-accumulated-balances.mjs",
+    "test:payables": "node --test cloud-run/pdf-download-service/payables.test.js",
     "test:native-entries": "node --test cloud-run/pdf-download-service/native-entries.test.js && node scripts/test-native-entry-consumers.mjs"
   },
   "dependencies": {

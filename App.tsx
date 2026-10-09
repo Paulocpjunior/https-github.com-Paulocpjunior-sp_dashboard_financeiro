@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { VersionUpdateNotice } from './components/VersionUpdateNotice';
 
+const PayablesPreview = import.meta.env.DEV ? React.lazy(() => import('./pages/PayablesPreview')) : null;
 const NativeEntryPreview = import.meta.env.DEV ? React.lazy(() => import('./pages/NativeEntryPreview')) : null;
 const Login = React.lazy(() => import('./pages/Login'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -18,6 +19,7 @@ const App: React.FC = () => {
       <VersionUpdateNotice />
       <Suspense fallback={null}>
         <Routes>
+          {PayablesPreview && <Route path="/dev/pagar" element={<PayablesPreview />} />}
           {NativeEntryPreview && <Route path="/dev/lancamentos" element={<NativeEntryPreview />} />}
           <Route path="/login" element={<Login />} />
           <Route
