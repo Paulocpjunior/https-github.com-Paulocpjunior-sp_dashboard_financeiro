@@ -123,7 +123,15 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
       const data=await load(db);
       if(req.method==='GET' && url.pathname==='/api/boleto-cloud/history') {
         const result=report(data.rows,url.searchParams);
-        await recheck();sendJson(req,res,200,{...result,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
+        const job=(await db.collection('boletoReturnJobs').doc('production').get()).data();
+        const issues=await db.collection('boletoIssues').where('environment','==','production').get();
+        const attention=issues.docs.map(d=>{const r=d.data();return {number:r.number || 'Emissão sem número',state:r.returnSync?.state,reason:r.returnSync?.reason,checkedAt:r.returnSync?.checkedAt};})
+          .filter(r=>['review','error'].includes(r.state));
+        const automation=job?{state:job.state,lastSuccessAt:job.lastSuccessAt || null,finishedAt:job.finishedAt || null,
+          settlementEnabled:job.settlementEnabled===true,counts:job.counts || null,
+          stale:!job.startedAt || Date.now()-Date.parse(job.startedAt)>45*60*1000,
+          attentionCount:attention.length,attention:attention.slice(0,30)}:null;
+        await recheck();sendJson(req,res,200,{...result,automation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
       }
       const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf)$/);
       if(!match || (match[2]==='sync'?req.method!=='POST':req.method!=='GET'))throw new HistoryError('Rota não encontrada.',404);

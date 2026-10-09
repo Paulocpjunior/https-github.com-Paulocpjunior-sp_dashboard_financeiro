@@ -74,3 +74,10 @@ test('protest dates and cancellation status remain distinct from payment status'
   const b={boleto:{token:row().token,situacao:'EM_ABERTO',valor:100,vencimento:'2026-10-05',protesto:{situacao:'CANCELAMENTO_CONFIRMADO',dataBanco:'2026-10-08',dataSistema:'2026-10-09'}}};
   const r=mergeSituation(row(),b,'now');assert.equal(r.protestedAt,'2026-10-08');assert.equal(r.protestStatus,'CANCELAMENTO_CONFIRMADO');assert.equal(r.cancelledAt,null);
 });
+test('automation reports stale state and attention without exposing internal identifiers',async()=>{
+  const f=fixture();f.data.set('boletoReturnJobs/production',{state:'error',startedAt:'2020-01-01T00:00:00Z',settlementEnabled:true,lease:'secret-lease'});
+  f.data.set('boletoIssues/problem',{environment:'production',state:'draft',number:'123',token:'private-token',returnSync:{state:'review',reason:'Conferir valor.',checkedAt:'2026-10-09T10:00:00Z',internal:'private-value'}});
+  const r=await f.call();assert.equal(r.body.automation.stale,true);assert.equal(r.body.automation.attentionCount,1);
+  assert.equal(r.body.automation.attention[0].reason,'Conferir valor.');
+  assert.ok(!JSON.stringify(r.body).includes('private'));assert.ok(!JSON.stringify(r.body).includes('secret-lease'));
+});
