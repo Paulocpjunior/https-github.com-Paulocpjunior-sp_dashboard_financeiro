@@ -12,6 +12,7 @@ type Boleto = { id:string; createdAt:string; bank:string; number:string; documen
   beneficiaryDocument:string; beneficiaryName:string; registeredAt:string|null; protestedAt:string|null; registrationStatus?:string; registrationError?:unknown;
   protestStatus?:string; protestDescription?:string; paymentOrigin?:string; manuallyPaid?:boolean; detailsSource:string; syncedAt:string|null; status:string; overdue:boolean };
 type Result = { today:string; month:string; page:number; pages:number; selected:Summary; metrics:Record<string,Summary>; rows:Boleto[];
+  automation?:{state:string;lastSuccessAt:string|null;finishedAt:string|null;settlementEnabled:boolean;stale:boolean;attentionCount:number;attention:{number:string;reason:string;checkedAt:string}[]}|null;
   beneficiaries:{document:string;name:string}[]; source:{exportedAt:string;count:number;snapshot:string} };
 const money=(n:number)=> (n/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const date=(s:string|null)=>s?s.split('-').reverse().join('/'):'—';
@@ -76,10 +77,17 @@ export default function BoletoDashboard() {
       <div className={`${card} flex flex-wrap gap-4 items-end`}><label>Mês de referência<input aria-label="Mês de referência" type="month" value={month} onChange={e=>{setMonth(e.target.value);setPage(1);}} className={`${input} block mt-1`}/></label>
         <label>Beneficiário<select aria-label="Beneficiário" value={beneficiary} onChange={e=>{setBeneficiary(e.target.value);setPage(1);}} className={`${input} block mt-1 max-w-full`}><option value="">Todos os beneficiários</option>{result?.beneficiaries.map(b=><option key={b.document} value={b.document}>{b.name} — {b.document}</option>)}</select></label>
         <button className={button} disabled={busy||!!action} onClick={()=>setRevision(n=>n+1)}><RefreshCw className="inline h-4 w-4 mr-2"/>Recarregar histórico</button></div>
-      <p className="text-sm text-slate-500">A carga histórica inclui boletos emitidos no painel e pelo CSV antigo. Novos boletos criados fora do app exigem nova importação do relatório. “Atualizar situação” consulta o emissor para o boleto escolhido. Nenhuma consulta altera os lançamentos de Contas a Receber.</p>
+      <p className="text-sm text-slate-500">A carga histórica inclui boletos emitidos no painel e pelo CSV antigo. Novos boletos criados fora do app exigem nova importação do relatório. “Atualizar situação” consulta o emissor para o boleto escolhido. Essa consulta individual não altera os lançamentos de Contas a Receber.</p>
       {error&&<p role="alert" className="rounded-lg bg-red-50 text-red-800 p-4">{error}</p>}
       {busy&&<p role="status">Consultando histórico…</p>}
-      {result&&<><p className="text-xs text-slate-500">Relatório de {new Date(result.source.exportedAt).toLocaleString('pt-BR')} · {result.source.count.toLocaleString('pt-BR')} boletos importados. Situações atualizadas individualmente indicam a data da consulta nos detalhes.</p>
+      {result&&<>
+        <section className={card} aria-label="Retorno bancário automático"><h2 className="font-semibold">Retorno bancário automático</h2>
+          <p className="text-sm mt-2">{!result.automation?'A rotina automática ainda não registrou uma execução.':result.automation.stale?'A rotina está sem execução recente. Verifique o processamento antes de considerar os saldos atualizados.':result.automation.state==='error'?'A última execução apresentou falha; os lançamentos afetados foram preservados.':result.automation.state==='running'?'Consulta automática em andamento.':'Última consulta automática concluída.'}</p>
+          {result.automation&&<p className="text-sm mt-2">Última execução sem falhas: {result.automation.lastSuccessAt?new Date(result.automation.lastSuccessAt).toLocaleString('pt-BR'):'Ainda não registrada'}. Baixa automática: {result.automation.settlementEnabled?'habilitada para recebíveis nativos vinculados, com pagamento bancário integral conferido':'desativada'}.</p>}
+          <p className="text-xs text-slate-500 mt-2">A confirmação depende do retorno do banco ao Boleto Cloud. Boletos históricos sem vínculo explícito, pagamentos manuais, valores divergentes e lançamentos alterados exigem revisão.</p>
+          {!!result.automation?.attentionCount&&<div role="status" className="mt-3 text-sm"><p className="font-semibold">{result.automation.attentionCount} boleto(s) precisam de atenção.</p><ul className="mt-2 space-y-2">{result.automation.attention.map((r,i)=><li key={i}>Boleto {r.number}: {r.reason} · {new Date(r.checkedAt).toLocaleString('pt-BR')}</li>)}</ul>{result.automation.attentionCount>30&&<p>Exibindo os primeiros 30 registros.</p>}</div>}
+        </section>
+        <p className="text-xs text-slate-500">Relatório de {new Date(result.source.exportedAt).toLocaleString('pt-BR')} · {result.source.count.toLocaleString('pt-BR')} boletos importados. Situações atualizadas individualmente indicam a data da consulta nos detalhes.</p>
         <h2 className="text-xl font-semibold">Total</h2><div className="grid sm:grid-cols-2 gap-4">{metric('open')}{metric('overdue')}</div>
         <h2 className="text-xl font-semibold">Hoje — {date(result.today)}</h2><div className="grid lg:grid-cols-3 gap-4">{['createdToday','dueToday','paidToday'].map(metric)}</div>
         <h2 className="text-xl font-semibold">Resumo do mês — {result.month.split('-').reverse().join('/')}</h2><div className="grid sm:grid-cols-2 gap-4">{['createdMonth','dueMonth'].map(metric)}</div>
