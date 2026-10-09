@@ -70,7 +70,8 @@ function mergeSituation(old, body, at) {
     paidAt,paidCents:b.pagamento?.valor==null?null:Math.round(b.pagamento.valor*100), creditedAt:date(b.pagamento?.dataCredito),cancelledAt,
     registeredAt:date(b.registro?.data),registrationStatus:b.registro?.situacao || null,registrationError:b.registro?.erro || null,
     cancellationReason:b.baixa?.motivo || '',cancellationDescription:b.baixa?.descricao || '',
-    protestedAt:date(b.protesto?.data), detailsSource:'api',syncedAt:at};
+    protestedAt:date(b.protesto?.dataBanco || b.protesto?.dataSistema),protestStatus:b.protesto?.situacao || null,
+    protestDescription:b.protesto?.descricao || '',paymentOrigin:b.pagamento?.origem || null,manuallyPaid:b.pagamento?.marcadoComoPago === true, detailsSource:'api',syncedAt:at};
 }
 function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl=fetch}) {
   let cached=null;

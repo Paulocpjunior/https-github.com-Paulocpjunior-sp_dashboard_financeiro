@@ -8,7 +8,7 @@ A API consultada permite obter a situação e o PDF de um boleto conhecido. Não
 
 Novas emissões confirmadas pelo app são incorporadas de `boletoIssues`. O beneficiário depende de um vínculo conferido entre a impressão digital da conta emissora e o cadastro do painel. Contas sem vínculo aparecem como não identificadas; não são atribuídas automaticamente a outro beneficiário.
 
-Novos títulos criados fora do app exigem nova carga do relatório. O botão Recarregar histórico relê a base (cache máximo de 30 segundos); Atualizar situação consulta somente o boleto escolhido. Não há sincronização automática de todos os títulos nesta versão. Registro e protesto não constam no Excel e permanecem explicitamente indisponíveis até consulta à API. Uma consulta com erro preserva os dados anteriores.
+Novos títulos criados fora do app exigem nova carga do relatório. O botão Recarregar histórico relê a base (cache máximo de 30 segundos); Atualizar situação consulta somente o boleto escolhido. Não há sincronização automática de todos os títulos nesta versão. Registro e protesto não constam no Excel e permanecem explicitamente indisponíveis até consulta à API. Uma consulta com erro preserva os dados anteriores. O mapeamento segue [Consultar Situação](https://developers.boleto.cloud/v1/boletos/situacao/): protesto mantém situação e datas, inclusive cancelamento de protesto; pagamento indica quando a origem é marcação manual.
 
 ## Definições dos indicadores
 

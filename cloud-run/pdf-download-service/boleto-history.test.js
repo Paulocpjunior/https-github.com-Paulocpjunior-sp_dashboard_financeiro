@@ -69,3 +69,8 @@ test('new app issues use only the verified account mapping and do not duplicate 
   const other=fixture();other.data.set('boletoIssues/new',issue);
   assert.equal((await other.call('/api/boleto-cloud/history?view=all')).body.selected.unidentifiedBeneficiaries,1);
 });
+
+test('protest dates and cancellation status remain distinct from payment status',()=>{
+  const b={boleto:{token:row().token,situacao:'EM_ABERTO',valor:100,vencimento:'2026-10-05',protesto:{situacao:'CANCELAMENTO_CONFIRMADO',dataBanco:'2026-10-08',dataSistema:'2026-10-09'}}};
+  const r=mergeSituation(row(),b,'now');assert.equal(r.protestedAt,'2026-10-08');assert.equal(r.protestStatus,'CANCELAMENTO_CONFIRMADO');assert.equal(r.cancelledAt,null);
+});
