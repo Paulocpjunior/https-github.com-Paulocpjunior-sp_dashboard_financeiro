@@ -24,6 +24,8 @@ async function defaultApi(path: string, body?: unknown) {
 const cls =
   "w-full border rounded p-2 bg-white text-slate-900 dark:bg-slate-800 dark:text-white";
 const btn = "rounded px-3 py-2 bg-blue-600 text-white disabled:opacity-50";
+const fileInputClass =
+  "block w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-3 file:font-semibold file:text-white hover:file:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500";
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export default function PayablesModal({
@@ -468,6 +470,7 @@ export default function PayablesModal({
                     "Comprovante (PDF ou imagem, até 2 MB)",
                     <input
                       type="file"
+                      className={fileInputClass}
                       accept="application/pdf,image/png,image/jpeg"
                       onChange={(e) => void upload(e.target.files?.[0])}
                     />,
@@ -635,6 +638,7 @@ export default function PayablesModal({
                   "Ou anexar PDF da fatura ao convite",
                   <input
                     type="file"
+                    className={fileInputClass}
                     accept="application/pdf"
                     onChange={(e) => void upload(e.target.files?.[0])}
                   />,
