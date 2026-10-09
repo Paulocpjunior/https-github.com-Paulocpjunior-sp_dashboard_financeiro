@@ -234,9 +234,23 @@ async function getFirestoreToken() {
   return token.token;
 }
 
+// Native payable settlements own their financial state. A delayed Jotform edit
+// must not undo an audited payment. Preconditions also fence concurrent updates.
+async function financialWritePrecondition(docId, token) {
+  const response = await fetch(`${FIRESTORE_BASE}/transactions/${docId}`, {headers:{Authorization:`Bearer ${token}`}});
+  if(response.status === 404) return 'currentDocument.exists=false';
+  if(!response.ok) throw new Error('Não foi possível conferir a versão do lançamento.');
+  const current = await response.json();
+  if(current.fields?.payableSettlement || current.fields?.payableRecurrence)
+    throw new Error('FINANCEIRO_NATIVE_OWNER: lançamento gerenciado no Financeiro; edição Jotform exige revisão.');
+  if(!current.updateTime) throw new Error('Versão do lançamento indisponível.');
+  return `currentDocument.updateTime=${encodeURIComponent(current.updateTime)}`;
+}
+
 async function firestoreSet(docId, fields) {
   const token = await getFirestoreToken();
-  const url = `${FIRESTORE_BASE}/transactions/${docId}`;
+  const precondition = await financialWritePrecondition(docId, token);
+  const url = `${FIRESTORE_BASE}/transactions/${docId}?${precondition}`;
   const resp = await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -250,7 +264,8 @@ async function firestoreSet(docId, fields) {
 async function firestorePatch(docId, fields) {
   const token = await getFirestoreToken();
   const mask = Object.keys(fields).map(f => `updateMask.fieldPaths=${f}`).join('&');
-  const url = `${FIRESTORE_BASE}/transactions/${docId}?${mask}`;
+  const precondition = await financialWritePrecondition(docId, token);
+  const url = `${FIRESTORE_BASE}/transactions/${docId}?${mask}&${precondition}`;
   const resp = await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -1688,6 +1703,7 @@ if (require.main === module) {
 
 module.exports = {
   app,
+  financialWritePrecondition,
   WEBHOOK_VERSION,
   parseValor,
   toBrDate,

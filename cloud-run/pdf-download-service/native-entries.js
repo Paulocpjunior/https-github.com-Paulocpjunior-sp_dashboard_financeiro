@@ -1,3 +1,4 @@
+const {handlePayables} = require('./payables');
 const { createHash } = require("node:crypto");
 const { validDocument } = require("./boleto-cloud");
 const catalog = require("./native-entry-catalog.json");
@@ -273,6 +274,10 @@ function createNativeEntryHandler({
       const enabled = env.NATIVE_ENTRY_ENABLED === "true";
       const reply = (body, status = 200) =>
         sendJson(request, response, status, body);
+      if(url.pathname.startsWith("/api/financial-entries/payables/")){
+        await handlePayables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed,files,catalog,getBucket,env});
+        return true;
+      }
       if (
         request.method === "GET" &&
         url.pathname === "/api/financial-entries/config"
@@ -306,7 +311,7 @@ function createNativeEntryHandler({
         return true;
       }
       const attachmentMatch = url.pathname.match(
-        /^\/api\/financial-entries\/attachments\/(native-[a-f0-9]{64})\/([a-f0-9]{64})$/,
+        /^\/api\/financial-entries\/attachments\/([a-zA-Z0-9_-]{1,200})\/([a-f0-9]{64})$/,
       );
       if (request.method === "GET" && attachmentMatch) {
         const entry = (

@@ -25,6 +25,7 @@ interface DataTableProps {
   canDelete?: boolean;
   canExportBoletoCloud?: boolean;
   onDelete?: (id: string) => void;
+  onPayable?: (id: string) => void;
   onMarkAsPaid?: (id: string) => void;
   onClientClick?: (clientName: string) => void;
   sortField: TransactionSortField;
@@ -48,6 +49,7 @@ const DataTable: React.FC<DataTableProps> = ({
     canDelete = false,
     canExportBoletoCloud = false,
     onDelete,
+    onPayable,
     onClientClick,
     sortField,
     sortDirection,
@@ -452,6 +454,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
+                            {onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -532,6 +535,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
+                            {onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -581,6 +585,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
+                            {onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
