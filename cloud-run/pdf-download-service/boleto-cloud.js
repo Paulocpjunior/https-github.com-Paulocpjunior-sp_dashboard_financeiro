@@ -168,7 +168,38 @@ function payload(row, address, emission = today()) {
       .includes(fields["boleto.pagador.endereco.uf"])
   )
     throw new BoletoError("CEP ou UF inválido.");
+  fields["boleto.pagador.endereco.cep"] = fields["boleto.pagador.endereco.cep"].replace(/^(\d{5})(\d{3})$/, "$1-$2");
   return fields;
+}
+async function validationError(result, cfg) {
+  const fallback = "Dados recusados pelo Boleto Cloud. Revise os dados antes de tentar novamente.";
+  try {
+    const reader = result.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > 16384) return fallback;
+        chunks.push(Buffer.from(value));
+      }
+    } finally { await reader.cancel().catch(() => {}); }
+    const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (!Array.isArray(data?.erro?.causas)) return fallback;
+    const details = data.erro.causas.slice(0, 5).map((cause) => {
+      if (typeof cause?.mensagem !== "string") return "";
+      let message = cause.mensagem;
+      for (const secret of [cfg.apiKey, cfg.accountToken].filter(Boolean))
+        message = message.split(secret).join("[credencial omitida]");
+      message = message.replace(/api-key_[\w-]+/gi, "[credencial omitida]")
+        .replace(/[\r\n\t]+/g, " ").slice(0, 400);
+      const code = /^[A-Z0-9]{1,16}$/.test(cause.codigo || "") ? ` (${cause.codigo})` : "";
+      return message + code;
+    }).filter(Boolean);
+    return details.length ? `Boleto Cloud: ${details.join("; ")}` : fallback;
+  } catch { return fallback; }
 }
 function publicRecord(record, cfg) {
   if (!record)
@@ -531,7 +562,7 @@ function createBoletoHandler({
               error:
                 result.status === 401
                   ? "Credenciais recusadas pelo Boleto Cloud. Consulte o administrador."
-                  : "Dados recusados pelo Boleto Cloud. Revise os dados antes de tentar novamente.",
+                  : await validationError(result, cfg),
             };
           } else
             outcome = {
