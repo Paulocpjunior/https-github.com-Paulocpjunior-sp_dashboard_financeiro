@@ -113,6 +113,8 @@ function config(env) {
   };
 }
 function payload(row, address, emission = today()) {
+  if (row.source === 'native-finance' && row.bankAccount !== require('./native-entry-catalog.json').banks[0])
+    throw new BoletoError('A conta do lançamento deve ser a conta Itaú 3145 / 99791-6 configurada para emissão.');
   if (!eligible(row))
     throw new BoletoError(
       "Cobrança excluída, liquidada, de saída ou sem método Boleto.",

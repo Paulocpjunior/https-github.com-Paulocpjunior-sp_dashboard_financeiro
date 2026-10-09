@@ -388,3 +388,8 @@ test("production uses its existing account without Sandbox credentials", async (
     assert.equal((await blocked.issue()).status, 503);
   }
 });
+
+test('native entry must use the configured Itaú account, without changing legacy issuance', () => {
+  assert.throws(() => payload({...row(), source:'native-finance', bankAccount:'BB Física'}, address), /conta Itaú/);
+  assert.equal(payload({...row(), source:'native-finance', bankAccount:require('./native-entry-catalog.json').banks[0]}, address)['boleto.valor'], '1250.00');
+});

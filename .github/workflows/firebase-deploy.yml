@@ -59,6 +59,7 @@ jobs:
           npm ci --prefix cloud-run/pdf-download-service
           npm test --prefix cloud-run/pdf-download-service
           npm run test:boleto-cloud
+          npm run test:native-entries
           npm run test:dashboard-duplicates-sorting
           npm run test:data-loading
           npm run test:payment-method

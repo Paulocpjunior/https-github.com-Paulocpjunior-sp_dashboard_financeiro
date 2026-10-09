@@ -1,3 +1,4 @@
+import NativeEntryModal from '../components/NativeEntryModal';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Layout from '../components/Layout';
 import KpiCard from '../components/KpiCard';
@@ -63,6 +64,7 @@ const Dashboard: React.FC = () => {
   const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
   const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');
 
+  const [nativeEntryKind, setNativeEntryKind] = useState<'pagar' | 'receber' | null>(null);
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Transaction[]>([]);
@@ -627,6 +629,7 @@ const Dashboard: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         
+        {nativeEntryKind && <NativeEntryModal kind={nativeEntryKind} onClose={() => setNativeEntryKind(null)} onSaved={() => { void handleManualRefresh(); }} />}
         {/* Header & Actions */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div className="print:hidden">
@@ -635,6 +638,7 @@ const Dashboard: React.FC = () => {
           </div>
           
           <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {isAdmin && <><button className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm" onClick={() => setNativeEntryKind('receber')}>Nova conta a receber</button><button className="px-3 py-2 rounded-lg bg-slate-700 text-white text-sm" onClick={() => setNativeEntryKind('pagar')}>Nova conta a pagar</button></>}
             {/* REFRESH INDICATOR */}
             <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-500 dark:text-slate-400">
               <Timer className="h-3.5 w-3.5" />
