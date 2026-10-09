@@ -3,6 +3,7 @@ export type UserRole = 'admin' | 'operacional';
 export type FinancialPermission =
   | 'wix.treasury.open'
   | 'billing.boleto-cloud.issue'
+  | 'billing.boleto-cloud.history.read'
   | 'itau.openfinance.read'
   | 'itau.statement.import';
 

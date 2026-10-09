@@ -111,6 +111,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: '/', label: 'Painel Principal', icon: LayoutDashboard },
     { path: '/relatorios', label: 'Relatórios', icon: FileText },
     { path: '/faturamento', label: 'Faturamento', accessibleLabel: 'Base de Faturamento', icon: ReceiptText },
+    ...(hasFinancialPermission(user, 'billing.boleto-cloud.history.read') ? [{ path: '/boletos', label: 'Boletos Boleto Cloud', icon: ReceiptText }] : []),
     ...(hasFinancialPermission(user, 'itau.openfinance.read') ? [{ path: '/extrato-itau', label: 'Extrato Itaú', icon: Building2 }] : []),
     // Verificação Case-Insensitive para Admin
     ...((user?.role || '').toLowerCase() === 'admin' ? [{ path: '/admin', label: 'Usuários', icon: Users }] : []),
