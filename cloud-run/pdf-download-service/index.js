@@ -1,4 +1,5 @@
 const { createBoletoHandler } = require('./boleto-cloud');
+const { createHistoryHandler } = require('./boleto-history');
 const http = require('node:http');
 const { createStatementHandler } = require('./itau-statements');
 const { randomUUID } = require('node:crypto');
@@ -58,6 +59,7 @@ function sanitizeFileName(value) {
 }
 
 function createServer() {
+  const history = createHistoryHandler({ getServices: getAdminServices, sendJson });
   return http.createServer(async (request, response) => {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
@@ -70,6 +72,7 @@ function createServer() {
       return;
     }
 
+    if (await history(request, response)) return;
     if (await createBoletoHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
 
     if (await createStatementHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;

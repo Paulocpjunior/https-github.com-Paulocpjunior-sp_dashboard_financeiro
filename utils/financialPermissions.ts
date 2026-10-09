@@ -6,6 +6,11 @@ export const FINANCIAL_PERMISSION_OPTIONS: Array<{
   description: string;
 }> = [
   {
+    value: 'billing.boleto-cloud.history.read',
+    label: 'Consultar histórico Boleto Cloud',
+    description: 'Consultar os boletos dos beneficiários, atualizar a situação e baixar PDFs. Não autoriza emitir.',
+  },
+  {
     value: 'wix.treasury.open',
     label: 'Tesouraria Wix',
     description: 'Legado: usuários ativos já possuem acesso à Tesouraria Wix no Dashboard.',
