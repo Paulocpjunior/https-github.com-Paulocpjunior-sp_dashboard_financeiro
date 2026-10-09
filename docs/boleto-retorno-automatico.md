@@ -4,7 +4,7 @@
 
 O Boleto Cloud mantém a comunicação Itaú API/VAN e o processamento do RET. O aplicativo consulta `GET /api/v1/boletos/{token}/situacao`; não reenvia remessas nem reprocessa o mesmo RET. Referência: https://developers.boleto.cloud/v1/boletos/situacao/ (conferida em 09/10/2026).
 
-O Cloud Run Job `sp-boleto-returns` executa independentemente de sessões do navegador. O Cloud Scheduler chama a API autenticada do Cloud Run a cada 15 minutos. Nenhuma rota pública de baixa foi adicionada. O invocador dedicado recebe `roles/run.invoker` somente nesse job; o worker reutiliza a conta de serviço e referências de segredos do backend homologado. Essa conta de execução já possui permissões amplas: o mecanismo não substitui controles IAM.
+O Cloud Run Job `sp-boleto-returns` executa independentemente de sessões do navegador. O Cloud Scheduler chama a API autenticada do Cloud Run a cada 15 minutos. O job utiliza o `launcher` dos Buildpacks para preservar o ambiente Node.js da imagem homologada. Nenhuma rota pública de baixa foi adicionada. O invocador dedicado recebe `roles/run.invoker` somente nesse job; o worker reutiliza a conta de serviço e referências de segredos do backend homologado. Essa conta de execução já possui permissões amplas: o mecanismo não substitui controles IAM.
 
 Referência de agendamento autenticado: https://docs.cloud.google.com/run/docs/execute/jobs-on-schedule.
 

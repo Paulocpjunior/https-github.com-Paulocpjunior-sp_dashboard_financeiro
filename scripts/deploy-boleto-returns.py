@@ -62,7 +62,7 @@ def main():
     jobs = describe('run', 'jobs', 'list', '--region', REGION)
     operation = 'update' if any(j['metadata']['name'] == JOB for j in jobs) else 'create'
     gcloud('run', 'jobs', operation, JOB, '--region', REGION, '--image', image, '--service-account', account,
-           '--command', 'node', '--args', 'boleto-return-job.js', '--tasks', '1', '--parallelism', '1', '--max-retries', '0',
+           '--command', 'launcher', '--args', 'node boleto-return-job.js', '--tasks', '1', '--parallelism', '1', '--max-retries', '0',
            '--task-timeout', '600s', '--memory', '512Mi', '--cpu', '1', '--set-secrets', ','.join(secrets),
            '--set-env-vars', f'BOLETO_CLOUD_ENVIRONMENT=production,BOLETO_CLOUD_CUTOVER_DATE={cutover},BOLETO_CLOUD_RETURN_ENABLED=true,BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=true',
            '--update-labels' if operation == 'update' else '--labels', f'financeiro-commit={sha}')
