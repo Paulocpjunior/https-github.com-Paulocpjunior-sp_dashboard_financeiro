@@ -54,6 +54,13 @@ export interface Transaction {
   observacao?: string;
   numeroDocumento?: string;
   parcela?: string | number;
+  nativeEntry?: {
+    version: number; kind: 'pagar' | 'receber'; authorizedBy: string; supplier: string;
+    personType: string; receiptMethod: string; interestRate: number; interestAmount: number;
+    email: string; phone: string; address: Record<string, string>; recurring: boolean; clientRegistryId: string;
+  };
+  attachments?: Array<{name:string;type:string;kind:string;sha256:string;size:number;path:string}>;
+  createdByName?: string;
   submissionId?: string;
   isExcluded?: boolean; // Marcação de exclusão lógica
   exclusionReason?: string;

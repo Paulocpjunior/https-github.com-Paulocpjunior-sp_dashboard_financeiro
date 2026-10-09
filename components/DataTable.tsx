@@ -1,3 +1,4 @@
+import NativeEntryDetails from './NativeEntryDetails';
 import BoletoIssueModal from './BoletoIssueModal';
 
 import React, { useState, useMemo } from 'react';
@@ -54,6 +55,7 @@ const DataTable: React.FC<DataTableProps> = ({
     possibleDuplicates,
 }) => {
 
+  const [nativeDetails, setNativeDetails] = useState<Transaction | null>(null);
   const [showBoletoModal, setShowBoletoModal] = useState(false);
 
   const handleSort = (field: TransactionSortField) => {
@@ -449,6 +451,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             {isPago ? formatCurrency(getPaidAmount(row)) : 'R$ 0,00'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
+                            {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -528,6 +531,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
+                            {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -576,6 +580,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             )}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
+                            {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -612,6 +617,7 @@ const DataTable: React.FC<DataTableProps> = ({
         </div>
       </div>
 
+      {nativeDetails && <NativeEntryDetails row={nativeDetails} onClose={() => setNativeDetails(null)} />}
       {/* MODAL DE EXPORTAÇÃO EM 2 ETAPAS */}
       {showBoletoModal && <BoletoIssueModal rows={(allData.length ? allData : data).filter(row => !isSaidaTransaction(row) && normalizeText(getPaymentMethod(row)).includes('boleto'))} duplicates={possibleDuplicates} onClose={() => setShowBoletoModal(false)} />}
 

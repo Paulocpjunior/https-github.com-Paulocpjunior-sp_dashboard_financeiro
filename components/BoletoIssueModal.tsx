@@ -91,7 +91,7 @@ export default function BoletoIssueModal({
           Object.fromEntries(
             Object.keys(addressFields).map((k) => [
               k,
-              value.fields?.[`boleto.pagador.endereco.${k}`] || "",
+              value.fields?.[`boleto.pagador.endereco.${k}`] || row?.nativeEntry?.address?.[k] || "",
             ]),
           ),
         );

@@ -1,3 +1,5 @@
+const { createNativeEntryHandler } = require('./native-entries');
+const { getStorage } = require('firebase-admin/storage');
 const { createBoletoHandler } = require('./boleto-cloud');
 const { createHistoryHandler } = require('./boleto-history');
 const http = require('node:http');
@@ -72,6 +74,7 @@ function createServer() {
       return;
     }
 
+    if (await createNativeEntryHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson, getBucket: name => getStorage().bucket(name) })(request, response)) return;
     if (await history(request, response)) return;
     if (await createBoletoHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
 
