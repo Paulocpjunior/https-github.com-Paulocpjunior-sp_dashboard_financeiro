@@ -48,4 +48,8 @@ Verificação em 08/10/2026: o serviço publicado tinha somente BOLETO_CLOUD_ACC
 
 Referências: guia-sandbox-para-producao.pdf fornecido por Paulo; https://developers.boleto.cloud/v1/boletos/criar/ ; https://developers.boleto.cloud/v1/boletos/situacao/ ; https://developers.boleto.cloud/v1/boletos/status-registro/ . Há divergência entre guias antigos sobre retorno 200 e referência de criação sobre 409: respostas sem evidência suficiente ficam em revisão, nunca provocam nova emissão automática.
 
-Atualização em 09/10/2026: a API Key de produção ainda não aparece na listagem de nomes do cofre. A tela local de cadastro solicita somente essa API Key. A vinculação ao Cloud Run e a habilitação de emissão ficam para a publicação do commit autorizado.
+Validação em 09/10/2026: na sessão autenticada do painel, o token de acesso API existente foi localizado em Paulo → Meus Dados. Ele foi armazenado em `sp-dashboard-boleto-cloud-api-key`, versão 2, com acesso do serviço; nenhum token foi gerado ou revogado no emissor. A versão 1 continha o mesmo valor do token da conta e não deve ser vinculada à autenticação. O segredo da conta Itaú permanece intacto.
+
+A consulta GET de produção `/api/v1/boletos/controle/{identificador-inexistente}/situacao` com a versão 2 retornou HTTP 404 e código 202D4AA8 (boleto não encontrado), superando a recusa de autenticação HTTP 401/código 2CD228EA observada com a versão anterior. Nenhum boleto foi emitido. Uma consulta com identificador malformado (`/boletos/1`) não serve como prova de autenticação: a API devolve erro de formato HTTP 400 inclusive com chave fictícia de formato equivalente. Não registrar valores de tokens nos diagnósticos.
+
+Na publicação autorizada, vincular `BOLETO_CLOUD_API_KEY=sp-dashboard-boleto-cloud-api-key:2`, mantendo o segredo existente de `BOLETO_CLOUD_ACCOUNT_TOKEN`. A vinculação ao Cloud Run e a habilitação de emissão ficam para o commit explicitamente autorizado.
