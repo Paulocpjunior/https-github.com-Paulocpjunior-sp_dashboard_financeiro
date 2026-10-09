@@ -1,3 +1,4 @@
+const { createBoletoHandler } = require('./boleto-cloud');
 const http = require('node:http');
 const { createStatementHandler } = require('./itau-statements');
 const { randomUUID } = require('node:crypto');
@@ -8,29 +9,6 @@ const { getFirestore } = require('firebase-admin/firestore');
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const pendingPDFs = new Map();
 const PDF_TTL_MS = 5 * 60 * 1000;
-const BOLETO_SECRET_ENV = 'BOLETO_CLOUD_ACCOUNT_TOKEN';
-const BOLETO_PERMISSION = 'billing.boleto-cloud.issue';
-const BOLETO_HEADERS = [
-  'TOKEN_CONTA_BANCARIA',
-  'CPRF_PAGADOR',
-  'VALOR',
-  'VENCIMENTO',
-  'NOSSO_NUMERO',
-  'DOCUMENTO',
-  'MULTA',
-  'JUROS',
-  'DIAS_PARA_ENCARGOS',
-  'DESCONTO',
-  'DIAS_PARA_DESCONTO',
-  'TIPO_VALOR_DESCONTO',
-  'DESCONTO2',
-  'DIAS_PARA_DESCONTO2',
-  'TIPO_VALOR_DESCONTO2',
-  'DESCONTO3',
-  'DIAS_PARA_DESCONTO3',
-  'TIPO_VALOR_DESCONTO3',
-  'INFORMACAO_PAGADOR',
-];
 const ALLOWED_ORIGINS = new Set([
   'https://gen-lang-client-0888019226.web.app',
   'http://127.0.0.1:3000',
@@ -63,39 +41,6 @@ function getAdminServices() {
   return { adminAuth: getAuth(), adminDb: getFirestore() };
 }
 
-async function authorizeBoletoRequest(request) {
-  const authorization = String(request.headers.authorization || '');
-  if (!authorization.startsWith('Bearer ')) return false;
-  const idToken = authorization.slice('Bearer '.length).trim();
-  if (!idToken) return false;
-
-  const { adminAuth, adminDb } = getAdminServices();
-  const decoded = await adminAuth.verifyIdToken(idToken, true);
-  const profile = await adminDb.collection('users').doc(decoded.uid).get();
-  if (!profile.exists) return false;
-  const data = profile.data() || {};
-  if (data.active === false) return false;
-  const role = String(data.role || '').toLowerCase().trim();
-  const permissions = Array.isArray(data.financialPermissions) ? data.financialPermissions : [];
-  return role === 'admin' || permissions.includes(BOLETO_PERMISSION);
-}
-
-function normalizeBoletoRows(value) {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 500) {
-    throw new Error('invalid boleto rows');
-  }
-  return value.map(row => {
-    if (!Array.isArray(row) || row.length !== BOLETO_HEADERS.length - 1) {
-      throw new Error('invalid boleto row');
-    }
-    return row.map(cell => {
-      const text = String(cell ?? '');
-      if (text.length > 500 || /[\r\n]/.test(text)) throw new Error('invalid boleto cell');
-      return text;
-    });
-  });
-}
-
 async function readRequestBody(request) {
   let size = 0;
   const chunks = [];
@@ -105,15 +50,6 @@ async function readRequestBody(request) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
-}
-
-function buildBoletoCsv(rows, accountToken) {
-  const token = String(accountToken || '').trim();
-  if (!token || /[;\r\n]/.test(token)) throw new Error('invalid boleto token');
-  return '\uFEFF' + [
-    BOLETO_HEADERS.join(';'),
-    ...rows.map(row => [token, ...row].join(';')),
-  ].join('\n');
 }
 
 function sanitizeFileName(value) {
@@ -134,36 +70,12 @@ function createServer() {
       return;
     }
 
+    if (await createBoletoHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
+
     if (await createStatementHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
 
     if (request.method === 'POST' && request.url === '/api/boleto-cloud-csv') {
-      try {
-        if (!(await authorizeBoletoRequest(request))) {
-          sendJson(request, response, 403, { error: 'forbidden' });
-          return;
-        }
-        const accountToken = process.env[BOLETO_SECRET_ENV];
-        if (!accountToken) {
-          sendJson(request, response, 503, { error: 'boleto secret unavailable' });
-          return;
-        }
-        const body = JSON.parse((await readRequestBody(request)).toString('utf8'));
-        const rows = normalizeBoletoRows(body.rows);
-        const csv = buildBoletoCsv(rows, accountToken);
-        const fileName = `boletos_importacao_${new Date().toISOString().slice(0, 10)}.csv`;
-        response.writeHead(200, {
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${fileName}"`,
-          'Content-Length': Buffer.byteLength(csv),
-          'Cache-Control': 'private, no-store',
-          'X-Content-Type-Options': 'nosniff',
-          ...corsHeaders(request),
-        });
-        response.end(csv);
-      } catch (error) {
-        const status = /token|credential|auth/i.test(String(error?.message || '')) ? 401 : 400;
-        sendJson(request, response, status, { error: 'invalid boleto export request' });
-      }
+      sendJson(request, response, 410, { error: 'Exportação CSV encerrada. Use a emissão de boletos no app.' });
       return;
     }
 
@@ -264,10 +176,7 @@ function createServer() {
 if (require.main === module) createServer().listen(Number(process.env.PORT) || 8080, '0.0.0.0');
 
 module.exports = {
-  BOLETO_HEADERS,
-  buildBoletoCsv,
   createServer,
-  normalizeBoletoRows,
   pendingPDFs,
   sanitizeFileName,
 };
