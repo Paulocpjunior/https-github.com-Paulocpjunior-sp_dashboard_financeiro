@@ -1,3 +1,5 @@
+const { eligible, amount, money } = require('./boleto-cloud');
+const { InviteError, prepareInvite, sendInvite } = require('./boleto-invite');
 const { createHash } = require('node:crypto');
 const { permitted } = require('./itau-statements');
 const idFor = token => createHash('sha256').update(token).digest('hex');
@@ -92,16 +94,21 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
       const issued=await db.collection('boletoIssues').where('environment','==','production').get();
       for(const d of issued.docs) {
         const issue=d.data(), f=issue.fields || {};
-        if(issue.state!=='issued' || !issue.token || known.has(issue.token))continue;
+        if(issue.state!=='issued' || !issue.token)continue;
+        if(known.has(issue.token)){
+          const imported=merged.find(r=>r.token===issue.token);
+          if(imported && issue.transactionId)imported.transactionId=issue.transactionId;
+          continue;
+        }
         known.add(issue.token);
         const account=meta.issuanceAccounts?.[issue.accountFingerprint];
-        const id=idFor(issue.token), row={id,token:issue.token,createdAt:f['boleto.emissao'],dueDate:f['boleto.vencimento'],
+        const id=idFor(issue.token), row={id,token:issue.token,transactionId:issue.transactionId || null,createdAt:f['boleto.emissao'],dueDate:f['boleto.vencimento'],
           amountCents:Math.round(Number(f['boleto.valor'])*100),number:issue.number || '',document:f['boleto.documento'] || '',
           payerName:f['boleto.pagador.nome'],payerDocument:String(f['boleto.pagador.cprf']||'').replace(/\D/g,''),
           bank:account?.bank || '',beneficiaryDocument:account?.beneficiaryDocument || null,beneficiaryName:account?.beneficiaryName || 'Emissão pelo app — beneficiário a conferir',paidAt:null,paidCents:null,creditedAt:null,
           cancelledAt:null,cancellationReason:'',cancellationDescription:'',registeredAt:issue.registration?.registeredAt || null,protestedAt:null,detailsSource:'app',syncedAt:null};
         if(!isDate(row.createdAt)||!isDate(row.dueDate)||!Number.isSafeInteger(row.amountCents))throw new HistoryError('Emissão recente com dados incompletos.',503);
-        merged.push(updates.get(id)?.record || row);
+        merged.push({...row,...updates.get(id)?.record,transactionId:issue.transactionId || null});
       }
       cached={snapshot:pointer.snapshot,at:Date.now(),rows:merged,meta};
     }
@@ -133,11 +140,23 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
           attentionCount:attention.length,attention:attention.slice(0,30)}:null;
         await recheck();sendJson(req,res,200,{...result,automation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
       }
-      const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf)$/);
+      const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf|invite|invite-email)$/);
       if(!match || (match[2]==='sync'?req.method!=='POST':req.method!=='GET'))throw new HistoryError('Rota não encontrada.',404);
       const record=data.rows.find(r=>r.id===match[1]);
       if(!record)throw new HistoryError('Boleto não encontrado no histórico.',404);
       if(!env.BOLETO_CLOUD_API_KEY)throw new HistoryError('Credencial do emissor indisponível.',503);
+      if (['invite','invite-email'].includes(match[2])) {
+        const source=record.transactionId?db.collection('transactions').doc(record.transactionId):null;
+        const sourceBefore=source?(await source.get()).data():null;
+        if(source && (!sourceBefore || !eligible(sourceBefore) || money(sourceBefore.valueReceived)>0))
+          throw new HistoryError('Cobrança excluída ou recebida: INVITE indisponível.',409);
+        if(source && (Math.round(amount(sourceBefore)*100)!==record.amountCents || sourceBefore.dueDate!==record.dueDate || String(sourceBefore.cpfCnpj || '').replace(/\D/g,'')!==record.payerDocument))
+          throw new HistoryError('Dados do lançamento divergiram do boleto. Confira a cobrança antes de preparar o INVITE.',409);
+        const artifact=await prepareInvite({token:record.token,base:'https://app.boletocloud.com/api/v1',apiKey:env.BOLETO_CLOUD_API_KEY,expected:record,fetchImpl});
+        await recheck();
+        if(source && JSON.stringify((await source.get()).data())!==JSON.stringify(sourceBefore))throw new HistoryError('Cobrança alterada durante a preparação.',409);
+        sendInvite(res,artifact,match[2]);return true;
+      }
       const result=await fetchImpl(`https://app.boletocloud.com/api/v1/boletos/${encodeURIComponent(record.token)}${match[2]==='sync'?'/situacao':''}`,{
         method:'GET',headers:{Authorization:`Basic ${Buffer.from(`${env.BOLETO_CLOUD_API_KEY}:token`).toString('base64')}`,Accept:match[2]==='sync'?'application/json':'application/pdf'},signal:AbortSignal.timeout(20000),redirect:'error'});
       if(!result.ok)throw new HistoryError(`Consulta ao emissor não concluída (HTTP ${result.status}). O histórico anterior foi preservado.`,502);
@@ -157,7 +176,7 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
         if(bytes.length>10000000 || bytes.subarray(0,5).toString()!=='%PDF-')throw new HistoryError('PDF inválido.',502);
         await recheck();res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="boleto.pdf"','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});res.end(bytes);
       }
-    }catch(e){sendJson(req,res,e.status || 502,{error:e instanceof HistoryError?e.message:'Não foi possível consultar o histórico. Tente novamente.'});}
+    }catch(e){sendJson(req,res,e.status || 502,{error:(e instanceof HistoryError || e instanceof InviteError)?e.message:'Não foi possível consultar o histórico. Tente novamente.'});}
     return true;
   };
 }
