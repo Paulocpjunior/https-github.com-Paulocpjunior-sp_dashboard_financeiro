@@ -265,7 +265,7 @@ export default function NativeEntryModal({
         >
           <option value="">Selecione</option>
           {options.map((v, i) => (
-            <option key={`${v}-${i}`}>{v}</option>
+            <option key={`${v}-${i}`} value={v}>{v}</option>
           ))}
         </select>
       </label>
