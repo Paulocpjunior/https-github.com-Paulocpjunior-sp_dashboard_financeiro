@@ -118,11 +118,11 @@ export default function BoletoIssueModal({
             ? { previewHash: record?.previewHash, legacyChecked: checked }
             : undefined;
       const response = await request(action, body);
-      if (action === "pdf") {
+      if (["pdf", "invite", "invite-email"].includes(action)) {
         const url = URL.createObjectURL(await response.blob());
         const a = document.createElement("a");
         a.href = url;
-        a.download = "boleto.pdf";
+        a.download = `boleto-${record?.number || "cobranca"}.${action === "invite" ? "ics" : action === "invite-email" ? "eml" : "pdf"}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -315,7 +315,7 @@ export default function BoletoIssueModal({
             )}
             {record.state === "issued" && (
               <div className="space-y-3">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     className={button}
                     disabled={busy}
@@ -331,6 +331,11 @@ export default function BoletoIssueModal({
                     Consultar registro no Itaú
                   </button>
                 </div>
+                <div className="flex flex-wrap gap-2">
+                  <button className={button} disabled={busy} onClick={() => perform("invite")}>Baixar INVITE com PDF (.ics)</button>
+                  <button className={button} disabled={busy} onClick={() => perform("invite-email")}>Preparar e-mail com INVITE e PDF</button>
+                </div>
+                <p className="text-sm">O cliente precisa importar o convite na agenda. Inclui o vencimento e lembrete na véspera; o calendário controla os avisos. O PDF fica dentro do convite e separado no e-mail preparado. Alguns calendários não exibem anexos. O e-mail é um rascunho (.eml): escolha o destinatário e envie no seu aplicativo de e-mail. Nenhum envio é automático. Após pagamento ou cancelamento, remova o evento da agenda.</p>
                 <p>
                   {!record.registration
                     ? "Registro bancário ainda não consultado."

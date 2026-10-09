@@ -1,3 +1,4 @@
+const { InviteError, prepareInvite, sendInvite } = require('./boleto-invite');
 const { createHash, randomUUID } = require("node:crypto");
 const { permitted } = require("./itau-statements");
 const hash = (value) =>
@@ -253,7 +254,7 @@ function createBoletoHandler({
         throw new BoletoError("Sem permissão para emitir boletos.", 403);
       const cfg = config(env);
       const match = url.pathname.match(
-        /^\/api\/boleto-cloud\/items\/([^/]+)(?:\/(preview|issue|recover|pdf|registration))?$/,
+        /^\/api\/boleto-cloud\/items\/([^/]+)(?:\/(preview|issue|recover|pdf|registration|invite|invite-email))?$/,
       );
       if (!match) throw new BoletoError("Rota não encontrada.", 404);
       const id = decodeURIComponent(match[1]),
@@ -276,6 +277,20 @@ function createBoletoHandler({
         });
       if (!action && request.method === "GET") {
         reply(existing);
+        return true;
+      }
+      if (["invite", "invite-email"].includes(action) && request.method === "GET") {
+        if (!existing?.token || existing.state !== "issued" || existing.accountFingerprint !== cfg.accountFingerprint)
+          throw new BoletoError("Boleto emitido não encontrado nesta conta.", 409);
+        const row = (await source.get()).data();
+        if (!row || !eligible(row) || money(row.valueReceived)>0) throw new BoletoError("Cobrança paga, excluída ou indisponível para INVITE.", 409);
+        if (!cfg.apiKey || !cfg.accountToken) throw new BoletoError("Credenciais indisponíveis.", 503);
+        const artifact = await prepareInvite({token:existing.token,base:cfg.base,apiKey:cfg.apiKey,fetchImpl,
+          expected:{token:existing.token,number:existing.number,amountCents:Math.round(amount(row)*100),dueDate:row.dueDate,payerDocument:digits(row.cpfCnpj)}});
+        if (!allowed((await userRef.get()).data())) throw new BoletoError("Acesso revogado.", 403);
+        const refreshed = (await source.get()).data();
+        if (JSON.stringify(refreshed)!==JSON.stringify(row)) throw new BoletoError("Cobrança alterada durante a preparação.",409);
+        sendInvite(response, artifact, action);
         return true;
       }
       if (
@@ -596,10 +611,10 @@ function createBoletoHandler({
       sendJson(
         request,
         response,
-        error instanceof BoletoError ? error.status : 500,
+        (error instanceof BoletoError || error instanceof InviteError) ? error.status : 500,
         {
           error:
-            error instanceof BoletoError
+            (error instanceof BoletoError || error instanceof InviteError)
               ? error.message
               : "Operação não confirmada. Consulte a cobrança antes de tentar novamente.",
         },
@@ -613,6 +628,7 @@ module.exports = {
   payload,
   eligible,
   amount,
+  money,
   validDocument,
   config,
   publicRecord,

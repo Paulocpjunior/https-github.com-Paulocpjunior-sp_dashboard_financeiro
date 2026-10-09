@@ -36,7 +36,7 @@ function fixture(fetchImpl=async()=>{throw new Error('Unexpected provider call')
   const document=p=>({path:p,get:async()=>snap(p),collection:n=>collection(`${p}/${n}`)});
   const db={collection,runTransaction:async fn=>{const writes=[];const value=await fn({get:r=>r.get(),set:(r,v)=>writes.push([r.path,v])});for(const [p,v]of writes)data.set(p,v);return value;}};
   const handler=createHistoryHandler({getServices:()=>({adminAuth:{verifyIdToken:async()=>({uid:'u'})},adminDb:db}),env:{BOLETO_CLOUD_ENVIRONMENT:'production',BOLETO_CLOUD_API_KEY:'synthetic-secret'},fetchImpl,sendJson:(_q,r,status,body)=>Object.assign(r,{status,body})});
-  return {data,async call(url='/api/boleto-cloud/history',method='GET',auth='Bearer synthetic'){const r={};await handler({url,method,headers:{authorization:auth}},r);return r;}};
+  return {data,async call(url='/api/boleto-cloud/history',method='GET',auth='Bearer synthetic'){const r={writeHead(status,headers){Object.assign(this,{status,headers});},end(body){this.body=body;}};await handler({url,method,headers:{authorization:auth}},r);return r;}};
 }
 test('history permission is independent from issuance and rejects inactive or blocked users',async()=>{
   const f=fixture();assert.equal((await f.call(undefined,undefined,'')).status,401);
@@ -80,4 +80,23 @@ test('automation reports stale state and attention without exposing internal ide
   const r=await f.call();assert.equal(r.body.automation.stale,true);assert.equal(r.body.automation.attentionCount,1);
   assert.equal(r.body.automation.attention[0].reason,'Conferir valor.');
   assert.ok(!JSON.stringify(r.body).includes('private'));assert.ok(!JSON.stringify(r.body).includes('secret-lease'));
+});
+
+
+test('INVITE authenticates, returns the attached PDF and does not write financial data',async()=>{
+ const record=row({dueDate:'2099-12-31'});
+ const f=fixture(async url=>url.endsWith('/situacao')?{ok:true,json:async()=>({boleto:{token:record.token,numero:record.number,valor:100,vencimento:record.dueDate,situacao:'EM_ABERTO',registro:{situacao:'REGISTRO_CONFIRMADO'},pagador:{nome:record.payerName,cprf:record.payerDocument}}})}:{ok:true,arrayBuffer:async()=>Buffer.from('%PDF-1.4 synthetic')});
+ f.data.set('boletoHistorySnapshots/s/chunks/0',{records:[record]});
+ const route=`/api/boleto-cloud/history/${record.id}/invite`;
+ assert.equal((await f.call(route,'GET','')).status,401);
+ const before=structuredClone([...f.data]);const response=await f.call(route);
+ assert.equal(response.status,200);assert.match(response.headers['Content-Type'],/text\/calendar/);assert.match(response.body,/ATTACH;FMTTYPE=application\/pdf/);assert.deepEqual([...f.data],before);
+ const draft=await f.call(route+'-email');assert.equal(draft.status,200);assert.match(draft.body,/X-Unsent: 1/);
+ f.data.set('users/u',{active:false,role:'admin'});assert.equal((await f.call(route)).status,403);
+});
+
+test('INVITE history blocks excluded linked transactions without contacting provider',async()=>{
+ const f=fixture();const record=row({dueDate:'2099-12-31',transactionId:'excluded'});
+ f.data.set('boletoHistorySnapshots/s/chunks/0',{records:[record]});f.data.set('transactions/excluded',{isExcluded:true});
+ assert.equal((await f.call(`/api/boleto-cloud/history/${record.id}/invite`)).status,409);
 });

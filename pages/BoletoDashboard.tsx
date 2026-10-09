@@ -58,13 +58,13 @@ export default function BoletoDashboard() {
       .catch(e=>{if(live&&generation===epoch.current)setError(e.message);}).finally(()=>{if(live)setBusy(false);});
     return()=>{live=false;};
   },[access,month,beneficiary,view,search,page,revision]);
-  async function act(row:Boleto,operation:'sync'|'pdf') {
+  async function act(row:Boleto,operation:'sync'|'pdf'|'invite'|'invite-email') {
     const generation=epoch.current;setAction(row.id);setError('');
     try {
       const response=await request(`/${row.id}/${operation}`,operation==='sync'?'POST':'GET');
       if(generation!==epoch.current)return;
       if(operation==='sync'){setSelected(null);setRevision(n=>n+1);}
-      else{const blob=await response.blob();if(generation!==epoch.current)return;const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`boleto-${row.number.replace(/[^\w-]/g,'')}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+      else{const blob=await response.blob();if(generation!==epoch.current)return;const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`boleto-${row.number.replace(/[^\w-]/g,'')}.${operation==='invite'?'ics':operation==='invite-email'?'eml':'pdf'}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
     }catch(e){if(generation===epoch.current)setError(e instanceof Error?e.message:'Consulta não concluída.');}
     finally{setAction('');}
   }
@@ -103,7 +103,7 @@ export default function BoletoDashboard() {
       {selected&&<div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"><section role="dialog" aria-modal="true" aria-labelledby="boleto-detail-title" className={`${card} max-w-2xl w-full max-h-[90vh] overflow-auto space-y-4`}><div className="flex justify-between gap-4"><h2 id="boleto-detail-title" className="font-bold text-xl">Boleto {selected.number}</h2><button aria-label="Fechar detalhes" onClick={()=>setSelected(null)}>Fechar</button></div><p>{selected.payerName} · {selected.payerDocument}</p><p>{money(selected.amountCents)} · Vencimento {date(selected.dueDate)}</p><p>Beneficiário: {selected.beneficiaryName}</p>
         <dl className="grid grid-cols-2 gap-3 text-sm"><dt>Registro</dt><dd>{selected.detailsSource==='api'?(selected.registrationStatus||'Não informado'):'Não consta no relatório; consulte a situação'}</dd><dt>Data do registro</dt><dd>{date(selected.registeredAt)}</dd><dt>Protesto</dt><dd>{selected.detailsSource==='api'?`${selected.protestStatus || 'Sem protesto informado'} · ${date(selected.protestedAt)} ${selected.protestDescription || ''}`:'Não consta no relatório'}</dd><dt>Pagamento</dt><dd>{date(selected.paidAt)} · {selected.paidCents===null?'—':money(selected.paidCents)}</dd><dt>Origem do pagamento</dt><dd>{selected.manuallyPaid?'Marcação manual':selected.paymentOrigin || 'Não informada'}</dd><dt>Crédito</dt><dd>{date(selected.creditedAt)}</dd><dt>Baixa</dt><dd>{date(selected.cancelledAt)} {selected.cancellationReason} {selected.cancellationDescription}</dd></dl>
         <p className="text-xs text-slate-500">{selected.syncedAt?`Consultado no emissor em ${new Date(selected.syncedAt).toLocaleString('pt-BR')}`:'Dados da carga histórica. Consulte o emissor para obter a situação atual.'}</p>
-        <div className="flex flex-wrap gap-3"><button className={button} disabled={!!action} onClick={()=>act(selected,'sync')}><RefreshCw className="inline h-4 w-4 mr-2"/>{action?'Consultando…':'Atualizar situação'}</button><button className={button} disabled={!!action} onClick={()=>act(selected,'pdf')}><Download className="inline h-4 w-4 mr-2"/>Baixar PDF</button></div>{error&&<p role="alert" className="text-red-600">{error}</p>}</section></div>}
+        <div className="flex flex-wrap gap-3"><button className={button} disabled={!!action} onClick={()=>act(selected,'sync')}><RefreshCw className="inline h-4 w-4 mr-2"/>{action?'Consultando…':'Atualizar situação'}</button><button className={button} disabled={!!action} onClick={()=>act(selected,'pdf')}><Download className="inline h-4 w-4 mr-2"/>Baixar PDF</button>{selected.status==='open'&&<><button className={button} disabled={!!action} onClick={()=>act(selected,'invite')}>Baixar INVITE com PDF (.ics)</button><button className={button} disabled={!!action} onClick={()=>act(selected,'invite-email')}>Preparar e-mail com INVITE e PDF</button></>}</div><p className="text-sm text-slate-500">Importe o .ics na agenda para ativar o lembrete da véspera. O PDF acompanha o convite e vai separado no rascunho de e-mail (.eml). O envio depende de você escolher o destinatário no seu aplicativo de e-mail. Alguns calendários não exibem anexos. Remova o evento após pagamento ou cancelamento; o arquivo não atualiza automaticamente.</p>{error&&<p role="alert" className="text-red-600">{error}</p>}</section></div>}
     </>}
   </div></Layout>;
 }
