@@ -17,12 +17,14 @@ Paulo autorizou em 08/10/2026 retirar o CSV e emitir dentro do app. O botão de 
 
 ## Configuração no serviço sp-pdf-download
 
+Em 09/10/2026, Paulo confirmou que a conta Boleto Cloud já está homologada e em produção. Esta implantação usará diretamente essa produção; não exige cadastrar credenciais nem repetir homologação de Sandbox. O suporte a Sandbox permanece opcional para desenvolvimento. A homologação existente da conta não substitui a verificação do novo fluxo do app após a publicação autorizada.
+
 Todas as credenciais ficam no Secret Manager e são vinculadas ao Cloud Run; não usar VITE_, código, mensagens ou logs para chaves.
 
 | Variável | Sandbox | Produção |
 | --- | --- | --- |
 | BOLETO_CLOUD_ENVIRONMENT | sandbox (padrão) | production |
-| BOLETO_CLOUD_ISSUANCE_ENABLED | true após configuração | true após homologação e autorização |
+| BOLETO_CLOUD_ISSUANCE_ENABLED | true após configuração | true após configuração e publicação autorizada |
 | BOLETO_CLOUD_SANDBOX_API_KEY | API Key do usuário Sandbox | não utilizada |
 | BOLETO_CLOUD_SANDBOX_ACCOUNT_TOKEN | token da conta Sandbox | não utilizado |
 | BOLETO_CLOUD_API_KEY | não utilizada | API Key do usuário de produção |
@@ -33,15 +35,17 @@ O domínio é fixado pelo servidor: sandbox.boletocloud.com ou app.boletocloud.c
 
 A data de virada é requisito de ativação, não prova de ausência de emissões antigas. Antes de cada emissão, o operador deve conferir no painel que a cobrança não foi emitida via CSV ou manualmente. O legado não gravava identificadores de emissão por lançamento: a aplicação não consegue certificar automaticamente os CSVs já importados. A declaração fica auditada e os arquivos antigos devem sair do fluxo operacional na virada.
 
-## Homologação e publicação
+## Integração à produção homologada e publicação
 
-1. Configurar as credenciais de Sandbox em ambiente isolado, com dados sintéticos e sem alterar cobranças de produção. Validar emissão real de Sandbox, PDF, consulta, 400, 401, repetição/409, interrupção e volume representativo.
-2. Conferir registro online e VAN da conta com Boleto Cloud; a informação consta do guia recebido, mas não foi validada pela implementação.
+1. Cadastrar somente a API Key do usuário de produção no Secret Manager (`sp-dashboard-boleto-cloud-api-key`). Preservar o token Itaú existente (`sp-dashboard-boleto-cloud-itau-3145-99791-6-token`). Não criar ou exigir credenciais de Sandbox para esta ativação. Validar permissões, duplicidade e falhas com testes sintéticos locais.
+2. Usar a conta de produção homologada, conforme confirmação de Paulo em 09/10/2026. O guia informa registro online e VAN; o resultado de cada novo boleto emitido pelo app ainda deve ser consultado no emissor.
 3. Revisar PR, testes, menus e commit remoto. Publicação somente a partir da main atual e com FINANCEIRO_APPROVED_COMMIT igual ao SHA completo autorizado por Paulo.
 4. Publicar primeiro o backend sp-pdf-download em us-central1, preservando identidade, configurações e segredos existentes; depois Hosting pelo fluxo protegido. A rotina atual de Hosting não publica este backend automaticamente.
-5. Configurar produção com a API Key e o token da conta existentes. Confirmar data da virada, revisar cobranças que já passaram pelo CSV e emitir poucos títulos reais escolhidos pelo operador, após a autorização de publicação. Conferir no painel o registro antes de ampliar o volume.
+5. Definir explicitamente BOLETO_CLOUD_ENVIRONMENT=production e vincular BOLETO_CLOUD_API_KEY e BOLETO_CLOUD_ACCOUNT_TOKEN aos segredos de produção. Confirmar data da virada, revisar cobranças que já passaram pelo CSV e emitir poucos títulos reais escolhidos pelo operador, após a autorização de publicação. Conferir no painel o registro antes de ampliar o volume.
 6. Validar versão pública, saúde, rotas, menus, permissões e fluxo real. A reversão operacional deve desabilitar BOLETO_CLOUD_ISSUANCE_ENABLED; não restaurar o CSV durante resultado incerto nem apagar histórico/chaves de controle.
 
 Verificação em 08/10/2026: o serviço publicado tinha somente BOLETO_CLOUD_ACCOUNT_TOKEN. A listagem de nomes dos segredos Boleto encontrou apenas o token da conta; valores não foram exibidos. Não houve emissão real, homologação com credencial Sandbox nem deploy nesta preparação.
 
 Referências: guia-sandbox-para-producao.pdf fornecido por Paulo; https://developers.boleto.cloud/v1/boletos/criar/ ; https://developers.boleto.cloud/v1/boletos/situacao/ ; https://developers.boleto.cloud/v1/boletos/status-registro/ . Há divergência entre guias antigos sobre retorno 200 e referência de criação sobre 409: respostas sem evidência suficiente ficam em revisão, nunca provocam nova emissão automática.
+
+Atualização em 09/10/2026: a API Key de produção ainda não aparece na listagem de nomes do cofre. A tela local de cadastro solicita somente essa API Key. A vinculação ao Cloud Run e a habilitação de emissão ficam para a publicação do commit autorizado.

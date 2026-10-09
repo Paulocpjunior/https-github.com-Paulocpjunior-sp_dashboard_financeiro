@@ -36,7 +36,7 @@ const env = {
   BOLETO_CLOUD_ISSUANCE_ENABLED: "true",
 };
 // Transactional in-memory store: models atomic commits and serializes concurrent callers.
-function fixture(fetchImpl) {
+function fixture(fetchImpl, environment = env) {
   const data = new Map([
     ["users/user", { active: true, role: "admin" }],
     ["transactions/a", row()],
@@ -109,7 +109,7 @@ function fixture(fetchImpl) {
       res.status = status;
       res.body = body;
     },
-    env,
+    env: environment,
     fetchImpl,
   });
   const call = async (action = "", body, id = "a", authorized = true) => {
@@ -359,4 +359,32 @@ test("PDF and registration are authorized reads; provider token does not leave s
   const reg = await f.call("registration");
   assert.equal(reg.body.registration.registeredAt, "2026-10-08");
   assert.equal(posts, 1);
+});
+
+
+test("production uses its existing account without Sandbox credentials", async () => {
+  const production = {
+    BOLETO_CLOUD_ENVIRONMENT: "production",
+    BOLETO_CLOUD_API_KEY: "synthetic-production-key",
+    BOLETO_CLOUD_ACCOUNT_TOKEN: "synthetic-existing-account",
+    BOLETO_CLOUD_CUTOVER_DATE: "2026-10-09",
+    BOLETO_CLOUD_ISSUANCE_ENABLED: "true",
+  };
+  let calls = 0;
+  const f = fixture((url, options) => {
+    calls++;
+    assert.equal(url, "https://app.boletocloud.com/api/v1/boletos");
+    assert.equal(options.headers.Authorization, `Basic ${Buffer.from("synthetic-production-key:token").toString("base64")}`);
+    assert.equal(new URLSearchParams(options.body).get("boleto.conta.token"), "synthetic-existing-account");
+    return success(url, options);
+  }, production);
+  const result = await f.issue();
+  assert.equal(result.body.environment, "production");
+  assert.equal(result.body.state, "issued");
+  assert.equal(calls, 1);
+  assert.deepEqual(f.data.get("transactions/a"), row());
+  for (const patch of [{BOLETO_CLOUD_API_KEY: ""}, {BOLETO_CLOUD_ISSUANCE_ENABLED: "false"}]) {
+    const blocked = fixture(() => { throw new Error("No provider call allowed"); }, {...production, ...patch});
+    assert.equal((await blocked.issue()).status, 503);
+  }
 });
