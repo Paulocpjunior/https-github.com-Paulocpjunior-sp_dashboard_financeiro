@@ -321,6 +321,37 @@ test("unrelated 409 never attaches another boleto; auth failure on recovery stay
   status = 401;
   assert.equal((await f.call("recover", {})).body.state, "unknown");
 });
+test("postal code uses the provider format without changing the source address", () => {
+  const original = structuredClone(address);
+  assert.equal(payload(row(), address)["boleto.pagador.endereco.cep"], "01310-100");
+  assert.equal(payload(row(), { ...address, cep: "01310-100" })["boleto.pagador.endereco.cep"], "01310-100");
+  assert.deepEqual(address, original);
+});
+test("400 reports validation causes, redacts credentials and never retries issuance", async () => {
+  let calls = 0;
+  const f = fixture(() => {
+    calls++;
+    return Response.json({ erro: { causas: [
+      { codigo: "842EF62A", mensagem: "Campo (boleto.pagador.endereco.cep) - Formato inválido." },
+      { codigo: "123ABC", mensagem: "Conta test-account, chave test-api e api-key_outrosegredo" },
+    ] } }, { status: 400 });
+  });
+  const result = (await f.issue()).body;
+  assert.equal(result.state, "rejected");
+  assert.match(result.error, /boleto.pagador.endereco.cep/);
+  assert.match(result.error, /842EF62A/);
+  assert.doesNotMatch(JSON.stringify(result), /test-account|test-api|api-key_outrosegredo/);
+  assert.equal(calls, 1);
+  assert.equal((await f.preview()).body.state, "draft");
+});
+test("malformed and oversized validation responses keep a safe fallback", async () => {
+  for (const body of ["not-json", "x".repeat(17000), JSON.stringify({erro:{causas:[{mensagem:{}}]}})]) {
+    const f = fixture(() => new Response(body, { status: 400 }));
+    const result = (await f.issue()).body;
+    assert.equal(result.state, "rejected");
+    assert.match(result.error, /Dados recusados pelo Boleto Cloud/);
+  }
+});
 test("400 and 401 stop without automatic retry and can be revised", async () => {
   for (const status of [400, 401]) {
     let calls = 0;
