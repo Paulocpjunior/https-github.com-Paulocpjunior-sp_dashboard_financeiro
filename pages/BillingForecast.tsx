@@ -178,8 +178,9 @@ const BillingForecast: React.FC = () => {
       clientNumber: row.clientNumber,
       groupName: row.profile?.groupName || (row.groupName === 'Sem grupo' ? '' : row.groupName),
       billingMethod: row.billingMethod,
-      issueDay: row.issueDate ? Number(row.issueDate.slice(-2)) : undefined,
-      dueDay: row.dueDate ? Number(row.dueDate.slice(-2)) : undefined,
+      issueDay: row.profile?.issueDay || (row.issueDate ? Number(row.issueDate.slice(-2)) : undefined),
+      issueMonthOffset: row.profile?.issueMonthOffset ?? 0,
+      dueDay: row.profile?.dueDay || (row.dueDate ? Number(row.dueDate.slice(-2)) : undefined),
       deliveryChannels: [...row.deliveryChannels],
       billingEmail: row.billingEmail,
       whatsapp: row.whatsapp,
@@ -426,6 +427,7 @@ const BillingForecast: React.FC = () => {
               <div className="grid sm:grid-cols-3 gap-4">
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Como é cobrado<select value={editingProfile.billingMethod || ''} onChange={event => updateEditing({ billingMethod: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5"><option value="">Selecione...</option><option value="Boleto Itaú">Boleto Itaú</option><option value="Fatura Wix">Fatura Wix</option><option value="Boleto Itaú + Fatura Wix">Boleto Itaú + Fatura Wix</option><option value="Outro">Outro</option></select></label>
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Dia de emissão<input type="number" min="1" max="31" value={editingProfile.issueDay || ''} onChange={event => updateEditing({ issueDay: event.target.value ? Number(event.target.value) : undefined })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Mês de emissão<select value={editingProfile.issueMonthOffset ?? 0} onChange={event => updateEditing({ issueMonthOffset: Number(event.target.value) as -1 | 0 })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5"><option value={0}>Mesmo mês do vencimento</option><option value={-1}>Mês anterior ao vencimento</option></select></label>
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Dia do vencimento<input type="number" min="1" max="31" value={editingProfile.dueDay || ''} onChange={event => updateEditing({ dueDay: event.target.value ? Number(event.target.value) : undefined })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
               </div>
               <fieldset><legend className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Meio de envio</legend><div className="grid sm:grid-cols-3 gap-3">{([{ value: 'email', label: 'E-mail', icon: Mail }, { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle }, { value: 'printed', label: 'Físico impresso', icon: Printer }] as const).map(item => { const Icon = item.icon; const selected = editingProfile.deliveryChannels.includes(item.value); return <button key={item.value} type="button" onClick={() => toggleChannel(item.value)} className={`p-3 rounded-lg border flex items-center gap-2 font-semibold ${selected ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-400 text-blue-700 dark:text-blue-300' : 'border-slate-300 dark:border-slate-700 text-slate-500'}`}><Icon className="h-4 w-4" />{item.label}</button>; })}</div></fieldset>
