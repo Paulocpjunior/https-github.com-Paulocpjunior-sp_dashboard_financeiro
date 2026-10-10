@@ -26,7 +26,6 @@ interface DataTableProps {
   canExportBoletoCloud?: boolean;
   onDelete?: (id: string) => void;
   onPayable?: (id: string) => void;
-  onMarkAsPaid?: (id: string) => void;
   onClientClick?: (clientName: string) => void;
   sortField: TransactionSortField;
   sortDirection: TransactionSortDirection;

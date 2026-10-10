@@ -53,14 +53,15 @@ service cloud.firestore {
         && request.resource.data.createdVia in ['dashboard', 'self-registration'];
     }
 
-    function isLimitedPaymentUpdate() {
-      return isActiveUser()
+    // Baixas usam o servidor, que registra auditoria na mesma transação.
+    function isAdministrativeExclusion() {
+      return isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status',
-          'paymentDate',
-          'updatedAt'
+          'isExcluded', 'exclusionReason', 'excludedAt', 'excludedBy', 'excludedByName', 'updatedAt'
         ])
-        && request.resource.data.status == 'Pago';
+        && request.resource.data.isExcluded == true
+        && request.resource.data.exclusionReason is string
+        && request.resource.data.exclusionReason.size() > 0;
     }
 
     match /users/{userId} {
@@ -100,7 +101,7 @@ service cloud.firestore {
     match /transactions/{transactionId} {
       allow read: if isActiveUser();
       allow create: if isAdmin();
-      allow update: if isAdmin() || isLimitedPaymentUpdate();
+      allow update: if isAdministrativeExclusion();
       allow delete: if isAdmin();
     }
 

@@ -594,29 +594,6 @@ export const DataService = {
   },
 
   /**
-   * Marca uma transação como paga (Dar Baixa) — atualiza Firebase e o cache local.
-   */
-  markAsPaid: async (id: string): Promise<void> => {
-    const today = toLocalISODate();
-    const updates: Partial<Transaction> = {
-      status: 'Pago',
-      paymentDate: today,
-    };
-
-    // Atualiza no Firebase
-    await FirebaseService.updateTransaction(id, updates);
-
-    // Atualiza o cache local imediatamente para refletir na UI
-    const transaction = CACHED_TRANSACTIONS.find(t => t.id === id);
-    if (transaction) {
-      transaction.status = 'Pago';
-      transaction.paymentDate = today;
-    }
-
-    DataService.notifyListeners();
-  },
-
-  /**
    * Força uma atualização dos dados.
    */
   refreshCache: async (): Promise<void> => {
