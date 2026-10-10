@@ -8,6 +8,7 @@ import {
   EntryReview,
   nativeEntryAPI,
   downloadEntryAttachment,
+  downloadEntryStatement,
 } from "../services/nativeEntryService";
 import { Transaction } from "../types";
 import { auth } from "../services/firebaseConfig";
@@ -332,6 +333,7 @@ export default function NativeEntryModal({
               {saved.client} · {money(Number(saved.valorOriginal))} ·{" "}
               {saved.dueDate.split("-").reverse().join("/")} · {saved.status}
             </p>
+            {receivable && !simulation && saved.extraItems && <button type="button" className="rounded-lg bg-blue-600 text-white px-4 py-3" onClick={() => downloadEntryStatement(saved.id).catch(e => setError(e.message))}>Baixar demonstrativo da cobrança (PDF)</button>}
             {saved.attachments?.map((a) => (
               <button
                 key={a.sha256}

@@ -327,6 +327,18 @@ function createNativeEntryHandler({
         });
         return true;
       }
+      const statementMatch = url.pathname.match(/^\/api\/financial-entries\/statement\/([a-zA-Z0-9_-]{1,200})$/);
+      if (request.method === "GET" && statementMatch) {
+        const ref = db.collection("transactions").doc(statementMatch[1]);
+        const entry = (await ref.get()).data();
+        const bytes = await require("./receivable-statement").statement(entry);
+        if (!bytes) throw new EntryError("Detalhamento indisponível para este lançamento.",404);
+        if (!allowed((await userRef.get()).data())) throw new EntryError("Acesso revogado.",403);
+        if (JSON.stringify((await ref.get()).data()) !== JSON.stringify(entry))
+          throw new EntryError("Cobrança alterada. Consulte novamente.",409);
+        reply({name:"demonstrativo.pdf",type:"application/pdf",base64:bytes.toString("base64")});
+        return true;
+      }
       const attachmentMatch = url.pathname.match(
         /^\/api\/financial-entries\/attachments\/([a-zA-Z0-9_-]{1,200})\/([a-f0-9]{64})$/,
       );

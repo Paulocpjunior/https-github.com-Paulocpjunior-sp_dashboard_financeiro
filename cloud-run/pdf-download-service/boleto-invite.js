@@ -17,9 +17,11 @@ function validateSituation(b, expected, currentDay = today()) {
 }
 // ASCII/base64 attachment lines can be folded without splitting Unicode text.
 const foldBinary = s => s.match(/.{1,74}/g).join('\r\n ');
-function artifacts(b, pdf, now = new Date()) {
+function artifacts(b, pdf, now = new Date(), detail = null) {
   if (!Buffer.isBuffer(pdf) || pdf.length > 3_000_000 || pdf.subarray(0,5).toString() !== '%PDF-')
     throw new InviteError('PDF do boleto inválido ou maior que 3 MB.', 502);
+  if (detail && (!Buffer.isBuffer(detail) || detail.length > 3_000_000 || detail.subarray(0,5).toString() !== '%PDF-'))
+    throw new InviteError('Demonstrativo inválido.',502);
   const number = b.numero.replace(/[^a-zA-Z0-9-]/g,'');
   const value = b.valor.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const subject = `Vencimento do boleto ${number} — ${value}`;
@@ -29,16 +31,17 @@ function artifacts(b, pdf, now = new Date()) {
   // A cobrança mantém a identidade ao baixar novamente, independentemente da data/valor.
   ics = ics.replace(/UID:[\s\S]*?\r\n(?=[A-Z])/, foldBinary(`UID:boleto-${hash(b.token)}@financeiro.sp`)+"\r\n")
     .replace('TRANSP:TRANSPARENT', `CLASS:PRIVATE\r\n${foldBinary('ATTACH;FMTTYPE=application/pdf;ENCODING=BASE64;VALUE=BINARY:'+pdf.toString('base64'))}\r\nTRANSP:TRANSPARENT`);
+  if (detail) ics = ics.replace('TRANSP:TRANSPARENT', foldBinary('ATTACH;FMTTYPE=application/pdf;ENCODING=BASE64;VALUE=BINARY:'+detail.toString('base64'))+'\r\nTRANSP:TRANSPARENT');
   const base64 = bytes => Buffer.from(bytes).toString('base64').match(/.{1,76}/g).join('\r\n');
   const boundary = 'sp-financeiro-'+hash(b.token).slice(0,32);
   const part = (mime,name,bytes) => [`--${boundary}`,`Content-Type: ${mime}`,`Content-Disposition: attachment; filename="${name}"`,'Content-Transfer-Encoding: base64','',base64(bytes)].join('\r\n');
   // Draft only: no recipient, no sender and no network delivery hidden in download.
   const email = ['X-Unsent: 1','MIME-Version: 1.0',`Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,`Content-Type: multipart/mixed; boundary="${boundary}"`,'',
     `--${boundary}`,'Content-Type: text/plain; charset=utf-8','Content-Transfer-Encoding: base64','',base64(`Olá,\n\nSegue o boleto de ${value}, com vencimento em ${date}, e o convite para adicionar o vencimento à sua agenda.\nAbra o arquivo .ics para importar o evento e conferir o lembrete. O PDF também segue separado para acesso em calendários que não exibem anexos.\n\nSe já pagou, desconsidere.\nSP Assessoria Contábil`),
-    part('application/pdf',`boleto-${number}.pdf`,pdf),part('text/calendar; charset=utf-8; method=PUBLISH',`vencimento-${number}.ics`,ics),`--${boundary}--`,''].join('\r\n');
+    part('application/pdf',`boleto-${number}.pdf`,pdf),...(detail?[part('application/pdf',`demonstrativo-${number}.pdf`,detail)]:[]),part('text/calendar; charset=utf-8; method=PUBLISH',`vencimento-${number}.ics`,ics),`--${boundary}--`,''].join('\r\n');
   return {ics,email,number};
 }
-async function prepareInvite({token,base,apiKey,expected,fetchImpl=fetch,now=new Date()}) {
+async function prepareInvite({token,base,apiKey,expected,entry=null,fetchImpl=fetch,now=new Date()}) {
   const headers={Authorization:`Basic ${Buffer.from(apiKey+':token').toString('base64')}`};
   const get=async suffix=>{const r=await fetchImpl(`${base}/boletos/${encodeURIComponent(token)}${suffix}`,{method:'GET',headers,redirect:'error',signal:AbortSignal.timeout(25000)});if(!r.ok)throw new InviteError('Não foi possível conferir o boleto no emissor. Nenhum convite foi gerado.',502);return r;};
   const currentDay=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
@@ -49,7 +52,13 @@ async function prepareInvite({token,base,apiKey,expected,fetchImpl=fetch,now=new
   const pdf=Buffer.from(await document.arrayBuffer());
   const last=validateSituation((await (await get('/situacao')).json()).boleto,expected,currentDay);
   if(JSON.stringify(first)!==JSON.stringify(last))throw new InviteError('Boleto alterado durante a preparação. Atualize e tente novamente.');
-  return artifacts(last,pdf,now);
+  let detail=null;
+  if (entry) {
+    if (Math.round(Number(entry.valorOriginal)*100)!==expected.amountCents)
+      throw new InviteError('Demonstrativo diverge do boleto.',409);
+    detail=await require('./receivable-statement').statement(entry);
+  }
+  return artifacts(last,pdf,now,detail);
 }
 function sendInvite(res,artifact,format) {
   const email=format==='invite-email';

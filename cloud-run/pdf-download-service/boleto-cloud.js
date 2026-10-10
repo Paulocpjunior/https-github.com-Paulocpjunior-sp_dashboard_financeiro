@@ -286,7 +286,7 @@ function createBoletoHandler({
         const row = (await source.get()).data();
         if (!row || !eligible(row) || money(row.valueReceived)>0) throw new BoletoError("Cobrança paga, excluída ou indisponível para INVITE.", 409);
         if (!cfg.apiKey || !cfg.accountToken) throw new BoletoError("Credenciais indisponíveis.", 503);
-        const artifact = await prepareInvite({token:existing.token,base:cfg.base,apiKey:cfg.apiKey,fetchImpl,
+        const artifact = await prepareInvite({token:existing.token,base:cfg.base,apiKey:cfg.apiKey,fetchImpl,entry:row,
           expected:{token:existing.token,number:existing.number,amountCents:Math.round(amount(row)*100),dueDate:row.dueDate,payerDocument:digits(row.cpfCnpj)}});
         if (!allowed((await userRef.get()).data())) throw new BoletoError("Acesso revogado.", 403);
         const refreshed = (await source.get()).data();
