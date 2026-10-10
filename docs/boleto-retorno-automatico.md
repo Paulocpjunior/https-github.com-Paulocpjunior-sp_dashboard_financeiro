@@ -34,3 +34,11 @@ O painel exibe última execução sem falhas, execução atrasada (45 minutos se
 Para simulação sem escrita: iniciar `node boleto-return-job.js --dry-run` no diretório do serviço, com credenciais obtidas do cofre em memória. Retorna somente contagens, sem tokens ou dados de pagador. A simulação percorre a primeira página.
 
 Para interromper: pausar `sp-boleto-returns-every-15m` no Cloud Scheduler e verificar se há execução em curso. A pausa não cancela execução iniciada; cancelar também essa execução se necessário. Não desfazer baixas válidas. Para desabilitar apenas novas baixas, atualizar o job com `BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=false` pelo fluxo autorizado. O painel só reflete essa mudança após nova execução.
+
+## Histórico conhecido pela API
+
+O mesmo job agora executa uma etapa independente de atualização do histórico, após a etapa nativa. Usa os tokens da carga existente; não depende de sessão do painel Boleto Cloud. Consulta abertos e pagamentos/cancelamentos dos últimos sete dias, inclusive para completar a data de crédito. Não descobre títulos novos criados fora do app e não reconsulta todo o arquivo de títulos encerrados há mais tempo.
+
+Cada lote percorre até 60 títulos por ordem estável, exclui tokens gerenciados pela emissão nativa e retoma por cursor em `boletoReturnJobs/history-production`. A etapa respeita o prazo global de oito minutos desde o início do worker; consultas têm timeout de quinze segundos. Falhas preservam os dados e serão revistas na próxima volta. O painel distingue execução de lote e última volta completa sem falhas. Uma nova carga reinicia o cursor. O prazo de atualização de cada título depende da quantidade de candidatos e dos tempos da API; não equivale a consultar todos a cada quinze minutos.
+
+A escrita dessa etapa é restrita a `boletoHistoryUpdates` e ao estado do job. Não altera `transactions`, não cria auditoria de baixa e não associa recebíveis por semelhança. A concessão de execução, conferência da carga atual e comparação da data da resposta protegem contra concorrência e respostas antigas. As situações obtidas pela API passam pelas mesmas validações do sincronismo individual. Testes usam exclusivamente documentos sintéticos.
