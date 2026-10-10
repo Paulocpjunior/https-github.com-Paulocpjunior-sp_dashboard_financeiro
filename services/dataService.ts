@@ -6,7 +6,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { logger } from '../utils/logger';
 import { toLocalISODate } from '../utils/dateUtils';
-import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { getOriginalAmount, getOutstandingAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
 import { sortTransactions, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 type LoadedRange = {
@@ -367,7 +367,7 @@ const normalizeAndCacheTransactions = (
       } else {
         t.status = 'Pendente';
       }
-      if (t.status === 'Pendente' && t.paymentDate) {
+      if (t.status === 'Pendente' && t.paymentDate && !t.payableBalance) {
         t.paymentDate = '';
       }
       t.date = normalizeDate(t.date) || t.date;
@@ -699,7 +699,7 @@ export const DataService = {
             else if (['pendente', 'nao', 'não', 'n', 'aberto', 'em aberto', ''].includes(sLower)) t.status = 'Pendente';
             else if (['agendado', 'programado'].includes(sLower)) t.status = 'Agendado';
           } else { t.status = 'Pendente'; }
-          if (t.status === 'Pendente' && t.paymentDate) t.paymentDate = '';
+          if (t.status === 'Pendente' && t.paymentDate && !t.payableBalance) t.paymentDate = '';
           // FIX: Normalizar datas DD/MM/YYYY -> YYYY-MM-DD (ISO)
           t.date = normalizeDate(t.date) || t.date;
           t.dueDate = normalizeDate(t.dueDate) || t.dueDate;
@@ -781,7 +781,7 @@ export const DataService = {
         const isPaid = isPaidStatus(t.status);
         const isPending = !isPaid;
 
-        if (isPaid) {
+        if (isPaid || t.payableBalance?.version === 1) {
             // Saldo Realizado = Recebido - Pago
             const entryPaid = isEntradaTransaction(t) ? getPaidAmount(t) : 0;
             const payablePaid = isSaidaTransaction(t) ? getPaidAmount(t) : 0;
@@ -795,7 +795,7 @@ export const DataService = {
             }
             // Saídas Pendentes
             if (isSaidaTransaction(t)) {
-                pendingPayables += getOriginalAmount(t);
+                pendingPayables += getOutstandingAmount(t);
             }
         }
     });
@@ -881,8 +881,8 @@ export const DataService = {
     if (isContasAPagar) {
       // KPI Contexto Saída: Total Pago vs Total Pendente
       const totalGeral = filtered.reduce((acc, curr) => acc + getOriginalAmount(curr), 0);
-      const totalPago = filtered.filter(i => isPaidStatus(i.status)).reduce((acc, curr) => acc + getPaidAmount(curr), 0);
-      const totalPendente = totalGeral - totalPago;
+      const totalPago = filtered.reduce((acc, curr) => acc + getPaidAmount(curr), 0);
+      const totalPendente = filtered.reduce((acc, curr) => acc + getOutstandingAmount(curr), 0);
 
       kpi = { totalPaid: totalPago, totalReceived: totalGeral, balance: totalPendente }; 
     } else if (isContasAReceber) {

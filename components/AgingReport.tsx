@@ -1,3 +1,4 @@
+import { getOutstandingAmount } from "../utils/transactionAmounts";
 
 import React from 'react';
 import { Transaction } from '../types';
@@ -41,7 +42,7 @@ export const AgingReport: React.FC<AgingReportProps> = ({ transactions, mode, on
       
       const diffTime = today.getTime() - dueDate.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      const value = mode === 'payables' ? t.valuePaid : (t.totalCobranca || t.valueReceived || 0);
+      const value = mode === 'payables' ? getOutstandingAmount(t) : (t.totalCobranca || t.valueReceived || 0);
 
       if (diffDays <= 0) {
         buckets[0].count++;

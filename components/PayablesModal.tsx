@@ -1,8 +1,9 @@
+import { CheckCircle2 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { downloadEntryAttachment } from "../services/nativeEntryService";
 import { auth } from "../services/firebaseConfig";
 import { toLocalISODate } from "../utils/dateUtils";
-import { getOriginalAmount } from "../utils/transactionAmounts";
+import { getOriginalAmount, getOutstandingAmount } from "../utils/transactionAmounts";
 import { Transaction } from "../types";
 async function defaultApi(path: string, body?: unknown) {
   if (!auth.currentUser) throw Error("Entre novamente.");
@@ -53,9 +54,10 @@ export default function PayablesModal({
     [uncertain, setUncertain] = useState(false);
   const [payment, setPayment] = useState({
     date: toLocalISODate(new Date()),
-    amount: "",
+    amount: "", mode: "full", interest: "0", fine: "0", discount: "0",
     bankAccount: "",
     method: "",
+    paidBy: "", authorizedBy: "", supplier: "", personType: "",
     note: "",
   });
   const [ruleRecipients, setRuleRecipients] = useState("");
@@ -81,9 +83,14 @@ export default function PayablesModal({
       setRecipients(d.recipients.join("; "));
       setPayment({
         date: toLocalISODate(new Date()),
-        amount: getOriginalAmount(d.transaction).toFixed(2),
+        amount: getOutstandingAmount(d.transaction).toFixed(2),
+        mode: "full", interest: "0", fine: "0", discount: "0",
         bankAccount: d.transaction.bankAccount || "",
         method: d.transaction.metodoPagamento || "",
+        paidBy: d.transaction.paidBy || "",
+        authorizedBy: d.transaction.payableSettlement?.authorizedBy || d.transaction.nativeEntry?.authorizedBy || "",
+        supplier: d.transaction.payableSettlement?.supplier || d.transaction.nativeEntry?.supplier || "",
+        personType: d.transaction.payableSettlement?.personType || d.transaction.nativeEntry?.personType || "",
         note: "",
       });
       const existing = list.rules.find((r: any) => r.id === key);
@@ -175,7 +182,7 @@ export default function PayablesModal({
           setAttachment(null);
           setMessage("Pagamento registrado na mesma conta.");
           onSaved();
-          await load();
+          onClose();
         }
       }
     } catch {
@@ -381,10 +388,19 @@ export default function PayablesModal({
           <fieldset disabled={busy || uncertain} className="space-y-3">
             {tab === "payment" &&
               (isPaid ? (
-                <p>Conta já paga. O histórico financeiro foi preservado.</p>
+                <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100">
+                  <p className="font-semibold">Conta já paga. O histórico financeiro foi preservado.</p>
+                  <p>Última baixa: {row.paymentDate || "Não informada"} · Banco: {row.bankAccount || "Não informado"}</p>
+                  <p>Forma: {row.metodoPagamento || "Não informada"} · Pago por: {row.paidBy || "Não informado"}</p>
+                  {data.transaction.payableSettlement?.supplier && <p>Favorecido: {data.transaction.payableSettlement.supplier} ({data.transaction.payableSettlement.personType}) · Autorizado por: {data.transaction.payableSettlement.authorizedBy}</p>}
+                </div>
               ) : (
                 <>
+                  <div className="rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-800">Valor original: <strong>{brl(getOriginalAmount(row))}</strong> · Vencimento: {row.dueDate}<br/>Lançamento: {row.id}<br/>Registrado por: {row.createdByName || "Não informado no histórico"}{row.observacaoAPagar && <p>Observação original: {row.observacaoAPagar}</p>}</div>
+                  <p className="text-base font-semibold">Saldo antes desta baixa: {brl(getOutstandingAmount(row))}</p>
                   <div className="grid sm:grid-cols-2 gap-3">
+                    {field("Tipo de baixa", <select className={cls} value={payment.mode} onChange={e => edit(() => setPayment({...payment, mode:e.target.value}))}><option value="full">Quitação integral</option><option value="partial">Pagamento parcial</option></select>)}
+                    {([['interest', 'Juros desta baixa'], ['fine', 'Multa desta baixa'], ['discount', 'Desconto desta baixa']] as const).map(([key,label]) => <React.Fragment key={key}>{field(label, <input className={cls} type="number" min="0" step="0.01" value={payment[key]} onChange={e => edit(() => setPayment({...payment,[key]:e.target.value}))}/>)}</React.Fragment>)}
                     {field(
                       "Data efetiva",
                       <input
@@ -453,6 +469,10 @@ export default function PayablesModal({
                         ))}
                       </select>,
                     )}
+                    {field("Pago por", <select className={cls} value={payment.paidBy} onChange={e=>edit(()=>setPayment({...payment,paidBy:e.target.value}))}><option value="">Selecione</option>{data.catalog.paidBy.map((v:string)=><option key={v} value={v}>{v}</option>)}</select>)}
+                    {field("Autorizado por", <select className={cls} value={payment.authorizedBy} onChange={e=>edit(()=>setPayment({...payment,authorizedBy:e.target.value}))}><option value="">Selecione</option>{data.catalog.authorizedBy.map((v:string)=><option key={v} value={v}>{v}</option>)}</select>)}
+                    {field("Pago à - Pessoa física / jurídica", <select className={cls} value={payment.personType} onChange={e=>edit(()=>setPayment({...payment,personType:e.target.value}))}><option value="">Selecione</option><option value="PF">Pessoa física</option><option value="PJ">Pessoa jurídica</option></select>)}
+                    {field("Nome do credor / favorecido", <input className={cls} maxLength={300} value={payment.supplier} onChange={e=>edit(()=>setPayment({...payment,supplier:e.target.value}))}/>)}
                   </div>
                   {field(
                     "Observação",
@@ -476,8 +496,7 @@ export default function PayablesModal({
                     />,
                   )}
                   <p className="text-sm">
-                    Baixa integral pelo valor provisionado. Pagamento parcial,
-                    juros e descontos ainda não estão liberados.
+                    Informe o valor efetivamente pago. Juros e multa aumentam o saldo; desconto reduz o saldo. Justifique diferenças na observação. A baixa parcial mantém a conta em aberto.
                   </p>
                 </>
               ))}
@@ -662,6 +681,7 @@ export default function PayablesModal({
               </>
             )}
           </fieldset>
+          {tab === "payment" && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}</p>)}</section>}
           {review && (
             <div className="border rounded p-3 my-3">
               <strong>
@@ -673,24 +693,29 @@ export default function PayablesModal({
                   ? `Pagamento de ${brl(Number(payment.amount))} em ${payment.date}, conta ${payment.bankAccount}, forma ${payment.method}.`
                   : `${review.transaction.description}: ${brl(getOriginalAmount(review.transaction))}, vencimento ${review.transaction.dueDate}.`}
               </p>
+              {tab === "payment" && <><p className="font-semibold">{review.after?.status === "Pago" ? "Conta será quitada" : "Conta continuará em aberto"} · Saldo após esta baixa: {brl((review.after?.payableBalance?.remainingCents || 0) / 100)}</p><p>Juros: {brl(Number(payment.interest))} · Multa: {brl(Number(payment.fine))} · Desconto: {brl(Number(payment.discount))}</p><p>Favorecido: {payment.supplier} ({payment.personType})</p><p>Pago por: {payment.paidBy} · Autorizado por: {payment.authorizedBy}</p><p>Observação da baixa: {payment.note || "Sem observação"}</p></>}
               {attachment && <p>Anexo: {attachment.name}</p>}
             </div>
           )}
           {tab === "payment" && !isPaid && (
+            <div className="mt-4 border-t border-slate-200 bg-white py-4 dark:border-slate-700 dark:bg-slate-900">
+            <p className="mb-2 text-sm text-slate-500">{review ? "Confira a revisão acima. A confirmação salva a baixa e fecha esta tela." : "Etapa 1 de 2: revise os dados antes de concluir a baixa."}</p>
             <button
-              className={btn + " mt-3"}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
               disabled={busy}
               onClick={() => void settle()}
             >
-              {busy
+              <CheckCircle2 aria-hidden="true" className="h-5 w-5" />{busy
                 ? "Processando…"
                 : review
                   ? uncertain
                     ? "Consultar/repetir a mesma confirmação"
-                    : "Confirmar baixa da conta"
-                  : "Revisar pagamento"}
+                    : "Confirmar baixa e concluir"
+                  : "Revisar baixa da conta"}
             </button>
+            </div>
           )}
+          {isPaid && tab === "payment" && <button className={btn + " mt-4 w-full min-h-12"} onClick={onClose}>Concluir e fechar lançamento</button>}
           {tab === "generate" && (
             <button
               className={btn + " mt-3"}

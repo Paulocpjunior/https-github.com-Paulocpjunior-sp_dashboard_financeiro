@@ -358,7 +358,7 @@ export default function NativeEntryModal({
               >
                 Lançar outra conta a {kind}
               </button>
-              <button onClick={onClose}>Concluir</button>
+              <button className="min-h-12 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800" onClick={onClose}>Concluir e fechar lançamento</button>
             </div>
           </div>
         ) : !config ? (

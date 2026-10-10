@@ -47,6 +47,14 @@ function payable(r) {
 }
 function pending(r) {
   payable(r);
+  if (r.payableBalance?.version === 1) {
+    const b = r.payableBalance;
+    if (![b.paidCents, b.interestCents, b.fineCents, b.discountCents, b.remainingCents].every(v => Number.isSafeInteger(v) && v >= 0) ||
+        nominal(r) + b.interestCents + b.fineCents - b.discountCents - b.paidCents !== b.remainingCents ||
+        b.remainingCents <= 0 || norm(r.status) !== "pendente" || !r.payableSettlement)
+      fail("Saldo de pagamento inconsistente ou conta quitada. Confira o histórico.");
+    return r;
+  }
   if (
     !["pendente", "agendado", "vencida", "vencido"].includes(norm(r.status)) ||
     ["sim", "pago", "true"].includes(norm(r.pago)) ||
@@ -94,15 +102,26 @@ function payment(r, input, catalog) {
   date(input.date);
   if (input.date > today())
     fail("A baixa exige data efetiva, não futura.", 400);
-  const value = String(input.amount || "");
-  if (
-    !/^\d{1,8}(\.\d{1,2})?$/.test(value) ||
-    Math.round(Number(value) * 100) !== nominal(r)
-  )
-    fail(
-      "Nesta etapa a baixa deve ser integral, pelo valor provisionado. Diferenças e parciais exigem conferência.",
-      400,
-    );
+  const cents = (value, label, optional = false) => {
+    const raw = String(value ?? (optional ? "0" : ""));
+    if (!/^\d{1,8}(\.\d{1,2})?$/.test(raw)) fail(`${label} inválido.`, 400);
+    return Math.round(Number(raw) * 100);
+  };
+  const amount = cents(input.amount, "Valor pago");
+  const interest = cents(input.interest, "Juros", true);
+  const fine = cents(input.fine, "Multa", true);
+  const discount = cents(input.discount, "Desconto", true);
+  const previous = r.payableBalance || {paidCents: 0, interestCents: 0, fineCents: 0, discountCents: 0, remainingCents: nominal(r)};
+  const available = previous.remainingCents + interest + fine - discount;
+  const mode = input.mode || "full";
+  if (!["full", "partial"].includes(mode) || amount <= 0 || available <= 0 || amount > available ||
+      (mode === "full" && amount !== available) || (mode === "partial" && amount >= available))
+    fail("Confira o valor: quitação deve zerar o saldo ajustado; baixa parcial deve deixar saldo positivo. Não é permitido pagar acima do saldo.", 400);
+  if ((interest || fine || discount) && !String(input.note || "").trim())
+    fail("Explique os juros, multa ou desconto na observação.", 400);
+  if (r.payableSettlement?.date && input.date < r.payableSettlement.date)
+    fail("A data não pode anteceder a última baixa registrada.", 400);
+  const remaining = available - amount;
   if (
     !catalog.banks.includes(input.bankAccount) ||
     !catalog.paymentMethods.includes(input.method)
@@ -110,14 +129,23 @@ function payment(r, input, catalog) {
     fail("Selecione conta bancária e forma de pagamento.", 400);
   if (typeof input.note !== "string" || input.note.length > 2000)
     fail("Observação inválida.", 400);
+  if (!catalog.paidBy.includes(input.paidBy) || !catalog.authorizedBy.includes(input.authorizedBy))
+    fail("Selecione Pago por e Autorizado por.", 400);
+  if (!["PF", "PJ"].includes(input.personType)) fail("Selecione o tipo do favorecido (PF/PJ).", 400);
+  if (typeof input.supplier !== "string" || !input.supplier.trim() || input.supplier.trim().length > 300)
+    fail("Informe o nome do credor/favorecido (até 300 caracteres).", 400);
   return {
-    status: "Pago",
-    pago: "Pago",
+    status: remaining ? "Pendente" : "Pago",
+    pago: remaining ? "Não" : "Pago",
     paymentDate: input.date,
     dataPagamento: input.date.split("-").reverse().join("/"),
-    valorPago: (nominal(r) / 100).toFixed(2),
+    valorPago: ((previous.paidCents + amount) / 100).toFixed(2),
+    payableBalance: { version: 1, paidCents: previous.paidCents + amount,
+      interestCents: previous.interestCents + interest, fineCents: previous.fineCents + fine,
+      discountCents: previous.discountCents + discount, remainingCents: remaining },
     bankAccount: input.bankAccount,
     metodoPagamento: input.method,
+    paidBy: input.paidBy,
   };
 }
 function calendar(r, id, to, pdf) {
@@ -134,7 +162,7 @@ function calendar(r, id, to, pdf) {
       titulo: title,
       vencimento: r.dueDate,
       identidade: id,
-      descricao: `Valor provisionado: R$ ${(nominal(r) / 100).toFixed(2)}.\nConfira a fatura antes de pagar. Remova o evento após pagamento ou cancelamento; não há sincronização automática.`,
+      descricao: `Saldo a pagar: R$ ${((r.payableBalance?.remainingCents ?? nominal(r)) / 100).toFixed(2)}.\nConfira a fatura antes de pagar. Remova o evento após pagamento ou cancelamento; não há sincronização automática.`,
     },
   ]);
   if (pdf) {
@@ -314,8 +342,23 @@ async function handlePayables(ctx) {
           requestId: b.requestId,
           note: b.payment.note,
           origin: "manual",
+          date: b.payment.date,
+          amountCents: Math.round(Number(b.payment.amount) * 100),
+          interestCents: Math.round(Number(b.payment.interest || 0) * 100),
+          fineCents: Math.round(Number(b.payment.fine || 0) * 100),
+          discountCents: Math.round(Number(b.payment.discount || 0) * 100),
+          bankAccount: b.payment.bankAccount,
+          method: b.payment.method,
+          attachments: added,
+          remainingCents: patch.payableBalance.remainingCents,
+          paidBy: b.payment.paidBy,
+          authorizedBy: b.payment.authorizedBy,
+          supplier: b.payment.supplier.trim(),
+          personType: b.payment.personType,
         },
       };
+      record.payablePayments = [...(current.payablePayments || []), record.payableSettlement];
+      if (record.payablePayments.length > 100) fail("Limite de 100 baixas atingido. Solicite revisão.");
       const result = { transaction: { ...record, id } };
       tx.set(ref, record);
       tx.create(db.collection("payableAudit").doc(hash([uid, b.requestId])), {

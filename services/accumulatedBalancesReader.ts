@@ -1,8 +1,9 @@
 import { KPIData, Transaction } from '../types';
 import { accumulateBalances, balancesInReais } from '../utils/accumulatedBalances';
 
-const fields = ['id', 'source', 'client', 'description', 'wixInvoiceNumber', 'wixEntityId', 'movement', 'type', 'status', 'isExcluded', 'valorOriginal', 'totalCobranca', 'honorarios', 'valorExtra', 'valuePaid', 'valueReceived'];
+const fields = ['payableBalance', 'id', 'source', 'client', 'description', 'wixInvoiceNumber', 'wixEntityId', 'movement', 'type', 'status', 'isExcluded', 'valorOriginal', 'totalCobranca', 'honorarios', 'valorExtra', 'valuePaid', 'valueReceived'];
 const decode = (value: any): unknown => {
+  if ('mapValue' in value) return Object.fromEntries(Object.entries(value.mapValue.fields || {}).map(([k,v]) => [k,decode(v)]));
   if ('stringValue' in value) return value.stringValue;
   if ('booleanValue' in value) return value.booleanValue;
   if ('integerValue' in value) return Number(value.integerValue);
