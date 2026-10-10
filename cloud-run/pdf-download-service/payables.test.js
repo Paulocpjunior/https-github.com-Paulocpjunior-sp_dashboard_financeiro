@@ -416,7 +416,7 @@ test('authenticated authorizer defaults to the managed user, with unchanged perm
  h.store.set('users/u',{active:true,role:'admin',name:'Administrador de teste'});
  const old=h.store.get('transactions/legacy'); old.nativeEntry={authorizedBy:'Autorizador histórico'};
  const item=await h.call('items/legacy');
- assert.deepEqual(item.body.actor,{uid:'u',name:'Administrador de teste'});
+ assert.deepEqual(item.body.actor,{uid:'u',role:'admin',name:'Administrador de teste'});
  assert.ok(item.body.catalog.authorizedBy.includes('Administrador de teste'));
  assert.equal(item.body.transaction.nativeEntry.authorizedBy,'Autorizador histórico');
  const b=await payBody(h);b.payment.authorizedBy=item.body.actor.name;
@@ -513,4 +513,34 @@ test('reversal rejects legacy, short reason, stale version, altered balances and
  assert.equal((await h.call('reversal/preview',b)).status,409);
  h.store.get('users/u').active=false;
  assert.equal((await h.call('reversal/preview',b)).status,403);
+});
+test('delegated read does not authorize mutations, maintenance or receivable access',async()=>{
+ const h=harness();h.store.set('users/u',{active:true,role:'operacional',name:'Leitor',financialPermissions:['payables.read']});
+ const item=await h.call('items/legacy');assert.equal(item.status,200);
+ assert.equal(item.body.capabilities.read,true);assert.equal(item.body.capabilities.settle,false);
+ const before=structuredClone([...h.store]);
+ for(const route of ['payment/preview','payment/commit','reversal/preview','reversal/commit','rules/save','rules/generate','invite/settings','invite/download'])
+  assert.equal((await h.call(route,{id:'legacy',requestId:randomUUID()})).status,403,route);
+ assert.deepEqual([...h.store],before);
+});
+test('delegated settlement is independent, uses authenticated authorizer and rechecks revocation',async()=>{
+ const h=harness(); const profile={active:true,role:'operacional',name:'Colaborador',financialPermissions:['payables.settle']};h.store.set('users/u',profile);
+ const b=await payBody(h);
+ assert.equal((await h.call('payment/preview',b)).status,403);
+ b.payment.authorizedBy='Colaborador';const preview=await h.call('payment/preview',b);assert.equal(preview.status,200);
+ b.confirmHash=preview.body.reviewHash;
+ h.store.set('users/u',{...profile,financialPermissions:['payables.read']});
+ assert.equal((await h.call('payment/commit',b)).status,403);
+ h.store.set('users/u',profile);assert.equal((await h.call('payment/commit',b)).status,200);
+ assert.equal(h.store.get('transactions/legacy').payableSettlement.authorizedByUid,'u');
+ assert.equal((await h.call('reversal/preview',{id:'legacy',requestId:randomUUID()})).status,403);
+});
+test('payable capabilities reject blocked profiles and do not imply administrative operations',()=>{
+ const {routeAllowed,capabilities}=require('./payable-permissions');
+ const p={active:true,role:'operacional',financialPermissions:['payables.recurrence']};
+ assert.equal(routeAllowed(p,'POST','rules/save'),true);assert.equal(routeAllowed(p,'POST','payment/commit'),false);
+ assert.equal(routeAllowed(p,'POST','maintenance'),false);assert.equal(routeAllowed(p,'GET','config'),false);
+ assert.equal(routeAllowed({...p,status:'blocked'},'POST','rules/save'),false);
+ assert.equal(routeAllowed({...p,active:false},'GET','items/legacy'),false);
+ assert.equal(capabilities({...p,financialPermissions:['payables.invite']}).settle,false);
 });

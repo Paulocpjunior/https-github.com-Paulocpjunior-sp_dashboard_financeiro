@@ -1,13 +1,13 @@
 import React from 'react';
 import { Timer, RefreshCw, Filter, Printer, Download, MessageCircle, ArrowUpCircle, ArrowDownCircle, CalendarClock, Plus } from 'lucide-react';
 interface Props {
- title: string; isAdmin: boolean; lastUpdated: Date | null; refreshCountdown: number;
+ title: string; isAdmin: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
  isRefreshing: boolean; hasFilters: boolean; filtersOpen: boolean;
  onNewReceivable: () => void; onNewPayable: () => void; onRecurrences: () => void;
  onRefresh: () => void; onFilters: () => void; onPrint: () => void;
  onExport: () => void; onWhatsApp: () => void;
 }
-export default function DashboardToolbar({title,isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
+export default function DashboardToolbar({title,isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
  return (
         <section aria-label="Ações do painel" className="space-y-4 print:hidden">
           <div className="print:hidden">
@@ -16,9 +16,9 @@ export default function DashboardToolbar({title,isAdmin,lastUpdated,refreshCount
           </div>
           
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4">
-            {isAdmin && (
+            {(isAdmin || canRecurrences) && (
               <div role="group" aria-label="Lançamentos e recorrências" className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button type="button" aria-label="Nova conta a receber" onClick={onNewReceivable}
+                {isAdmin && <><button type="button" aria-label="Nova conta a receber" onClick={onNewReceivable}
                   className="group flex min-h-28 items-center gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-left text-blue-950 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-50 dark:hover:bg-blue-900/60 dark:focus-visible:ring-offset-slate-900">
                   <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white" aria-hidden="true">
                     <ArrowUpCircle className="h-7 w-7" /><Plus className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-blue-800 p-0.5 ring-2 ring-blue-50 dark:ring-blue-950" />
@@ -32,11 +32,12 @@ export default function DashboardToolbar({title,isAdmin,lastUpdated,refreshCount
                   </span>
                   <span className="min-w-0"><span className="block text-base font-semibold leading-6">Nova conta a pagar</span><span className="mt-1 block text-sm leading-5 text-rose-800 dark:text-rose-200">Cadastrar uma despesa</span></span>
                 </button>
-                <button type="button" aria-label="Recorrências a pagar" onClick={onRecurrences}
+                </>}
+                {canRecurrences && <button type="button" aria-label="Recorrências a pagar" onClick={onRecurrences}
                   className="group flex min-h-28 items-center gap-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-left text-violet-950 transition-colors hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-50 dark:hover:bg-violet-900/60 dark:focus-visible:ring-offset-slate-900">
                   <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white" aria-hidden="true"><CalendarClock className="h-7 w-7" /></span>
                   <span className="min-w-0"><span className="block text-base font-semibold leading-6">Recorrências a pagar</span><span className="mt-1 block text-sm leading-5 text-violet-800 dark:text-violet-200">Gerenciar despesas recorrentes</span></span>
-                </button>
+                </button>}
               </div>
             )}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

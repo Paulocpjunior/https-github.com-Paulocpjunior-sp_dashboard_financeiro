@@ -244,7 +244,7 @@ async function handlePayables(ctx) {
   } = ctx;
   if (!enabled) fail("Lançamentos nativos não ativados.", 503);
   const path = url.pathname.replace("/api/financial-entries/payables/", "");
-  const actor = { uid, name: String(user.name || uid).trim() || uid };
+  const actor = { uid, role:user.role, name: String(user.name || uid).trim() || uid };
   // The authenticated profile adds only a default name, never permission or a persistent catalog entry.
   const paymentCatalog = { ...catalog, authorizedBy: [...new Set([actor.name, ...catalog.authorizedBy])] };
   const recheck = async (tx) => {
@@ -276,6 +276,18 @@ async function handlePayables(ctx) {
     reply({ rules: result.docs.map((d) => ({ id: d.id, ...d.data() })) });
     return;
   }
+  const attachment = path.match(/^items\/([a-zA-Z0-9_-]{1,200})\/attachments\/([a-f0-9]{64})$/);
+  if (request.method === "GET" && attachment) {
+    const ref = db.collection("transactions").doc(attachment[1]);
+    const row = payable((await ref.get()).data());
+    const meta = row.attachments?.find(a=>a.sha256 === attachment[2]);
+    if (!meta || !env.NATIVE_ENTRY_ATTACHMENT_BUCKET) fail("Anexo não encontrado.",404);
+    const [bytes] = await getBucket(env.NATIVE_ENTRY_ATTACHMENT_BUCKET).file(`native-finance/${attachment[1]}/${attachment[2]}`).download();
+    await recheck();
+    if (hash((await ref.get()).data()) !== hash(row)) fail("Conta alterada. Consulte novamente.");
+    reply({name:meta.name,type:meta.type,base64:bytes.toString("base64")});
+    return;
+  }
   const item = path.match(/^items\/([^/]+)$/);
   if (request.method === "GET" && item) {
     const id = decodeURIComponent(item[1]);
@@ -293,6 +305,7 @@ async function handlePayables(ctx) {
       recipients: settings?.recipients || [],
       catalog: paymentCatalog,
       actor,
+      capabilities: require("./payable-permissions").capabilities(user),
     });
     return;
   }
@@ -355,6 +368,8 @@ async function handlePayables(ctx) {
     }
     const r = (await ref.get()).data();
     if (hash(r) !== b.version) fail("Conta alterada. Reabra a revisão.");
+    if (user.role !== "admin" && b.payment?.authorizedBy !== actor.name)
+      fail("O responsável deve ser o usuário autenticado. Este registro não substitui aprovação independente.",403);
     const patch = payment(r, b.payment, paymentCatalog);
     const upload = files(b.attachments || []);
     if (upload.some((f) => f.kind !== "comprovante"))

@@ -277,9 +277,13 @@ function createNativeEntryHandler({
       }
       const userRef = db.collection("users").doc(uid);
       const user = (await userRef.get()).data();
-      if (!allowed(user))
+      const payablePath = url.pathname.startsWith("/api/financial-entries/payables/") ? url.pathname.replace("/api/financial-entries/payables/", "") : null;
+      const routeAllowed = payablePath !== null
+        ? profile => require("./payable-permissions").routeAllowed(profile, request.method, payablePath)
+        : allowed;
+      if (!routeAllowed(user))
         throw new EntryError(
-          "Piloto disponível somente para administradores ativos.",
+          "Seu usuário não possui permissão para esta operação.",
           403,
         );
       const enabled = env.NATIVE_ENTRY_ENABLED === "true";
@@ -292,7 +296,7 @@ function createNativeEntryHandler({
       const catalogState=(await catalogRef.get()).data()||maintenance.initial();
       const catalog=maintenance.effective(catalogState);
       if(url.pathname.startsWith("/api/financial-entries/payables/")){
-        await handlePayables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed,files,catalog,catalogRef,catalogState,getBucket,env});
+        await handlePayables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed:routeAllowed,files,catalog,catalogRef,catalogState,getBucket,env});
         return true;
       }
       if (

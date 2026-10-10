@@ -17,16 +17,19 @@ const row: any = {
   paidBy: catalog.paidBy[0],
   attachments: [],
 };
+const readOnlyPreview = new URLSearchParams(window.location.search).get('access') === 'read';
 let rules: any[] = [];
 let previousPayment: any = null;
 async function demo(path: string, b?: any) {
+  if (readOnlyPreview && b) throw Object.assign(Error("Perfil de consulta não pode alterar dados."),{status:403});
   if (path === "rules") return { rules };
   if (path === "drafts") return {drafts:[]};
   if (path.startsWith("items/"))
     return {
       transaction: { ...row },
       catalog: {...catalog, authorizedBy: ["Administrador fictício", ...catalog.authorizedBy]},
-      actor: {uid:"demo-user",name:"Administrador fictício"},
+      actor: {uid:"demo-user",role:"admin",name:"Administrador fictício"},
+      capabilities:{read:true,settle:!readOnlyPreview,reverse:!readOnlyPreview,recurrence:!readOnlyPreview,invite:!readOnlyPreview},
       version: "demo",
       recipients: [],
     };
