@@ -105,6 +105,28 @@ assert.deepEqual(getBillingProfileCompletenessErrors({
   billingMethod: 'Boleto Itaú', issueDay: 5, dueDay: 10, deliveryChannels: ['whatsapp'], whatsapp: '',
 }), ['WhatsApp']);
 
+  const synthetic = { id: 'audit-a', client: 'Cliente sintético', cpfCnpj: '11111111000111', clientNumber: '17', date: '2026-10-20', dueDate: '2026-11-05', movement: 'Entrada', type: 'Entrada de Caixa / Contas a Receber', status: 'Pendente', totalCobranca: 100, source: 'jotform' };
+  const complete = { id: 'profile-a', identityKey: 'doc-11111111000111', client: 'Cliente sintético', cpfCnpj: synthetic.cpfCnpj, clientNumber: '17', active: true, billingMethod: 'Boleto Itaú', issueDay: 20, dueDay: 5, deliveryChannels: ['email'], billingEmail: 'teste@example.com' };
+  const before = JSON.stringify([synthetic, complete]);
+  const blocked = buildBillingForecastRows([synthetic], [complete], '2026-10', '2026-11')[0];
+  assert.ok(blocked.missingFields.some(x => x.includes('emissão posterior')));
+  assert.equal(blocked.issueDate, '2026-11-20', 'do not silently alter legacy dates');
+  assert.ok(getBillingProfileCompletenessErrors(complete).some(x => x.includes('emissão posterior')));
+  const previousMonth = {...complete, issueMonthOffset: -1};
+  assert.deepEqual(getBillingProfileCompletenessErrors(previousMonth), []);
+  const corrected = buildBillingForecastRows([synthetic], [previousMonth], '2026-10', '2027-01')[0];
+  assert.equal(corrected.issueDate, '2026-12-20'); assert.equal(corrected.dueDate, '2027-01-05');
+  assert.deepEqual(corrected.missingFields, []);
+  const leap = buildBillingForecastRows([synthetic], [{...previousMonth, issueDay:31}], '2026-10', '2028-03')[0];
+  assert.equal(leap.issueDate, '2028-02-29');
+  assert.ok(leap.adjustedDates.some(x => x.includes('31 para 29')));
+  assert.equal(JSON.stringify([synthetic, complete]), before, 'preview must not mutate source records');
+  const other = {...synthetic, id:'audit-b', client:'Outra empresa', cpfCnpj:'22222222000122', clientNumber:'017'};
+  const conflicts = buildBillingForecastRows([synthetic, other], [previousMonth], '2026-10', '2027-01');
+  assert.ok(conflicts.every(r => r.missingFields.some(x => x.includes('N.Cliente associado'))));
+  assert.equal(buildBillingForecastRows([synthetic,{...other,isExcluded:true}], [previousMonth], '2026-10', '2027-01')[0].missingFields.length, 0);
+  assert.ok(getBillingProfileCompletenessErrors({...complete,issueMonthOffset:3}).includes('mês de emissão inválido'));
+
   const billingReportSource = readFileSync(new URL('../services/billingReportService.ts', import.meta.url), 'utf8');
   const financialReportSource = readFileSync(new URL('../services/reportService.ts', import.meta.url), 'utf8');
   assert.match(financialReportSource, /savePDF\(doc, fileName\)/, 'o relatório financeiro deve usar a base compartilhada de download PDF');

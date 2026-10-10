@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { DEFAULT_COLLECTIONS, collectBackupCollections, listCollection } from './export-firestore-data.mjs';
+import { DEFAULT_COLLECTIONS, CHILD_COLLECTIONS, collectBackupCollections, listCollection } from './export-firestore-data.mjs';
 
 for (const name of ['transactions', 'jotformEvents', 'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps']) assert.ok(DEFAULT_COLLECTIONS.includes(name));
 const followUps=await collectBackupCollections('test',['billingFollowUps'],'test',async(_project,name)=>name==='billingFollowUps'?[{path:'projects/test/databases/(default)/documents/billingFollowUps/task',id:'task',data:{revision:1}}]:[{id:'audit',data:{revision:1}}]);
@@ -47,3 +47,27 @@ try {
   globalThis.fetch = originalFetch;
 }
 console.log('OK: backup includes billing revisions, orphan histories, pagination and exact encoded paths; failures abort.');
+
+for (const name of ['boletoIssues','boletoIssueLocks','boletoReconciliations','boletoReconciliationAudit','boletoReconciliationSettlements','payableRecurrences','payableAudit','nativeEntryRequests','nativeEntryLocks','nativeEntryAudit','bankStatementAudit']) assert.ok(DEFAULT_COLLECTIONS.includes(name), name);
+const at='2026-10-10T12:00:00.000Z';
+const expanded = await collectBackupCollections('test', Object.keys(CHILD_COLLECTIONS), 'test', async (_p,name,_t,options) => {
+  assert.equal(options.readTime,at);
+  if (!name.includes('/')) { assert.equal(options.showMissing,true); return [{path:prefix+name+'/orphan',missing:true}]; }
+  return [{path:prefix+name+'/evidence',id:'evidence',data:{preserved:true}}];
+}, {readTime:at});
+for (const [parent,children] of Object.entries(CHILD_COLLECTIONS)) {
+  assert.equal(expanded.find(c=>c.name===parent).count,0);
+  for(const child of children) assert.equal(expanded.find(c=>c.name===parent+'/orphan/'+child).count,1);
+}
+try {
+ globalThis.fetch=async url=> { assert.equal(new URL(url).searchParams.get('readTime'),at); return {ok:true,json:async()=>({documents:[]})}; };
+ await listCollection('test','boletoIssues','test',{readTime:at});
+} finally { globalThis.fetch=originalFetch; }
+console.log('OK: financial collections, orphan events/chunks/statements and a shared readTime are preserved.');
+
+const { verifyFinancialBackup } = await import('./verify-financial-backup.mjs');
+const fixture={schemaVersion:2,projectId:'test',database:'(default)',readTime:at,scope:{firestore:['boletoIssues']},collections:[{name:'boletoIssues',count:1,documents:[{path:prefix+'boletoIssues/pilot'}]},{name:'boletoIssues/pilot/events',count:1,documents:[{path:prefix+'boletoIssues/pilot/events/created'}]}],counts:{collections:2,totalDocuments:2}};
+assert.equal(verifyFinancialBackup(fixture).valid,true);
+assert.throws(()=>verifyFinancialBackup({...fixture,collections:fixture.collections.slice(0,1)}),/Subcoleção ausente/);
+assert.throws(()=>verifyFinancialBackup({...fixture,counts:{collections:2,totalDocuments:1}}),/Totais/);
+assert.throws(()=>verifyFinancialBackup({...fixture,collections:[fixture.collections[0],fixture.collections[0]]}),/Coleção repetida/);

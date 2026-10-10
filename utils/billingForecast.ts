@@ -90,12 +90,14 @@ const isConfirmedBillingMethod = (value: string): boolean => [
 ].includes(value);
 
 export const getBillingProfileCompletenessErrors = (profile: Pick<BillingProfile,
-  'billingMethod' | 'issueDay' | 'dueDay' | 'deliveryChannels' | 'billingEmail' | 'whatsapp' | 'printedDeliveryDetails'
+  'billingMethod' | 'issueDay' | 'issueMonthOffset' | 'dueDay' | 'deliveryChannels' | 'billingEmail' | 'whatsapp' | 'printedDeliveryDetails'
 >): string[] => {
   const errors: string[] = [];
   if (!isConfirmedBillingMethod(canonicalBillingMethod(profile.billingMethod))) errors.push('método de cobrança');
   if (!Number.isInteger(profile.issueDay) || Number(profile.issueDay) < 1 || Number(profile.issueDay) > 31) errors.push('dia de emissão');
   if (!Number.isInteger(profile.dueDay) || Number(profile.dueDay) < 1 || Number(profile.dueDay) > 31) errors.push('dia de vencimento');
+  if (profile.issueMonthOffset != null && ![-1, 0].includes(profile.issueMonthOffset)) errors.push('mês de emissão inválido');
+  if ((profile.issueMonthOffset ?? 0) === 0 && profile.issueDay && profile.dueDay && profile.issueDay > profile.dueDay) errors.push('emissão posterior ao vencimento: confira o mês de emissão');
   if (!profile.deliveryChannels?.length) errors.push('meio de envio');
   if (profile.deliveryChannels?.includes('email') && !String(profile.billingEmail || '').trim()) errors.push('e-mail de faturamento');
   if (profile.deliveryChannels?.includes('whatsapp') && !String(profile.whatsapp || '').trim()) errors.push('WhatsApp');
@@ -114,6 +116,15 @@ export const buildBillingForecastRows = (
   const activeProfiles = profiles.filter(profile => profile.active !== false);
   const transactionsByKey = new Map<string, Transaction[]>();
   const profilesByKey = new Map<string, BillingProfile>();
+  const documentsByNumber = new Map<string, Set<string>>();
+  for (const source of [...activeTransactions, ...activeProfiles]) {
+    const number = cleanDigits(source.clientNumber).replace(/^0+/, '');
+    const document = cleanDigits(source.cpfCnpj);
+    if (number && document) {
+      const documents = documentsByNumber.get(number) || new Set<string>();
+      documents.add(document); documentsByNumber.set(number, documents);
+    }
+  }
 
   for (const transaction of activeTransactions) {
     const key = getBillingIdentityKey(transaction);
@@ -174,8 +185,15 @@ export const buildBillingForecastRows = (
     if (deliveryChannels.includes('printed') && !printedDeliveryDetails) missingFields.push('entrega física');
     missingFields.push(...conflicts);
 
-    const issueDate = dateForMonthDay(targetMonth, issueDay);
+    const monthOffset = profile?.issueMonthOffset ?? 0;
+    const issueDate = dateForMonthDay(addMonths(targetMonth, monthOffset === -1 ? -1 : 0), issueDay);
     const dueDate = dateForMonthDay(targetMonth, dueDay);
+    if (![-1, 0].includes(monthOffset)) missingFields.push('mês de emissão inválido');
+    if (issueDate && dueDate && issueDate > dueDate) missingFields.push('emissão posterior ao vencimento: confira o mês de emissão');
+    const clientNumber = preferredText(profile?.clientNumber, latest?.clientNumber);
+    if ((documentsByNumber.get(cleanDigits(clientNumber).replace(/^0+/, ''))?.size || 0) > 1) {
+      missingFields.push('N.Cliente associado a documentos diferentes: conferir identidade e destinatário');
+    }
     const adjustedDates: string[] = [];
     if (issueDay && Number(issueDate.slice(-2)) !== issueDay) adjustedDates.push(`emissão ajustada do dia ${issueDay} para ${Number(issueDate.slice(-2))}`);
     if (dueDay && Number(dueDate.slice(-2)) !== dueDay) adjustedDates.push(`vencimento ajustado do dia ${dueDay} para ${Number(dueDate.slice(-2))}`);

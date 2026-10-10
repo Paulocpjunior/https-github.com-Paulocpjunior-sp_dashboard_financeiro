@@ -18,6 +18,7 @@
     "auth:update-recovery-emails": "node scripts/update-recovery-emails.mjs",
     "auth:update-recovery-emails:apply": "node scripts/update-recovery-emails.mjs --apply",
     "backup:firestore": "node scripts/export-firestore-data.mjs",
+    "verify:firestore-backup": "node scripts/verify-financial-backup.mjs",
     "test:firestore-backup": "node scripts/test-firestore-backup.mjs",
     "audit:transactions": "node scripts/audit-transactions-data.mjs",
     "audit:integrity": "node scripts/audit-finance-integrity.mjs",

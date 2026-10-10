@@ -95,6 +95,7 @@ export interface BillingProfile {
   groupName?: string;
   billingMethod?: string;
   issueDay?: number;
+  issueMonthOffset?: -1 | 0;
   dueDay?: number;
   deliveryChannels: BillingDeliveryChannel[];
   billingEmail?: string;

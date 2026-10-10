@@ -2,13 +2,25 @@
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const DEFAULT_PROJECT_ID = 'gen-lang-client-0888019226';
 const DEFAULT_DATABASE = '(default)';
-export const DEFAULT_COLLECTIONS = ['users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents', 'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps'];
-const REVISIONED_COLLECTIONS = new Set(['billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps']);
+export const CHILD_COLLECTIONS = {
+  billingMonthlyReviews: ['revisions'], billingIdentityLinks: ['revisions'], billingFollowUps: ['revisions'],
+  boletoIssues: ['events'], boletoHistorySnapshots: ['chunks'], bankStatements: ['entries', 'imports'],
+};
+export const DEFAULT_COLLECTIONS = [
+  'users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents',
+  'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps',
+  'boletoIssues', 'boletoIssueLocks', 'boletoHistory', 'boletoHistorySnapshots', 'boletoHistoryUpdates',
+  'boletoHistoryAudit', 'boletoReturnJobs', 'boletoSettlementAudit', 'boletoReconciliations',
+  'boletoReconciliationPreviews', 'boletoReconciliationAudit', 'boletoReconciliationSettlements',
+  'payableRecurrences', 'payableInviteSettings', 'payableOperations', 'payableAudit',
+  'nativeEntryRequests', 'nativeEntryLocks', 'nativeEntryAudit', 'bankStatements', 'bankStatementAudit',
+];
 const REPORT_DIR = 'migration-backups';
 
 const usage = `
@@ -106,12 +118,13 @@ const requestJson = async (url, token) => {
   return response.json();
 };
 
-export const listCollection = async (projectId, collection, token, { showMissing = false } = {}) => {
+export const listCollection = async (projectId, collection, token, { showMissing = false, readTime } = {}) => {
   const docs = [];
   let pageToken = '';
   do {
     const params = new URLSearchParams({ pageSize: '300' });
     if (showMissing) params.set('showMissing', 'true');
+    if (readTime) params.set('readTime', readTime);
     if (pageToken) params.set('pageToken', pageToken);
     const collectionPath = collection.split('/').map(encodeURIComponent).join('/');
     const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${encodeURIComponent(DEFAULT_DATABASE)}/documents/${collectionPath}?${params.toString()}`;
@@ -124,21 +137,24 @@ export const listCollection = async (projectId, collection, token, { showMissing
   return docs;
 };
 
-export async function collectBackupCollections(projectId, names, token, list = listCollection) {
+export async function collectBackupCollections(projectId, names, token, list = listCollection, { readTime } = {}) {
   const collections = new Map();
   for (const name of names) {
-    const revisioned = REVISIONED_COLLECTIONS.has(name);
-    const parents = await list(projectId, name, token, { showMissing: revisioned });
+    const children = CHILD_COLLECTIONS[name] || [];
+    const revisioned = children.length > 0;
+    const parents = await list(projectId, name, token, { showMissing: revisioned, readTime });
     const documents = parents.filter(document => !document.missing);
     collections.set(name, { name, count: documents.length, documents });
     if (revisioned) {
       for (const parent of parents) {
         // Use the original document path, not the display id (which is decoded).
         const prefix = `projects/${projectId}/databases/${DEFAULT_DATABASE}/documents/`;
-        if (!parent.path.startsWith(`${prefix}${name}/`)) throw new Error('Unexpected billing parent path');
-        const revisionPath = `${parent.path.slice(prefix.length)}/revisions`;
-        const revisions = await list(projectId, revisionPath, token);
-        collections.set(revisionPath, { name: revisionPath, count: revisions.length, documents: revisions });
+        if (!parent.path.startsWith(`${prefix}${name}/`)) throw new Error('Unexpected backup parent path');
+        for (const child of children) {
+          const childPath = `${parent.path.slice(prefix.length)}/${child}`;
+          const records = await list(projectId, childPath, token, { readTime });
+          collections.set(childPath, { name: childPath, count: records.length, documents: records });
+        }
       }
     }
   }
@@ -152,6 +168,8 @@ const buildMarkdown = (backup) => {
     `Generated at: ${backup.generatedAt}`,
     `Project: ${backup.projectId}`,
     `Database: ${backup.database}`,
+    `Consistent read time: ${backup.readTime}`,
+    'Scope: Firestore only. Storage objects and Firebase Auth accounts are NOT included.',
     `Total documents: ${backup.counts.totalDocuments}`,
     '',
     '## Collections',
@@ -175,9 +193,13 @@ const main = async () => {
   mkdirSync(dirname(outPath), { recursive: true });
 
   const token = getAccessToken();
-  const collections = await collectBackupCollections(args.projectId, args.collections, token);
+  const readTime = new Date().toISOString();
+  const collections = await collectBackupCollections(args.projectId, args.collections, token, listCollection, { readTime });
 
   const backup = {
+    schemaVersion: 2,
+    readTime,
+    scope: { firestore: args.collections, storageObjectsIncluded: false, authAccountsIncluded: false },
     generatedAt: new Date().toISOString(),
     projectId: args.projectId,
     database: DEFAULT_DATABASE,
@@ -188,8 +210,12 @@ const main = async () => {
     },
   };
 
-  writeFileSync(outPath, `${JSON.stringify(backup, null, 2)}\n`);
-  writeFileSync(markdownPath, buildMarkdown(backup));
+  const { verifyFinancialBackup } = await import('./verify-financial-backup.mjs');
+  verifyFinancialBackup(backup);
+  const bytes = `${JSON.stringify(backup, null, 2)}\n`;
+  writeFileSync(outPath, bytes, { mode: 0o600 });
+  writeFileSync(`${outPath}.sha256`, `${createHash('sha256').update(bytes).digest('hex')}  ${outPath.split('/').pop()}\n`, { mode: 0o600 });
+  writeFileSync(markdownPath, buildMarkdown(backup), { mode: 0o600 });
 
   console.log(`Firestore data backup complete for ${args.projectId}`);
   console.log(`JSON backup: ${outPath}`);
