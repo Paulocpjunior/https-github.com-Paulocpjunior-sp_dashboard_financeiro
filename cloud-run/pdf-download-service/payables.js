@@ -155,7 +155,7 @@ function reversal(r, event, reason) {
   if (typeof reason !== "string" || reason.trim().length < 10 || reason.length > 2000)
     fail("Informe o motivo do estorno (10 a 2000 caracteres).", 400);
   const last = r.payableSettlement;
-  if (!last?.requestId || event?.action !== "payment" ||
+  if (!last?.requestId || !event?.after?.payableSettlement || event?.action !== "payment" ||
       hash(event.after?.payableSettlement) !== hash(last) ||
       (r.payableReversals || []).some(x => x.paymentRequestId === last.requestId))
     fail("Última baixa sem histórico íntegro ou já estornada. Solicite revisão.");
