@@ -17,6 +17,7 @@ export function verifyFinancialBackup(backup) {
     for (const document of collection.documents) {
       if (!document.path?.startsWith(prefix + collection.name + '/') || document.path.slice((prefix + collection.name + '/').length).includes('/')) throw Error('Caminho de documento inválido.');
       if (paths.has(document.path)) throw Error('Documento repetido.');
+      if (backup.preservesFirestoreTypes && !Array.isArray(document.typeOverrides)) throw Error('Tipos originais ausentes.');
       paths.add(document.path); total++;
     }
   }
