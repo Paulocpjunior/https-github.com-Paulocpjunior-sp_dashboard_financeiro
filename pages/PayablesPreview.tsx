@@ -20,6 +20,7 @@ const row: any = {
 let rules: any[] = [];
 async function demo(path: string, b?: any) {
   if (path === "rules") return { rules };
+  if (path === "drafts") return {drafts:[]};
   if (path.startsWith("items/"))
     return {
       transaction: { ...row },

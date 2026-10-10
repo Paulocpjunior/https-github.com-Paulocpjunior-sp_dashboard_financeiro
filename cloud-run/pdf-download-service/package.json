@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test test.js boleto-cloud.test.js boleto-history.test.js boleto-invite.test.js boleto-returns.test.js boleto-history-sync.test.js boleto-reconciliation.test.js native-entries.test.js payables.test.js maintenance.test.js"
+    "test": "node --test test.js boleto-cloud.test.js boleto-history.test.js boleto-invite.test.js boleto-returns.test.js boleto-history-sync.test.js boleto-reconciliation.test.js native-entries.test.js payables.test.js maintenance.test.js payable-ledger.test.js payable-provision-job.test.js"
   },
   "engines": {
     "node": "22"
