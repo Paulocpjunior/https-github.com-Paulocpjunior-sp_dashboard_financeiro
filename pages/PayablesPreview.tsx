@@ -18,6 +18,7 @@ const row: any = {
   attachments: [],
 };
 let rules: any[] = [];
+let previousPayment: any = null;
 async function demo(path: string, b?: any) {
   if (path === "rules") return { rules };
   if (path === "drafts") return {drafts:[]};
@@ -38,10 +39,21 @@ async function demo(path: string, b?: any) {
     const payableBalance={version:1,paidCents:old.paidCents+amountCents,interestCents:old.interestCents+interestCents,fineCents:old.fineCents+fineCents,discountCents:old.discountCents+discountCents,remainingCents};
     const after={...row,status:remainingCents?'Pendente':'Pago',payableBalance};
     if(path.endsWith('preview')) return {reviewHash:'demo',after};
+    previousPayment = structuredClone(row);
     Object.assign(row,after);
     row.paymentDate=p.date;
     row.payableSettlement={...p,actor:'Administrador fictício',requestId:b.requestId,amountCents,interestCents,fineCents,discountCents,remainingCents};
     row.payablePayments=[...(row.payablePayments||[]),row.payableSettlement];
+    return {transaction:{...row}};
+  }
+  if (path === "reversal/preview" || path === "reversal/commit") {
+    if (!previousPayment || b.reason.trim().length < 10) throw Object.assign(Error("Confira a baixa e o motivo."),{status:400});
+    if (path.endsWith('preview')) return {reviewHash:'demo-reversal',after:previousPayment};
+    const history=row.payablePayments;
+    const reversal={requestId:b.requestId,paymentRequestId:row.payableSettlement.requestId,amountCents:row.payableSettlement.amountCents,reason:b.reason,actor:'Administrador fictício',at:new Date().toISOString()};
+    for (const k of Object.keys(row)) delete row[k];
+    Object.assign(row,previousPayment,{payablePayments:history,payableReversals:[reversal]});
+    previousPayment=null;
     return {transaction:{...row}};
   }
   if (path === "rules/save") {

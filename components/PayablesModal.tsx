@@ -61,6 +61,8 @@ export default function PayablesModal({
     paidBy: "", authorizedBy: "", supplier: "", personType: "",
     note: "",
   });
+  const [reversalReason, setReversalReason] = useState("");
+  const [reversalReview, setReversalReview] = useState<any>(null);
   const [ruleRecipients, setRuleRecipients] = useState("");
   const [recipients, setRecipients] = useState(""),
     [attachment, setAttachment] = useState<any>(null),
@@ -122,11 +124,14 @@ export default function PayablesModal({
     if (uncertain) return;
     fn();
     setReview(null);
+    setReversalReview(null);
     attempt.current = crypto.randomUUID();
     setMessage("");
   }
   async function select(key: string) {
     if (busy || uncertain) return;
+    setReversalReview(null);
+    setReversalReason("");
     setSelected(key);
     setData(null);
     setReview(null);
@@ -163,12 +168,24 @@ export default function PayablesModal({
       if ([400, 403, 409].includes((e as any).status)) {
         setUncertain(false);
         setReview(null);
+        setReversalReview(null);
       }
       throw e;
     } finally {
       gate.current = false;
       setBusy(false);
     }
+  }
+  async function reversePayment() {
+    try {
+      const payload = {reason: reversalReason};
+      if (!reversalReview) setReversalReview(await run("reversal/preview",payload));
+      else {
+        setUncertain(true);
+        const result = await run("reversal/commit",{...payload,confirmHash:reversalReview.reviewHash});
+        if (result) {setUncertain(false); onSaved(); onClose();}
+      }
+    } catch { /* Preserve request identity for safe retry after an unknown outcome. */ }
   }
   async function settle() {
     try {
@@ -379,6 +396,7 @@ export default function PayablesModal({
               ["recurrence", "Recorrência"],
               ["generate", "Gerar competência"],
               ["invite", "INVITE"],
+              ["reversal", "Estornar baixa"],
             ].map(([key, title]) => (
               <button
                 key={key}
@@ -397,6 +415,16 @@ export default function PayablesModal({
             ))}
           </nav>
           <fieldset disabled={busy || uncertain} className="space-y-3">
+            {tab === "reversal" && <section className="space-y-3 rounded-xl border border-amber-400 p-4">
+              <h3 className="font-semibold">Estorno da última baixa ativa</h3>
+              <p>Corrige o registro financeiro e restaura o saldo anterior. Não devolve dinheiro pelo banco. O pagamento original e seus comprovantes permanecem no histórico.</p>
+              {!row.payableSettlement ? <p>Esta conta não possui baixa nativa ativa para estornar. Baixas legadas exigem revisão.</p> : <>
+                <p>Baixa de {brl(row.payableSettlement.amountCents / 100)} em {row.payableSettlement.date} · Registrada por {row.payableSettlement.actor}</p>
+                <p>Responsável pelo estorno: {data.actor?.name}</p>
+                <label className="block">Motivo do estorno (obrigatório)<textarea className={cls} minLength={10} maxLength={2000} value={reversalReason} onChange={e=>edit(()=>setReversalReason(e.target.value))}/></label>
+                {reversalReview && <div className="rounded border p-3"><strong>Revisão do estorno</strong><p>Saldo após o estorno: {brl(getOutstandingAmount(reversalReview.after))} · {reversalReview.after.status}</p><p>{reversalReason}</p></div>}
+              </>}
+            </section>}
             {tab === "payment" &&
               (isPaid ? (
                 <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100">
@@ -705,7 +733,9 @@ export default function PayablesModal({
               </>
             )}
           </fieldset>
-          {tab === "payment" && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}</p>)}</section>}
+          {tab === "reversal" && row?.payableSettlement && <button className={btn + " mt-4 w-full min-h-12"} disabled={busy || reversalReason.trim().length < 10} onClick={reversePayment}>{busy ? "Aguarde…" : uncertain ? "Consultar resultado do estorno" : reversalReview ? "Confirmar estorno e concluir" : "Revisar estorno"}</button>}
+          {row?.payableReversals?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de estornos</h3>{row.payableReversals.map((r:any)=><p key={r.requestId} className="my-2 text-sm">{brl(r.amountCents/100)} · {r.at} · {r.actor}<br/>{r.reason}</p>)}</section>}
+          {tab === "payment" && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{(row.payableReversals || []).some((r:any)=>r.paymentRequestId === p.requestId) ? "ESTORNADA · " : ""}{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}</p>)}</section>}
           {review && (
             <div className="border rounded p-3 my-3">
               <strong>

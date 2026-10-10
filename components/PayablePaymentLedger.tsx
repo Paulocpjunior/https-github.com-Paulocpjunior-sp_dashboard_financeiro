@@ -19,7 +19,7 @@ export default function PayablePaymentLedger() {
   }
   return <details className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
     <summary className="cursor-pointer font-semibold text-blue-700 dark:text-blue-300">Pagamentos por data efetiva — contas a pagar</summary>
-    <p className="my-3 text-sm text-slate-600 dark:text-slate-300">Uma linha por baixa realizada no app, inclusive pagamentos parciais. Não inclui pagamentos legados sem histórico de baixa. Acesso administrativo.</p>
+    <p className="my-3 text-sm text-slate-600 dark:text-slate-300">Uma linha por baixa ativa realizada no app, inclusive pagamentos parciais. Baixas estornadas são excluídas dos totais; seu histórico permanece na conta. Não inclui pagamentos legados sem histórico de baixa. Acesso administrativo.</p>
     <form onSubmit={load} className="flex flex-wrap gap-3 items-end">
       <label>De<input required disabled={busy} type="date" value={start} onChange={e=>{setStart(e.target.value);setResult(null);}} className="block border rounded p-2 dark:bg-slate-800"/></label>
       <label>Até<input required disabled={busy} type="date" value={end} onChange={e=>{setEnd(e.target.value);setResult(null);}} className="block border rounded p-2 dark:bg-slate-800"/></label>

@@ -2,7 +2,14 @@
 function projectPayments(events, start, end) {
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
   if (!validDate(start) || !validDate(end) || start > end) throw Object.assign(Error('Informe um período válido.'), {status:400});
-  const rows = [], seen = new Set();
+  const rows = [], seen = new Set(), reversed = new Set();
+  const payments = new Map(events.filter(e => e.action === 'payment').map(e => [`${e.transactionId}:${e.after?.payableSettlement?.requestId}`, e.after?.payableSettlement]));
+  for (const event of events.filter(e => e.action === 'payment-reversal')) {
+    const key = `${event.transactionId}:${event.reversal?.paymentRequestId}`;
+    if (reversed.has(key) || !payments.has(key) || payments.get(key).amountCents !== event.reversal.amountCents)
+      throw Object.assign(Error('Histórico de estorno inconsistente. Solicite revisão.'), {status:409});
+    reversed.add(key);
+  }
   for (const event of events) {
     if (event.action !== 'payment') continue;
     const p = event.after?.payableSettlement;
@@ -11,6 +18,7 @@ function projectPayments(events, start, end) {
     const key = `${event.transactionId}:${p.requestId}`;
     if (seen.has(key)) throw Object.assign(Error('Baixa duplicada no histórico. Solicite revisão.'), {status:409});
     seen.add(key);
+    if (reversed.has(key)) continue;
     if (p.date < start || p.date > end) continue;
     rows.push({id:key, transactionId:event.transactionId, date:p.date, amountCents:p.amountCents,
       supplier:p.supplier || event.after.description || event.after.client || '', bankAccount:p.bankAccount || '',

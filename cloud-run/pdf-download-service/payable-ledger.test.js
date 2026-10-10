@@ -20,3 +20,10 @@ test('reads all pages including old backdated entries and ignores provisioning e
  const db={collection(){return {orderBy(){return this},limit(){return this},startAfter(c){this.cursor=c;return this},async get(){return {docs:this.cursor?docs.slice(500):docs.slice(0,500)}}}}};
  assert.equal((await readPaymentLedger(db,'2026-10-01','2026-10-01')).totalCents,10);
 });
+test('reversed payments are excluded even when reversal is recorded outside requested period',()=>{
+ const a=event('a','2026-10-10',1000),b=event('b','2026-10-11',500);
+ const reversal={action:'payment-reversal',transactionId:'title',at:'2026-11-01',reversal:{paymentRequestId:'a',amountCents:1000}};
+ assert.equal(projectPayments([reversal,b,a],'2026-10-01','2026-10-31').totalCents,500);
+ assert.throws(()=>projectPayments([reversal,b],'2026-10-01','2026-10-31'));
+ assert.throws(()=>projectPayments([reversal,a,reversal],'2026-10-01','2026-10-31'));
+});
