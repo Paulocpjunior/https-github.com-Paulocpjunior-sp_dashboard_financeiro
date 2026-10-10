@@ -23,7 +23,7 @@
     "attachments:apply": "python3 scripts/deploy-financial-attachments.py --apply",
     "backup:firestore": "node scripts/export-firestore-data.mjs",
     "verify:firestore-backup": "node scripts/verify-financial-backup.mjs",
-    "test:firestore-backup": "node scripts/test-firestore-backup.mjs && node scripts/test-firestore-backup-types.mjs && node scripts/test-recovery-drill.mjs && python3 scripts/test-recovery-tools.py",
+    "test:firestore-backup": "node scripts/test-firestore-backup.mjs && node scripts/test-firestore-backup-types.mjs && node scripts/test-recovery-drill.mjs && python3 scripts/test-recovery-tools.py && python3 scripts/test-backup-replica.py",
     "audit:transactions": "node scripts/audit-transactions-data.mjs",
     "audit:integrity": "node scripts/audit-finance-integrity.mjs",
     "audit:jotform-payables": "node scripts/audit-jotform-firestore-payables.mjs",
@@ -77,7 +77,8 @@
     "test:billing-completeness": "node scripts/test-billing-completeness.mjs",
     "test:accumulated-balances": "node scripts/test-accumulated-balances.mjs",
     "test:payables": "node --test cloud-run/pdf-download-service/payables.test.js",
-    "test:native-entries": "node --test cloud-run/pdf-download-service/native-entries.test.js && node scripts/test-native-entry-consumers.mjs"
+    "test:native-entries": "node --test cloud-run/pdf-download-service/native-entries.test.js && node scripts/test-native-entry-consumers.mjs",
+    "backup:unas": "python3 scripts/replicate-financial-backup.py"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

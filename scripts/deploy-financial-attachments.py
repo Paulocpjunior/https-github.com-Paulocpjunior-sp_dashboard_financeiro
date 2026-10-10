@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Provisionamento explícito e protegido dos anexos financeiros."""
-import argparse,json,pathlib,subprocess
+import argparse,json,pathlib,subprocess,uuid
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 PROJECT='gen-lang-client-0888019226'
 BUCKET=PROJECT+'-finance-attachments'
@@ -36,7 +36,16 @@ def main():
  assert state['versioning_enabled'] is True
  assert int(state['soft_delete_policy']['retentionDurationSeconds'])>=2592000
  # Atualiza somente a variável; preserva imagem, segredos, conta e demais configurações.
- gc('run','services','update','sp-pdf-download','--region',REGION,'--image',image,'--update-env-vars','NATIVE_ENTRY_ATTACHMENT_BUCKET='+BUCKET)
+ suffix='attachments-'+uuid.uuid4().hex[:10]
+ gc('run','services','update','sp-pdf-download','--region',REGION,'--image',image,'--update-env-vars','NATIVE_ENTRY_ATTACHMENT_BUCKET='+BUCKET,'--revision-suffix',suffix,'--no-traffic')
+ candidate=json.loads(gc('run','revisions','describe','sp-pdf-download-'+suffix,'--region',REGION,'--format=json'))
+ assert any(c['type']=='Ready' and c['status']=='True' for c in candidate['status']['conditions'])
+ candidate_env={x['name']:x for x in candidate['spec']['containers'][0]['env']}
+ assert candidate_env['NATIVE_ENTRY_ATTACHMENT_BUCKET']['value']==BUCKET
+ assert all(candidate_env[k]==v for k,v in env.items() if k!='NATIVE_ENTRY_ATTACHMENT_BUCKET')
+ assert candidate['spec']['containers'][0]['image']==image
+ assert candidate['spec']['serviceAccountName']==account
+ gc('run','services','update-traffic','sp-pdf-download','--region',REGION,'--to-revisions','sp-pdf-download-'+suffix+'=100')
  verified=json.loads(gc('run','services','describe','sp-pdf-download','--region',REGION,'--format=json'))
  actual={x['name']:x for x in verified['spec']['template']['spec']['containers'][0]['env']}
  assert actual['NATIVE_ENTRY_ATTACHMENT_BUCKET']['value']==BUCKET
@@ -44,6 +53,6 @@ def main():
   if name!='NATIVE_ENTRY_ATTACHMENT_BUCKET':assert actual[name]==value
  assert verified['spec']['template']['spec']['serviceAccountName']==account
  assert verified['spec']['template']['spec']['containers'][0]['image']==image
- assert verified['status']['latestReadyRevisionName']==verified['status']['latestCreatedRevisionName']
+ assert any(t.get('revisionName')=='sp-pdf-download-'+suffix and t.get('percent')==100 for t in verified['status']['traffic'])
  print('Bucket privado e configuração verificados. Validar upload/download sintético antes de declarar homologação.')
 if __name__=='__main__':main()

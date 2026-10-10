@@ -1,3 +1,4 @@
+const maintenance=require("./maintenance");
 const { createHash } = require("node:crypto");
 const { money } = require("./boleto-cloud");
 const { gerarIcs } = require("./convites-vencimento.cjs");
@@ -184,7 +185,7 @@ async function handlePayables(ctx) {
     enabled,
     allowed,
     files,
-    catalog,
+    catalog, catalogRef, catalogState,
     getBucket,
     env,
   } = ctx;
@@ -193,6 +194,7 @@ async function handlePayables(ctx) {
   const recheck = async (tx) => {
     if (!allowed((await (tx ? tx.get(userRef) : userRef.get())).data()))
       fail("Acesso revogado.", 403);
+    if(tx && catalogRef && ((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision)fail("Parâmetros alterados. Reabra a conta e revise novamente.",409);
   };
   if (request.method === "GET" && path === "rules") {
     const result = await db.collection("payableRecurrences").limit(501).get();
@@ -452,6 +454,7 @@ async function handlePayables(ctx) {
       if (b.month < rule.start || b.month > rule.end)
         fail("Competência fora da vigência.");
       const source = payable((await tx.get(ref)).data());
+      maintenance.assertActiveCategory(catalogState,source.description);
       if(!catalog.banks.includes(source.bankAccount))fail("Conta de origem sem conta bancária válida. Confira antes de provisionar.",400);
       if (String(source.dueDate).slice(0, 7) === b.month)
         fail("A conta de origem já representa esta competência.");
@@ -479,7 +482,7 @@ async function handlePayables(ctx) {
           return (
             !r.isExcluded &&
             norm(r.movement) === "saida" &&
-            r.description === source.description &&
+            maintenance.sameAccount(r.description,source.description) &&
             nominal(r) === Math.round(amount * 100)
           );
         })

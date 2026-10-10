@@ -2,6 +2,7 @@ const {handlePayables} = require('./payables');
 const { createHash } = require("node:crypto");
 const { validDocument } = require("./boleto-cloud");
 const catalog = require("./native-entry-catalog.json");
+const maintenance = require("./maintenance");
 const hash = (value) =>
   createHash("sha256")
     .update(typeof value === "string" ? value : JSON.stringify(value))
@@ -40,12 +41,6 @@ function cents(v, label) {
       `${label}: use um valor positivo com até duas casas decimais.`,
     );
   return Math.round(Number(s) * 100);
-}
-function choice(v, key, required = true) {
-  const s = text(v, key, required);
-  if (s && !catalog[key].includes(s))
-    throw new EntryError(`Seleção inválida: ${key}.`);
-  return s;
 }
 function files(input = []) {
   if (!Array.isArray(input) || input.length > 4)
@@ -90,7 +85,8 @@ function files(input = []) {
     };
   });
 }
-function buildEntry(input, client, actor, now = new Date().toISOString()) {
+function buildEntry(input, client, actor, now = new Date().toISOString(), source = catalog) {
+  const choice = (v,key,required=true) => { const s=text(v,key,required); if(s&&!source[key].includes(s))throw new EntryError(`Seleção inválida: ${key}.`); return s; };
   if (!input || !["receber", "pagar"].includes(input.kind))
     throw new EntryError("Selecione pagar ou receber.");
   const receivable = input.kind === "receber";
@@ -274,8 +270,14 @@ function createNativeEntryHandler({
       const enabled = env.NATIVE_ENTRY_ENABLED === "true";
       const reply = (body, status = 200) =>
         sendJson(request, response, status, body);
+      if(url.pathname === "/api/financial-entries/maintenance") {
+        await maintenance.handleMaintenance({request,db,userRef,uid,allowed,readBody,reply}); return true;
+      }
+      const catalogRef=db.collection("financialSettings").doc("nativeCatalog");
+      const catalogState=(await catalogRef.get()).data()||maintenance.initial();
+      const catalog=maintenance.effective(catalogState);
       if(url.pathname.startsWith("/api/financial-entries/payables/")){
-        await handlePayables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed,files,catalog,getBucket,env});
+        await handlePayables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed,files,catalog,catalogRef,catalogState,getBucket,env});
         return true;
       }
       if (
@@ -392,7 +394,7 @@ function createNativeEntryHandler({
       }
       const actor = { uid, name: user.name || uid };
       // Fixed timestamp for the review hash; real timestamps are assigned on commit.
-      const built = buildEntry(input, client, actor, "");
+      const built = buildEntry(input, client, actor, "", catalog);
       const metadata = upload.map(({ bytes, ...meta }) => meta);
       const previewHash = hash([built.record, metadata]);
       const id = "native-" + hash([uid, body.requestId]);
@@ -419,6 +421,7 @@ function createNativeEntryHandler({
         if (!allowed((await tx.get(userRef)).data()))
           throw new EntryError("Acesso revogado.", 403);
         const attempt = (await tx.get(requestRef)).data();
+        if(((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision) throw new EntryError("Parâmetros alterados. Reabra e revise o lançamento.",409);
         const old = (await tx.get(ref)).data();
         if (attempt && attempt.hash !== previewHash)
           throw new EntryError(
@@ -464,6 +467,7 @@ function createNativeEntryHandler({
       const saved = await db.runTransaction(async (tx) => {
         if (!allowed((await tx.get(userRef)).data()))
           throw new EntryError("Acesso revogado.", 403);
+        if(((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision) throw new EntryError("Parâmetros alterados. Reabra e revise o lançamento.",409);
         const old = (await tx.get(ref)).data();
         if (old) return { record: old, replayed: true };
         if (
@@ -497,7 +501,7 @@ function createNativeEntryHandler({
             input.kind === "receber"
               ? String(r.cpfCnpj || "").replace(/\D/g, "") ===
                 built.record.cpfCnpj
-              : r.description === built.record.description;
+              : maintenance.sameAccount(r.description,built.record.description);
           const rawAmount = String(
             r.totalCobranca ||
               r.valorOriginal ||
