@@ -31,6 +31,7 @@ export interface EntryDraft {
   amount: string;
   honorarios: string;
   extras: string;
+  extraItems?: Array<{ account: string; amount: string }>;
   interestRate: string;
   paid: boolean;
   paidAmount: string;
@@ -110,5 +111,15 @@ export async function downloadEntryAttachment(id: string, sha256: string) {
   a.href = url;
   a.download = result.name;
   a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+
+export async function downloadEntryStatement(id: string) {
+  const result = await request(`statement/${encodeURIComponent(id)}`);
+  const bytes = Uint8Array.from(atob(result.base64), c => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], {type: result.type}));
+  const a = document.createElement("a");
+  a.href = url; a.download = result.name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

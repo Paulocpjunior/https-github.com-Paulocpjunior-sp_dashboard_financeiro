@@ -166,7 +166,7 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
           throw new HistoryError('Cobrança excluída ou recebida: INVITE indisponível.',409);
         if(source && (Math.round(amount(sourceBefore)*100)!==record.amountCents || sourceBefore.dueDate!==record.dueDate || String(sourceBefore.cpfCnpj || '').replace(/\D/g,'')!==record.payerDocument))
           throw new HistoryError('Dados do lançamento divergiram do boleto. Confira a cobrança antes de preparar o INVITE.',409);
-        const artifact=await prepareInvite({token:record.token,base:'https://app.boletocloud.com/api/v1',apiKey:env.BOLETO_CLOUD_API_KEY,expected:record,fetchImpl});
+        const artifact=await prepareInvite({token:record.token,base:'https://app.boletocloud.com/api/v1',apiKey:env.BOLETO_CLOUD_API_KEY,expected:record,entry:sourceBefore,fetchImpl});
         await recheck();
         if(source && JSON.stringify((await source.get()).data())!==JSON.stringify(sourceBefore))throw new HistoryError('Cobrança alterada durante a preparação.',409);
         sendInvite(res,artifact,match[2]);return true;

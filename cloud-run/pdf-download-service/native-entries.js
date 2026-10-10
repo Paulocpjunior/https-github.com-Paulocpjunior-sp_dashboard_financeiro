@@ -104,7 +104,21 @@ function buildEntry(input, client, actor, now = new Date().toISOString(), source
   if (!input.paid && input.paymentDate)
     throw new EntryError("Documento pendente não deve ter data de pagamento.");
   const honor = receivable ? cents(input.honorarios, "Honorários") : 0;
-  const extra = receivable ? cents(input.extras, "Extras") : 0;
+  let extraItems = [];
+  if (receivable && input.extraItems !== undefined) {
+    if (!Array.isArray(input.extraItems) || input.extraItems.length > 30)
+      throw new EntryError("Informe no máximo 30 serviços extras.");
+    extraItems = input.extraItems.map(item => {
+      if (!item || typeof item !== "object") throw new EntryError("Serviço extra inválido.");
+      const account = choice(item.account, "extras");
+      const value = cents(item.amount, "Valor do serviço extra");
+      if (value <= 0) throw new EntryError("Informe o valor de cada serviço extra.");
+      return { account, amount: value / 100 };
+    });
+  } else if (receivable && cents(input.extras, "Extras") > 0) {
+    extraItems = [{ account: choice(input.extraDescription, "extras"), amount: cents(input.extras, "Extras") / 100 }];
+  }
+  const extra = extraItems.reduce((sum, item) => sum + Math.round(item.amount * 100), 0);
   const rate = receivable ? choice(input.interestRate, "interestRates") : "0";
   const original = receivable
     ? honor + extra
@@ -228,7 +242,8 @@ function buildEntry(input, client, actor, now = new Date().toISOString(), source
       valorExtra: extra / 100,
       extras: extra / 100,
       totalCobranca: original / 100,
-      cobrancaExtra: choice(input.extraDescription, "extras", false),
+      cobrancaExtra: extraItems.map(item => item.account).join("; "),
+      extraItems,
       observacao: note,
       numeroDocumento: description.slice(0, 20),
     });
@@ -310,6 +325,18 @@ function createNativeEntryHandler({
             };
           }),
         });
+        return true;
+      }
+      const statementMatch = url.pathname.match(/^\/api\/financial-entries\/statement\/([a-zA-Z0-9_-]{1,200})$/);
+      if (request.method === "GET" && statementMatch) {
+        const ref = db.collection("transactions").doc(statementMatch[1]);
+        const entry = (await ref.get()).data();
+        const bytes = await require("./receivable-statement").statement(entry);
+        if (!bytes) throw new EntryError("Detalhamento indisponível para este lançamento.",404);
+        if (!allowed((await userRef.get()).data())) throw new EntryError("Acesso revogado.",403);
+        if (JSON.stringify((await ref.get()).data()) !== JSON.stringify(entry))
+          throw new EntryError("Cobrança alterada. Consulte novamente.",409);
+        reply({name:"demonstrativo.pdf",type:"application/pdf",base64:bytes.toString("base64")});
         return true;
       }
       const attachmentMatch = url.pathname.match(
