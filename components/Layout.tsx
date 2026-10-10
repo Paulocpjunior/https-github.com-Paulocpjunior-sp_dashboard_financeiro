@@ -211,7 +211,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   title={item.accessibleLabel || item.label}
                 >
                   <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-white' : 'text-royal-300 dark:text-slate-500'}`} />
-                  <span className="min-w-0 truncate whitespace-nowrap font-medium">{item.label}</span>
+                  <span className="min-w-0 whitespace-normal leading-5 font-medium">{item.label}</span>
                 </button>
               );
             })}
@@ -226,7 +226,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 aria-haspopup="dialog"
               >
                 <Wallet className="h-5 w-5 shrink-0 text-royal-300 dark:text-slate-500" />
-                <span className="min-w-0 truncate whitespace-nowrap font-medium">Tesouraria Wix</span>
+                <span className="min-w-0 whitespace-normal leading-5 font-medium">Tesouraria Wix</span>
               </button>
             )}
             {user?.role === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="w-full min-h-12 flex items-center px-4 py-3 rounded-xl text-royal-200 dark:text-slate-400 hover:bg-royal-900/50">Manutenção</button>}

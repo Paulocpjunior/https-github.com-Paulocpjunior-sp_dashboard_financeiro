@@ -1,3 +1,4 @@
+import DashboardToolbar from '../components/DashboardToolbar';
 import PayablesModal from '../components/PayablesModal';
 import NativeEntryModal from '../components/NativeEntryModal';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -14,7 +15,7 @@ import { auth } from '../services/firebaseConfig';
 import { AuthService } from '../services/authService';
 import { hasFinancialPermission } from '../utils/financialPermissions';
 import { FilterState, KPIData, Transaction } from '../types';
-import { ArrowDown, ArrowUp, DollarSign, Download, Filter, Search, Loader2, XCircle, Printer, MessageCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, RefreshCw, Timer, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { ArrowDown, ArrowUp, DollarSign, Filter, Search, Loader2, XCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { logger } from '../utils/logger';
 import { formatISODateBR, toLocalISODate } from '../utils/dateUtils';
@@ -620,81 +621,15 @@ const Dashboard: React.FC = () => {
         
         {payableModal && <PayablesModal id={payableModal.id} onClose={() => setPayableModal(null)} onSaved={() => { void handleManualRefresh(); }} />}
         {nativeEntryKind && <NativeEntryModal kind={nativeEntryKind} onClose={() => setNativeEntryKind(null)} onSaved={() => { void handleManualRefresh(); }} />}
-        {/* Header & Actions */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-          <div className="print:hidden">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Visão Geral</h1>
-            <p className="text-slate-500 dark:text-slate-400">Movimentos do período selecionado. Os saldos em aberto e o acumulado histórico permanecem no resumo acima.</p>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-2 print:hidden">
-            {isAdmin && <><button className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm" onClick={() => setNativeEntryKind('receber')}>Nova conta a receber</button><button className="px-3 py-2 rounded-lg bg-slate-700 text-white text-sm" onClick={() => setNativeEntryKind('pagar')}>Nova conta a pagar</button><button className="px-3 py-2 rounded-lg bg-slate-700 text-white text-sm" onClick={() => setPayableModal({})}>Recorrências a pagar</button></>}
-            {/* REFRESH INDICATOR */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-500 dark:text-slate-400">
-              <Timer className="h-3.5 w-3.5" />
-              {lastUpdated ? (
-                <span>
-                  Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
-                  <span className="ml-1.5 text-blue-500 dark:text-blue-400 font-medium">
-                    ({refreshCountdown}s)
-                  </span>
-                </span>
-              ) : (
-                <span>Carregando...</span>
-              )}
-            </div>
-
-            <button
-              onClick={handleManualRefresh}
-              disabled={isRefreshing}
-              className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm
-                ${isRefreshing 
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-500 cursor-not-allowed' 
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-400'
-                }`}
-              title="Atualizar dados agora"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>{isRefreshing ? 'Atualizando...' : 'Atualizar'}</span>
-            </button>
-
-            <button
-              onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm
-                ${Object.values(filters).some(Boolean) 
-                  ? 'bg-white dark:bg-slate-800 border-blue-500 text-blue-600 dark:text-blue-400' 
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
-            >
-              <Filter className="h-4 w-4" />
-              <span>Filtros</span>
-            </button>
-
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm"
-            >
-              <Printer className="h-4 w-4" />
-              <span>Imprimir</span>
-            </button>
-
-             <button
-              onClick={() => DataService.exportToCSV(filters)}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-800 dark:bg-slate-700 text-white border border-slate-800 dark:border-slate-700 rounded-lg hover:bg-slate-900 dark:hover:bg-slate-600 transition-colors text-sm"
-            >
-              <Download className="h-4 w-4" />
-              <span>Exportar</span>
-            </button>
-
-             <button
-              onClick={handleWhatsAppShare}
-              className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white border border-green-600 rounded-lg hover:bg-green-700 transition-colors text-sm"
-            >
-              <MessageCircle className="h-4 w-4" />
-              <span className="hidden sm:inline">WhatsApp</span>
-            </button>
-          </div>
-        </div>
+        <DashboardToolbar
+          title={isContasAPagar ? 'Contas a pagar' : isContasAReceber ? 'Contas a receber' : 'Visão geral'}
+          isAdmin={isAdmin} lastUpdated={lastUpdated} refreshCountdown={refreshCountdown}
+          isRefreshing={isRefreshing} hasFilters={Object.values(filters).some(Boolean)} filtersOpen={isFilterMenuOpen}
+          onNewReceivable={() => setNativeEntryKind('receber')} onNewPayable={() => setNativeEntryKind('pagar')}
+          onRecurrences={() => setPayableModal({})} onRefresh={handleManualRefresh}
+          onFilters={() => setIsFilterMenuOpen(!isFilterMenuOpen)} onPrint={handlePrint}
+          onExport={() => DataService.exportToCSV(filters)} onWhatsApp={handleWhatsAppShare}
+        />
 
         {/* Quick View Modes (Similar to Reports) */}
         <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
