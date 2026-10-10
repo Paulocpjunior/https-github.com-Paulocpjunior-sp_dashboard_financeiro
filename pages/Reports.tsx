@@ -1,3 +1,4 @@
+import PayablePaymentLedger from "../components/PayablePaymentLedger";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Layout from '../components/Layout';
 import { DataService } from '../services/dataService';
@@ -551,6 +552,8 @@ const Reports: React.FC = () => {
           </h1>
           <p className="text-slate-500 dark:text-slate-400">Gere relatórios PDF com filtros granulares e totais evidenciados.</p>
         </div>
+
+        <PayablePaymentLedger />
 
         {/* Quick Report Mode Selector */}
         <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-2">

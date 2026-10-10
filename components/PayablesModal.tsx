@@ -46,6 +46,7 @@ export default function PayablesModal({
   const [selected, setSelected] = useState(id || ""),
     [data, setData] = useState<any>(null),
     [rules, setRules] = useState<any[]>([]),
+    [drafts, setDrafts] = useState<any[]>([]),
     [tab, setTab] = useState("payment"),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -65,6 +66,7 @@ export default function PayablesModal({
     [attachment, setAttachment] = useState<any>(null),
     [invoiceHash, setInvoiceHash] = useState("");
   const [rule, setRule] = useState({
+    schedule: "months", months: [] as number[],
     start: toLocalISODate(new Date()).slice(0, 7),
     end: toLocalISODate(new Date()).slice(0, 4) + "-12",
     day: 5,
@@ -77,6 +79,8 @@ export default function PayablesModal({
   async function load(key = selected) {
     const list = await api("rules");
     setRules(list.rules);
+    if (!id) setDrafts((await api("drafts")).drafts);
+    setVariableAmount("");
     if (key) {
       const d = await api("items/" + encodeURIComponent(key));
       setData(d);
@@ -97,8 +101,9 @@ export default function PayablesModal({
       setRuleRecipients((existing?.recipients || []).join("; "));
       setRule(
         existing
-          ? { ...existing, ruleRevision: existing.revision }
+          ? { ...existing, schedule: existing.schedule || "months", months: existing.months || Array.from({length:12},(_,i)=>i+1), end: existing.end || "", ruleRevision: existing.revision }
           : {
+              schedule: "months", months: [],
               start: String(d.transaction.dueDate).slice(0, 7),
               end: String(d.transaction.dueDate).slice(0, 4) + "-12",
               day: Number(String(d.transaction.dueDate).slice(-2)),
@@ -308,6 +313,12 @@ export default function PayablesModal({
         Registrar pagamento atualiza a conta selecionada. Não executa
         transferência bancária.
       </p>
+      {!id && <section className="my-4 rounded-lg border border-amber-400 p-3">
+        <h3 className="font-semibold">Recorrentes aguardando valor da fatura ({drafts.length})</h3>
+        <p className="text-sm">Pendências sem valor não entram nos saldos. Informe o valor de cada mês e confirme o lançamento.</p>
+        {drafts.map(d => <button key={d.id} disabled={busy || uncertain} className="block w-full text-left border rounded p-2 mt-2 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => {void select(d.ruleId).then(() => {setMonth(d.month);setVariableAmount("");setTab("generate");});}}>{d.description} · {d.month} · Informar valor obrigatório</button>)}
+        {!drafts.length && <p className="text-sm mt-2">Nenhuma pendência mensal gerada.</p>}
+      </section>}
       {!id &&
         field(
           "Recorrências cadastradas",
@@ -508,6 +519,17 @@ export default function PayablesModal({
                   origem não será gerada novamente. Dias 29–31 são ajustados ao
                   último dia do mês, sem ajuste automático de dia útil.
                 </p>
+                <fieldset className="rounded-lg border border-blue-300 dark:border-blue-700 p-4 space-y-3">
+                  <legend className="font-semibold">Meses da recorrência — obrigatório</legend>
+                  <label className="block"><input type="radio" name="recurrenceSchedule" checked={rule.schedule === "continuous"} onChange={() => edit(() => setRule({...rule,schedule:"continuous",mode:"variable"}))}/> Contínua (auto-loop) — todos os meses, sem data final</label>
+                  <p className="text-sm text-slate-500">Para luz, telefone, condomínio e outras contas que se repetem. O ciclo continua no ano seguinte até a regra ser desativada.</p>
+                  <label className="block"><input type="radio" name="recurrenceSchedule" checked={rule.schedule === "months"} onChange={() => edit(() => setRule({...rule,schedule:"months"}))}/> Meses específicos — selecione os meses e a vigência</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((label,index) => <label key={label} className={`rounded border p-2 text-sm ${(rule.schedule === 'continuous' || rule.months.includes(index+1)) ? 'bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100 border-blue-400' : 'border-slate-300 dark:border-slate-600'}`}><input type="checkbox" disabled={rule.schedule === 'continuous'} checked={rule.schedule === 'continuous' || rule.months.includes(index+1)} onChange={e => edit(() => setRule({...rule,months:e.target.checked ? [...rule.months,index+1] : rule.months.filter(m=>m!==index+1)}))}/> {label}</label>)}
+                  </div>
+                  {rule.schedule === 'months' && !rule.months.length && <p role="status" className="text-amber-700 dark:text-amber-300">Selecione pelo menos um mês para salvar.</p>}
+                  <p className="text-sm">No modo contínuo, uma pendência mensal sem valor será criada pelo agendamento. Informe o valor da fatura e revise para confirmar a conta.</p>
+                </fieldset>
                 <div className="grid sm:grid-cols-2 gap-3">
                   {field(
                     "Início",
@@ -520,8 +542,8 @@ export default function PayablesModal({
                       }
                     />,
                   )}
-                  {field(
-                    "Fim",
+                  {rule.schedule === "months" && field(
+                    "Fim da vigência (obrigatório)",
                     <input
                       className={cls}
                       type="month"
@@ -551,6 +573,7 @@ export default function PayablesModal({
                     <select
                       className={cls}
                       value={rule.mode}
+                      disabled={rule.schedule === "continuous"}
                       onChange={(e) =>
                         edit(() => setRule({ ...rule, mode: e.target.value }))
                       }
@@ -584,7 +607,7 @@ export default function PayablesModal({
                     }
                   />,
                 )}
-                <button className={btn} onClick={() => void saveRule()}>
+                <button className={btn} disabled={rule.schedule === "months" && !rule.months.length} onClick={() => void saveRule()}>
                   Salvar regra e destinatários
                 </button>
               </>
@@ -600,7 +623,7 @@ export default function PayablesModal({
                     onChange={(e) => edit(() => setMonth(e.target.value))}
                   />,
                 )}
-                {rule.mode === "variable" &&
+                {(rule.schedule === "continuous" || rule.mode === "variable") &&
                   field(
                     "Valor confirmado da fatura",
                     <input
@@ -614,7 +637,7 @@ export default function PayablesModal({
                     />,
                   )}
                 <p>
-                  A geração é manual e revisada, uma competência por vez.
+                  O valor é obrigatório para cada competência. Revise e confirme para incluir a conta nos saldos.
                   Faturas e comprovantes antigos não são copiados.
                 </p>
               </>

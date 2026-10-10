@@ -132,6 +132,7 @@ async function payBody(h) {
 async function ruleBody(h) {
   return {
     ...(await payBody(h)),
+    schedule: "months", months: [1,2,3,4,5,6,7,8,9,10,11,12],
     start: "2099-01",
     end: "2099-12",
     day: 31,
@@ -437,4 +438,35 @@ test('profile rename after preview invalidates confirmation; arbitrary browser n
  b.payment.authorizedBy='Responsável renomeado';
  assert.equal((await h.call('payment/commit',b)).status,409);
  assert.equal(h.store.get('transactions/legacy').status,'Pendente');
+});
+test('continuous recurrence crosses years and remains duplicate-safe', async()=>{
+ const h=harness(); const rule={...await ruleBody(h),schedule:'continuous',months:[],end:''};
+ const saved=await h.call('rules/save',rule); assert.equal(saved.status,200); assert.equal(saved.body.rule.end,null); assert.equal(saved.body.rule.months.length,12);
+ const b={id:'legacy',month:'2100-02',amount:'123.45',requestId:randomUUID()};
+ const p=await h.call('rules/preview',b); assert.equal(p.status,200); assert.equal(p.body.transaction.dueDate,'2100-02-28');
+ assert.equal((await h.call('rules/generate',{...b,confirmHash:p.body.reviewHash})).status,200);
+ assert.equal((await h.call('rules/preview',{...b,requestId:randomUUID()})).status,409);
+});
+test('specific months are mandatory and enforced by generation; legacy rules retain their interval',async()=>{
+ const h=harness();const base=await ruleBody(h);
+ for(const months of [[],[0],[13],[2,2],['2']]) assert.equal((await h.call('rules/save',{...base,requestId:randomUUID(),months})).status,400);
+ assert.equal((await h.call('rules/save',{...base,months:[2,6]})).status,200);
+ const b={id:'legacy',month:'2099-03',requestId:randomUUID()};
+ assert.equal((await h.call('rules/preview',b)).status,409);
+ assert.equal((await h.call('rules/preview',{...b,month:'2099-06'})).status,200);
+ const rule=h.store.get('payableRecurrences/legacy'); delete rule.schedule;delete rule.months;
+ assert.equal((await h.call('rules/preview',b)).status,200);
+ assert.equal((await h.call('rules/preview',{...b,month:'2100-03'})).status,409);
+});
+test('continuous monthly draft requires fresh amount and closes only on confirmed provision',async()=>{
+ const h=harness();const rule={...await ruleBody(h),schedule:'continuous'};
+ const saved=await h.call('rules/save',rule);assert.equal(saved.body.rule.mode,'variable');assert.equal(saved.body.rule.monthlyDrafts,true);
+ const {key}=require('./payable-provision-job');const draftId='payableMonthlyDrafts/'+key('legacy','2099-02');
+ h.store.set(draftId,{ruleId:'legacy',month:'2099-02',amount:null,status:'awaiting-amount'});
+ const b={id:'legacy',month:'2099-02',requestId:randomUUID()};
+ assert.equal((await h.call('rules/preview',b)).status,400);
+ const p=await h.call('rules/preview',{...b,amount:'321.45'});assert.equal(p.status,200);
+ assert.equal(h.store.get(draftId).status,'awaiting-amount');
+ assert.equal((await h.call('rules/generate',{...b,amount:'321.45',confirmHash:p.body.reviewHash})).status,200);
+ assert.equal(h.store.get(draftId).status,'confirmed');assert.equal(h.store.get(h.store.get(draftId).transactionId?'transactions/'+h.store.get(draftId).transactionId:'').valuePaid,321.45);
 });

@@ -1,3 +1,4 @@
+const {recurrenceSchedule, includesMonth} = require("./payable-recurrence");
 const maintenance=require("./maintenance");
 const { createHash } = require("node:crypto");
 const { money } = require("./boleto-cloud");
@@ -230,6 +231,19 @@ async function handlePayables(ctx) {
       fail("Cadastro do usuário alterado. Reabra a conta e revise novamente.", 409);
     if(tx && catalogRef && ((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision)fail("Parâmetros alterados. Reabra a conta e revise novamente.",409);
   };
+  if (request.method === "GET" && path === "drafts") {
+    const result = await db.collection("payableMonthlyDrafts").where("status", "==", "awaiting-amount").limit(501).get();
+    if (result.docs.length > 500) fail("Mais de 500 pendências: revisão necessária.");
+    await recheck();
+    reply({drafts: result.docs.map(d => ({id:d.id,...d.data()}))});
+    return;
+  }
+  if (request.method === "GET" && path === "ledger") {
+    const result = await require("./payable-ledger").readPaymentLedger(db, url.searchParams.get("start"), url.searchParams.get("end"));
+    await recheck();
+    reply(result);
+    return;
+  }
   if (request.method === "GET" && path === "rules") {
     const result = await db.collection("payableRecurrences").limit(501).get();
     if (result.docs.length > 500)
@@ -443,12 +457,12 @@ async function handlePayables(ctx) {
   }
   if (path === "rules/save") {
     const recipients = emails(b.recipients || []);
-    const start = String(b.start || ""),
-      end = String(b.end || "");
+    const schedule = recurrenceSchedule(b);
+    const start = String(b.start || ""), end = schedule.end;
     due(start, b.day);
-    due(end, b.day);
+    if (end !== null) due(end, b.day);
     if (
-      start > end ||
+      (end !== null && start > end) ||
       !["fixed", "variable"].includes(b.mode) ||
       typeof b.active !== "boolean"
     )
@@ -471,8 +485,9 @@ async function handlePayables(ctx) {
         supplier: r.nativeEntry?.supplier || "",
         day: b.day,
         start,
-        end,
-        mode: b.mode,
+        ...schedule,
+        mode: schedule.schedule === "continuous" ? "variable" : b.mode,
+        monthlyDrafts: schedule.schedule === "continuous",
         active: b.active,
         recipients,
         revision: (previous?.revision || 0) + 1,
@@ -503,8 +518,8 @@ async function handlePayables(ctx) {
       const rule = (await tx.get(ruleRef)).data();
       if (!rule?.active) fail("Recorrência inativa ou não encontrada.");
       const dueDate = due(b.month, rule.day);
-      if (b.month < rule.start || b.month > rule.end)
-        fail("Competência fora da vigência.");
+      if (!includesMonth(rule, b.month))
+        fail("Competência fora da vigência ou dos meses selecionados.");
       const source = payable((await tx.get(ref)).data());
       maintenance.assertActiveCategory(catalogState,source.description);
       if(!catalog.banks.includes(source.bankAccount))fail("Conta de origem sem conta bancária válida. Confira antes de provisionar.",400);
@@ -514,8 +529,10 @@ async function handlePayables(ctx) {
       const target = db.collection("transactions").doc(targetId);
       if ((await tx.get(target)).exists)
         fail("Competência já provisionada. Consulte o lançamento existente.");
+      const draftRef = db.collection("payableMonthlyDrafts").doc(require("./payable-provision-job").key(id,b.month));
+      const monthlyDraft = (await tx.get(draftRef)).data();
       const value =
-        rule.mode === "variable"
+        (rule.schedule === "continuous" || rule.mode === "variable")
           ? String(b.amount || "")
           : String(nominal(source) / 100);
       if (!/^\d{1,8}(\.\d{1,2})?$/.test(value) || Number(value) <= 0)
@@ -583,6 +600,7 @@ async function handlePayables(ctx) {
       });
       const result = { transaction: { ...record, id: targetId } };
       tx.create(target, record);
+      if (monthlyDraft) tx.set(draftRef, {...monthlyDraft,status:"confirmed",transactionId:targetId,confirmedAt:at,confirmedBy:uid});
       tx.set(db.collection("payableInviteSettings").doc(targetId), {
         recipients: rule.recipients,
         updatedAt: at,
