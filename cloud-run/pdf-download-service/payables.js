@@ -149,6 +149,30 @@ function payment(r, input, catalog) {
     paidBy: input.paidBy,
   };
 }
+// Restore only settlement-owned fields; retain attachments and immutable history.
+function reversal(r, event, reason) {
+  payable(r);
+  if (typeof reason !== "string" || reason.trim().length < 10 || reason.length > 2000)
+    fail("Informe o motivo do estorno (10 a 2000 caracteres).", 400);
+  const last = r.payableSettlement;
+  if (!last?.requestId || event?.action !== "payment" ||
+      hash(event.after?.payableSettlement) !== hash(last) ||
+      (r.payableReversals || []).some(x => x.paymentRequestId === last.requestId))
+    fail("Última baixa sem histórico íntegro ou já estornada. Solicite revisão.");
+  if (!event.before || nominal(r) !== nominal(event.after) || nominal(r) !== nominal(event.before))
+    fail("Valor da provisão alterado. Solicite revisão antes do estorno.");
+  const fields = ["status", "pago", "paymentDate", "dataPagamento", "valorPago", "payableBalance", "bankAccount", "metodoPagamento", "paidBy", "payableSettlement"];
+  for (const key of fields)
+    if (hash(r[key] ?? null) !== hash(event.after[key] ?? null))
+      fail("Conta alterada após a baixa. Solicite revisão antes do estorno.");
+  const restored = {...r};
+  for (const key of fields) {
+    if (Object.hasOwn(event.before, key)) restored[key] = event.before[key];
+    else delete restored[key];
+  }
+  pending(restored);
+  return restored;
+}
 function calendar(r, id, to, pdf) {
   pending(r);
   date(r.dueDate);
@@ -293,6 +317,34 @@ async function handlePayables(ctx) {
       fail("Tentativa já utilizada com outros dados.");
     return snap.result;
   };
+  if (path === "reversal/preview" || path === "reversal/commit") {
+    const result = await db.runTransaction(async tx => {
+      await recheck(tx);
+      const prior = replay((await tx.get(op)).data());
+      if (prior) return prior;
+      const current = (await tx.get(ref)).data();
+      if (hash(current) !== b.version) fail("Conta alterada. Reabra a revisão.");
+      const last = current?.payableSettlement;
+      if (!last?.uid || !last?.requestId) fail("Baixa legada sem histórico de estorno. Solicite revisão.");
+      const event = (await tx.get(db.collection("payableAudit").doc(hash([last.uid, last.requestId])))).data();
+      if (event?.transactionId !== id) fail("Histórico da baixa não corresponde à conta.");
+      const record = reversal(current, event, b.reason);
+      const reviewHash = hash([id, b.version, b.reason, actor, last.requestId]);
+      if (path.endsWith("preview")) return {reviewHash, before: current, after: record};
+      if (b.confirmHash !== reviewHash) fail("Revise o estorno antes de confirmar.");
+      const at = new Date().toISOString();
+      const reversalEntry = {requestId:b.requestId, paymentRequestId:last.requestId, amountCents:last.amountCents, reason:b.reason.trim(), uid, actor:actor.name, at};
+      record.payableReversals = [...(current.payableReversals || []), reversalEntry];
+      record.updatedAt = at;
+      const result = {transaction:{...record,id}};
+      tx.set(ref,record);
+      tx.create(db.collection("payableAudit").doc(hash([uid,b.requestId])),{action:"payment-reversal", transactionId:id, uid, at, reversal:reversalEntry, before:current, after:record});
+      tx.create(op,{digest,result,at});
+      return result;
+    });
+    reply(result);
+    return;
+  }
   if (path === "payment/preview" || path === "payment/commit") {
     const old = (await op.get()).data();
     const saved = replay(old);
@@ -624,6 +676,7 @@ async function handlePayables(ctx) {
 }
 module.exports = {
   handlePayables,
+  reversal,
   payment,
   calendar,
   due,

@@ -470,3 +470,47 @@ test('continuous monthly draft requires fresh amount and closes only on confirme
  assert.equal((await h.call('rules/generate',{...b,amount:'321.45',confirmHash:p.body.reviewHash})).status,200);
  assert.equal(h.store.get(draftId).status,'confirmed');assert.equal(h.store.get(h.store.get(draftId).transactionId?'transactions/'+h.store.get(draftId).transactionId:'').valuePaid,321.45);
 });
+
+test('reversal restores partial balance with adjustments, retains history and is idempotent', async()=>{
+ const h=harness();
+ async function pay(amount,mode,interest='0') {
+  const b=await payBody(h); Object.assign(b.payment,{amount,mode,interest});
+  b.confirmHash=(await h.call('payment/preview',b)).body.reviewHash;
+  assert.equal((await h.call('payment/commit',b)).status,200);
+ }
+ await pay('40','partial','5');
+ const partial=structuredClone(h.store.get('transactions/legacy'));
+ await pay('65','full');
+ const b={id:'legacy',requestId:randomUUID(),version:(await h.call('items/legacy')).body.version,reason:'Baixa registrada na conta incorreta'};
+ const before=structuredClone([...h.store]);
+ const preview=await h.call('reversal/preview',b);
+ assert.equal(preview.status,200);assert.deepEqual([...h.store],before);
+ assert.equal(preview.body.after.payableBalance.remainingCents,6500);
+ b.confirmHash=preview.body.reviewHash;
+ const outcomes=await Promise.all([h.call('reversal/commit',b),h.call('reversal/commit',b)]);
+ assert.ok(outcomes.every(r=>r.status===200));
+ const restored=h.store.get('transactions/legacy');
+ assert.deepEqual(restored.payableBalance,partial.payableBalance);
+ assert.equal(restored.payablePayments.length,2);assert.equal(restored.payableReversals.length,1);
+ const next={...b,requestId:randomUUID(),version:(await h.call('items/legacy')).body.version};
+ next.confirmHash=(await h.call('reversal/preview',next)).body.reviewHash;
+ assert.equal((await h.call('reversal/commit',next)).status,200);
+ const original=h.store.get('transactions/legacy');
+ assert.equal(original.status,'Pendente');assert.equal(original.payableSettlement,undefined);
+ assert.equal(original.payableBalance,undefined);assert.equal(original.payableReversals.length,2);
+ const body=await payBody(h);assert.equal((await h.call('payment/preview',body)).status,200);
+});
+test('reversal rejects legacy, short reason, stale version, altered balances and revoked access',async()=>{
+ const h=harness();
+ let b={id:'legacy',requestId:randomUUID(),version:(await h.call('items/legacy')).body.version,reason:'Correção de baixa incorreta'};
+ assert.equal((await h.call('reversal/preview',b)).status,409);
+ const p=await payBody(h);p.confirmHash=(await h.call('payment/preview',p)).body.reviewHash;await h.call('payment/commit',p);
+ assert.equal((await h.call('reversal/preview',b)).status,409);
+ b.version=(await h.call('items/legacy')).body.version;
+ assert.equal((await h.call('reversal/preview',{...b,reason:'x'})).status,400);
+ assert.equal((await h.call('reversal/commit',b)).status,409);
+ h.store.get('transactions/legacy').valorPago='999';b.version=(await h.call('items/legacy')).body.version;
+ assert.equal((await h.call('reversal/preview',b)).status,409);
+ h.store.get('users/u').active=false;
+ assert.equal((await h.call('reversal/preview',b)).status,403);
+});

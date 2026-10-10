@@ -33,6 +33,8 @@ export interface Transaction {
   client: string; // Name/Creditor
   paidBy: string;
   movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
+  payableSettlement?: {requestId:string;uid:string;date:string;amountCents:number;actor:string};
+  payableReversals?: Array<{requestId:string;paymentRequestId:string;amountCents:number;reason:string;uid:string;actor:string;at:string}>;
   payablePayments?: Array<{requestId:string;date:string;amountCents:number;interestCents:number;fineCents:number;discountCents:number;remainingCents:number;bankAccount:string;method:string;actor:string;note:string}>;
   payableBalance?: { version: 1; paidCents: number; interestCents: number; fineCents: number; discountCents: number; remainingCents: number };
   valuePaid: number;
