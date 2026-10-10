@@ -10,6 +10,7 @@ import { AccumulatedBalancesService } from '../services/accumulatedBalancesServi
 import { ThemeToggle } from './ThemeToggle';
 import { logger } from '../utils/logger';
 import { WhatsAppSendModal } from './WhatsAppSendModal';
+import MaintenanceModal from './MaintenanceModal';
 import { WixTreasuryModal } from './WixTreasuryModal';
 import { canOpenWixTreasury, hasFinancialPermission } from '../utils/financialPermissions';
 
@@ -27,6 +28,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showSessionAlert, setShowSessionAlert] = useState(true);
   const [globalWhatsAppText, setGlobalWhatsAppText] = useState<string | null>(null);
   const [showWixTreasury, setShowWixTreasury] = useState(false);
+  const [showMaintenance,setShowMaintenance]=useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,6 +122,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300">
       
+      {showMaintenance && <MaintenanceModal onClose={()=>setShowMaintenance(false)}/>}
       {/* Session Active Toast */}
       {showSessionAlert && user && (
         <div className="fixed top-5 right-5 z-[60] animate-in slide-in-from-right fade-in duration-500 print:hidden pointer-events-none">
@@ -226,6 +229,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className="min-w-0 truncate whitespace-nowrap font-medium">Tesouraria Wix</span>
               </button>
             )}
+            {user?.role === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="w-full min-h-12 flex items-center px-4 py-3 rounded-xl text-royal-200 dark:text-slate-400 hover:bg-royal-900/50">Manutenção</button>}
           </nav>
         </div>
 

@@ -319,3 +319,16 @@ test("attachments are stored privately and require authentication to retrieve", 
     attachments[0].base64,
   );
 });
+test('maintained catalog feeds config and renamed accounts retain duplicate protection',async()=>{
+ const h=harness();const {initial,change}=require('./maintenance');const state=initial();
+ const next=change(state,{group:'categories',revision:0,id:state.items.categories[0].id,label:'1 - Descrição atualizada',active:true,reason:'Revisão cadastral'}).next;
+ h.store.set('financialSettings/nativeCatalog',next);
+ assert.equal((await h.call('config',undefined,'good','GET')).body.catalog.categories[0],'1 - Descrição atualizada');
+ h.store.set('transactions/legacy',{movement:'Saída',description:catalog.categories[0],dueDate:'2026-11-20',valorOriginal:100.30});
+ const body={requestId:randomUUID(),entry:payable({category:'1 - Descrição atualizada'})};
+ const p=await h.call('preview',body);assert.equal(p.status,200);
+ assert.equal((await h.call('commit',{...body,confirmHash:p.body.previewHash})).status,409);
+ assert.equal([...h.store.keys()].filter(x=>x.startsWith('transactions/')).length,1);
+ for(const token of ['', 'bad'])assert.equal((await h.call('maintenance',undefined,token,'GET')).status,401);
+ assert.equal((await harness({profile:{active:true,role:'operacional'}}).call('maintenance',undefined,'good','GET')).status,403);
+});

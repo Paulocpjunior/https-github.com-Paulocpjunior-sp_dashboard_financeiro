@@ -14,6 +14,7 @@ export const CHILD_COLLECTIONS = {
   boletoIssues: ['events'], boletoHistorySnapshots: ['chunks'], bankStatements: ['entries', 'imports'],
 };
 export const DEFAULT_COLLECTIONS = [
+  'financialSettings', 'financialSettingsAudit',
   'users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents',
   'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps',
   'boletoIssues', 'boletoIssueLocks', 'boletoHistory', 'boletoHistorySnapshots', 'boletoHistoryUpdates',
