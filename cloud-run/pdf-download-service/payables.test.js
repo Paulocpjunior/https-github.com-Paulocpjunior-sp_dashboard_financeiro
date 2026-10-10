@@ -204,6 +204,17 @@ test("blocks unauthorized, disabled, stale and partial payments without changing
   assert.equal((await h.call("items/legacy")).status, 403);
   assert.equal(h.store.get("transactions/legacy").status, "Pendente");
 });
+test("revoked permission after preview cannot settle or create audit records", async () => {
+  for (const user of [{active:false,role:"admin"},{active:true,role:"operacional"}]) {
+    const h=harness(), b=await payBody(h);
+    const preview=await h.call("payment/preview",b);
+    h.store.set("users/u",user);
+    const before=structuredClone([...h.store]);
+    const result=await h.call("payment/commit",{...b,confirmHash:preview.body.reviewHash});
+    assert.equal(result.status,403);
+    assert.deepEqual([...h.store],before);
+  }
+});
 test("proof is private and stored with audit; existing attachment survives", async () => {
   const h = harness();
   h.store.get("transactions/legacy").attachments = [

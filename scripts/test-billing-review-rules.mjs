@@ -1,11 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, collection, setDoc, getDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, setDoc, getDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc } from 'firebase/firestore';
 if(!process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:')&&!process.env.FIRESTORE_EMULATOR_HOST?.startsWith('localhost:'))throw new Error('Teste exige emulador isolado, nunca produção.');
 const env=await initializeTestEnvironment({projectId:'demo-financeiro-reviews',firestore:{rules:readFileSync('firestore.rules','utf8')}});
 try {
  await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'users/admin-test'),{active:true,role:'admin'});await setDoc(doc(db,'users/operator-test'),{active:true,role:'operacional',name:'Operador sintético'});await setDoc(doc(db,'users/inactive-test'),{active:false,role:'admin'});});
  const admin=env.authenticatedContext('admin-test').firestore();const operator=env.authenticatedContext('operator-test').firestore();const inactive=env.authenticatedContext('inactive-test').firestore();
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'transactions/payment-pilot'),{status:'Pendente',valuePaid:100,movement:'Saída'});});
+ for(const client of [admin,operator,inactive,env.unauthenticatedContext().firestore()]) {
+  await assertFails(updateDoc(doc(client,'transactions/payment-pilot'),{status:'Pago',paymentDate:'2026-10-10'}));
+  await assertFails(updateDoc(doc(client,'transactions/payment-pilot'),{valuePaid:1}));
+ }
+ await assertFails(updateDoc(doc(operator,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:'teste'}));
+ await assertFails(updateDoc(doc(admin,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:''}));
+ await assertSucceeds(updateDoc(doc(admin,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:'Exclusão administrativa sintética',excludedAt:new Date().toISOString(),excludedBy:'admin-test',excludedByName:'Admin'}));
  const base={schemaVersion:1,month:'2026-10',identity:'number:123',client:'Cliente sintético',decision:'charge',amount:500,dueDate:'2026-10-10',startDate:'2026-10-01',billingDay:10,lastChargeDate:'',evidence:'Contrato sintético',event:'entrada',sourceFingerprint:'a'.repeat(64)};
  async function write(db,uid,id,data,old) {
   const parent=doc(db,'billingMonthlyReviews',id);const audit=doc(collection(parent,'revisions'));

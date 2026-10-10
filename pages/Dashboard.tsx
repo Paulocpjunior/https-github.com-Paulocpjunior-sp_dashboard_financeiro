@@ -511,19 +511,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleMarkAsPaid = async (id: string) => {
-    if (window.confirm('Confirmar baixa? Isso marcará a transação como PAGA com a data de hoje e atualizará o Firebase.')) {
-      try {
-        await DataService.markAsPaid(id);
-        // Recarrega dados imediatamente para refletir o status "Pago" na tabela
-        applyTransactionResult(filters, page);
-      } catch (err) {
-        logger.error('Erro ao dar baixa:', err);
-        alert('Erro ao dar baixa. Tente novamente.');
-      }
-    }
-  };
-
   const handleWhatsAppShare = () => {
     const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     const periodLabel = getPeriodText() === 'Selecione um período' ? 'Todos os períodos' : getPeriodText();
@@ -1156,7 +1143,6 @@ const Dashboard: React.FC = () => {
                 canDelete={isAdmin}
                 canExportBoletoCloud={canExportBoletoCloud}
                 onDelete={handleDeleteTransaction}
-                onMarkAsPaid={handleMarkAsPaid}
                 onPayable={isAdmin ? (id) => setPayableModal({id}) : undefined}
                 clientFilterValue={filters.client}
                 onClientFilterChange={(val) => handleFilterChange('client', val)}
