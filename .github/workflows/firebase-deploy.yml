@@ -35,6 +35,9 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
+      - name: Auditar dependências do aplicativo
+        run: npm audit --audit-level=low
+
       - name: Validar funcionalidades financeiras antes de publicar
         run: |
           node scripts/guard-production.mjs --check
