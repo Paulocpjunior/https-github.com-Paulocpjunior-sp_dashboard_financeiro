@@ -71,6 +71,7 @@ function eligible(row) {
   const method = norm(row.metodoPagamento || row.paymentMethod || row.method);
   return (
     !row.isExcluded &&
+    !row.boletoReconciliation &&
     ["pendente", "agendado", "vencida"].includes(norm(row.status)) &&
     norm(row.movement) === "entrada" &&
     !/saida|pagar/.test(norm(row.type)) &&

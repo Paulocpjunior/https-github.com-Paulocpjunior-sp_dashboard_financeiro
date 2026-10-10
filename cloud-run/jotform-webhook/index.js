@@ -241,7 +241,7 @@ async function financialWritePrecondition(docId, token) {
   if(response.status === 404) return 'currentDocument.exists=false';
   if(!response.ok) throw new Error('Não foi possível conferir a versão do lançamento.');
   const current = await response.json();
-  if(current.fields?.payableSettlement || current.fields?.payableRecurrence)
+  if(current.fields?.payableSettlement || current.fields?.payableRecurrence || current.fields?.boletoReconciliation || current.fields?.boletoSettlement)
     throw new Error('FINANCEIRO_NATIVE_OWNER: lançamento gerenciado no Financeiro; edição Jotform exige revisão.');
   if(!current.updateTime) throw new Error('Versão do lançamento indisponível.');
   return `currentDocument.updateTime=${encodeURIComponent(current.updateTime)}`;
