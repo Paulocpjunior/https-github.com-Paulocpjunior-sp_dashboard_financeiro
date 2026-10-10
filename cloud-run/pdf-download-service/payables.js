@@ -219,9 +219,15 @@ async function handlePayables(ctx) {
   } = ctx;
   if (!enabled) fail("Lançamentos nativos não ativados.", 503);
   const path = url.pathname.replace("/api/financial-entries/payables/", "");
+  const actor = { uid, name: String(user.name || uid).trim() || uid };
+  // The authenticated profile adds only a default name, never permission or a persistent catalog entry.
+  const paymentCatalog = { ...catalog, authorizedBy: [...new Set([actor.name, ...catalog.authorizedBy])] };
   const recheck = async (tx) => {
-    if (!allowed((await (tx ? tx.get(userRef) : userRef.get())).data()))
+    const currentUser = (await (tx ? tx.get(userRef) : userRef.get())).data();
+    if (!allowed(currentUser))
       fail("Acesso revogado.", 403);
+    if ((String(currentUser.name || uid).trim() || uid) !== actor.name)
+      fail("Cadastro do usuário alterado. Reabra a conta e revise novamente.", 409);
     if(tx && catalogRef && ((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision)fail("Parâmetros alterados. Reabra a conta e revise novamente.",409);
   };
   if (request.method === "GET" && path === "rules") {
@@ -247,7 +253,8 @@ async function handlePayables(ctx) {
       transaction: { ...r, id },
       version: hash(r),
       recipients: settings?.recipients || [],
-      catalog,
+      catalog: paymentCatalog,
+      actor,
     });
     return;
   }
@@ -282,7 +289,7 @@ async function handlePayables(ctx) {
     }
     const r = (await ref.get()).data();
     if (hash(r) !== b.version) fail("Conta alterada. Reabra a revisão.");
-    const patch = payment(r, b.payment, catalog);
+    const patch = payment(r, b.payment, paymentCatalog);
     const upload = files(b.attachments || []);
     if (upload.some((f) => f.kind !== "comprovante"))
       fail("Anexe somente comprovantes na baixa.", 400);
@@ -290,6 +297,7 @@ async function handlePayables(ctx) {
       b.id,
       b.version,
       b.payment,
+      actor,
       upload.map(({ bytes, ...m }) => m),
     ]);
     if (path.endsWith("preview")) {
@@ -323,7 +331,7 @@ async function handlePayables(ctx) {
       if (prior) return prior;
       const current = (await tx.get(ref)).data();
       if (hash(current) !== b.version) fail("Conta alterada durante a baixa.");
-      payment(current, b.payment, catalog);
+      payment(current, b.payment, paymentCatalog);
       const at = new Date().toISOString();
       const record = {
         ...current,
@@ -353,6 +361,7 @@ async function handlePayables(ctx) {
           remainingCents: patch.payableBalance.remainingCents,
           paidBy: b.payment.paidBy,
           authorizedBy: b.payment.authorizedBy,
+          authorizedByUid: b.payment.authorizedBy === actor.name ? uid : null,
           supplier: b.payment.supplier.trim(),
           personType: b.payment.personType,
         },

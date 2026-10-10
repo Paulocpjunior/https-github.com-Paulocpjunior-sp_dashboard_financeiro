@@ -23,7 +23,8 @@ async function demo(path: string, b?: any) {
   if (path.startsWith("items/"))
     return {
       transaction: { ...row },
-      catalog,
+      catalog: {...catalog, authorizedBy: ["Administrador fictício", ...catalog.authorizedBy]},
+      actor: {uid:"demo-user",name:"Administrador fictício"},
       version: "demo",
       recipients: [],
     };

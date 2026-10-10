@@ -88,7 +88,7 @@ export default function PayablesModal({
         bankAccount: d.transaction.bankAccount || "",
         method: d.transaction.metodoPagamento || "",
         paidBy: d.transaction.paidBy || "",
-        authorizedBy: d.transaction.payableSettlement?.authorizedBy || d.transaction.nativeEntry?.authorizedBy || "",
+        authorizedBy: d.actor?.name || "",
         supplier: d.transaction.payableSettlement?.supplier || d.transaction.nativeEntry?.supplier || "",
         personType: d.transaction.payableSettlement?.personType || d.transaction.nativeEntry?.personType || "",
         note: "",
@@ -471,6 +471,7 @@ export default function PayablesModal({
                     )}
                     {field("Pago por", <select className={cls} value={payment.paidBy} onChange={e=>edit(()=>setPayment({...payment,paidBy:e.target.value}))}><option value="">Selecione</option>{data.catalog.paidBy.map((v:string)=><option key={v} value={v}>{v}</option>)}</select>)}
                     {field("Autorizado por", <select className={cls} value={payment.authorizedBy} onChange={e=>edit(()=>setPayment({...payment,authorizedBy:e.target.value}))}><option value="">Selecione</option>{data.catalog.authorizedBy.map((v:string)=><option key={v} value={v}>{v}</option>)}</select>)}
+                    <p className="text-xs text-slate-500 sm:col-span-2">Autorizado por inicia com o usuário conectado. O acesso à baixa segue as permissões do cadastro de usuários.</p>
                     {field("Pago à - Pessoa física / jurídica", <select className={cls} value={payment.personType} onChange={e=>edit(()=>setPayment({...payment,personType:e.target.value}))}><option value="">Selecione</option><option value="PF">Pessoa física</option><option value="PJ">Pessoa jurídica</option></select>)}
                     {field("Nome do credor / favorecido", <input className={cls} maxLength={300} value={payment.supplier} onChange={e=>edit(()=>setPayment({...payment,supplier:e.target.value}))}/>)}
                   </div>

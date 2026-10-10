@@ -409,3 +409,32 @@ test("rejects overpayment, negative adjustments, excess discount and stale simul
  const next=await payBody(h);next.payment.date='2025-12-31';next.payment.amount='60';
  assert.equal((await h.call('payment/preview',next)).status,400);
 });
+
+test('authenticated authorizer defaults to the managed user, with unchanged permissions and historical authorizers', async () => {
+ const h=harness();
+ h.store.set('users/u',{active:true,role:'admin',name:'Administrador de teste'});
+ const old=h.store.get('transactions/legacy'); old.nativeEntry={authorizedBy:'Autorizador histórico'};
+ const item=await h.call('items/legacy');
+ assert.deepEqual(item.body.actor,{uid:'u',name:'Administrador de teste'});
+ assert.ok(item.body.catalog.authorizedBy.includes('Administrador de teste'));
+ assert.equal(item.body.transaction.nativeEntry.authorizedBy,'Autorizador histórico');
+ const b=await payBody(h);b.payment.authorizedBy=item.body.actor.name;
+ b.confirmHash=(await h.call('payment/preview',b)).body.reviewHash;
+ const saved=await h.call('payment/commit',b);assert.equal(saved.status,200);
+ assert.equal(saved.body.transaction.payableSettlement.authorizedByUid,'u');
+ assert.equal(saved.body.transaction.nativeEntry.authorizedBy,'Autorizador histórico');
+ for(const profile of [{active:false,role:'admin'}, {active:true,role:'operacional'}, {active:true,role:'admin',status:'blocked'}]) {
+   h.store.set('users/u',{...profile,name:'Administrador de teste'});
+   assert.equal((await h.call('items/legacy')).status,403);
+ }
+});
+test('profile rename after preview invalidates confirmation; arbitrary browser names are rejected', async () => {
+ const h=harness(); h.store.set('users/u',{active:true,role:'admin',name:'Responsável atual'});
+ const b=await payBody(h);b.payment.authorizedBy='Responsável atual';
+ b.confirmHash=(await h.call('payment/preview',b)).body.reviewHash;
+ h.store.set('users/u',{active:true,role:'admin',name:'Responsável renomeado'});
+ assert.equal((await h.call('payment/commit',b)).status,400);
+ b.payment.authorizedBy='Responsável renomeado';
+ assert.equal((await h.call('payment/commit',b)).status,409);
+ assert.equal(h.store.get('transactions/legacy').status,'Pendente');
+});
