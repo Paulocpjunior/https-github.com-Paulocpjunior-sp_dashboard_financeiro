@@ -138,7 +138,12 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
           settlementEnabled:job.settlementEnabled===true,counts:job.counts || null,
           stale:!job.startedAt || Date.now()-Date.parse(job.startedAt)>45*60*1000,
           attentionCount:attention.length,attention:attention.slice(0,30)}:null;
-        await recheck();sendJson(req,res,200,{...result,automation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
+        const historyJob=(await db.collection('boletoReturnJobs').doc('history-production').get()).data();
+        const historyAutomation=historyJob?{state:historyJob.state,lastSuccessAt:historyJob.lastSuccessAt || null,
+          lastCycleSuccessfulAt:historyJob.lastCycleSuccessfulAt || null,remaining:historyJob.remaining ?? null,
+          lastCycleErrors:historyJob.lastCycleErrors ?? null,counts:historyJob.counts || null,attention:historyJob.attention || [],
+          stale:!historyJob.startedAt || Date.now()-Date.parse(historyJob.startedAt)>45*60*1000}:null;
+        await recheck();sendJson(req,res,200,{...result,automation,historyAutomation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
       }
       const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf|invite|invite-email)$/);
       if(!match || (match[2]==='sync'?req.method!=='POST':req.method!=='GET'))throw new HistoryError('Rota não encontrada.',404);

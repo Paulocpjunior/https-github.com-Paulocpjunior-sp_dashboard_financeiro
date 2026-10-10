@@ -100,3 +100,9 @@ test('INVITE history blocks excluded linked transactions without contacting prov
  f.data.set('boletoHistorySnapshots/s/chunks/0',{records:[record]});f.data.set('transactions/excluded',{isExcluded:true});
  assert.equal((await f.call(`/api/boleto-cloud/history/${record.id}/invite`)).status,409);
 });
+
+test('historical synchronization exposes progress without leaking cursor or lease',async()=>{
+ const f=fixture();f.data.set('boletoReturnJobs/history-production',{state:'complete',startedAt:new Date().toISOString(),lastSuccessAt:'2026-10-10T12:00:00Z',remaining:41,lastCycleSuccessfulAt:null,lease:'private-lease',cursor:'private-cursor',counts:{updated:60},attention:[]});
+ const r=await f.call();assert.equal(r.body.historyAutomation.remaining,41);assert.equal(r.body.historyAutomation.lastCycleSuccessfulAt,null);assert.equal(r.body.historyAutomation.stale,false);
+ assert.equal(JSON.stringify(r.body).includes('private-'),false);
+});
