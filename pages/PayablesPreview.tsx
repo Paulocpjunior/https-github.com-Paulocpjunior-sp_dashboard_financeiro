@@ -13,6 +13,8 @@ const row: any = {
   metodoPagamento: catalog.paymentMethods[2],
   dueDate: "2026-11-10",
   date: "2026-10-09",
+  nativeEntry: {supplier: "Fornecedor fictício", personType: "PJ", authorizedBy: catalog.authorizedBy[0]},
+  paidBy: catalog.paidBy[0],
   attachments: [],
 };
 let rules: any[] = [];
@@ -25,11 +27,20 @@ async function demo(path: string, b?: any) {
       version: "demo",
       recipients: [],
     };
-  if (path === "payment/preview")
-    return { reviewHash: "demo", after: { ...row, status: "Pago" } };
-  if (path === "payment/commit") {
-    row.status = "Pago";
-    return { transaction: { ...row } };
+  if (path === "payment/preview" || path === "payment/commit") {
+    const p = b.payment;
+    const old = row.payableBalance || {paidCents:0,interestCents:0,fineCents:0,discountCents:0,remainingCents:15000};
+    const amountCents = Math.round(Number(p.amount)*100), interestCents=Math.round(Number(p.interest)*100), fineCents=Math.round(Number(p.fine)*100), discountCents=Math.round(Number(p.discount)*100);
+    const remainingCents=old.remainingCents+interestCents+fineCents-discountCents-amountCents;
+    if(remainingCents<0 || amountCents<=0 || (p.mode==='full' && remainingCents!==0) || (p.mode==='partial' && remainingCents<=0)) throw Object.assign(Error('Confira valor pago e tipo de baixa.'),{status:400});
+    const payableBalance={version:1,paidCents:old.paidCents+amountCents,interestCents:old.interestCents+interestCents,fineCents:old.fineCents+fineCents,discountCents:old.discountCents+discountCents,remainingCents};
+    const after={...row,status:remainingCents?'Pendente':'Pago',payableBalance};
+    if(path.endsWith('preview')) return {reviewHash:'demo',after};
+    Object.assign(row,after);
+    row.paymentDate=p.date;
+    row.payableSettlement={...p,actor:'Administrador fictício',requestId:b.requestId,amountCents,interestCents,fineCents,discountCents,remainingCents};
+    row.payablePayments=[...(row.payablePayments||[]),row.payableSettlement];
+    return {transaction:{...row}};
   }
   if (path === "rules/save") {
     rules = [{ ...b, revision: 1, description: row.description }];

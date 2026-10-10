@@ -124,6 +124,7 @@ async function payBody(h) {
       bankAccount: catalog.banks[0],
       method: catalog.paymentMethods[0],
       note: "Teste fictício",
+      paidBy: catalog.paidBy[0], authorizedBy: catalog.authorizedBy[0], supplier: "Credor fictício", personType: "PJ",
     },
     attachments: [],
   };
@@ -159,6 +160,12 @@ test("payable review is read-only, commit updates exact legacy ID and repeated c
   assert.equal(paid.valuePaid, 100);
   assert.equal(paid.valorPago, "100.00");
   assert.equal(paid.payableSettlement.origin, "manual");
+  assert.equal(paid.paidBy, b.payment.paidBy);
+  for (const key of ["authorizedBy", "supplier", "personType", "paidBy"])
+    assert.equal(paid.payableSettlement[key], b.payment[key]);
+  const audit = [...h.store].find(([k])=>k.startsWith("payableAudit/"))[1];
+  assert.equal(audit.after.payableSettlement.supplier, b.payment.supplier);
+  assert.equal(audit.before.status, "Pendente");
   assert.equal(
     [...h.store.keys()].filter((k) => k.startsWith("transactions/")).length,
     1,
@@ -351,4 +358,54 @@ test('changed source and concurrent monthly generation cannot duplicate provisio
  const results=await Promise.all([h.call('rules/generate',{...one,confirmHash:p1.body.reviewHash}),h.call('rules/generate',{...second,confirmHash:p2.body.reviewHash})]);
  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
  assert.equal([...h.store.keys()].filter(k=>k.startsWith('transactions/')).length,2);
+});
+
+test("settlement requires Jotform responsibility and payee fields and rejects edits after review", async()=>{
+  for (const [key,value] of [["paidBy",""],["authorizedBy","Inventado"],["personType","XX"],["supplier"," "],["supplier","x".repeat(301)]]) {
+    const h=harness(), b=await payBody(h), before=structuredClone([...h.store]);
+    b.payment[key]=value;
+    assert.equal((await h.call("payment/preview",b)).status,400);
+    assert.deepEqual([...h.store],before);
+  }
+  const h=harness(), b=await payBody(h);
+  const preview=await h.call("payment/preview",b);
+  b.confirmHash=preview.body.reviewHash;
+  b.payment.supplier="Outro favorecido";
+  assert.equal((await h.call("payment/commit",b)).status,409);
+  assert.equal(h.store.get("transactions/legacy").status,"Pendente");
+});
+
+test("partial payment, interest, fine and discount preserve original and settle only the adjusted balance", async () => {
+  const h=harness();
+  const post=async (payment) => {
+    const b=await payBody(h); Object.assign(b.payment,payment);
+    const preview=await h.call('payment/preview',b); assert.equal(preview.status,200,JSON.stringify(preview.body));
+    b.confirmHash=preview.body.reviewHash;
+    const results=await Promise.all([h.call('payment/commit',b),h.call('payment/commit',b)]);
+    results.forEach(r=>assert.equal(r.status,200));
+    return h.store.get('transactions/legacy');
+  };
+  let r=await post({mode:'partial',amount:'40',interest:'2',fine:'1',discount:'3'});
+  assert.equal(r.status,'Pendente'); assert.equal(r.valuePaid,100); assert.equal(r.valorPago,'40.00');
+  assert.equal(r.payableBalance.remainingCents,6000); assert.equal(r.payablePayments.length,1);
+  r=await post({mode:'full',amount:'61',interest:'2',discount:'1'});
+  assert.equal(r.status,'Pago'); assert.equal(r.valuePaid,100); assert.equal(r.valorPago,'101.00');
+  assert.deepEqual(r.payableBalance,{version:1,paidCents:10100,interestCents:400,fineCents:100,discountCents:400,remainingCents:0});
+  assert.equal(r.payablePayments.length,2);
+  assert.equal([...h.store.keys()].filter(k=>k.startsWith('payableAudit/')).length,2);
+  assert.equal((await h.call('payment/preview',await payBody(h))).status,409);
+});
+test("rejects overpayment, negative adjustments, excess discount and stale simultaneous settlements", async () => {
+ const h=harness();
+ for(const payment of [{amount:'101'},{interest:'-1'},{discount:'101'},{amount:'100',mode:'partial'},{amount:'50',mode:'partial',interest:'1',note:''}]) {
+   const b=await payBody(h);Object.assign(b.payment,payment);
+   assert.equal((await h.call('payment/preview',b)).status,400);
+ }
+ const a=await payBody(h),b=await payBody(h);
+ for(const x of [a,b]){Object.assign(x.payment,{amount:'40',mode:'partial'});x.confirmHash=(await h.call('payment/preview',x)).body.reviewHash;}
+ assert.equal((await h.call('payment/commit',a)).status,200);
+ assert.equal((await h.call('payment/commit',b)).status,409);
+ assert.equal(h.store.get('transactions/legacy').payableBalance.remainingCents,6000);
+ const next=await payBody(h);next.payment.date='2025-12-31';next.payment.amount='60';
+ assert.equal((await h.call('payment/preview',next)).status,400);
 });

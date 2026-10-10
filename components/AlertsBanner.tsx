@@ -1,3 +1,4 @@
+import { getOutstandingAmount } from "../utils/transactionAmounts";
 
 import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
@@ -145,7 +146,7 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
                   <span className="text-[10px] text-slate-500">{new Date(t.dueDate).toLocaleDateString('pt-BR')}</span>
                 </div>
                 <span className={`font-black ${t.movement === 'Saída' ? 'text-red-500' : 'text-emerald-500'}`}>
-                  {formatCurrency(t.movement === 'Saída' ? t.valuePaid : (t.totalCobranca || t.valueReceived || 0))}
+                  {formatCurrency(t.movement === 'Saída' ? getOutstandingAmount(t) : (t.totalCobranca || t.valueReceived || 0))}
                 </span>
               </div>
             ))}

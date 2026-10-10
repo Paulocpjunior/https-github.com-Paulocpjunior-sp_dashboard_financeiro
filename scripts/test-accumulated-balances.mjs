@@ -11,6 +11,13 @@ try {
   const wix = { totalPaid: 0, totalReceived: 0, balance: 0 };
   accumulateBalances(wix, transaction('wix-inv-1', { movement: 'Saída', valorOriginal: 123.45, status: 'S', source: 'wix' }));
   assert.deepEqual(balancesInReais(wix), { totalPaid: 0, totalReceived: 0, balance: 123.45 });
+  const { getOriginalAmount, getPaidAmount, getOutstandingAmount } = await server.ssrLoadModule('/utils/transactionAmounts.ts');
+  const partial = transaction('partial', {movement:'Saída',valuePaid:100,payableBalance:{version:1,paidCents:4000,interestCents:200,fineCents:100,discountCents:300,remainingCents:6000}});
+  assert.equal(getOriginalAmount(partial),100); assert.equal(getPaidAmount(partial),40); assert.equal(getOutstandingAmount(partial),60);
+  const partialTotals={totalPaid:0,totalReceived:0,balance:0}; accumulateBalances(partialTotals,partial);
+  assert.deepEqual(balancesInReais(partialTotals),{totalPaid:60,totalReceived:0,balance:-40});
+  const settled={...partial,status:'Pago',payableBalance:{version:1,paidCents:10100,interestCents:400,fineCents:100,discountCents:400,remainingCents:0}};
+  assert.equal(getOriginalAmount(settled),100); assert.equal(getPaidAmount(settled),101); assert.equal(getOutstandingAmount(settled),0);
   const projectId = 'synthetic-project';
   const prefix = `projects/${projectId}/databases/(default)/documents/transactions/`;
   const readTime = '2026-10-01T10:00:00.000000Z';
@@ -29,6 +36,13 @@ try {
   assert.equal(requests[0].structuredQuery.where, undefined, 'consulta global não recebe filtro do mês');
   assert.equal(requests[1].readTime, readTime, 'todas as páginas precisam da mesma versão');
   assert.deepEqual(requests[1].structuredQuery.startAt, { values: [{ referenceValue: prefix + '000999' }], before: false });
+  const partialRead = await readAccumulatedBalances({projectId,token:'synthetic-token',checkSession:()=>{},fetcher:async (_url,init)=>{
+    assert.ok(JSON.parse(init.body).structuredQuery.select.fields.some(f=>f.fieldPath==='payableBalance'));
+    const doc=row(0,{movement:'Saída',valuePaid:100});
+    doc.document.fields.payableBalance={mapValue:{fields:Object.fromEntries(Object.entries(partial.payableBalance).map(([k,v])=>[k,{integerValue:String(v)}]))}};
+    return {ok:true,json:async()=>[doc]};
+  }});
+  assert.deepEqual(partialRead.kpi,{totalPaid:60,totalReceived:0,balance:-40});
   let calls = 0;
   await assert.rejects(() => readAccumulatedBalances({ projectId, token: 'synthetic-token', checkSession: () => {}, fetcher: async () => ++calls === 1 ? { ok: true, json: async () => Array.from({ length: 1000 }, (_, i) => row(i)) } : { ok: false, status: 403 } }), /sem permissão/, 'falha na última página não libera saldo parcial');
   await assert.rejects(() => readAccumulatedBalances({ projectId, token: 'synthetic-token', checkSession: () => {}, fetcher: async () => ({ ok: true, json: async () => [] }) }), /incompleta/, 'resposta ausente não representa saldo zero');

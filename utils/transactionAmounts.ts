@@ -105,6 +105,8 @@ export const getOriginalAmount = (transaction: Transaction): number => {
 };
 
 export const getPaidAmount = (transaction: Transaction): number => {
+  if (isSaidaTransaction(transaction) && transaction.payableBalance?.version === 1)
+    return transaction.payableBalance.paidCents / 100;
   if (!isPaidStatus(transaction.status)) return 0;
 
   if (isEntradaTransaction(transaction)) {
@@ -131,6 +133,8 @@ export const getPaidAmount = (transaction: Transaction): number => {
 };
 
 export const getOutstandingAmount = (transaction: Transaction): number => {
+  if (isSaidaTransaction(transaction) && transaction.payableBalance?.version === 1)
+    return transaction.payableBalance.remainingCents / 100;
   const outstanding = getOriginalAmount(transaction) - getPaidAmount(transaction);
   return outstanding > 0 ? outstanding : 0;
 };

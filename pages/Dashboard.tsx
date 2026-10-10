@@ -1,3 +1,4 @@
+import { getPaidAmount, getOutstandingAmount } from "../utils/transactionAmounts";
 import DashboardToolbar from '../components/DashboardToolbar';
 import PayablesModal from '../components/PayablesModal';
 import NativeEntryModal from '../components/NativeEntryModal';
@@ -550,11 +551,8 @@ const Dashboard: React.FC = () => {
         
         if (!grouped[d]) grouped[d] = { date: d, Pago: 0, Pendente: 0 };
         
-        if (t.status === 'Pago') {
-          grouped[d].Pago += t.valuePaid;
-        } else {
-          grouped[d].Pendente += t.valuePaid;
-        }
+        grouped[d].Pago += getPaidAmount(t);
+        grouped[d].Pendente += getOutstandingAmount(t);
       });
 
       return Object.values(grouped)
@@ -846,7 +844,7 @@ const Dashboard: React.FC = () => {
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1">
                       <ArrowDown className="h-3 w-3 text-red-500" />
-                      Data Pagamento
+                      Última baixa
                       <span className="text-red-500 text-[10px]">(Saídas)</span>
                     </label>
                     <div className="flex gap-2 items-center">

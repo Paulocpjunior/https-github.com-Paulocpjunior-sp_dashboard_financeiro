@@ -8,7 +8,7 @@ import { Transaction, KPIData, FilterState } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { formatISODateBR } from '../utils/dateUtils';
-import { getOriginalAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { getOriginalAmount, getOutstandingAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
 import { formatExtraChargeDescription, hasExtraCharge } from '../utils/extraCharges';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
@@ -412,7 +412,7 @@ const Reports: React.FC = () => {
 
         // Detalhamento Saídas (Contas a Pagar)
         if (isSaidaTransaction(curr)) {
-            if (isPaid) acc.settledPayables += getPaidAmount(curr);
+            acc.settledPayables += getPaidAmount(curr);
         }
 
         // Detalhamento Entradas (Contas a Receber)
@@ -429,15 +429,14 @@ const Reports: React.FC = () => {
       }
     );
 
-    // Mesma fórmula usada pelo Painel Principal: total original menos valor efetivado.
-    // Isso preserva no saldo eventuais diferenças de registros marcados como pagos.
+    // Valores originais preservados; saldo das baixas nativas inclui os ajustes registrados.
     newKpi.totalPaid = result
       .filter(isSaidaTransaction)
       .reduce((total, transaction) => total + getOriginalAmount(transaction), 0);
     newKpi.totalReceived = result
       .filter(isEntradaTransaction)
       .reduce((total, transaction) => total + getOriginalAmount(transaction), 0);
-    newKpi.pendingPayables = Math.max(0, newKpi.totalPaid - newKpi.settledPayables);
+    newKpi.pendingPayables = result.filter(isSaidaTransaction).reduce((sum, row) => sum + getOutstandingAmount(row), 0);
     newKpi.pendingReceivables = Math.max(0, newKpi.totalReceived - newKpi.settledReceivables);
     newKpi.balance = newKpi.totalReceived - newKpi.totalPaid;
 
@@ -463,7 +462,7 @@ const Reports: React.FC = () => {
     const dateLabelMap: Record<string, string> = {
         'date': 'Data de Lançamento',
         'dueDate': 'Data de Vencimento',
-        'paymentDate': 'Data de Pagamento/Baixa'
+        'paymentDate': 'Data da última baixa'
     };
 
     // ★ FIX: Capturar snapshot dos dados ANTES do setTimeout para evitar dados stale
@@ -604,7 +603,7 @@ const Reports: React.FC = () => {
                         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                             <button onClick={() => setDateFilterType('date')} className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'date' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>Lançamento</button>
                             <button onClick={() => setDateFilterType('dueDate')} className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'dueDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>Vencimento</button>
-                            <button onClick={() => setDateFilterType('paymentDate')} className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'paymentDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>Pagamento/Baixa</button>
+                            <button onClick={() => setDateFilterType('paymentDate')} className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${dateFilterType === 'paymentDate' ? 'bg-white dark:bg-slate-600 shadow text-blue-600 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>Última baixa</button>
                         </div>
                      </div>
                   </div>
@@ -740,7 +739,7 @@ const Reports: React.FC = () => {
                          >
                             <option value="date">Data Lançamento</option>
                             <option value="dueDate">Data Vencimento</option>
-                            <option value="paymentDate">Data Pagamento/Baixa</option>
+                            <option value="paymentDate">Data da última baixa</option>
                             <option value="client">Cliente / Favorecido</option>
                             {isEntrada && <option value="clientNumber">N.Cliente</option>}
                             <option value="valorOriginal">Valor (Original)</option>

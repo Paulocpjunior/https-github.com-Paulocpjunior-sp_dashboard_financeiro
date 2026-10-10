@@ -442,14 +442,14 @@ const DataTable: React.FC<DataTableProps> = ({
                               ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
                                 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
                               {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
-                              {row.status}
+                              {row.payableBalance?.remainingCents && row.payableBalance.paidCents ? "Parcial" : row.status}
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-amber-600 dark:text-amber-400 font-medium">
-                            {isPending ? formatCurrency(getOriginalAmount(row)) : 'R$ 0,00'}
+                            {isPending ? formatCurrency(getOutstandingAmount(row)) : 'R$ 0,00'}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-green-600 dark:text-green-400 font-medium">
-                            {isPago ? formatCurrency(getPaidAmount(row)) : 'R$ 0,00'}
+                            {formatCurrency(getPaidAmount(row))}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
@@ -503,7 +503,7 @@ const DataTable: React.FC<DataTableProps> = ({
                                 isVencido ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
                                 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
                               {isVencido && !isPago && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
-                              {row.status}
+                              {row.payableBalance?.remainingCents && row.payableBalance.paidCents ? "Parcial" : row.status}
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right text-slate-600 dark:text-slate-400">
@@ -566,7 +566,7 @@ const DataTable: React.FC<DataTableProps> = ({
                               ${row.status === 'Pago' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 
                                 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}>
                               {isPending && <AlertTriangle className="w-2.5 h-2.5 mr-0.5" />}
-                              {row.status}
+                              {row.payableBalance?.remainingCents && row.payableBalance.paidCents ? "Parcial" : row.status}
                             </span>
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-right">
@@ -581,6 +581,7 @@ const DataTable: React.FC<DataTableProps> = ({
                                 {formatCurrency(getOriginalAmount(row))}
                               </span>
                             )}
+                            {row.payableBalance && <span className="block text-xs text-slate-500">Pago: {formatCurrency(getPaidAmount(row))} · Saldo: {formatCurrency(getOutstandingAmount(row))}</span>}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
