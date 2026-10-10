@@ -1,6 +1,5 @@
 import { CheckCircle2 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
-import { downloadEntryAttachment } from "../services/nativeEntryService";
 import { auth } from "../services/firebaseConfig";
 import { toLocalISODate } from "../utils/dateUtils";
 import { getOriginalAmount, getOutstandingAmount } from "../utils/transactionAmounts";
@@ -86,6 +85,8 @@ export default function PayablesModal({
     if (key) {
       const d = await api("items/" + encodeURIComponent(key));
       setData(d);
+      const caps = d.capabilities || {};
+      setTab(caps.settle ? "payment" : "history");
       setRecipients(d.recipients.join("; "));
       setPayment({
         date: toLocalISODate(new Date()),
@@ -250,6 +251,15 @@ export default function PayablesModal({
       }
     } catch {}
   }
+  async function downloadAttachment(sha:string) {
+    try {
+      const r = await api(`items/${encodeURIComponent(selected)}/attachments/${sha}`);
+      const bytes = Uint8Array.from(atob(r.base64),(c:string)=>c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes],{type:r.type}));
+      const a=document.createElement('a'); a.href=url;a.download=r.name;a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    } catch(e) {setError((e as Error).message);}
+  }
   async function invite(format: string) {
     try {
       const r = await run("invite/download", {
@@ -380,7 +390,7 @@ export default function PayablesModal({
                   key={a.sha256}
                   className="text-blue-600 underline text-sm"
                   onClick={() =>
-                    void downloadEntryAttachment(selected, a.sha256).catch(
+                    void downloadAttachment(a.sha256).catch(
                       (e) => setError(e.message),
                     )
                   }
@@ -392,12 +402,13 @@ export default function PayablesModal({
           ) : null}
           <nav className="flex flex-wrap gap-2 my-4">
             {[
+              ["history", "Histórico"],
               ["payment", "Registrar pagamento"],
               ["recurrence", "Recorrência"],
               ["generate", "Gerar competência"],
               ["invite", "INVITE"],
               ["reversal", "Estornar baixa"],
-            ].map(([key, title]) => (
+            ].filter(([key]) => key === "history" || data.capabilities?.[({payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
               <button
                 key={key}
                 className={tab === key ? btn : "border rounded px-3 py-2"}
@@ -414,6 +425,7 @@ export default function PayablesModal({
               </button>
             ))}
           </nav>
+          {tab === "history" && <p className="text-sm">Consulta do histórico. As ações disponíveis dependem dos direitos definidos em Usuários.</p>}
           <fieldset disabled={busy || uncertain} className="space-y-3">
             {tab === "reversal" && <section className="space-y-3 rounded-xl border border-amber-400 p-4">
               <h3 className="font-semibold">Estorno da última baixa ativa</h3>
@@ -509,7 +521,7 @@ export default function PayablesModal({
                       </select>,
                     )}
                     {field("Pago por", <select className={cls} value={payment.paidBy} onChange={e=>edit(()=>setPayment({...payment,paidBy:e.target.value}))}><option value="">Selecione</option>{data.catalog.paidBy.map((v:string)=><option key={v} value={v}>{v}</option>)}</select>)}
-                    {field("Autorizado por", <select className={cls} value={payment.authorizedBy} onChange={e=>edit(()=>setPayment({...payment,authorizedBy:e.target.value}))}><option value="">Selecione</option>{data.catalog.authorizedBy.map((v:string)=><option key={v} value={v}>{v}</option>)}</select>)}
+                    {field("Autorizado por", <select className={cls} value={payment.authorizedBy} disabled={data.actor?.role !== "admin"} onChange={e=>edit(()=>setPayment({...payment,authorizedBy:e.target.value}))}><option value="">Selecione</option>{data.catalog.authorizedBy.map((v:string)=><option key={v} value={v}>{v}</option>)}</select>)}
                     <p className="text-xs text-slate-500 sm:col-span-2">Autorizado por inicia com o usuário conectado. O acesso à baixa segue as permissões do cadastro de usuários.</p>
                     {field("Pago à - Pessoa física / jurídica", <select className={cls} value={payment.personType} onChange={e=>edit(()=>setPayment({...payment,personType:e.target.value}))}><option value="">Selecione</option><option value="PF">Pessoa física</option><option value="PJ">Pessoa jurídica</option></select>)}
                     {field("Nome do credor / favorecido", <input className={cls} maxLength={300} value={payment.supplier} onChange={e=>edit(()=>setPayment({...payment,supplier:e.target.value}))}/>)}
@@ -735,7 +747,7 @@ export default function PayablesModal({
           </fieldset>
           {tab === "reversal" && row?.payableSettlement && <button className={btn + " mt-4 w-full min-h-12"} disabled={busy || reversalReason.trim().length < 10} onClick={reversePayment}>{busy ? "Aguarde…" : uncertain ? "Consultar resultado do estorno" : reversalReview ? "Confirmar estorno e concluir" : "Revisar estorno"}</button>}
           {row?.payableReversals?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de estornos</h3>{row.payableReversals.map((r:any)=><p key={r.requestId} className="my-2 text-sm">{brl(r.amountCents/100)} · {r.at} · {r.actor}<br/>{r.reason}</p>)}</section>}
-          {tab === "payment" && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{(row.payableReversals || []).some((r:any)=>r.paymentRequestId === p.requestId) ? "ESTORNADA · " : ""}{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}</p>)}</section>}
+          {(tab === "payment" || tab === "history") && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{(row.payableReversals || []).some((r:any)=>r.paymentRequestId === p.requestId) ? "ESTORNADA · " : ""}{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}</p>)}</section>}
           {review && (
             <div className="border rounded p-3 my-3">
               <strong>

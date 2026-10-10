@@ -5,7 +5,12 @@ export type FinancialPermission =
   | 'billing.boleto-cloud.issue'
   | 'billing.boleto-cloud.history.read'
   | 'itau.openfinance.read'
-  | 'itau.statement.import';
+  | 'itau.statement.import'
+  | 'payables.read'
+  | 'payables.settle'
+  | 'payables.reverse'
+  | 'payables.recurrence'
+  | 'payables.invite';
 
 export interface User {
   id: string;

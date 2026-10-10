@@ -65,6 +65,8 @@ const getFilterScopeKey = (filters: Partial<FilterState>) => [
 const Dashboard: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
+  const canManagePayable = (['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite'] as const).some(p => hasFinancialPermission(currentUser,p));
+  const canManageRecurrences = hasFinancialPermission(currentUser,'payables.recurrence');
   const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');
 
   const [payableModal, setPayableModal] = useState<{id?:string}|null>(null);
@@ -621,7 +623,7 @@ const Dashboard: React.FC = () => {
         {nativeEntryKind && <NativeEntryModal kind={nativeEntryKind} onClose={() => setNativeEntryKind(null)} onSaved={() => { void handleManualRefresh(); }} />}
         <DashboardToolbar
           title={isContasAPagar ? 'Contas a pagar' : isContasAReceber ? 'Contas a receber' : 'Visão geral'}
-          isAdmin={isAdmin} lastUpdated={lastUpdated} refreshCountdown={refreshCountdown}
+          isAdmin={isAdmin} canRecurrences={canManageRecurrences} lastUpdated={lastUpdated} refreshCountdown={refreshCountdown}
           isRefreshing={isRefreshing} hasFilters={Object.values(filters).some(Boolean)} filtersOpen={isFilterMenuOpen}
           onNewReceivable={() => setNativeEntryKind('receber')} onNewPayable={() => setNativeEntryKind('pagar')}
           onRecurrences={() => setPayableModal({})} onRefresh={handleManualRefresh}
@@ -1076,7 +1078,7 @@ const Dashboard: React.FC = () => {
                 canDelete={isAdmin}
                 canExportBoletoCloud={canExportBoletoCloud}
                 onDelete={handleDeleteTransaction}
-                onPayable={isAdmin ? (id) => setPayableModal({id}) : undefined}
+                onPayable={canManagePayable ? (id) => setPayableModal({id}) : undefined}
                 clientFilterValue={filters.client}
                 onClientFilterChange={(val) => handleFilterChange('client', val)}
                 clientOptions={options.clients}
