@@ -3,6 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { collectTypeOverrides } from './firestore-backup-types.mjs';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -92,6 +93,7 @@ const parseFirestoreDocument = (document) => ({
   createTime: document.createTime,
   updateTime: document.updateTime,
   ...(!document.createTime && !document.updateTime ? { missing: true } : {}),
+  typeOverrides: collectTypeOverrides(document.fields || {}),
   data: Object.fromEntries(
     Object.entries(document.fields || {}).map(([key, value]) => [key, parseFirestoreValue(value)]),
   ),
@@ -198,6 +200,7 @@ const main = async () => {
 
   const backup = {
     schemaVersion: 2,
+    preservesFirestoreTypes: true,
     readTime,
     scope: { firestore: args.collections, storageObjectsIncluded: false, authAccountsIncluded: false },
     generatedAt: new Date().toISOString(),
