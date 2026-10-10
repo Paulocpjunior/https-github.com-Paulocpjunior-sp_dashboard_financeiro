@@ -14,3 +14,7 @@ Implementação de 10/10/2026. Campos comparados com o formulário Jotform 21002
 Validação: testes de backend sintéticos, idempotência/concorrência, cálculo e leitura REST dos acumulados, lint/build e simulação local de parcial seguida de quitação com desconto. Não houve escrita em dados financeiros reais.
 
 Publicação exige aprovação do SHA completo conforme AGENTS.md; publicar backend e frontend compatíveis. Abas antigas devem ser recarregadas para preencher os novos campos obrigatórios.
+
+## Autorizador padrão
+
+Na nova baixa, Autorizado por inicia com o nome do perfil autenticado, obtido em users pelo UID validado pelo servidor. O nome atual é incluído apenas nas opções da resposta, sem modificar o catálogo global. A seleção manual existente permanece disponível; authorizedByUid é gravado somente quando o autorizador corresponde ao usuário conectado. Campos históricos não são reescritos. O hash de revisão inclui a identidade atual, exigindo nova revisão se o cadastro mudar. Nenhuma permissão é concedida por selecionar um nome: a baixa continua restrita aos administradores ativos autorizados pela regra existente.
