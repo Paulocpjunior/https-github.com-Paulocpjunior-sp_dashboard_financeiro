@@ -26,6 +26,7 @@ const input = (extra = {}) => ({
   paymentDate: "",
   honorarios: "100.10",
   extras: "0.20",
+  extraDescription: catalog.extras[0],
   interestRate: "0",
   deliveryMethod: catalog.deliveryMethods[0],
   ...extra,
@@ -331,4 +332,21 @@ test('maintained catalog feeds config and renamed accounts retain duplicate prot
  assert.equal([...h.store.keys()].filter(x=>x.startsWith('transactions/')).length,1);
  for(const token of ['', 'bad'])assert.equal((await h.call('maintenance',undefined,token,'GET')).status,401);
  assert.equal((await harness({profile:{active:true,role:'operacional'}}).call('maintenance',undefined,'good','GET')).status,403);
+});
+
+
+test("extras require active catalog accounts and server sums item amounts", () => {
+  const r = buildEntry(input({ extras: "999", extraItems: [
+    {account: catalog.extras[0], amount: "0.10"},
+    {account: catalog.extras[1], amount: "0.20"}
+  ]}), client, actor).record;
+  assert.equal(r.extras, 0.3);
+  assert.equal(r.totalCobranca, 100.4);
+  assert.equal(r.extraItems.length, 2);
+  for (const extraItems of [[{account: "inventada", amount: "1"}], [{account: catalog.extras[0], amount: ""}], [{account: catalog.extras[0], amount: "0"}], {}]) {
+    assert.throws(() => buildEntry(input({extraItems}), client, actor));
+  }
+  assert.throws(() => buildEntry(input({extraDescription: ""}), client, actor));
+  assert.throws(() => buildEntry(input({extraItems: [{account: catalog.extras[0], amount: "1"}]}), client, actor, undefined, {...catalog, extras: []}));
+  assert.equal(buildEntry(input({extraItems: []}), client, actor).record.totalCobranca, 100.1);
 });

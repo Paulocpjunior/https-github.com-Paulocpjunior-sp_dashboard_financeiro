@@ -24,6 +24,7 @@ const empty = (kind: EntryKind): EntryDraft => ({
   amount: "",
   honorarios: "",
   extras: "0",
+  extraItems: [],
   interestRate: "0",
   paid: false,
   paidAmount: "0",
@@ -109,7 +110,7 @@ export default function NativeEntryModal({
   }
   const amount = receivable
     ? Math.round(
-        (Number(draft.honorarios || 0) + Number(draft.extras || 0)) * 100,
+        (Number(draft.honorarios || 0) + (draft.extraItems || []).reduce((sum, item) => sum + Math.round(Number(item.amount || 0) * 100), 0) / 100) * 100,
       ) / 100
     : Number(draft.amount || 0);
   const selected = config?.clients.find((c) => c.id === draft.clientRegistryId);
@@ -430,12 +431,26 @@ export default function NativeEntryModal({
                   {field("description", "Descrição da cobrança", "text", true)}
                   <div className="grid sm:grid-cols-2 gap-4">
                     {field("honorarios", "Honorários (R$)", "number", true)}
-                    {field("extras", "Extras (R$)", "number")}
-                    {select(
-                      "extraDescription",
-                      "Descrição dos extras",
-                      config.catalog.extras,
-                    )}
+                    <section className="sm:col-span-2 rounded-xl border border-slate-300 dark:border-slate-600 p-4 space-y-3">
+                      <h4 className="font-semibold">Serviços extras</h4>
+                      <p className="text-sm text-slate-500">Selecione cada serviço no plano de contas. Novas contas são cadastradas em Manutenção → Cobranças extras.</p>
+                      {(draft.extraItems || []).map((item, index) => (
+                        <div key={index} className="grid sm:grid-cols-[1fr_150px_auto] gap-3 items-end">
+                          <label className="text-sm">Conta do serviço extra *
+                            <select required className={inputClass} value={item.account} onChange={e => change("extraItems", draft.extraItems!.map((x, i) => i === index ? {...x, account: e.target.value} : x))}>
+                              <option value="">Selecione a conta</option>
+                              {config.catalog.extras.map(account => <option key={account} value={account}>{account}</option>)}
+                            </select>
+                          </label>
+                          <label className="text-sm">Valor (R$) *
+                            <input required type="number" min="0.01" step="0.01" className={inputClass} value={item.amount} onChange={e => change("extraItems", draft.extraItems!.map((x, i) => i === index ? {...x, amount: e.target.value} : x))}/>
+                          </label>
+                          <button type="button" className="rounded-lg border px-3 py-2" aria-label={`Remover serviço extra ${index + 1}`} onClick={() => change("extraItems", draft.extraItems!.filter((_, i) => i !== index))}>Remover</button>
+                        </div>
+                      ))}
+                      <button type="button" disabled={(draft.extraItems?.length || 0) >= 30} className="rounded-lg bg-blue-600 text-white px-4 py-2" onClick={() => change("extraItems", [...(draft.extraItems || []), {account: "", amount: ""}])}>+ Adicionar serviço extra</button>
+                      <p className="text-sm">Total dos extras: {money((draft.extraItems || []).reduce((sum, item) => sum + Math.round(Number(item.amount || 0) * 100), 0) / 100)}. O boleto mantém o valor total da cobrança.</p>
+                    </section>
                     {select(
                       "deliveryMethod",
                       "Método de envio da cobrança",
@@ -611,6 +626,10 @@ export default function NativeEntryModal({
                   {review.transaction.status}
                 </p>
                 <p>Conta: {review.transaction.bankAccount}</p>
+                {receivable && <div>
+                  <p>Honorários: {money(Number(review.transaction.honorarios || 0))}</p>
+                  {review.transaction.extraItems?.map((item, index) => <p key={index}>{item.account}: {money(item.amount)}</p>)}
+                </div>}
                 <p>{receivable ? draft.description : draft.supplier}</p>
                 <p>
                   Método:{" "}

@@ -41,9 +41,11 @@ const api: EntryAPI = {
       status: d.paid ? "Pago" : "Pendente",
       valuePaid: 0,
       valueReceived: 0,
+      honorarios: Number(d.honorarios || 0),
+      extraItems: d.extraItems?.map(item => ({account: item.account, amount: Number(item.amount)})),
       valorOriginal:
         d.kind === "receber"
-          ? Number(d.honorarios) + Number(d.extras)
+          ? Number(d.honorarios) + (d.extraItems || []).reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0) / 100
           : Number(d.amount),
     },
   }),

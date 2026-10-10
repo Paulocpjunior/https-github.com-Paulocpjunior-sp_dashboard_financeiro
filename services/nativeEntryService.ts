@@ -31,6 +31,7 @@ export interface EntryDraft {
   amount: string;
   honorarios: string;
   extras: string;
+  extraItems?: Array<{ account: string; amount: string }>;
   interestRate: string;
   paid: boolean;
   paidAmount: string;

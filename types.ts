@@ -41,6 +41,7 @@ export interface Transaction {
   // Campos específicos para 'Entrada de Caixa / Contas a Receber'
   honorarios?: number;
   cobrancaExtra?: string;
+  extraItems?: Array<{ account: string; amount: number }>;
   valorExtra?: number;
   totalCobranca?: number;
   metodoPagamento?: string; // Campo original gravado pelo Jotform
