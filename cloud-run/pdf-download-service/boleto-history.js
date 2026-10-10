@@ -145,10 +145,19 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
           stale:!historyJob.startedAt || Date.now()-Date.parse(historyJob.startedAt)>45*60*1000}:null;
         await recheck();sendJson(req,res,200,{...result,automation,historyAutomation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
       }
-      const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf|invite|invite-email)$/);
-      if(!match || (match[2]==='sync'?req.method!=='POST':req.method!=='GET'))throw new HistoryError('Rota não encontrada.',404);
+      const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf|invite|invite-email|reconcile|reconcile-preview|reconcile-confirm)$/);
+      if(!match || (['sync','reconcile-preview','reconcile-confirm'].includes(match[2])?req.method!=='POST':req.method!=='GET'))throw new HistoryError('Rota não encontrada.',404);
       const record=data.rows.find(r=>r.id===match[1]);
       if(!record)throw new HistoryError('Boleto não encontrado no histórico.',404);
+      if(match[2].startsWith('reconcile')) {
+        if(!require('./boleto-reconciliation').admin((await profile.get()).data()))throw new HistoryError('Somente administradores podem conciliar boletos antigos.',403);
+        const cfg=require('./boleto-cloud').config(env);
+        const account=data.meta.issuanceAccounts?.[cfg.accountFingerprint];
+        if(!account || account.beneficiaryDocument!==record.beneficiaryDocument || account.bank!==record.bank)
+          throw new HistoryError('Beneficiário fora da conta de emissão homologada.',409);
+        await require('./boleto-reconciliation').handleReconciliation({req,res,db,uid,record,operation:match[2],sendJson,env,fetchImpl});
+        cached=null;return true;
+      }
       if(!env.BOLETO_CLOUD_API_KEY)throw new HistoryError('Credencial do emissor indisponível.',503);
       if (['invite','invite-email'].includes(match[2])) {
         const source=record.transactionId?db.collection('transactions').doc(record.transactionId):null;
@@ -181,7 +190,7 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
         if(bytes.length>10000000 || bytes.subarray(0,5).toString()!=='%PDF-')throw new HistoryError('PDF inválido.',502);
         await recheck();res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="boleto.pdf"','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});res.end(bytes);
       }
-    }catch(e){sendJson(req,res,e.status || 502,{error:(e instanceof HistoryError || e instanceof InviteError)?e.message:'Não foi possível consultar o histórico. Tente novamente.'});}
+    }catch(e){sendJson(req,res,e.status || 502,{error:(e instanceof HistoryError || e instanceof InviteError || e.reconciliation)?e.message:'Não foi possível consultar o histórico. Tente novamente.'});}
     return true;
   };
 }

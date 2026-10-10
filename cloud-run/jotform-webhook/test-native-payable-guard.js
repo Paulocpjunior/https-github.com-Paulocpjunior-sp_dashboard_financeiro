@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const {financialWritePrecondition}=require('./index');
 const original=global.fetch;
 (async()=>{try{
- for(const marker of ['payableSettlement','payableRecurrence']){
+ for(const marker of ['payableSettlement','payableRecurrence','boletoReconciliation','boletoSettlement']){
  global.fetch=async()=>({ok:true,json:async()=>({fields:{[marker]:{mapValue:{fields:{}}}},updateTime:'2026-01-01T00:00:00Z'})});
  await assert.rejects(financialWritePrecondition('synthetic','token'),/FINANCEIRO_NATIVE_OWNER/);
  }

@@ -3,11 +3,12 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ReceiptText, RefreshCw, Download, Search } from 'lucide-react';
+import BoletoReconciliation from '../components/BoletoReconciliation';
 import Layout from '../components/Layout';
 import { auth, db } from '../firebase';
 
 type Summary = { count:number; amountCents:number; paidCents:number; payers:number; beneficiaries:number; unidentifiedBeneficiaries:number };
-type Boleto = { id:string; createdAt:string; bank:string; number:string; document:string; payerDocument:string; payerName:string; amountCents:number; dueDate:string;
+type Boleto = { transactionId?:string; id:string; createdAt:string; bank:string; number:string; document:string; payerDocument:string; payerName:string; amountCents:number; dueDate:string;
   paidCents:number|null; paidAt:string|null; creditedAt:string|null; cancelledAt:string|null; cancellationReason:string; cancellationDescription:string;
   beneficiaryDocument:string; beneficiaryName:string; registeredAt:string|null; protestedAt:string|null; registrationStatus?:string; registrationError?:unknown;
   protestStatus?:string; protestDescription?:string; paymentOrigin?:string; manuallyPaid?:boolean; detailsSource:string; syncedAt:string|null; status:string; overdue:boolean };
@@ -27,7 +28,7 @@ function Counts({value}:{value:Summary}) {
   return <p className="text-xs text-slate-500 mt-2">{value.count.toLocaleString('pt-BR')} boletos · {value.payers} pagadores · {value.unidentifiedBeneficiaries?'Beneficiário pendente de identificação':`${value.beneficiaries} beneficiários`}</p>;
 }
 export default function BoletoDashboard() {
-  const [access,setAccess]=useState({ready:false,allowed:false});
+  const [access,setAccess]=useState({ready:false,allowed:false,canReconcile:false});
   const [month,setMonth]=useState(()=>today().slice(0,7)),[beneficiary,setBeneficiary]=useState(''),[view,setView]=useState('dueMonth');
   const [query,setQuery]=useState(''),[search,setSearch]=useState(''),[page,setPage]=useState(1),[revision,setRevision]=useState(0);
   const [result,setResult]=useState<Result|null>(null),[busy,setBusy]=useState(false),[action,setAction]=useState(''),[error,setError]=useState('');
@@ -36,11 +37,11 @@ export default function BoletoDashboard() {
   useEffect(()=>{
     let stop=()=>{};
     const unsub=onAuthStateChanged(auth,user=>{
-      stop();epoch.current++;setResult(null);setSelected(null);setAccess({ready:!user,allowed:false});
+      stop();epoch.current++;setResult(null);setSelected(null);setAccess({ready:!user,allowed:false,canReconcile:false});
       if(user)stop=onSnapshot(doc(db,'users',user.uid),snap=>{
         epoch.current++;setResult(null);setSelected(null);
-        const p=snap.data();setAccess({ready:true,allowed:p?.active===true && !['blocked','deleted'].includes(p?.status) && (p?.role==='admin'||p?.financialPermissions?.includes('billing.boleto-cloud.history.read'))});
-      },()=>{epoch.current++;setResult(null);setSelected(null);setAccess({ready:true,allowed:false});});
+        const p=snap.data();setAccess({ready:true,canReconcile:p?.active===true && p?.role==='admin' && !['blocked','deleted'].includes(p?.status),allowed:p?.active===true && !['blocked','deleted'].includes(p?.status) && (p?.role==='admin'||p?.financialPermissions?.includes('billing.boleto-cloud.history.read'))});
+      },()=>{epoch.current++;setResult(null);setSelected(null);setAccess({ready:true,allowed:false,canReconcile:false});});
     });
     return()=>{epoch.current++;stop();unsub();};
   },[]);
@@ -78,6 +79,7 @@ export default function BoletoDashboard() {
       <div className={`${card} flex flex-wrap gap-4 items-end`}><label>Mês de referência<input aria-label="Mês de referência" type="month" value={month} onChange={e=>{setMonth(e.target.value);setPage(1);}} className={`${input} block mt-1`}/></label>
         <label>Beneficiário<select aria-label="Beneficiário" value={beneficiary} onChange={e=>{setBeneficiary(e.target.value);setPage(1);}} className={`${input} block mt-1 max-w-full`}><option value="">Todos os beneficiários</option>{result?.beneficiaries.map(b=><option key={b.document} value={b.document}>{b.name} — {b.document}</option>)}</select></label>
         <button className={button} disabled={busy||!!action} onClick={()=>setRevision(n=>n+1)}><RefreshCw className="inline h-4 w-4 mr-2"/>Recarregar histórico</button></div>
+      {access.canReconcile&&<div className={card}><button className={button} onClick={()=>choose('all')}>Conciliar boletos antigos</button><p className="text-sm mt-2">Pesquise o boleto no histórico e abra Detalhes para revisar e confirmar seu vínculo com Contas a Receber.</p></div>}
       <p className="text-sm text-slate-500">O histórico inclui boletos emitidos no painel e pelo CSV antigo. Os títulos conhecidos em aberto e os pagos ou cancelados nos últimos sete dias são consultados automaticamente pela API, em lotes. Títulos novos criados fora do app ainda precisam ser incorporados ao histórico. “Atualizar situação” consulta o emissor para o boleto escolhido. Essa consulta individual não altera os lançamentos de Contas a Receber.</p>
       {error&&<p role="alert" className="rounded-lg bg-red-50 text-red-800 p-4">{error}</p>}
       {busy&&<p role="status">Consultando histórico…</p>}
@@ -114,7 +116,7 @@ export default function BoletoDashboard() {
       {selected&&<div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"><section role="dialog" aria-modal="true" aria-labelledby="boleto-detail-title" className={`${card} max-w-2xl w-full max-h-[90vh] overflow-auto space-y-4`}><div className="flex justify-between gap-4"><h2 id="boleto-detail-title" className="font-bold text-xl">Boleto {selected.number}</h2><button aria-label="Fechar detalhes" onClick={()=>setSelected(null)}>Fechar</button></div><p>{selected.payerName} · {selected.payerDocument}</p><p>{money(selected.amountCents)} · Vencimento {date(selected.dueDate)}</p><p>Beneficiário: {selected.beneficiaryName}</p>
         <dl className="grid grid-cols-2 gap-3 text-sm"><dt>Registro</dt><dd>{selected.detailsSource==='api'?(selected.registrationStatus||'Não informado'):'Não consta no relatório; consulte a situação'}</dd><dt>Data do registro</dt><dd>{date(selected.registeredAt)}</dd><dt>Protesto</dt><dd>{selected.detailsSource==='api'?`${selected.protestStatus || 'Sem protesto informado'} · ${date(selected.protestedAt)} ${selected.protestDescription || ''}`:'Não consta no relatório'}</dd><dt>Pagamento</dt><dd>{date(selected.paidAt)} · {selected.paidCents===null?'—':money(selected.paidCents)}</dd><dt>Origem do pagamento</dt><dd>{selected.manuallyPaid?'Marcação manual':selected.paymentOrigin || 'Não informada'}</dd><dt>Crédito</dt><dd>{date(selected.creditedAt)}</dd><dt>Baixa</dt><dd>{date(selected.cancelledAt)} {selected.cancellationReason} {selected.cancellationDescription}</dd></dl>
         <p className="text-xs text-slate-500">{selected.syncedAt?`Consultado no emissor em ${new Date(selected.syncedAt).toLocaleString('pt-BR')}`:'Dados da carga histórica. Consulte o emissor para obter a situação atual.'}</p>
-        <div className="flex flex-wrap gap-3"><button className={button} disabled={!!action} onClick={()=>act(selected,'sync')}><RefreshCw className="inline h-4 w-4 mr-2"/>{action?'Consultando…':'Atualizar situação'}</button><button className={button} disabled={!!action} onClick={()=>act(selected,'pdf')}><Download className="inline h-4 w-4 mr-2"/>Baixar PDF</button>{selected.status==='open'&&<><button className={button} disabled={!!action} onClick={()=>act(selected,'invite')}>Baixar INVITE com PDF (.ics)</button><button className={button} disabled={!!action} onClick={()=>act(selected,'invite-email')}>Preparar e-mail com INVITE e PDF</button></>}</div><p className="text-sm text-slate-500">Importe o .ics na agenda para ativar o lembrete da véspera. O PDF acompanha o convite e vai separado no rascunho de e-mail (.eml). O envio depende de você escolher o destinatário no seu aplicativo de e-mail. Alguns calendários não exibem anexos. Remova o evento após pagamento ou cancelamento; o arquivo não atualiza automaticamente.</p>{error&&<p role="alert" className="text-red-600">{error}</p>}</section></div>}
+        <div className="flex flex-wrap gap-3"><button className={button} disabled={!!action} onClick={()=>act(selected,'sync')}><RefreshCw className="inline h-4 w-4 mr-2"/>{action?'Consultando…':'Atualizar situação'}</button><button className={button} disabled={!!action} onClick={()=>act(selected,'pdf')}><Download className="inline h-4 w-4 mr-2"/>Baixar PDF</button>{selected.status==='open'&&<><button className={button} disabled={!!action} onClick={()=>act(selected,'invite')}>Baixar INVITE com PDF (.ics)</button><button className={button} disabled={!!action} onClick={()=>act(selected,'invite-email')}>Preparar e-mail com INVITE e PDF</button></>}</div><p className="text-sm text-slate-500">Importe o .ics na agenda para ativar o lembrete da véspera. O PDF acompanha o convite e vai separado no rascunho de e-mail (.eml). O envio depende de você escolher o destinatário no seu aplicativo de e-mail. Alguns calendários não exibem anexos. Remova o evento após pagamento ou cancelamento; o arquivo não atualiza automaticamente.</p>{access.canReconcile&&!selected.transactionId&&<BoletoReconciliation key={selected.id} boletoId={selected.id}/>} {error&&<p role="alert" className="text-red-600">{error}</p>}</section></div>}
     </>}
   </div></Layout>;
 }

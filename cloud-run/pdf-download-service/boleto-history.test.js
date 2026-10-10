@@ -106,3 +106,10 @@ test('historical synchronization exposes progress without leaking cursor or leas
  const r=await f.call();assert.equal(r.body.historyAutomation.remaining,41);assert.equal(r.body.historyAutomation.lastCycleSuccessfulAt,null);assert.equal(r.body.historyAutomation.stale,false);
  assert.equal(JSON.stringify(r.body).includes('private-'),false);
 });
+
+test('history read permission never grants reconciliation access',async()=>{
+ const f=fixture();f.data.set('users/u',{active:true,role:'operacional',financialPermissions:['billing.boleto-cloud.history.read']});
+ for(const [action,method] of [['reconcile','GET'],['reconcile-preview','POST'],['reconcile-confirm','POST']]){
+   const response=await f.call(`/api/boleto-cloud/history/${row().id}/${action}`,method);assert.equal(response.status,403);
+ }
+});
