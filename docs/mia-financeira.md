@@ -1,4 +1,6 @@
-# MiA financeira — ativação no servidor
+# FiA — Assistente Financeira
+
+Nome aprovado por Paulo: Financeiro + IA. A identidade MiA permanece no DP/Folha; esta alteração não muda nomes em outros módulos.
 
 Implementação preparada em 11/10/2026; não habilitada em produção até a publicação do novo SHA autorizado.
 
