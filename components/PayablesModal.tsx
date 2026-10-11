@@ -60,6 +60,7 @@ export default function PayablesModal({
     paidBy: "", authorizedBy: "", supplier: "", personType: "",
     note: "",
   });
+  const [approvalReason,setApprovalReason] = useState("");
   const [reversalReason, setReversalReason] = useState("");
   const [reversalReview, setReversalReview] = useState<any>(null);
   const [ruleRecipients, setRuleRecipients] = useState("");
@@ -193,6 +194,13 @@ export default function PayablesModal({
       const payload = { payment, attachments: attachment ? [attachment] : [] };
       if (!review) {
         setReview(await run("payment/preview", payload));
+      } else if(review.approvalRequired && review.approvalStatus!=="approved") {
+        const result=await run("approvals/request",payload);
+        if(result) {
+          setReview(null); attempt.current=crypto.randomUUID();
+          setMessage(result.approval.status==="rejected" ? "Solicitação rejeitada. Revise os dados conforme o motivo na aba Aprovações." : "Solicitação registrada. Outro responsável deve aprovar na aba Aprovações. Depois revise novamente para concluir a baixa.");
+          const refreshed=await api("items/"+encodeURIComponent(selected));setData(refreshed);
+        }
       } else {
         setUncertain(true);
         const r = await run("payment/commit", {
@@ -403,12 +411,13 @@ export default function PayablesModal({
           <nav className="flex flex-wrap gap-2 my-4">
             {[
               ["history", "Histórico"],
+              ["approvals", "Aprovações"],
               ["payment", "Registrar pagamento"],
               ["recurrence", "Recorrência"],
               ["generate", "Gerar competência"],
               ["invite", "INVITE"],
               ["reversal", "Estornar baixa"],
-            ].filter(([key]) => key === "history" || data.capabilities?.[({payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
+            ].filter(([key]) => key === "history" || key === "approvals" || data.capabilities?.[({payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
               <button
                 key={key}
                 className={tab === key ? btn : "border rounded px-3 py-2"}
@@ -425,6 +434,25 @@ export default function PayablesModal({
               </button>
             ))}
           </nav>
+          {tab === "approvals" && <section className="space-y-3 rounded-xl border p-4">
+            <h3 className="font-semibold">Aprovação por outro responsável</h3>
+            <p>{data.approvalPolicy?.enabled ? `Obrigatória para contas com valor provisionado a partir de ${brl(data.approvalPolicy.thresholdCents/100)}. Pagamentos parciais seguem o valor da conta.` : "Política desativada. O administrador pode configurar em Manutenção."}</p>
+            {!data.approvals?.length && <p>Nenhuma solicitação válida para esta versão da conta.</p>}
+            {data.approvals?.map((a:any)=><article key={a.id} className="border rounded-lg p-3 space-y-2">
+              <p className="font-semibold">{a.status==='approved'?'Aprovada':a.status==='rejected'?'Rejeitada':'Aguardando aprovação'} · {brl(Number(a.payment.amount))}</p>
+              <p>Solicitante: {a.requesterName} · Data de pagamento: {a.payment.date}</p>
+              <p>{a.payment.supplier} · {a.payment.bankAccount} · {a.payment.method}</p>
+              <p>Juros {brl(Number(a.payment.interest||0))} · Multa {brl(Number(a.payment.fine||0))} · Desconto {brl(Number(a.payment.discount||0))}</p>
+              <p>Pago por: {a.payment.paidBy} · Responsável informado: {a.payment.authorizedBy}</p>
+              <p>Observação: {a.payment.note||'Sem observação'}</p>
+              <p>Comprovantes vinculados: {a.attachments.map((f:any)=>f.name).join(', ')||'Nenhum'}</p>
+              {a.attachments.map((f:any)=><button key={f.sha256} className="underline text-blue-500 mr-3" disabled={busy} onClick={async()=>{try{const doc=await api(`items/${encodeURIComponent(selected)}/attachments/${f.sha256}`);const bytes=Uint8Array.from(atob(doc.base64),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:doc.type}));const link=document.createElement('a');link.href=url;link.download=doc.name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){setError((e as Error).message);}}}>Baixar {f.name}</button>)}
+              {a.status==='approved' && a.requesterUid===data.actor.uid && data.capabilities?.settle && <button className={btn} disabled={busy} onClick={async()=>{setBusy(true);try{const f=a.attachments[0];const doc=f?await api(`items/${encodeURIComponent(selected)}/attachments/${f.sha256}`):null;setPayment(a.payment);setAttachment(doc?{name:doc.name,type:doc.type,kind:'comprovante',base64:doc.base64}:null);setReview(null);attempt.current=crypto.randomUUID();setTab('payment');setMessage('Dados aprovados recuperados. Revise antes de concluir.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>Retomar baixa aprovada</button>}
+              {a.reason && <p>{a.approverName}: {a.reason}</p>}
+              {a.status==='pending' && a.requesterUid===data.actor.uid && <p>É necessário outro usuário autorizado para decidir.</p>}
+              {a.status==='pending' && data.capabilities?.approve && a.requesterUid!==data.actor.uid && <><label className="block">Motivo da decisão<textarea className={cls} minLength={5} maxLength={500} value={approvalReason} onChange={e=>setApprovalReason(e.target.value)}/></label><div className="flex gap-3">{['approved','rejected'].map(decision=><button key={decision} className={btn} disabled={busy||approvalReason.trim().length<5} onClick={async()=>{try{const result=await run('approvals/decide',{approvalId:a.id,decision,reason:approvalReason});if(result){attempt.current=crypto.randomUUID();setData(await api('items/'+encodeURIComponent(selected)));setApprovalReason('');setMessage('Decisão registrada. A aprovação não registra nem executa o pagamento.');}}catch{}}}>{decision==='approved'?'Aprovar esta baixa':'Rejeitar esta baixa'}</button>)}</div></>}
+            </article>)}
+          </section>}
           {tab === "history" && <p className="text-sm">Consulta do histórico. As ações disponíveis dependem dos direitos definidos em Usuários.</p>}
           <fieldset disabled={busy || uncertain} className="space-y-3">
             {tab === "reversal" && <section className="space-y-3 rounded-xl border border-amber-400 p-4">
@@ -747,7 +775,7 @@ export default function PayablesModal({
           </fieldset>
           {tab === "reversal" && row?.payableSettlement && <button className={btn + " mt-4 w-full min-h-12"} disabled={busy || reversalReason.trim().length < 10} onClick={reversePayment}>{busy ? "Aguarde…" : uncertain ? "Consultar resultado do estorno" : reversalReview ? "Confirmar estorno e concluir" : "Revisar estorno"}</button>}
           {row?.payableReversals?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de estornos</h3>{row.payableReversals.map((r:any)=><p key={r.requestId} className="my-2 text-sm">{brl(r.amountCents/100)} · {r.at} · {r.actor}<br/>{r.reason}</p>)}</section>}
-          {(tab === "payment" || tab === "history") && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{(row.payableReversals || []).some((r:any)=>r.paymentRequestId === p.requestId) ? "ESTORNADA · " : ""}{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}</p>)}</section>}
+          {(tab === "payment" || tab === "history") && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{(row.payableReversals || []).some((r:any)=>r.paymentRequestId === p.requestId) ? "ESTORNADA · " : ""}{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}{p.approval && <><br/>Aprovação independente: {p.approval.name} · {p.approval.at} · {p.approval.reason}</>}</p>)}</section>}
           {review && (
             <div className="border rounded p-3 my-3">
               <strong>
@@ -765,7 +793,7 @@ export default function PayablesModal({
           )}
           {tab === "payment" && !isPaid && (
             <div className="mt-4 border-t border-slate-200 bg-white py-4 dark:border-slate-700 dark:bg-slate-900">
-            <p className="mb-2 text-sm text-slate-500">{review ? "Confira a revisão acima. A confirmação salva a baixa e fecha esta tela." : "Etapa 1 de 2: revise os dados antes de concluir a baixa."}</p>
+            <p className="mb-2 text-sm text-slate-500">{review?.approvalRequired && review.approvalStatus!=="approved" ? "Esta baixa exige aprovação de outro responsável antes da conclusão." : review ? "Confira a revisão acima. A confirmação salva a baixa e fecha esta tela." : "Etapa 1 de 2: revise os dados antes de concluir a baixa."}</p>
             <button
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
               disabled={busy}
@@ -776,7 +804,7 @@ export default function PayablesModal({
                 : review
                   ? uncertain
                     ? "Consultar/repetir a mesma confirmação"
-                    : "Confirmar baixa e concluir"
+                    : (review.approvalRequired && review.approvalStatus!=="approved" ? "Solicitar aprovação da baixa" : "Confirmar baixa e concluir")
                   : "Revisar baixa da conta"}
             </button>
             </div>

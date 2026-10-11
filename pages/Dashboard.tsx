@@ -65,7 +65,7 @@ const getFilterScopeKey = (filters: Partial<FilterState>) => [
 const Dashboard: React.FC = () => {
   const currentUser = AuthService.getCurrentUser();
   const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
-  const canManagePayable = (['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite'] as const).some(p => hasFinancialPermission(currentUser,p));
+  const canManagePayable = (['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'] as const).some(p => hasFinancialPermission(currentUser,p));
   const canManageRecurrences = hasFinancialPermission(currentUser,'payables.recurrence');
   const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');
 

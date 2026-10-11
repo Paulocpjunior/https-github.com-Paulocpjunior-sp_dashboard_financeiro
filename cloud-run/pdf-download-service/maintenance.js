@@ -11,6 +11,13 @@ function effective(state) {
  return result;
 }
 function change(state,body) {
+ if(body.group==='payableApproval') {
+  if(body.revision!==state.revision)fail('Cadastro alterado por outro administrador. Recarregue antes de salvar.',409);
+  const reason=String(body.reason||'').trim();
+  if(typeof body.enabled!=='boolean'||!Number.isSafeInteger(body.thresholdCents)||body.thresholdCents<0||body.thresholdCents>100000000000||reason.length<5||reason.length>500)fail('Confira limite e motivo da política.');
+  const policy={enabled:body.enabled,thresholdCents:body.thresholdCents};
+  return {next:{...state,revision:state.revision+1,payableApproval:policy},before:state.payableApproval||{enabled:false,thresholdCents:0},after:policy,reason};
+ }
  if(!editable.includes(body.group))fail('Parâmetro protegido ou desconhecido.');
  if(body.revision!==state.revision)fail('Cadastro alterado por outro administrador. Recarregue antes de salvar.',409);
  const label=typeof body.label==='string'?body.label.trim():'';
@@ -28,7 +35,7 @@ function change(state,body) {
  }
  if(items.some(x=>x.id!==old?.id&&x.label.toLocaleLowerCase('pt-BR')===label.toLocaleLowerCase('pt-BR')))fail('Descrição já cadastrada.');
  const entry={id:old?.id||randomUUID(),label,active:body.active};
- return {next:{revision:state.revision+1,items:{...state.items,[body.group]:old?items.map(x=>x.id===old.id?entry:x):[...items,entry]}},before:old,after:entry,reason};
+ return {next:{...state,revision:state.revision+1,items:{...state.items,[body.group]:old?items.map(x=>x.id===old.id?entry:x):[...items,entry]}},before:old,after:entry,reason};
 }
 async function handleMaintenance({request,db,userRef,uid,allowed,readBody,reply}) {
  const ref=db.collection('financialSettings').doc('nativeCatalog');

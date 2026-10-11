@@ -78,8 +78,8 @@ function harness() {
       adminDb: db,
       adminAuth: {
         verifyIdToken: async (t) => {
-          if (t !== "good") throw Error();
-          return { uid: "u" };
+          if (!["good","approver"].includes(t)) throw Error();
+          return { uid: t === "approver" ? "v" : "u" };
         },
       },
     }),
@@ -543,4 +543,73 @@ test('payable capabilities reject blocked profiles and do not imply administrati
  assert.equal(routeAllowed({...p,status:'blocked'},'POST','rules/save'),false);
  assert.equal(routeAllowed({...p,active:false},'GET','items/legacy'),false);
  assert.equal(capabilities({...p,financialPermissions:['payables.invite']}).settle,false);
+});
+function enableApproval(h,thresholdCents=0) {
+ const state=require('./maintenance').initial();state.payableApproval={enabled:true,thresholdCents};
+ h.store.set('financialSettings/nativeCatalog',state);
+ h.store.set('users/v',{active:true,role:'operational',name:'Outro responsável',financialPermissions:['payables.approve']});
+}
+async function requestApproval(h,b) {
+ const r=await h.call('approvals/request',{...b,requestId:randomUUID()});
+ assert.equal(r.status,200,JSON.stringify(r.body));return r.body.approval;
+}
+async function decideApproval(h,b,a,decision='approved',token='approver') {
+ return h.call('approvals/decide',{id:b.id,version:b.version,requestId:randomUUID(),approvalId:a.id,decision,reason:'Conferência de teste'},token);
+}
+test('independent approval blocks self-approval, records decision without settlement and permits exact payment once',async()=>{
+ const h=harness();enableApproval(h);const b=await payBody(h);
+ const preview=await h.call('payment/preview',b);assert.equal(preview.body.approvalRequired,true);
+ const commit={...b,confirmHash:preview.body.reviewHash};
+ assert.equal((await h.call('payment/commit',commit)).status,403);
+ const a=await requestApproval(h,b);
+ assert.equal((await requestApproval(h,b)).id,a.id);
+ assert.equal((await decideApproval(h,b,a,'approved','good')).status,403);
+ const decision=await decideApproval(h,b,a);assert.equal(decision.status,200);
+ assert.equal(h.store.get('transactions/legacy').status,'Pendente');
+ assert.equal((await decideApproval(h,b,a,'rejected')).status,409);
+ const paid=await h.call('payment/commit',commit);assert.equal(paid.status,200,JSON.stringify(paid.body));
+ assert.equal(paid.body.transaction.payableSettlement.approval.uid,'v');
+ assert.equal((await h.call('payment/commit',commit)).status,200);
+ assert.equal(h.store.get('transactions/legacy').payablePayments.length,1);
+});
+test('threshold applies to original provision for partial payments and missing approval permission is rejected',async()=>{
+ const h=harness();enableApproval(h,10000);const b=await payBody(h);b.payment.amount='1.00';b.payment.mode='partial';
+ assert.equal((await h.call('payment/preview',b)).body.approvalRequired,true);
+ const a=await requestApproval(h,b);h.store.get('users/v').financialPermissions=['payables.read'];
+ assert.equal((await decideApproval(h,b,a)).status,403);
+ const state=h.store.get('financialSettings/nativeCatalog');state.payableApproval.thresholdCents=10001;
+ assert.equal((await h.call('payment/preview',b)).body.approvalRequired,false);
+});
+test('approval cannot be reused after payload, policy, account or approver rights change',async()=>{
+ for(const change of ['payload','policy','account','rights','rejected']) {
+  const h=harness();enableApproval(h);const b=await payBody(h);const a=await requestApproval(h,b);
+  assert.equal((await decideApproval(h,b,a,change==='rejected'?'rejected':'approved')).status,200);
+  if(change==='payload')b.payment.note='Dados diferentes';
+  if(change==='policy')h.store.get('financialSettings/nativeCatalog').revision++;
+  if(change==='account')h.store.get('transactions/legacy').description='Conta alterada';
+  if(change==='rights')h.store.get('users/v').active=false;
+  const preview=await h.call('payment/preview',b);
+  const result=await h.call('payment/commit',{...b,confirmHash:preview.body.reviewHash});
+  assert([403,409].includes(result.status),change+JSON.stringify(result));
+  assert.equal(h.store.get('transactions/legacy').status,'Pendente');
+ }
+});
+test('approval identity includes transaction and concurrent decisions produce one winner',async()=>{
+ const h=harness();enableApproval(h);h.store.set('transactions/other',row());
+ const b=await payBody(h);const a=await requestApproval(h,b);const other=await requestApproval(h,{...b,id:'other'});
+ assert.notEqual(a.id,other.id);
+ const results=await Promise.all([decideApproval(h,b,a),decideApproval(h,b,a,'rejected')]);
+ assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+});
+test('approval stores inspectable proof and rejects replacement bytes at settlement',async()=>{
+ const h=harness();enableApproval(h);const b=await payBody(h);
+ b.attachments=[{name:'comprovante.pdf',type:'application/pdf',kind:'comprovante',base64:Buffer.from('%PDF-1.4 fixture').toString('base64')}];
+ const a=await requestApproval(h,b);const sha=a.attachments[0].sha256;
+ const downloaded=await h.call('items/legacy/attachments/'+sha,undefined,'approver');
+ assert.equal(downloaded.status,200);assert.equal(downloaded.body.base64,b.attachments[0].base64);
+ assert.equal((await decideApproval(h,b,a)).status,200);
+ b.attachments[0].base64=Buffer.from('%PDF-1.4 altered').toString('base64');
+ const preview=await h.call('payment/preview',b);
+ assert.equal((await h.call('payment/commit',{...b,confirmHash:preview.body.reviewHash})).status,403);
+ assert.equal(h.store.get('transactions/legacy').status,'Pendente');
 });
