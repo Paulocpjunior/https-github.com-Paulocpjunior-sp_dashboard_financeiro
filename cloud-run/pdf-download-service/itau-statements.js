@@ -16,7 +16,7 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
     let userId;
     try {
       const isComparison = request.method === 'GET' && url.pathname === '/api/itau/payment-comparison';
-      const linkAction = request.method === 'POST' ? ({'/api/itau/legacy-links/preview':'preview','/api/itau/legacy-links/confirm':'confirm','/api/itau/legacy-links/unlink':'unlink','/api/itau/native-links/preview':'preview','/api/itau/native-links/confirm':'confirm','/api/itau/native-links/unlink':'unlink'})[url.pathname] : null;
+      const linkAction = request.method === 'POST' ? ({'/api/itau/legacy-links/preview':'preview','/api/itau/legacy-links/confirm':'confirm','/api/itau/legacy-links/unlink':'unlink','/api/itau/native-links/preview':'preview','/api/itau/native-links/confirm':'confirm','/api/itau/native-links/unlink':'unlink','/api/itau/group-links/preview':'preview','/api/itau/group-links/confirm':'confirm','/api/itau/group-links/unlink':'unlink'})[url.pathname] : null;
       const isRead = request.method === 'GET' && url.pathname === '/api/itau/statements';
       const isPreview = request.method === 'POST' && url.pathname === '/api/itau/preview';
       const isCommit = request.method === 'POST' && url.pathname === '/api/itau/import';
@@ -37,7 +37,7 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
         let input;
         try { input=JSON.parse((await readBody(request)).toString('utf8')); } catch { throw new StatementError('Solicitação inválida.',400); }
         if(!input || typeof input!=='object' || Array.isArray(input)) throw new StatementError('Solicitação inválida.',400);
-        const links=require('./itau-legacy-links');
+        const links=require(url.pathname.includes('/group-links/')?'./itau-group-links':'./itau-legacy-links');
         const kind=url.pathname.includes('/native-links/')?'native':'legacy';
         const result=linkAction==='preview'?await links.preview(db,userId,input,kind):await links.mutate(db,userId,linkAction,input,kind);
         sendJson(request,response,200,result);
@@ -55,7 +55,7 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
         const result=require('./itau-payment-comparison').comparePayments(bank.docs.map(d=>d.data()),ledger.rows);
         if(legacy) result.legacy = require('./itau-legacy-payments').compareLegacy(bank.docs.map(d=>d.data()),legacy);
         await audit.add({...actor,action:'payment-comparison',start,end,count:bank.size,includeLegacy:!!legacy});
-        sendJson(request,response,200,{...result,legacyLinks,start,end,paymentStart:expand(start,-3),paymentEnd:expand(end,3),generatedAt:new Date().toISOString()});
+        sendJson(request,response,200,{...result,groupPayments:ledger.rows.filter(p=>p.bankAccount===require('./native-entry-catalog.json').banks[0]),groupLinks:legacyLinks.filter(l=>l.kind==='native-group'),legacyLinks:legacyLinks.filter(l=>l.kind!=='native-group'),start,end,paymentStart:expand(start,-3),paymentEnd:expand(end,3),generatedAt:new Date().toISOString()});
       } else if (isRead) {
         const start = url.searchParams.get('start'), end = url.searchParams.get('end');
         interval(start, end);

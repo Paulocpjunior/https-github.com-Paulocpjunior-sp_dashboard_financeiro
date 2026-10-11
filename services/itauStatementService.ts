@@ -50,9 +50,16 @@ export interface LegacyLink {
  kind?:'legacy'|'native';paymentRequestId?:string;
  statementId:string;transactionId:string;active:boolean;revision:number;validation:'current'|'changed'|'missing'|'inactive';
  statement:LegacyLinkPreview['statement'];payment:LegacyLinkPreview['payment'];
- history:Array<{paymentRequestId?:string;kind?:'legacy'|'native';action:'confirm'|'unlink';at:string;actor:{uid:string;name:string};reason:string;reference?:string;transactionId:string}>;
+ history:Array<{members?:GroupMember[];paymentRequestId?:string;kind?:'legacy'|'native'|'native-group';action:'confirm'|'unlink';at:string;actor:{uid:string;name:string};reason:string;reference?:string;transactionId:string}>;
 }
+export interface GroupMember {transactionId:string;paymentRequestId:string}
+export interface GroupPayment extends GroupMember {id:string;date:string;amountCents:number;supplier:string}
+export interface GroupPreview {statement:LegacyLinkPreview['statement'];members:GroupMember[];payments:GroupPayment[];totalCents:number;fingerprint:string;revision:number}
+export interface GroupLink extends GroupPreview {statementId:string;kind:'native-group';active:boolean;validation:LegacyLink['validation'];history:Array<{action:'confirm'|'unlink';at:string;actor:{uid:string;name:string};reason:string;reference?:string;members?:GroupMember[];transactionId?:string;paymentRequestId?:string}>}
 export const ItauStatements = {
+ previewGroup:(statementId:string,members:GroupMember[])=>request<GroupPreview>('group-links/preview',{statementId,members}),
+ confirmGroup:(body:{statementId:string;members:GroupMember[];requestId:string;revision:number;fingerprint:string;reason:string;reference:string;checkedEvidence:boolean})=>request('group-links/confirm',body),
+ unlinkGroup:(body:{statementId:string;requestId:string;revision:number;reason:string})=>request('group-links/unlink',body),
  previewLegacyLink:(statementId:string,transactionId:string,paymentRequestId?:string)=>request<LegacyLinkPreview>(`${paymentRequestId?'native':'legacy'}-links/preview`,{statementId,transactionId,paymentRequestId}),
  confirmLegacyLink:(body:{statementId:string;transactionId:string;paymentRequestId?:string;requestId:string;revision:number;fingerprint:string;reason:string;reference:string;checkedEvidence:boolean})=>request(`${body.paymentRequestId?'native':'legacy'}-links/confirm`,body),
  unlinkLegacyLink:(body:{kind?:'legacy'|'native';statementId:string;requestId:string;revision:number;reason:string})=>request(`${body.kind==='native'?'native':'legacy'}-links/unlink`,body),
@@ -67,6 +74,7 @@ export interface LegacyComparison {
  rows:Array<{statement:StatementRow;ambiguous:boolean;candidates:Array<{id:string;paymentRequestId?:string;transactionId:string;date:string;amountCents:number;supplier:string;bankEvidence:'missing'|'same-account'}>}>;
 }
 export interface PaymentComparison {
+ groupPayments?:GroupPayment[];groupLinks?:GroupLink[];
  legacy?:LegacyComparison;
  legacyLinks?:LegacyLink[];
  rows:Array<{statement:StatementRow;reviewHint?:string;status:'suggestion'|'ambiguous'|'no-candidate'|'outside-scope';candidates:Array<{id:string;paymentRequestId?:string;transactionId:string;date:string;amountCents:number;supplier:string}>}>;
