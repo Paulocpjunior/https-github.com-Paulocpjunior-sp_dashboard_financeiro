@@ -359,3 +359,9 @@ test('enabled approval policy blocks direct paid payable creation while preservi
  assert.equal((await h.call('preview',{...paid,entry:input({paid:true,paidAmount:'100.30',paymentDate:'2026-10-09'})})).status,200);
  assert.equal([...h.store.keys()].filter(k=>k.startsWith('transactions/')).length,0);
 });
+test('communication configuration route requires active admin and stays disabled',async()=>{
+ const h=harness();
+ for(const token of ['', 'bad'])assert.equal((await h.call('communication-settings',undefined,token,'GET')).status,401);
+ assert.equal((await harness({profile:{active:true,role:'operacional'}}).call('communication-settings',undefined,'good','GET')).status,403);
+ const result=await h.call('communication-settings',undefined,'good','GET');assert.equal(result.status,200);
+});

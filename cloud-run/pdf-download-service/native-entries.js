@@ -289,6 +289,9 @@ function createNativeEntryHandler({
       const enabled = env.NATIVE_ENTRY_ENABLED === "true";
       const reply = (body, status = 200) =>
         sendJson(request, response, status, body);
+      if(url.pathname === "/api/financial-entries/communication-settings") {
+        await require('./communication-settings').handle({request,db,userRef,uid,allowed,readBody,reply,env});return true;
+      }
       if(url.pathname === "/api/financial-entries/maintenance") {
         await maintenance.handleMaintenance({request,db,userRef,uid,allowed,readBody,reply}); return true;
       }
