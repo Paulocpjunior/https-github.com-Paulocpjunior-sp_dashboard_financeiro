@@ -54,7 +54,7 @@ test('permissions default deny, require explicit active state and separate read/
   assert.throws(()=>interval('2026-01-01','2026-09-30'));
 });
 
-function harness(profile = operator) {
+function harness(profile = operator, readLedger) {
   const store = new Map([['users/u1',profile]]);
   let sequence = 0, queryCount = 0, queue = Promise.resolve();
   const snap = ref => ({ exists:store.has(ref.path), data:()=>store.get(ref.path) });
@@ -86,7 +86,7 @@ function harness(profile = operator) {
       queue=run.catch(()=>{}); return run;
     },
   };
-  const handler=createStatementHandler({ getServices:()=>({adminDb:db,adminAuth:{verifyIdToken:async token=>{if(token!=='valid')throw new Error('revoked'); return {uid:'u1'};}}}),readBody:async request=>Buffer.from(JSON.stringify(request.body)),sendJson:(_req,res,status,body)=>Object.assign(res,{status,body}) });
+  const handler=createStatementHandler({ readLedger, getServices:()=>({adminDb:db,adminAuth:{verifyIdToken:async token=>{if(token!=='valid')throw new Error('revoked'); return {uid:'u1'};}}}),readBody:async request=>Buffer.from(JSON.stringify(request.body)),sendJson:(_req,res,status,body)=>Object.assign(res,{status,body}) });
   const call=async(path,body,token='valid',method='POST')=>{const res={};await handler({url:`/api/itau/${path}`,method,headers:{authorization:token?`Bearer ${token}`:''},body},res);return res;};
   return {store,call,getQueryCount:()=>queryCount};
 }
@@ -140,4 +140,41 @@ test('consultation filters dates, audits reads and refuses truncated results',as
 test('rejects bank error status and unclosed duplicate statement block',()=>{
   assert.throws(()=>parse(ofx().replace('<STMTTRNRS>','<STMTTRNRS><STATUS><CODE>2000<SEVERITY>ERROR</STATUS>')));
   assert.throws(()=>parse(ofx().replace('</OFX>','<STMTRS></OFX>')));
+});
+const {comparePayments}=require('./itau-payment-comparison');
+const bankAccount=require('./native-entry-catalog.json').banks[0];
+const payment=(id,date='2026-09-15',amountCents=123456)=>({id,transactionId:'account-'+id,date,amountCents,bankAccount,supplier:'Credor fictício'});
+test('comparison respects paid cents, account, direction and 3 calendar days without claiming reconciliation',()=>{
+ const bank=parse(ofx()).rows;
+ const p=payment('a','2026-09-18');
+ const r=comparePayments(bank,[p,payment('late','2026-09-19'),{...payment('wrong-bank'),bankAccount:'Outra conta'},payment('different-amount','2026-09-15',1)]);
+ assert.equal(r.rows[0].status,'suggestion');assert.deepEqual(r.rows[0].candidates,[p]);assert.equal(r.rows[1].status,'outside-scope');
+ assert.equal(r.unmatchedPayments.length,2);assert.equal(r.paymentCount,3);
+ assert.deepEqual(bank,parse(ofx()).rows);
+});
+test('one-to-many and many-to-one matches are ambiguous; no-candidate is explicit',()=>{
+ const bank=parse(ofx(entry('one')+entry('two'))).rows;
+ assert(comparePayments(bank,[payment('a')]).rows.every(r=>r.status==='ambiguous'));
+ assert.equal(comparePayments([bank[0]],[payment('a'),payment('b')]).rows[0].status,'ambiguous');
+ assert.equal(comparePayments([bank[0]],[]).rows[0].status,'no-candidate');
+});
+test('comparison requires bank and payable access, expands payment dates and only writes read audit',async()=>{
+ let calls=0;const reader=async(_db,start,end)=>{calls++;assert.equal(start,'2026-08-29');assert.equal(end,'2026-10-03');return {rows:[payment('a')]};};
+ const denied=harness(operator,reader);
+ assert.equal((await denied.call('payment-comparison?start=2026-09-01&end=2026-09-30',null,'valid','GET')).status,403);assert.equal(calls,0);
+ const h=harness({...operator,financialPermissions:['itau.openfinance.read','payables.read']},reader);
+ h.store.set(`bankStatements/${ACCOUNT}/entries/one`,parse(ofx()).rows[0]);
+ const before=[...h.store.entries()];
+ const r=await h.call('payment-comparison?start=2026-09-01&end=2026-09-30',null,'valid','GET');
+ assert.equal(r.status,200);assert.equal(r.body.rows[0].status,'suggestion');
+ for(const [key,value] of before)assert.deepEqual(h.store.get(key),value);
+ assert([...h.store.keys()].filter(k=>!before.some(([p])=>p===k)).every(k=>k.startsWith('bankStatementAudit/')));
+});
+test('comparison rechecks revocation and refuses incomplete bank coverage',async()=>{
+ const profile={...operator,financialPermissions:['itau.openfinance.read','payables.read']};
+ let h;h=harness(profile,async()=>{h.store.set('users/u1',{...profile,active:false});return {rows:[payment('a')]};});
+ assert.equal((await h.call('payment-comparison?start=2026-09-01&end=2026-09-30',null,'valid','GET')).status,403);
+ const full=harness(profile,async()=>({rows:[]}));
+ for(let i=0;i<1001;i++)full.store.set(`bankStatements/${ACCOUNT}/entries/${i}`,{date:'2026-09-15'});
+ assert.equal((await full.call('payment-comparison?start=2026-09-01&end=2026-09-30',null,'valid','GET')).status,400);
 });

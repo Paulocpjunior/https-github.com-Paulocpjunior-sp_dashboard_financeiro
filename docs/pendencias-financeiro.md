@@ -1,6 +1,27 @@
 # Pendências do SP Dashboard Financeiro
 
-## Status verificado em 03/10/2026
+## Status do projeto — 11/10/2026
+
+Produção confirmada em `/version.json`: commit `7658c86`, build `20261011T090054Z-7658c86`. PR #66 publicada com backend e Hosting, testes e conferência visual. A aprovação independente permanece **desativada por decisão de Paulo**, sem alçada ou aprovadores a configurar agora.
+
+### Entregas recentes
+
+- Emissão Boleto Cloud por API, demonstrativo de honorários/extras e anexos do INVITE entregues. A descrição antiga de emissão somente por CSV abaixo é histórica, não representa a versão atual.
+- Baixas nativas integrais/parciais, ajustes, histórico, estorno auditado e permissões separadas publicados.
+- Aprovação por outro responsável e limite global disponíveis, mas desativados. Nenhuma ativação está pendente de autorização neste momento: a decisão é continuar sem essa exigência.
+- Manutenção de cadastros e plano de contas, recorrências e provisões mensais fazem parte da plataforma. UNAS `Backup_Fin` continua para configuração posterior do usuário.
+
+### Próxima sequência
+
+1. Comparação bancária: nesta etapa, sugestões entre débitos OFX e baixas nativas a pagar. Mesmo valor, mesma conta e até três dias corridos; estornos excluídos. Não registra conciliação nem baixa. Pagamentos legados, pendentes, recebimentos e agrupamentos permanecem fora do escopo inicial.
+2. Evoluir a conferência para vínculos documentados e tratamento de divergências, preservando revisão humana em correspondências ambíguas.
+3. Régua de comunicação e comprovação de entrega; validação dos destinatários e interrupção de lembretes após pagamento confirmado.
+4. MiA financeira: validação do serviço seguro e do escopo de consulta antes de ativar ações.
+5. Alçadas por usuário e fila consolidada de aprovações ficam adiadas enquanto a política estiver desativada.
+
+O bloco seguinte preserva o levantamento de 03/10. Contagens de inconsistências e dados faltantes são históricos; não houve nova auditoria dos lançamentos nesta atualização. Publicar novos commits continua exigindo autorização do SHA completo.
+
+## Levantamento histórico — 03/10/2026
 
 - Interface pública: commit `9de2299`, build `20261003T133108Z-9de2299`; endpoint de versão respondeu HTTP 200. CI desse commit aprovado (execução `37124782209`).
 - Integração Jotform: endpoint de saúde respondeu HTTP 200, versão `6.15-identity-conflict-guard`. Saúde do serviço não comprova que todos os lançamentos estão conciliados.

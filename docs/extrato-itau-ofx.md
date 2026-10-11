@@ -38,3 +38,14 @@ Teste de navegador local com arquivo fictício: seleção, prévia, confirmaçã
 Ainda depende de autorização para o commit exato, conforme AGENTS.md. Publicar primeiro o serviço `sp-pdf-download` em `us-central1`, preservando configuração, identidade de serviço e segredos existentes. A revisão deve incluir `index.js`, `itau-ofx.js` e `itau-statements.js`. A publicação de Hosting acrescenta `/api/itau/**` para esse serviço e a rota `/extrato-itau`, preservando rotas de PDF e Boleto Cloud.
 
 Após autorização: confirmar origin/main, executar as proteções, publicar backend e Hosting, verificar health, versão e bloqueio 401/403 de acessos sem sessão. Validar consulta/importação com usuário autorizado e arquivo real antes de anunciar homologação bancária. Não habilitar colaboradores para o teste sem definição explícita de quem terá acesso.
+
+
+## Comparação de baixas nativas — implementação de 11/10/2026
+
+A ação **Comparar baixas com o extrato** consulta débitos OFX do período e baixas nativas da mesma conta, incluindo margem de três dias antes/depois. Requer Consultar Itaú e algum direito de gestão de contas a pagar. Direitos são revalidados antes da resposta.
+
+A projeção existente de pagamentos exclui estornos e usa cada pagamento parcial efetivo, não o valor nominal nem o acumulado da conta. Sugestões exigem valor exato em centavos e distância máxima de três dias corridos. Duas baixas candidatas para o mesmo débito, ou a mesma baixa candidata para dois débitos, são ambíguas. Mesmo uma sugestão única exige conferência do favorecido: valor/data não provam identidade.
+
+Não altera lançamentos, saldos, vínculos ou estados de conciliação. Registra apenas auditoria da consulta. Créditos, pagamentos agrupados, contas pendentes e pagamentos legados sem auditoria nativa não são conciliados. Ausência de candidato não comprova falta de pagamento; pode haver cobertura incompleta do OFX, agrupamento, tarifas ou diferenças de data. Acima de 1.000 movimentos ou do limite de leitura integral do histórico nativo, a consulta falha sem resultado parcial.
+
+Esta implementação ainda aguarda publicação e teste com extrato real. Testes automatizados usam dados fictícios.
