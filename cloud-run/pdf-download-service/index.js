@@ -3,6 +3,7 @@ const { getStorage } = require('firebase-admin/storage');
 const { createBoletoHandler } = require('./boleto-cloud');
 const { createHistoryHandler } = require('./boleto-history');
 const http = require('node:http');
+const { createAIHandler } = require('./financial-ai');
 const { createStatementHandler } = require('./itau-statements');
 const { randomUUID } = require('node:crypto');
 const { getApps, initializeApp, applicationDefault } = require('firebase-admin/app');
@@ -62,6 +63,7 @@ function sanitizeFileName(value) {
 
 function createServer() {
   const history = createHistoryHandler({ getServices: getAdminServices, sendJson });
+  const financialAI = createAIHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson });
   return http.createServer(async (request, response) => {
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
@@ -74,6 +76,7 @@ function createServer() {
       return;
     }
 
+    if (await financialAI(request, response)) return;
     if (await createNativeEntryHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson, getBucket: name => getStorage().bucket(name) })(request, response)) return;
     if (await history(request, response)) return;
     if (await createBoletoHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;

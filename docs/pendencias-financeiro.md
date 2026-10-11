@@ -26,7 +26,7 @@ Arquitetura e critérios de entrega: [Integrações bancárias](arquitetura-inte
 1. Comparação bancária: nesta etapa, sugestões entre débitos OFX e baixas nativas a pagar. Mesmo valor, mesma conta e até três dias corridos; estornos excluídos. Não registra conciliação nem baixa. Pagamentos legados, pendentes, recebimentos e agrupamentos permanecem fora do escopo inicial.
 2. Evoluir a conferência para vínculos documentados e tratamento de divergências, preservando revisão humana em correspondências ambíguas.
 3. Régua de comunicação: o INVITE atual gera arquivos ICS/EML e anexos, sem envio automático pelo servidor. Implementar envio agendado e comprovação de entrega; validação dos destinatários e interrupção de lembretes após pagamento confirmado.
-4. MiA financeira: o código atual desativa IA em produção. Implementar serviço autenticado no servidor, escopo por permissões e respostas com fontes antes de ativar consultas.
+4. MiA financeira: serviço autenticado preparado; relê o recorte no Firestore e consulta Vertex AI sem chave no navegador. Ativação depende de publicação do novo SHA e `FINANCIAL_AI_ENABLED=true`. Detalhes em [MiA financeira](mia-financeira.md).
 5. Alçadas por usuário e fila consolidada de aprovações ficam adiadas enquanto a política estiver desativada.
 
 O bloco seguinte preserva o levantamento de 03/10. Contagens de inconsistências e dados faltantes são históricos; não houve nova auditoria dos lançamentos nesta atualização. Publicar novos commits continua exigindo autorização do SHA completo.
