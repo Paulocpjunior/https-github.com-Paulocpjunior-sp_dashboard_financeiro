@@ -4,6 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { Landmark, Upload, ShieldCheck } from 'lucide-react';
 import Layout from '../components/Layout';
 import StatementPaymentComparison from '../components/StatementPaymentComparison';
+import BankingFlowScope from '../components/BankingFlowScope';
 import { auth, db } from '../firebase';
 import { ItauStatements, PaymentComparison, OfxFile, StatementImport, StatementPreview, StatementRequestError, StatementRow, readOfxFile } from '../services/itauStatementService';
 
@@ -72,7 +73,7 @@ export default function ItauStatement() {
   return <Layout><div className="space-y-6 text-slate-800 dark:text-slate-100">
     <header className="flex gap-3 items-start"><Landmark className="h-8 w-8 text-blue-700 shrink-0"/><div><h1 className="text-2xl font-bold">Extrato Itaú</h1><p className="text-slate-500">Agência 3145 · Conta 99791-6 · Real (BRL)</p></div></header>
     {!access.ready ? <p role="status">Verificando acesso…</p> : !access.read ? <section className={card}><ShieldCheck className="mb-3"/><h2 className="font-semibold">Acesso restrito</h2><p>Solicite ao administrador a permissão Consultar Itaú para esta conta.</p></section> : <>
-      <section className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-4 text-sm"><strong>Extrato por arquivo OFX</strong><p>Os dados são atualizados por importação manual. A conexão automática com o Itaú aguarda habilitação. Confira abaixo o período e a data de cada importação.</p></section>
+      <BankingFlowScope/>
       {error && <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-300 p-4 text-red-700 dark:text-red-300">{error}</div>}
       {message && <div role="status" className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-4 text-emerald-700 dark:text-emerald-300">{message}</div>}
       <form className={`${card} flex flex-wrap gap-4 items-end`} onSubmit={event => { event.preventDefault(); const id = ++generation.current; setResult(null); setComparison(null); void run(async () => { const data = await ItauStatements.list(start,end); if(id === generation.current) setResult(data); }); }}>
