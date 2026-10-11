@@ -85,7 +85,7 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
             const result = { alreadyImported: imported.exists, inserted: imported.exists ? 0 : check.fresh.length, duplicates: check.duplicates.length };
             if (!imported.exists) {
               check.fresh.forEach(row => tx.create(account.collection('entries').doc(row.id), { ...row, accountId: ACCOUNT, importHash: statement.fileHash, importedAt: actor.at }));
-              tx.create(importRef, { fileHash: statement.fileHash, fileName, start: statement.start, end: statement.end, ledgerBalance: statement.ledgerBalance, totals: statement.totals, rowCount: statement.rows.length, inserted: result.inserted, duplicates: result.duplicates, importedAt: actor.at, importedBy: userId });
+              tx.create(importRef, { fileHash: statement.fileHash, fileName, start: statement.start, end: statement.end, ledgerBalance: statement.ledgerBalance, balanceRows: statement.balanceRows, totals: statement.totals, rowCount: statement.rows.length, inserted: result.inserted, duplicates: result.duplicates, importedAt: actor.at, importedBy: userId });
             }
             tx.create(audit.doc(), { ...actor, action: 'import', fileHash: statement.fileHash, ...result });
             return result;
