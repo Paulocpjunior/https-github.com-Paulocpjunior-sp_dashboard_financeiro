@@ -2,7 +2,11 @@
 
 ## Status do projeto — 11/10/2026
 
-Produção confirmada em `/version.json`: commit `7658c86`, build `20261011T090054Z-7658c86`. PR #66 publicada com backend e Hosting, testes e conferência visual. A aprovação independente permanece **desativada por decisão de Paulo**, sem alçada ou aprovadores a configurar agora.
+Produção verificada nesta rodada: commit `253dabce6c7fcaf349d5b3c5e2f98195e3ecf42f`, build `20261011T102658Z-253dabc` (PR #69). OFX real importado com 18 movimentos e reimportação bloqueada como duplicada. A aprovação independente permanece **desativada por decisão de Paulo**, sem alçada ou aprovadores a configurar agora.
+
+A investigação de 11/10 leu 46.459 documentos de transações em snapshot consistente, sem gravações financeiras. Três dos seis débitos têm candidatos legados por valor/data; não são vínculos confirmados. A conta bancária ausente nos candidatos impede assumir sua origem. Diferença entre último saldo disponível e saldo contábil: R$ 2.157,03, ainda sem causa comprovada.
+
+A nova triagem de conferência está em desenvolvimento nesta branch: filtros por resultado, cobertura explícita de baixas nativas e orientação para tarifas/SISPAG. Não inclui pagamentos legados no algoritmo nem confirma conciliação.
 
 ### Entregas recentes
 
@@ -21,8 +25,8 @@ Arquitetura e critérios de entrega: [Integrações bancárias](arquitetura-inte
 
 1. Comparação bancária: nesta etapa, sugestões entre débitos OFX e baixas nativas a pagar. Mesmo valor, mesma conta e até três dias corridos; estornos excluídos. Não registra conciliação nem baixa. Pagamentos legados, pendentes, recebimentos e agrupamentos permanecem fora do escopo inicial.
 2. Evoluir a conferência para vínculos documentados e tratamento de divergências, preservando revisão humana em correspondências ambíguas.
-3. Régua de comunicação e comprovação de entrega; validação dos destinatários e interrupção de lembretes após pagamento confirmado.
-4. MiA financeira: validação do serviço seguro e do escopo de consulta antes de ativar ações.
+3. Régua de comunicação: o INVITE atual gera arquivos ICS/EML e anexos, sem envio automático pelo servidor. Implementar envio agendado e comprovação de entrega; validação dos destinatários e interrupção de lembretes após pagamento confirmado.
+4. MiA financeira: o código atual desativa IA em produção. Implementar serviço autenticado no servidor, escopo por permissões e respostas com fontes antes de ativar consultas.
 5. Alçadas por usuário e fila consolidada de aprovações ficam adiadas enquanto a política estiver desativada.
 
 O bloco seguinte preserva o levantamento de 03/10. Contagens de inconsistências e dados faltantes são históricos; não houve nova auditoria dos lançamentos nesta atualização. Publicar novos commits continua exigindo autorização do SHA completo.

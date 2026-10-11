@@ -49,7 +49,7 @@ export const ItauStatements = {
 };
 
 export interface PaymentComparison {
- rows:Array<{statement:StatementRow;status:'suggestion'|'ambiguous'|'no-candidate'|'outside-scope';candidates:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>}>;
+ rows:Array<{statement:StatementRow;reviewHint?:string;status:'suggestion'|'ambiguous'|'no-candidate'|'outside-scope';candidates:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>}>;
  counts:Record<string,number>;coverage:string;criterion:string;paymentCount:number;unmatchedPayments:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>;
  start:string;end:string;paymentStart:string;paymentEnd:string;generatedAt:string;
 }

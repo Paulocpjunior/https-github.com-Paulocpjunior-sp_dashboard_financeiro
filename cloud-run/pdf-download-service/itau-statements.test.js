@@ -214,3 +214,25 @@ test('UTF-8 Itaú bytes override an inaccurate 1252 header without mojibake',()=
   assert.equal(result.balanceRows[0].memo,'SALDO TOTAL DISPONÍVEL DIA');
   assert.equal(parseOfx(Buffer.from(text,'latin1')).balanceRows[0].memo,'SALDO TOTAL DISPONÍVEL DIA');
 });
+
+
+test('review hints explain fees and SISPAG without creating financial matches', () => {
+  const {comparePayments}=require('./itau-payment-comparison');
+  const rows=[
+    {id:'fee',amountCents:-710,name:'TAR/CUSTAS COBRANÇA'},
+    {id:'batch',amountCents:-10000,name:'SISPAG SALARIOS'},
+    {id:'ordinary',amountCents:-20000,name:'PIX ENVIADO'},
+    {id:'credit',amountCents:710,name:'ESTORNO TARIFA'},
+  ];
+  const before=JSON.stringify(rows);
+  const result=comparePayments(rows,[]);
+  assert.match(result.rows[0].reviewHint,/sugere tarifa/);
+  assert.match(result.rows[1].reviewHint,/Pode representar um lote/);
+  assert.match(result.rows[2].reviewHint,/Jotform/);
+  assert.match(result.rows[3].reviewHint,/Recebimento fora/);
+  assert.equal(result.counts['no-candidate'],3);
+  assert.equal(result.counts['outside-scope'],1);
+  assert.equal(result.paymentCount,0);
+  assert.ok(result.rows.every(row=>row.candidates.length===0));
+  assert.equal(JSON.stringify(rows),before);
+});
