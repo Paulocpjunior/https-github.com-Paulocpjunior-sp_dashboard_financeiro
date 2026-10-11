@@ -32,6 +32,7 @@ export default function ItauStatement() {
   const [start, setStart] = useState(() => `${today().slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
   const [result, setResult] = useState<{ rows: StatementRow[]; imports: StatementImport[] } | null>(null);
+  const [includeLegacy,setIncludeLegacy] = useState(false);
   const [comparison,setComparison] = useState<PaymentComparison|null>(null);
   const [preview, setPreview] = useState<StatementPreview | null>(null);
   const [file, setFile] = useState<OfxFile | null>(null);
@@ -88,7 +89,7 @@ export default function ItauStatement() {
         <label className="grid gap-1 text-sm font-medium">Até<input className={input} type="date" required value={end} disabled={busy} onChange={e => { setEnd(e.target.value); setResult(null); setComparison(null); }}/></label>
         <button className={button} disabled={busy || !validRange}>Consultar extrato</button><span className="text-xs text-slate-500">Até 93 dias por consulta.</span>
       </form>
-      {access.compare && <section className={card}><h2 className="font-semibold">Conferência de pagamentos</h2><p className="text-sm text-slate-500 my-2">Compare o OFX importado com as baixas nativas de contas a pagar. Nenhuma sugestão dá baixa ou confirma conciliação.</p><button className={button} disabled={busy||!validRange} onClick={()=>{const id=++generation.current;setComparison(null);void run(async()=>{const data=await ItauStatements.compare(start,end);if(id===generation.current)setComparison(data);});}}>Comparar baixas com o extrato</button></section>}
+      {access.compare && <section className={card}><h2 className="font-semibold">Conferência de pagamentos</h2><p className="text-sm text-slate-500 my-2">Compare o OFX importado com as baixas nativas de contas a pagar. A consulta opcional de pagamentos antigos aparece separadamente. Nenhuma sugestão dá baixa ou confirma conciliação.</p><label className="flex items-center gap-2 my-3 text-sm"><input type="checkbox" checked={includeLegacy} disabled={busy} onChange={e=>{setIncludeLegacy(e.target.checked);setComparison(null);}}/> Incluir conferência separada de pagamentos antigos</label><button className={button} disabled={busy||!validRange} onClick={()=>{const id=++generation.current;setComparison(null);void run(async()=>{const data=await ItauStatements.compare(start,end,includeLegacy);if(id===generation.current)setComparison(data);});}}>Comparar baixas com o extrato</button></section>}
       {comparison && <StatementPaymentComparison comparison={comparison}/>}
       {access.import && <section className={card}><h2 className="font-semibold flex gap-2 items-center"><Upload size={19}/>Importar extrato OFX</h2><p className="text-sm text-slate-500 mt-1 mb-4">Selecione o arquivo original do Itaú. Confira a prévia antes de salvar. Até 2 MB e 400 movimentações por arquivo.</p><label className="text-sm font-medium">Arquivo OFX<input ref={uploadRef} type="file" accept=".ofx" disabled={busy} className="block mt-2 max-w-full" onChange={event => {
         const selected = event.target.files?.[0]; const id = ++generation.current; setPreview(null); setFile(null);

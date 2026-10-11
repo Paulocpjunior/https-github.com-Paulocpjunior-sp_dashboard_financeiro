@@ -1,3 +1,4 @@
+import LegacyPaymentComparison from './LegacyPaymentComparison';
 import React, {useState} from 'react';
 import type {PaymentComparison} from '../services/itauStatementService';
 const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -14,4 +15,5 @@ export default function StatementPaymentComparison({comparison}:{comparison:Paym
         {comparison.rows.length>0&&!rows.length&&<p>Nenhuma movimentação corresponde ao filtro escolhido.</p>}
         {!comparison.rows.length&&<p>Nenhuma movimentação importada neste período. Importe o OFX para comparar.</p>}
         <details><summary className="cursor-pointer">{comparison.unmatchedPayments.length} baixas sem candidato neste extrato</summary><p className="text-sm">Inclui a margem de 3 dias nas extremidades. Ausência de candidato não comprova falta de pagamento.</p>{comparison.unmatchedPayments.map(p=><p className="my-2 text-sm break-all" key={p.id}>{displayDate(p.date)} · {p.supplier} · {money(p.amountCents)} · {p.transactionId}</p>)}</details>
+        {comparison.legacy && <LegacyPaymentComparison comparison={comparison.legacy}/>}
       </section>);}

@@ -9,7 +9,7 @@ function interval(start, end) {
   const valid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
   if (!valid(start) || !valid(end) || start > end || (Date.parse(end) - Date.parse(start)) / 86400000 > 92) throw new StatementError('Selecione um período válido de até 93 dias.');
 }
-function createStatementHandler({ getServices, readBody, sendJson, readLedger = require('./payable-ledger').readPaymentLedger }) {
+function createStatementHandler({ getServices, readBody, sendJson, readLedger = require('./payable-ledger').readPaymentLedger, readLegacy = require('./itau-legacy-payments').readLegacyPayments }) {
   return async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
     if (!url.pathname.startsWith('/api/itau/')) return false;
@@ -40,9 +40,11 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
           readLedger(db,expand(start,-3),expand(end,3)),
         ]);
         if(bank.size>1000) throw new StatementError('Mais de 1.000 movimentações. Reduza o período.');
+        const legacy = url.searchParams.get('includeLegacy') === 'true' ? await readLegacy(db,expand(start,-3),expand(end,3)) : null;
         if(!allowed((await db.collection('users').doc(userId).get()).data())) throw new StatementError('Acesso revogado.',403);
         const result=require('./itau-payment-comparison').comparePayments(bank.docs.map(d=>d.data()),ledger.rows);
-        await audit.add({...actor,action:'payment-comparison',start,end,count:bank.size});
+        if(legacy) result.legacy = require('./itau-legacy-payments').compareLegacy(bank.docs.map(d=>d.data()),legacy);
+        await audit.add({...actor,action:'payment-comparison',start,end,count:bank.size,includeLegacy:!!legacy});
         sendJson(request,response,200,{...result,start,end,paymentStart:expand(start,-3),paymentEnd:expand(end,3),generatedAt:new Date().toISOString()});
       } else if (isRead) {
         const start = url.searchParams.get('start'), end = url.searchParams.get('end');
