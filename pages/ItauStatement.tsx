@@ -6,7 +6,7 @@ import Layout from '../components/Layout';
 import StatementPaymentComparison from '../components/StatementPaymentComparison';
 import BankingFlowScope from '../components/BankingFlowScope';
 import { auth, db } from '../firebase';
-import { ItauStatements, PaymentComparison, OfxFile, StatementImport, StatementPreview, StatementRequestError, StatementRow, readOfxFile } from '../services/itauStatementService';
+import { ItauStatements, PaymentComparison, StatementBalance, OfxFile, StatementImport, StatementPreview, StatementRequestError, StatementRow, readOfxFile } from '../services/itauStatementService';
 
 const money = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const displayDate = (value: string) => value.split('-').reverse().join('/');
@@ -19,6 +19,13 @@ function Movements({ rows }: { rows: StatementRow[] }) {
   return <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 dark:bg-slate-800"><tr>{['Data', 'Histórico do banco', 'Identificador bancário', 'Valor'].map(label => <th className="px-4 py-3" key={label}>{label}</th>)}</tr></thead><tbody>
     {rows.map(row => <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-3 whitespace-nowrap">{displayDate(row.date)}</td><td className="px-4 py-3 min-w-64"><div>{row.name || row.memo || 'Sem histórico informado'}</div>{row.name && row.memo && <div className="text-slate-500">{row.memo}</div>}<span className="text-xs text-slate-500">{row.type}{row.checknum ? ` · Documento ${row.checknum}` : ''}</span></td><td className="px-4 py-3 break-all">{row.fitid}</td><td className={`px-4 py-3 text-right whitespace-nowrap font-semibold ${row.amountCents < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>{money(row.amountCents)}</td></tr>)}
   </tbody></table></div>;
+}
+function BalanceReferences({ rows }: { rows?: StatementBalance[] }) {
+  if (!rows?.length) return null;
+  return <details className="rounded-lg border border-amber-300 dark:border-amber-800 p-3 text-sm my-3"><summary className="cursor-pointer font-medium">{rows.length} referências de saldo preservadas — fora das movimentações</summary>
+    <p className="my-2">Saldo anterior e saldo disponível diário não são receitas. O saldo disponível pode ter composição e data diferentes do saldo do arquivo; nenhuma diferença será ajustada automaticamente.</p>
+    <ul className="space-y-1">{rows.map(row=><li key={row.fitid}>{displayDate(row.date)} · {row.memo || row.name} · {money(row.amountCents)}</li>)}</ul>
+  </details>;
 }
 export default function ItauStatement() {
   const [access, setAccess] = useState({ ready: false, read: false, import: false, compare:false });
@@ -94,14 +101,14 @@ export default function ItauStatement() {
         {preview.alreadyImported && <p role="status">Este arquivo já foi importado. Nenhuma nova gravação é necessária.</p>}
         {preview.conflicts.length > 0 && <p role="alert" className="text-red-600">Identificadores com conteúdo diferente: {preview.conflicts.join(', ')}. Importação bloqueada para revisão.</p>}
         {preview.duplicateCount > 0 && <p className="text-sm">As movimentações idênticas já existentes serão preservadas e não serão gravadas novamente.</p>}
-        <Movements rows={preview.rows}/><p className="text-sm text-slate-500">A importação alimenta somente o extrato bancário. Não cria lançamentos nem dá baixa nas contas a pagar ou receber.</p>
+        <BalanceReferences rows={preview.balanceRows}/><Movements rows={preview.rows}/><p className="text-sm text-slate-500">A importação alimenta somente o extrato bancário. Não cria lançamentos nem dá baixa nas contas a pagar ou receber.</p>
         <div className="flex gap-3"><button className={button} disabled={busy || preview.alreadyImported || preview.conflicts.length > 0 || !file} onClick={() => {
           const id = ++generation.current; void run(async () => { const saved = await ItauStatements.commit(file!, preview.fileHash); if (id !== generation.current) return; setMessage(saved.alreadyImported ? 'Arquivo já importado anteriormente.' : `Importação concluída: ${saved.inserted} novas movimentações; ${saved.duplicates} já existentes preservadas.`); setPreview(null); setFile(null); setResult(null); setComparison(null); if(uploadRef.current) uploadRef.current.value = ''; });
         }}>Confirmar importação</button><button className="rounded-lg border px-4 py-2" disabled={busy} onClick={() => { generation.current++; setPreview(null); setFile(null); if(uploadRef.current) uploadRef.current.value = ''; }}>Cancelar</button></div>
       </section>}
       {result && <><section className="grid sm:grid-cols-3 gap-4"><div className={card}><p className="text-sm text-slate-500">Entradas no período</p><strong className="text-xl text-emerald-700">{money(totals.credits)}</strong></div><div className={card}><p className="text-sm text-slate-500">Saídas no período</p><strong className="text-xl text-red-600">{money(totals.debits)}</strong></div><div className={card}><p className="text-sm text-slate-500">Variação das movimentações</p><strong className="text-xl">{money(totals.credits + totals.debits)}</strong><p className="text-xs text-slate-500">Não representa o saldo da conta.</p></div></section>
         <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"><h2 className="p-5 font-semibold">{result.rows.length} movimentações importadas</h2>{result.rows.length ? <Movements rows={result.rows}/> : <p className="px-5 pb-5 text-slate-500">Nenhuma movimentação importada neste período. Isso não confirma ausência de movimentação no banco.</p>}</section>
-        <section className={card}><h2 className="font-semibold mb-3">Últimas 20 importações da conta</h2>{!result.imports.length && <p className="text-slate-500">Nenhum arquivo importado.</p>}{result.imports.map(item => <div key={item.fileHash} className="py-3 border-t border-slate-100 dark:border-slate-800 text-sm"><p className="font-medium break-all">{item.fileName}</p><p>Período: {displayDate(item.start)} a {displayDate(item.end)} · {item.rowCount} movimentações</p><p className="text-slate-500">Importado em {new Date(item.importedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (Brasília)</p>{item.ledgerBalance && <p>Saldo do arquivo em {displayDate(item.ledgerBalance.date)}: {money(item.ledgerBalance.amountCents)}</p>}</div>)}</section></>}
+        <section className={card}><h2 className="font-semibold mb-3">Últimas 20 importações da conta</h2>{!result.imports.length && <p className="text-slate-500">Nenhum arquivo importado.</p>}{result.imports.map(item => <div key={item.fileHash} className="py-3 border-t border-slate-100 dark:border-slate-800 text-sm"><p className="font-medium break-all">{item.fileName}</p><p>Período: {displayDate(item.start)} a {displayDate(item.end)} · {item.rowCount} movimentações</p><p className="text-slate-500">Importado em {new Date(item.importedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (Brasília)</p>{item.ledgerBalance && <p>Saldo do arquivo em {displayDate(item.ledgerBalance.date)}: {money(item.ledgerBalance.amountCents)}</p>}<BalanceReferences rows={item.balanceRows}/></div>)}</section></>}
     </>}
   </div></Layout>;
 }

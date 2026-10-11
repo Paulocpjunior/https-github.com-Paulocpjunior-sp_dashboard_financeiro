@@ -3,15 +3,17 @@ export interface StatementRow {
   id: string; fitid: string; date: string; amountCents: number; type: string;
   name: string; memo: string; checknum: string;
 }
+export interface StatementBalance extends Omit<StatementRow, 'id'> { kind: 'opening' | 'available' }
 export interface StatementImport {
   fileHash: string; fileName: string; start: string; end: string;
+  balanceRows?: StatementBalance[];
   ledgerBalance: { date: string; amountCents: number } | null;
   totals: { credits: number; debits: number }; rowCount: number;
   inserted: number; duplicates: number; importedAt: string;
 }
 export interface StatementPreview {
   accountId: string; start: string; end: string; fileHash: string; fileName: string;
-  rows: StatementRow[]; ledgerBalance: StatementImport['ledgerBalance'];
+  rows: StatementRow[]; balanceRows?: StatementBalance[]; ledgerBalance: StatementImport['ledgerBalance'];
   totals: StatementImport['totals']; newCount: number; duplicateCount: number;
   conflicts: string[]; alreadyImported: boolean;
 }

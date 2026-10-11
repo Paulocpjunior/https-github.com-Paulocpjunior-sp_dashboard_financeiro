@@ -46,7 +46,14 @@ function decodeOfx(bytes) {
   if (!bytes.length || bytes.length > 2 * 1024 * 1024) fail('Selecione um OFX de até 2 MB.');
   const header = bytes.subarray(0, 400).toString('ascii');
   const legacy = /(?:CHARSET\s*:\s*(?:1252|8859-1)|encoding\s*=\s*["'](?:windows-1252|iso-8859-1))/i.test(header);
-  const text = new TextDecoder(legacy ? 'windows-1252' : 'utf-8', { fatal: true }).decode(bytes);
+  // Itaú can declare CHARSET:1252 while exporting valid UTF-8 bytes.
+  // Prefer strict UTF-8; use the declared legacy encoding only when UTF-8 is invalid.
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch (error) {
+    if (!legacy) throw error;
+    text = new TextDecoder('windows-1252', { fatal: true }).decode(bytes);
+  }
   if (text.includes('\uFFFD')) fail('Codificação do OFX não reconhecida.');
   return text;
 }
@@ -76,23 +83,34 @@ function parseOfx(bytes) {
   if ((list.match(/<STMTTRN\s*>/gi) || []).length !== txBlocks.length) fail('Movimentação incompleta no OFX.');
   if (txBlocks.length > MAX_ROWS) fail(`Importe um período menor: máximo de ${MAX_ROWS} movimentações por arquivo.`);
   const seen = new Set();
+  const balanceRows = [];
   const rows = txBlocks.map(([_, value]) => {
     const fitid = field(value, 'FITID');
     if (seen.has(fitid)) fail('FITID repetido dentro do arquivo; nenhuma movimentação será importada.');
     seen.add(fitid);
     const bookedAt = date(field(value, 'DTPOSTED'));
-    if (bookedAt < start || bookedAt > end) fail('Movimentação fora do período declarado no OFX.');
     const amountCents = cents(field(value, 'TRNAMT'));
     const type = field(value, 'TRNTYPE');
     const name = field(value, 'NAME', true);
     const memo = field(value, 'MEMO', true);
     const row = { fitid, date: bookedAt, amountCents, type, name, memo, checknum: field(value, 'CHECKNUM', true) };
+    // Itaú exports balance references as STMTTRN. Preserve them, never total as cash flow.
+    const label = (memo || name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase();
+    if (label === 'SALDO ANTERIOR' || label === 'SALDO TOTAL DISPONIVEL DIA') {
+      const opening = label === 'SALDO ANTERIOR';
+      if (bookedAt > end || (opening ? bookedAt > start : bookedAt < start)) fail('Data da referência de saldo incompatível com o período.');
+      if (balanceRows.some(r => r.kind === (opening ? 'opening' : 'available') && (opening || r.date === bookedAt))) fail('Referência de saldo repetida; requer revisão.');
+      balanceRows.push({ ...row, kind: opening ? 'opening' : 'available' });
+      return null;
+    }
+    if (/^(SALDO|SDO)\b/.test(label)) fail('Referência de saldo não reconhecida; requer revisão para não contar saldo como movimentação.');
+    if (bookedAt < start || bookedAt > end) fail('Movimentação fora do período declarado no OFX.');
     return { ...row, id: hash(`${ACCOUNT}:${fitid}`), fingerprint: hash(JSON.stringify(row)) };
-  });
+  }).filter(Boolean);
   const ledger = block(statement, 'LEDGERBAL', true);
   const ledgerBalance = ledger ? { amountCents: cents(field(ledger, 'BALAMT')), date: date(field(ledger, 'DTASOF')) } : null;
   const totals = rows.reduce((sum, r) => ({ credits: sum.credits + Math.max(r.amountCents, 0), debits: sum.debits + Math.min(r.amountCents, 0) }), { credits: 0, debits: 0 });
-  return { accountId: ACCOUNT, currency: 'BRL', start, end, rows, ledgerBalance, totals, fileHash: hash(bytes) };
+  return { accountId: ACCOUNT, currency: 'BRL', start, end, rows, balanceRows, ledgerBalance, totals, fileHash: hash(bytes) };
 }
 function classifyRows(rows, existing) {
   const duplicates = [], fresh = [], conflicts = [];

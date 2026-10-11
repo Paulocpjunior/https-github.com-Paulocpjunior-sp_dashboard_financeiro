@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { parseOfx, classifyRows, ACCOUNT } = require('./itau-ofx');
 const { createStatementHandler, permitted, interval } = require('./itau-statements');
 
-// Synthetic fixtures only. Real Itaú export still required for bank-format homologation.
+// Synthetic fixtures only. Never commit real bank exports or counterparties.
 const entry = (id, amount = '-1234.56', date = '20260915120000[-3:BRT]') => `<STMTTRN><TRNTYPE>OTHER\n<DTPOSTED>${date}\n<TRNAMT>${amount}\n<FITID>${id}\n<NAME>Fornecedor teste\n<MEMO>Descrição original\n</STMTTRN>`;
 const ofx = (entries = entry('FIT-1') + entry('FIT-2', '2000.00')) => `OFXHEADER:100\nENCODING:UTF-8\n\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL\n<BANKACCTFROM><BANKID>0341\n<BRANCHID>3145\n<ACCTID>099791-6\n<ACCTTYPE>CHECKING\n</BANKACCTFROM><BANKTRANLIST><DTSTART>20260901000000\n<DTEND>20260930235959\n${entries}</BANKTRANLIST><LEDGERBAL><BALAMT>765.44\n<DTASOF>20260930235959\n</LEDGERBAL></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
 const parse = value => parseOfx(Buffer.from(value));
@@ -177,4 +177,40 @@ test('comparison rechecks revocation and refuses incomplete bank coverage',async
  const full=harness(profile,async()=>({rows:[]}));
  for(let i=0;i<1001;i++)full.store.set(`bankStatements/${ACCOUNT}/entries/${i}`,{date:'2026-09-15'});
  assert.equal((await full.call('payment-comparison?start=2026-09-01&end=2026-09-30',null,'valid','GET')).status,400);
+});
+
+test('Itaú balance pseudo-entries are preserved separately, including opening before DTSTART', () => {
+  const balance = (id, label, amount, date) => entry(id,amount,date).replace('Descrição original',label).replace('OTHER','CREDIT');
+  const text=ofx(balance('open','SALDO ANTERIOR','100.00','20260831100000[-03:EST]')+entry('debit','-10.00')+balance('day','SALDO TOTAL DISPONÍVEL DIA','90.00','20260915100000[-03:EST]'));
+  const parsed=parse(text);
+  assert.equal(parsed.rows.length,1);
+  assert.deepEqual(parsed.totals,{credits:0,debits:-1000});
+  assert.deepEqual(parsed.balanceRows.map(r=>[r.kind,r.amountCents,r.date]),[['opening',10000,'2026-08-31'],['available',9000,'2026-09-15']]);
+  assert.equal(parsed.balanceRows[0].memo,'SALDO ANTERIOR');
+  assert.throws(()=>parse(text.replace('SALDO ANTERIOR','SALDO DESCONHECIDO')));
+  assert.throws(()=>parse(text.replace('SALDO TOTAL DISPONÍVEL DIA','SALDO TOTAL DISPONÍVEL DIA AJUSTADO')));
+  assert.throws(()=>parse(ofx(balance('a','SALDO ANTERIOR','100.00','20260831100000')+balance('b','SALDO ANTERIOR','100.00','20260831100000'))));
+  assert.throws(()=>parse(ofx(balance('x','SALDO TOTAL DISPONÍVEL DIA','100.00','20260831100000'))));
+});
+test('import stores balance references only in import metadata; replay never creates balance credits',async()=>{
+  const h=harness();
+  const text=ofx(entry('opening','100.00','20260831100000').replace('Descrição original','SALDO ANTERIOR')+entry('real','-10.00'));
+  const file={base64:Buffer.from(text).toString('base64'),fileName:'ficticio.ofx'};
+  const preview=await h.call('preview',file);
+  assert.equal(preview.status,200);
+  const commit=await h.call('import',{...file,confirmHash:parse(text).fileHash});
+  assert.equal(commit.status,200);
+  const imported=[...h.store.entries()].filter(([k])=>k.includes('/imports/'))[0][1];
+  assert.equal(imported.balanceRows.length,1);
+  assert.equal([...h.store.keys()].filter(k=>k.includes('/entries/')).length,1);
+  await h.call('import',{...file,confirmHash:parse(text).fileHash});
+  assert.equal([...h.store.keys()].filter(k=>k.includes('/entries/')).length,1);
+});
+
+test('UTF-8 Itaú bytes override an inaccurate 1252 header without mojibake',()=>{
+  const text=ofx(entry('balance','100.00').replace('Descrição original','SALDO TOTAL DISPONÍVEL DIA')).replace('ENCODING:UTF-8','ENCODING:USASCII\nCHARSET:1252');
+  const result=parse(text);
+  assert.equal(result.rows.length,0);
+  assert.equal(result.balanceRows[0].memo,'SALDO TOTAL DISPONÍVEL DIA');
+  assert.equal(parseOfx(Buffer.from(text,'latin1')).balanceRows[0].memo,'SALDO TOTAL DISPONÍVEL DIA');
 });

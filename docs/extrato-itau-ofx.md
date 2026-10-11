@@ -49,3 +49,13 @@ A projeção existente de pagamentos exclui estornos e usa cada pagamento parcia
 Não altera lançamentos, saldos, vínculos ou estados de conciliação. Registra apenas auditoria da consulta. Créditos, pagamentos agrupados, contas pendentes e pagamentos legados sem auditoria nativa não são conciliados. Ausência de candidato não comprova falta de pagamento; pode haver cobertura incompleta do OFX, agrupamento, tarifas ou diferenças de data. Acima de 1.000 movimentos ou do limite de leitura integral do histórico nativo, a consulta falha sem resultado parcial.
 
 Esta implementação ainda aguarda publicação e teste com extrato real. Testes automatizados usam dados fictícios.
+
+## Formato real Itaú — referências de saldo (11/10/2026)
+
+A validação local de um OFX original identificou três referências de saldo serializadas como `STMTTRN`, incluindo saldo anterior antes de `DTSTART`. O parser antigo recusava o período; simplesmente relaxar a data somaria os saldos às receitas. A correção reconhece somente os rótulos exatos normalizados `SALDO ANTERIOR` e `SALDO TOTAL DISPONÍVEL DIA`, preserva seus identificadores, datas, valores e descrições em `balanceRows` nos metadados da importação e os exclui de `entries`, totais e candidatos de conciliação. Outros rótulos iniciados por SALDO/SDO exigem revisão. Referências repetidas/incompatíveis são recusadas. Movimentações efetivas continuam obrigatoriamente dentro do período.
+
+O arquivo também declarou CHARSET:1252 com bytes UTF-8. A leitura usa UTF-8 estrito quando válido e recorre à codificação legada declarada somente quando necessário. Testes cobrem ambos sem alterar descrições.
+
+A prévia e o histórico exibem as referências separadamente. `LEDGERBAL` e saldo disponível diário não são tratados como equivalentes: datas/composição podem divergir e nenhuma diferença é corrigida automaticamente. Créditos agregados de boletos não comprovam o recebimento de um título individual.
+
+Conferência local do arquivo real e soma independente concluídas; importação em produção e comparação com as baixas ainda dependem da publicação autorizada desta correção. O arquivo original e seus dados financeiros não estão no repositório. Fixtures de testes são fictícias.
