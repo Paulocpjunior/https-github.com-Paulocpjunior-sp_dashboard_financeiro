@@ -39,7 +39,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
   const [messages, setMessages] = useState<Message[]>(() => [
     {
       role: 'assistant',
-      content: 'Olá! Sou a MiA do Financeiro. Posso ajudar a filtrar e analisar o recorte selecionado no painel. Minhas consultas não alteram lançamentos. Para análise, selecione até 300 registros.',
+      content: 'Olá! Sou a FiA do Financeiro. Posso ajudar a filtrar e analisar o recorte selecionado no painel. Minhas consultas não alteram lançamentos. Para análise, selecione até 300 registros.',
     },
   ]);
   
@@ -82,7 +82,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: error instanceof Error ? error.message : 'Não foi possível consultar a MiA.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: error instanceof Error ? error.message : 'Não foi possível consultar a FiA.' }]);
     } finally {
       setIsLoading(false);
     }
@@ -100,7 +100,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
                 <Sparkles className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="text-white font-bold text-sm">MiA · Financeiro</h3>
+                <h3 className="text-white font-bold text-sm">FiA · Financeiro</h3>
                 <div className="flex items-center gap-1">
                   <span className={`w-1.5 h-1.5 rounded-full ${isAIAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-amber-300'}`}></span>
                   <span className="text-[10px] text-blue-100 font-medium">
@@ -109,7 +109,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
                 </div>
               </div>
             </div>
-            <button aria-label="Fechar janela MiA" onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white transition-colors">
+            <button aria-label="Fechar janela FiA" onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white transition-colors">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -191,7 +191,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
               />
               <button 
                 onClick={() => handleSend()}
-                aria-label="Enviar pergunta à MiA"
+                aria-label="Enviar pergunta à FiA"
                 disabled={!query.trim() || isLoading || !isAIAvailable}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
@@ -204,7 +204,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
 
       {/* Toggle Button */}
       <button
-        aria-label={isOpen ? "Fechar MiA" : "Abrir MiA financeira"}
+        aria-label={isOpen ? "Fechar FiA" : "Abrir FiA financeira"}
         onClick={() => setIsOpen(!isOpen)}
         className={`p-4 rounded-2xl shadow-2xl transition-all duration-300 flex items-center gap-2 group ${
           isOpen ? 'bg-slate-800 text-white rotate-90' : 'bg-blue-600 text-white hover:scale-110'
