@@ -134,3 +134,60 @@ test('two partial settlements of one title can link separately, never using accu
  assert.equal((await links.list(h.db,'2026-10-01','2026-10-11')).filter(l=>l.active).length,2);
  assert.equal(transaction.valorPago,'30.00');
 });
+const groups=require('./itau-group-links');
+function groupHarness(){
+ const h=nativeHarness(),secondId=randomUUID();
+ const second={...h.store.get('transactions/p1').payablePayments[0],requestId:secondId,amountCents:1999,supplier:'Segundo favorecido fictício'};
+ const transaction={movement:'Saída',status:'Pago',payablePayments:[second],payableSettlement:second};
+ h.store.set('transactions/p2',transaction);
+ const auditId=require('node:crypto').createHash('sha256').update(JSON.stringify(['admin',secondId])).digest('hex');
+ h.store.set(`payableAudit/${auditId}`,{action:'payment',uid:'admin',transactionId:'p2',after:structuredClone(transaction)});
+ h.store.set(`bankStatements/${ACCOUNT}/entries/s1`,{...statement,amountCents:-3000});
+ const members=[{transactionId:'p1',paymentRequestId:h.paymentRequestId},{transactionId:'p2',paymentRequestId:secondId}];
+ h.groupInput=async()=>({...await groups.preview(h.db,'admin',{statementId:'s1',members}),statementId:'s1',requestId:randomUUID(),reason:'Lote e favorecidos conferidos individualmente.',reference:'Comprovante fictício do lote TEST-GROUP',checkedEvidence:true});
+ return {...h,members,secondId};
+}
+test('group confirmation and undo are atomic metadata-only operations with replay and full history',async()=>{
+ const h=groupHarness(),before=structuredClone([...h.store]),input=await h.groupInput();
+ const result=await groups.mutate(h.db,'admin','confirm',input);assert.equal(result.active,true);
+ assert.equal((await groups.mutate(h.db,'admin','confirm',input)).replayed,true);
+ let list=await links.list(h.db,'2026-10-01','2026-10-11');assert.equal(list[0].validation,'current');assert.equal(list[0].payments.length,2);
+ const undo={statementId:'s1',requestId:randomUUID(),revision:1,reason:'Lote revisado e associação desfeita.'};
+ await groups.mutate(h.db,'admin','unlink',undo);assert.equal((await groups.mutate(h.db,'admin','unlink',undo)).replayed,true);
+ list=await links.list(h.db,'2026-10-01','2026-10-11');assert.equal(list[0].history.length,2);assert.equal(list[0].history[1].members.length,2);
+ assert.equal([...h.store].filter(([k,v])=>k.startsWith('bankLegacyPaymentLocks/')&&v.active).length,0);
+ for(const [k,v] of before)assert.deepEqual(h.store.get(k),v);
+});
+test('group rejects duplicate selection, under/over totals, invalid count, wrong dates and missing audit',async()=>{
+ for(const selection of [[],[{transactionId:'p1',paymentRequestId:'bad'}],Array(26).fill({transactionId:'p1',paymentRequestId:'bad'})])await assert.rejects(()=>groups.preview(groupHarness().db,'admin',{statementId:'s1',members:selection}));
+ const duplicate=groupHarness();await assert.rejects(()=>groups.preview(duplicate.db,'admin',{statementId:'s1',members:[duplicate.members[0],duplicate.members[0]]}),/duas vezes/);
+ for(const amount of [-3001,-2999,3000]){const h=groupHarness();h.store.get(`bankStatements/${ACCOUNT}/entries/s1`).amountCents=amount;await assert.rejects(()=>h.groupInput());}
+ const h=groupHarness();h.store.get(`bankStatements/${ACCOUNT}/entries/s1`).date='2026-10-01';await assert.rejects(()=>h.groupInput(),/três dias/);
+});
+test('group revalidates all members and audit before any write, including reversal and access revocation',async()=>{
+ for(const change of [h=>h.store.get('transactions/p1').payableReversals.push({paymentRequestId:h.paymentRequestId}),h=>h.store.delete(`payableAudit/${h.auditId}`),h=>{h.store.get('transactions/p2').isExcluded=true;},h=>{h.store.get('users/admin').active=false;}]){
+  const h=groupHarness(),input=await h.groupInput();change(h);await assert.rejects(()=>groups.mutate(h.db,'admin','confirm',input));
+  assert(![...h.store.keys()].some(k=>k.startsWith('bankLegacyPaymentLocks/')));
+ }
+ const h=groupHarness(),input=await h.groupInput();h.store.get('transactions/p2').description='Alterado após prévia';await assert.rejects(()=>groups.mutate(h.db,'admin','confirm',input),/mudou/);
+ await assert.rejects(()=>groups.mutate(h.db,'admin','confirm',{...input,checkedEvidence:false}),e=>e.status===400);
+});
+test('group and individual links cannot reuse a payment or the same bank debit',async()=>{
+ const h=groupHarness(),input=await h.groupInput();
+ h.store.set(`bankStatements/${ACCOUNT}/entries/s2`,{...statement,fitid:'SECOND'});
+ const single={...await links.preview(h.db,'admin',{...h.target,statementId:'s2'},'native'),...h.target,statementId:'s2',requestId:randomUUID(),reason:input.reason,reference:input.reference,checkedEvidence:true};
+ const outcomes=await Promise.allSettled([groups.mutate(h.db,'admin','confirm',input),links.mutate(h.db,'admin','confirm',single,'native')]);assert.equal(outcomes.filter(r=>r.status==='fulfilled').length,1);
+ h.store.set('transactions/legacy',{...payment,valorPago:'30.00'});
+ await assert.rejects(()=>links.preview(h.db,'admin',{statementId:'s1',transactionId:'legacy'}),/ativo/);
+ const second=groupHarness(),g=await second.groupInput();second.store.set('transactions/legacy',{...payment,valorPago:'30.00'});
+ const old={...await links.preview(second.db,'admin',{statementId:'s1',transactionId:'legacy'}),statementId:'s1',transactionId:'legacy',requestId:randomUUID(),reason:g.reason,reference:g.reference,checkedEvidence:true};
+ await links.mutate(second.db,'admin','confirm',old);await assert.rejects(()=>groups.mutate(second.db,'admin','confirm',g),/mudou|ativo/);
+});
+test('group flags changed sources, permits undo when source disappears, stale undo cannot touch new group',async()=>{
+ const h=groupHarness();await groups.mutate(h.db,'admin','confirm',await h.groupInput());
+ const original=structuredClone(h.store.get('transactions/p2'));h.store.delete('transactions/p2');
+ assert.equal((await links.list(h.db,'2026-10-01','2026-10-11'))[0].validation,'changed');
+ const undo={statementId:'s1',requestId:randomUUID(),revision:1,reason:'Fonte indisponível; revisar lote.'};await groups.mutate(h.db,'admin','unlink',undo);
+ h.store.set('transactions/p2',original);await groups.mutate(h.db,'admin','confirm',await h.groupInput());
+ await assert.rejects(()=>groups.mutate(h.db,'admin','unlink',{...undo,requestId:randomUUID()}),/mudou/);
+});

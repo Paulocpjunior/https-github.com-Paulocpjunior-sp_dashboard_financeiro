@@ -18,7 +18,7 @@ function comparePayments(statements, payments) {
   }).map(row => ({...row,status:row.statement.amountCents >= 0 ? 'outside-scope' : !row.candidates.length ? 'no-candidate' : row.candidates.length>1 || links.get(row.candidates[0].id)>1 ? 'ambiguous' : 'suggestion'}));
   const counts = Object.fromEntries(['suggestion','ambiguous','no-candidate','outside-scope'].map(s=>[s,rows.filter(r=>r.status===s).length]));
   return {rows,counts,paymentCount:eligible.length,unmatchedPayments:eligible.filter(p=>!links.has(p.id)),
-    coverage:'Somente baixas nativas de contas a pagar da conta Itaú 3145 / 99791-6, sem estornos. Pagamentos legados, contas pendentes, recebimentos e pagamentos agrupados não são conciliados nesta etapa.',
+    coverage:'Sugestões individuais de baixas nativas da conta Itaú 3145 / 99791-6, sem estornos. Grupos exigem seleção e conferência manual. Pagamentos antigos têm revisão separada; contas pendentes e recebimentos ficam fora desta comparação.',
     criterion:'Mesmo valor efetivamente pago, mesma conta bancária e diferença de até 3 dias corridos. Sugestões não confirmam identidade do favorecido nem registram conciliação.'};
 }
 module.exports={comparePayments,reviewHint};

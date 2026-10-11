@@ -2,7 +2,7 @@
 
 ## Status do projeto — 11/10/2026
 
-Produção verificada: commit `0ea877563767ed6d237eed327a62d824b7796407` (PR #74). FiA publicada, autenticação e consulta de filtro verificadas no app. A aprovação independente permanece **desativada por decisão de Paulo**, sem alçada ou aprovadores a configurar agora.
+Produção verificada: commit `4cd56eda6d663cbff111ed3f4487326ebb9b4fb1` (PR #75). FiA publicada, autenticação e consulta de filtro verificadas no app. A aprovação independente permanece **desativada por decisão de Paulo**, sem alçada ou aprovadores a configurar agora.
 
 A investigação de 11/10 leu 46.459 documentos de transações em snapshot consistente, sem gravações financeiras. Três dos seis débitos têm candidatos legados por valor/data; não são vínculos confirmados. A conta bancária ausente nos candidatos impede assumir sua origem. Diferença entre último saldo disponível e saldo contábil: R$ 2.157,03, ainda sem causa comprovada.
 
@@ -24,7 +24,7 @@ Arquitetura e critérios de entrega: [Integrações bancárias](arquitetura-inte
 ### Próxima sequência
 
 1. Comparação bancária: nesta etapa, sugestões entre débitos OFX e baixas nativas a pagar. Mesmo valor, mesma conta e até três dias corridos; estornos excluídos. Não registra conciliação nem baixa. Pagamentos legados, pendentes, recebimentos e agrupamentos permanecem fora do escopo inicial.
-2. Vínculos legados documentados publicados (PR #74). Nesta branch: extensão para baixas nativas individuais, inclusive parciais, conferidas contra o evento de auditoria; exclusividade compartilhada com os vínculos antigos, proteção contra estorno, histórico e desfazimento. Testes sintéticos e prévia local; publicação e homologação real de confirmação nativa pendentes. Agrupamentos permanecem como etapa posterior.
+2. Vínculos legados documentados publicados (PR #74). Baixas nativas individuais publicadas (PR #75), inclusive parciais; confirmação real ainda depende de baixa elegível no extrato. Nesta branch: grupos manuais de 2 a 25 baixas nativas, soma exata, auditoria por baixa, exclusividade compartilhada, confirmação administrativa e desfazimento integral. Publicação e homologação real de grupo pendentes; nenhum grupo real foi criado.
 3. Régua de comunicação: o INVITE atual gera arquivos ICS/EML e anexos, sem envio automático pelo servidor. Implementar envio agendado e comprovação de entrega; validação dos destinatários e interrupção de lembretes após pagamento confirmado.
 4. FiA financeira: publicada e habilitada; relê o recorte no Firestore e consulta Vertex AI sem chave no navegador. Consulta de filtro homologada em produção; análises financeiras ainda exigem validação pela equipe. Detalhes em [MiA financeira](mia-financeira.md).
 5. Alçadas por usuário e fila consolidada de aprovações ficam adiadas enquanto a política estiver desativada.

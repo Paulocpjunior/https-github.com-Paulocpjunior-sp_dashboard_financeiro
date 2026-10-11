@@ -44,7 +44,7 @@ async function sourceEvidence(db,reader,statement,transaction,statementId,transa
  if(!statement||statement.accountId&&statement.accountId!==ACCOUNT||!isoDate(statement.date)||!Number.isSafeInteger(statement.amountCents)||statement.amountCents>=0||!statement.fitid||payment.amountCents!==-statement.amountCents||Math.abs(Date.parse(payment.date)-Date.parse(statement.date))/86400000>3)fail('O débito não corresponde aos critérios desta baixa.');
  return {statement:{id:statementId,date:statement.date,amountCents:statement.amountCents,fitid:statement.fitid,name:String(statement.name||statement.memo||'').slice(0,500)},payment,fingerprint:hash({statement,transaction,event})};
 }
-const readerFor=db=>({get:ref=>ref.get()});
+const readerFor=db=>({get:ref=>ref.get(),getAll:(...items)=>db.getAll(...items)});
 const paymentKey=(transactionId,paymentRequestId)=>paymentRequestId?hash([ACCOUNT,'native',transactionId,paymentRequestId]):key(transactionId);
 async function preview(db,uid,input,kind='legacy'){
  const statementId=identifier(input.statementId),transactionId=identifier(input.transactionId);
@@ -108,7 +108,12 @@ async function list(db,start,end){
  const page=await db.collection('bankLegacyLinks').where('statementDate','>=',start).where('statementDate','<=',end).limit(1001).get();
  if(page.size>1000)fail('Mais de 1.000 vínculos. Reduza o período.');
  const records=page.docs.map(d=>d.data()).filter(r=>r.accountId===ACCOUNT);
- const active=records.filter(r=>r.active), states=new Map();
+ const groups=records.filter(r=>r.active&&r.kind==='native-group');
+ const active=records.filter(r=>r.active&&r.kind!=='native-group'), states=new Map();
+ for(const r of groups){
+  try{const current=await require('./itau-group-links').evidence(db,readerFor(db),r.statementId,r.members);states.set(r.statementId,current.fingerprint===r.fingerprint?'current':'changed');}
+  catch(error){if(error.status!==409)throw error;states.set(r.statementId,'changed');}
+ }
  for(let i=0;i<active.length;i+=50){
   const batch=active.slice(i,i+50),snapshots=await db.getAll(...batch.flatMap(r=>[refs(db,r.statementId).statement,db.collection('transactions').doc(r.transactionId)]));
   await Promise.all(batch.map(async(r,j)=>{const s=snapshots[j*2],t=snapshots[j*2+1];
@@ -123,4 +128,4 @@ async function list(db,start,end){
  }
  return records.map(r=>({...r,validation:r.active?states.get(r.statementId):'inactive'}));
 }
-module.exports={preview,mutate,list,evidence,admin};
+module.exports={preview,mutate,list,evidence,admin,hash,refs,paymentKey,identifier,text,fail,nativePayment,auditRef};
