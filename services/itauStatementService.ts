@@ -40,7 +40,14 @@ export async function readOfxFile(file: File): Promise<OfxFile> {
   return { base64: btoa(binary), fileName: file.name };
 }
 export const ItauStatements = {
+  compare: (start:string,end:string) => request<PaymentComparison>(`payment-comparison?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
   list: (start: string, end: string) => request<{ rows: StatementRow[]; imports: StatementImport[] }>(`statements?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
   preview: (file: OfxFile) => request<StatementPreview>('preview', file),
   commit: (file: OfxFile, confirmHash: string) => request<{ alreadyImported: boolean; inserted: number; duplicates: number }>('import', { ...file, confirmHash }),
 };
+
+export interface PaymentComparison {
+ rows:Array<{statement:StatementRow;status:'suggestion'|'ambiguous'|'no-candidate'|'outside-scope';candidates:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>}>;
+ counts:Record<string,number>;coverage:string;criterion:string;paymentCount:number;unmatchedPayments:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>;
+ start:string;end:string;paymentStart:string;paymentEnd:string;generatedAt:string;
+}

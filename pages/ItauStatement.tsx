@@ -3,8 +3,9 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { Landmark, Upload, ShieldCheck } from 'lucide-react';
 import Layout from '../components/Layout';
+import StatementPaymentComparison from '../components/StatementPaymentComparison';
 import { auth, db } from '../firebase';
-import { ItauStatements, OfxFile, StatementImport, StatementPreview, StatementRequestError, StatementRow, readOfxFile } from '../services/itauStatementService';
+import { ItauStatements, PaymentComparison, OfxFile, StatementImport, StatementPreview, StatementRequestError, StatementRow, readOfxFile } from '../services/itauStatementService';
 
 const money = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const displayDate = (value: string) => value.split('-').reverse().join('/');
@@ -19,10 +20,11 @@ function Movements({ rows }: { rows: StatementRow[] }) {
   </tbody></table></div>;
 }
 export default function ItauStatement() {
-  const [access, setAccess] = useState({ ready: false, read: false, import: false });
+  const [access, setAccess] = useState({ ready: false, read: false, import: false, compare:false });
   const [start, setStart] = useState(() => `${today().slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
   const [result, setResult] = useState<{ rows: StatementRow[]; imports: StatementImport[] } | null>(null);
+  const [comparison,setComparison] = useState<PaymentComparison|null>(null);
   const [preview, setPreview] = useState<StatementPreview | null>(null);
   const [file, setFile] = useState<OfxFile | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,21 +36,22 @@ export default function ItauStatement() {
     let unsubscribeProfile = () => {};
     const unsubscribeAuth = onAuthStateChanged(auth, user => {
       unsubscribeProfile(); generation.current++;
-      setResult(null); setPreview(null); setFile(null); setBusy(false);
-      if (!user) { setAccess({ ready: true, read: false, import: false }); return; }
+      setResult(null); setComparison(null); setPreview(null); setFile(null); setBusy(false);
+      if (!user) { setAccess({ ready: true, read: false, import: false, compare:false }); return; }
       unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), snapshot => {
         const p = snapshot.data();
         const active = p?.active === true && !['deleted', 'blocked'].includes(p?.status);
         const read = active && (p?.role === 'admin' || p?.financialPermissions?.includes('itau.openfinance.read') === true);
         const write = read && (p?.role === 'admin' || p?.financialPermissions?.includes('itau.statement.import') === true);
         generation.current++; setBusy(false);
-        setAccess({ ready: true, read: !!read, import: !!write });
+        setAccess({ ready: true, read: !!read, import: !!write, compare:!!read && (p?.role==='admin' || p?.financialPermissions?.some((x:string)=>['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'].includes(x))) });
+        setComparison(null);
         if (!read) setResult(null);
         // A pending response cannot resurrect data after profile revocation.
         setPreview(null); setFile(null);
       }, () => {
-        generation.current++; setBusy(false); setResult(null); setPreview(null); setFile(null);
-        setAccess({ ready: true, read: false, import: false });
+        generation.current++; setBusy(false); setResult(null); setComparison(null); setPreview(null); setFile(null);
+        setAccess({ ready: true, read: false, import: false, compare:false });
       });
     });
     return () => { generation.current++; unsubscribeAuth(); unsubscribeProfile(); };
@@ -59,7 +62,7 @@ export default function ItauStatement() {
     try { await action(); } catch (e) {
       if (id !== generation.current) return;
       if (e instanceof StatementRequestError && [401,403].includes(e.status)) {
-        setResult(null); setPreview(null); setFile(null);
+        setResult(null); setComparison(null); setPreview(null); setFile(null);
       }
       setError(e instanceof Error ? e.message : 'Operação não concluída.');
     } finally { if (id === generation.current) setBusy(false); }
@@ -72,11 +75,13 @@ export default function ItauStatement() {
       <section className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-4 text-sm"><strong>Extrato por arquivo OFX</strong><p>Os dados são atualizados por importação manual. A conexão automática com o Itaú aguarda habilitação. Confira abaixo o período e a data de cada importação.</p></section>
       {error && <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-300 p-4 text-red-700 dark:text-red-300">{error}</div>}
       {message && <div role="status" className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-4 text-emerald-700 dark:text-emerald-300">{message}</div>}
-      <form className={`${card} flex flex-wrap gap-4 items-end`} onSubmit={event => { event.preventDefault(); const id = ++generation.current; setResult(null); void run(async () => { const data = await ItauStatements.list(start,end); if(id === generation.current) setResult(data); }); }}>
-        <label className="grid gap-1 text-sm font-medium">De<input className={input} type="date" required value={start} disabled={busy} onChange={e => { setStart(e.target.value); setResult(null); }}/></label>
-        <label className="grid gap-1 text-sm font-medium">Até<input className={input} type="date" required value={end} disabled={busy} onChange={e => { setEnd(e.target.value); setResult(null); }}/></label>
+      <form className={`${card} flex flex-wrap gap-4 items-end`} onSubmit={event => { event.preventDefault(); const id = ++generation.current; setResult(null); setComparison(null); void run(async () => { const data = await ItauStatements.list(start,end); if(id === generation.current) setResult(data); }); }}>
+        <label className="grid gap-1 text-sm font-medium">De<input className={input} type="date" required value={start} disabled={busy} onChange={e => { setStart(e.target.value); setResult(null); setComparison(null); }}/></label>
+        <label className="grid gap-1 text-sm font-medium">Até<input className={input} type="date" required value={end} disabled={busy} onChange={e => { setEnd(e.target.value); setResult(null); setComparison(null); }}/></label>
         <button className={button} disabled={busy || !validRange}>Consultar extrato</button><span className="text-xs text-slate-500">Até 93 dias por consulta.</span>
       </form>
+      {access.compare && <section className={card}><h2 className="font-semibold">Conferência de pagamentos</h2><p className="text-sm text-slate-500 my-2">Compare o OFX importado com as baixas nativas de contas a pagar. Nenhuma sugestão dá baixa ou confirma conciliação.</p><button className={button} disabled={busy||!validRange} onClick={()=>{const id=++generation.current;setComparison(null);void run(async()=>{const data=await ItauStatements.compare(start,end);if(id===generation.current)setComparison(data);});}}>Comparar baixas com o extrato</button></section>}
+      {comparison && <StatementPaymentComparison comparison={comparison}/>}
       {access.import && <section className={card}><h2 className="font-semibold flex gap-2 items-center"><Upload size={19}/>Importar extrato OFX</h2><p className="text-sm text-slate-500 mt-1 mb-4">Selecione o arquivo original do Itaú. Confira a prévia antes de salvar. Até 2 MB e 400 movimentações por arquivo.</p><label className="text-sm font-medium">Arquivo OFX<input ref={uploadRef} type="file" accept=".ofx" disabled={busy} className="block mt-2 max-w-full" onChange={event => {
         const selected = event.target.files?.[0]; const id = ++generation.current; setPreview(null); setFile(null);
         if (!selected) return;
@@ -90,7 +95,7 @@ export default function ItauStatement() {
         {preview.duplicateCount > 0 && <p className="text-sm">As movimentações idênticas já existentes serão preservadas e não serão gravadas novamente.</p>}
         <Movements rows={preview.rows}/><p className="text-sm text-slate-500">A importação alimenta somente o extrato bancário. Não cria lançamentos nem dá baixa nas contas a pagar ou receber.</p>
         <div className="flex gap-3"><button className={button} disabled={busy || preview.alreadyImported || preview.conflicts.length > 0 || !file} onClick={() => {
-          const id = ++generation.current; void run(async () => { const saved = await ItauStatements.commit(file!, preview.fileHash); if (id !== generation.current) return; setMessage(saved.alreadyImported ? 'Arquivo já importado anteriormente.' : `Importação concluída: ${saved.inserted} novas movimentações; ${saved.duplicates} já existentes preservadas.`); setPreview(null); setFile(null); setResult(null); if(uploadRef.current) uploadRef.current.value = ''; });
+          const id = ++generation.current; void run(async () => { const saved = await ItauStatements.commit(file!, preview.fileHash); if (id !== generation.current) return; setMessage(saved.alreadyImported ? 'Arquivo já importado anteriormente.' : `Importação concluída: ${saved.inserted} novas movimentações; ${saved.duplicates} já existentes preservadas.`); setPreview(null); setFile(null); setResult(null); setComparison(null); if(uploadRef.current) uploadRef.current.value = ''; });
         }}>Confirmar importação</button><button className="rounded-lg border px-4 py-2" disabled={busy} onClick={() => { generation.current++; setPreview(null); setFile(null); if(uploadRef.current) uploadRef.current.value = ''; }}>Cancelar</button></div>
       </section>}
       {result && <><section className="grid sm:grid-cols-3 gap-4"><div className={card}><p className="text-sm text-slate-500">Entradas no período</p><strong className="text-xl text-emerald-700">{money(totals.credits)}</strong></div><div className={card}><p className="text-sm text-slate-500">Saídas no período</p><strong className="text-xl text-red-600">{money(totals.debits)}</strong></div><div className={card}><p className="text-sm text-slate-500">Variação das movimentações</p><strong className="text-xl">{money(totals.credits + totals.debits)}</strong><p className="text-xs text-slate-500">Não representa o saldo da conta.</p></div></section>

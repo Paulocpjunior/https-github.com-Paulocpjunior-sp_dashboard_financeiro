@@ -9,16 +9,17 @@ function interval(start, end) {
   const valid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
   if (!valid(start) || !valid(end) || start > end || (Date.parse(end) - Date.parse(start)) / 86400000 > 92) throw new StatementError('Selecione um período válido de até 93 dias.');
 }
-function createStatementHandler({ getServices, readBody, sendJson }) {
+function createStatementHandler({ getServices, readBody, sendJson, readLedger = require('./payable-ledger').readPaymentLedger }) {
   return async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
     if (!url.pathname.startsWith('/api/itau/')) return false;
     let userId;
     try {
+      const isComparison = request.method === 'GET' && url.pathname === '/api/itau/payment-comparison';
       const isRead = request.method === 'GET' && url.pathname === '/api/itau/statements';
       const isPreview = request.method === 'POST' && url.pathname === '/api/itau/preview';
       const isCommit = request.method === 'POST' && url.pathname === '/api/itau/import';
-      if (!isRead && !isPreview && !isCommit) throw new StatementError('Rota não encontrada.', 404);
+      if (!isRead && !isPreview && !isCommit && !isComparison) throw new StatementError('Rota não encontrada.', 404);
       const { adminAuth, adminDb: db } = getServices();
       const bearer = String(request.headers.authorization || '').match(/^Bearer (\S+)$/);
       if (!bearer) throw new StatementError('Entre novamente para consultar o extrato.', 401);
@@ -26,12 +27,24 @@ function createStatementHandler({ getServices, readBody, sendJson }) {
       try { token = await adminAuth.verifyIdToken(bearer[1], true); } catch { throw new StatementError('Sessão expirada. Entre novamente.', 401); }
       userId = token.uid;
       const profile = await db.collection('users').doc(userId).get();
-      const allowed = data => permitted(data, READ) && (isRead || permitted(data, IMPORT));
+      const allowed = data => permitted(data, READ) && (isRead || isComparison || permitted(data, IMPORT)) && (!isComparison || require('./payable-permissions').capabilities(data).read);
       if (!profile.exists || !allowed(profile.data())) throw new StatementError('Sem permissão para esta operação na conta Itaú 3145 / 99791-6.', 403);
       const account = db.collection('bankStatements').doc(ACCOUNT);
       const audit = db.collection('bankStatementAudit');
       const actor = { userId, accountId: ACCOUNT, at: new Date().toISOString() };
-      if (isRead) {
+      if (isComparison) {
+        const start=url.searchParams.get('start'),end=url.searchParams.get('end'); interval(start,end);
+        const expand=(date,days)=>new Date(Date.parse(date+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);
+        const [bank,ledger]=await Promise.all([
+          account.collection('entries').where('date','>=',start).where('date','<=',end).orderBy('date').limit(1001).get(),
+          readLedger(db,expand(start,-3),expand(end,3)),
+        ]);
+        if(bank.size>1000) throw new StatementError('Mais de 1.000 movimentações. Reduza o período.');
+        if(!allowed((await db.collection('users').doc(userId).get()).data())) throw new StatementError('Acesso revogado.',403);
+        const result=require('./itau-payment-comparison').comparePayments(bank.docs.map(d=>d.data()),ledger.rows);
+        await audit.add({...actor,action:'payment-comparison',start,end,count:bank.size});
+        sendJson(request,response,200,{...result,start,end,paymentStart:expand(start,-3),paymentEnd:expand(end,3),generatedAt:new Date().toISOString()});
+      } else if (isRead) {
         const start = url.searchParams.get('start'), end = url.searchParams.get('end');
         interval(start, end);
         const [transactions, imports] = await Promise.all([
