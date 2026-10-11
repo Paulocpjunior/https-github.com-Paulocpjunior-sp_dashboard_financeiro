@@ -4,8 +4,8 @@ Comparação de capacidades, não equivalência comercial ou homologação dos c
 
 | Prioridade | Referência | Situação do Financeiro | Entrega necessária e aceite |
 |---|---|---|---|
-| 1 | Nibo: conciliação inteligente e importação bancária | OFX importado; sugestões apenas para baixas nativas, sem confirmação de conciliação | Triagem e candidatos legados publicados. Vínculos legados e nativos individuais publicados nos PRs #74/#75. Grupos manuais de baixas nativas preparados nesta branch, com soma exata e histórico, sem segunda baixa. Não inferir favorecido por valor. |
-| 2 | Conta Azul: cobranças recorrentes e automáticas | Recorrências a pagar e emissão de boleto disponíveis; INVITE prepara arquivo | Régua com destinatário validado, PDF/demonstrativo, registro de envio, retentativa idempotente e interrupção após liquidação. Não chamar geração de EML de entrega. |
+| 1 | Nibo: conciliação inteligente e importação bancária | OFX importado; sugestões apenas para baixas nativas, sem confirmação de conciliação | Triagem e candidatos legados publicados. Vínculos legados e nativos individuais publicados nos PRs #74/#75. Grupos manuais de baixas nativas publicados nos PRs #76/#77, com soma exata e histórico, sem segunda baixa. Não inferir favorecido por valor. |
+| 2 | Conta Azul: cobranças recorrentes e automáticas | Recorrências a pagar e emissão de boleto disponíveis; INVITE prepara arquivo | Base da régua preparada com destinatário validado, reserva exclusiva, revalidação por pagamento e resultado incerto sem reenvio. Faltam transporte autorizado, interface, agendador e comprovação de entrega. Não chamar geração de EML de entrega. |
 | 3 | Assistência operacional integrada | FiA autenticada publicada e habilitada (PR #72) | Primeira versão somente consulta entregue; filtro validado em produção. Ampliar a homologação das análises e das referências aos registros. |
 | 4 | Conexão bancária automática | API direta Itaú ainda não habilitada; OFX intermediário | Sincronização incremental, cobertura e idempotência, observabilidade e cruzamento com Boleto Cloud sem duplicar baixas. |
 
