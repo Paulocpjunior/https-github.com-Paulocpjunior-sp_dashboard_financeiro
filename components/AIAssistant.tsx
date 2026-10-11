@@ -13,6 +13,7 @@ interface Message {
 interface AIAssistantProps {
   onApplyFilters: (filters: Partial<FilterState>) => void;
   transactions: Transaction[];
+  service?: typeof GeminiService;
 }
 
 const SUGGESTIONS = [
@@ -23,17 +24,22 @@ const SUGGESTIONS = [
   "Mostrar gastos com impostos"
 ];
 
-const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions }) => {
+const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions, service = GeminiService }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const isAIAvailable = GeminiService.isAvailable();
+  const [isAIAvailable, setAIAvailable] = useState(false);
+  const [availability, setAvailability] = useState('Verificando disponibilidade');
+  useEffect(() => {
+    if (!isOpen) return;
+    let current = true;
+    service.status().then(status => { if(current){setAIAvailable(status.enabled);setAvailability(status.enabled?'Consulta autenticada · somente leitura':'Habilitação pendente no servidor');} }).catch(() => {if(current){setAIAvailable(false);setAvailability('Servidor indisponível ou sessão expirada');}});
+    return () => {current=false;};
+  }, [isOpen, service]);
   const [messages, setMessages] = useState<Message[]>(() => [
     {
       role: 'assistant',
-      content: isAIAvailable
-        ? 'Olá! Sou seu assistente CashFlow Pro. Como posso ajudar com suas finanças hoje?'
-        : 'IA financeira desativada neste ambiente por segurança. Os filtros manuais seguem disponíveis normalmente.',
+      content: 'Olá! Sou a MiA do Financeiro. Posso ajudar a filtrar e analisar o recorte selecionado no painel. Minhas consultas não alteram lançamentos. Para análise, selecione até 300 registros.',
     },
   ]);
   
@@ -49,7 +55,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
 
   const handleSend = async (textOverride?: string) => {
     const textToProcess = textOverride || query;
-    if (!textToProcess.trim() || isLoading) return;
+    if (!textToProcess.trim() || isLoading || !isAIAvailable) return;
 
     const userMessage: Message = { role: 'user', content: textToProcess };
     setMessages(prev => [...prev, userMessage]);
@@ -57,17 +63,17 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
     setIsLoading(true);
 
     try {
-      const mode = await GeminiService.detectMode(textToProcess);
+      const mode = await service.detectMode(textToProcess);
       let assistantMessage: Message = { role: 'assistant', content: '', mode };
 
       if (mode === 'forecast') {
-        const forecast = await GeminiService.forecastCashFlow(transactions);
+        const forecast = await service.forecastCashFlow(transactions);
         assistantMessage.content = forecast;
       } else if (mode === 'analysis') {
-        const analysis = await GeminiService.analyzeData(textToProcess, transactions);
+        const analysis = await service.analyzeData(textToProcess, transactions);
         assistantMessage.content = analysis;
       } else {
-        const result = await GeminiService.interpretQuery(textToProcess);
+        const result = await service.interpretQuery(textToProcess);
         assistantMessage.content = result.explanation;
         if (Object.keys(result.filters).length > 0) {
           onApplyFilters(result.filters);
@@ -76,7 +82,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Desculpe, tive um problema ao processar sua solicitação.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: error instanceof Error ? error.message : 'Não foi possível consultar a MiA.' }]);
     } finally {
       setIsLoading(false);
     }
@@ -86,7 +92,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
     <div className="fixed bottom-6 right-6 z-50">
       {/* Chat Window */}
       {isOpen && (
-        <div className="absolute bottom-20 right-0 w-[400px] h-[600px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden transition-all animate-in slide-in-from-bottom-4">
+        <div className="absolute bottom-20 right-0 w-[min(400px,calc(100vw-3rem))] h-[min(600px,calc(100dvh-8rem))] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden transition-all animate-in slide-in-from-bottom-4">
           {/* Header */}
           <div className="p-4 bg-blue-600 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -94,16 +100,16 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
                 <Sparkles className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h3 className="text-white font-bold text-sm">IA Financeira</h3>
+                <h3 className="text-white font-bold text-sm">MiA · Financeiro</h3>
                 <div className="flex items-center gap-1">
                   <span className={`w-1.5 h-1.5 rounded-full ${isAIAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-amber-300'}`}></span>
                   <span className="text-[10px] text-blue-100 font-medium">
-                    {isAIAvailable ? 'Online e pronta' : 'Configuração segura pendente'}
+                    {availability}
                   </span>
                 </div>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white transition-colors">
+            <button aria-label="Fechar janela MiA" onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white transition-colors">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -185,7 +191,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
               />
               <button 
                 onClick={() => handleSend()}
-                disabled={!query.trim() || isLoading}
+                aria-label="Enviar pergunta à MiA"
+                disabled={!query.trim() || isLoading || !isAIAvailable}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 <Send className="h-4 w-4" />
@@ -197,6 +204,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions 
 
       {/* Toggle Button */}
       <button
+        aria-label={isOpen ? "Fechar MiA" : "Abrir MiA financeira"}
         onClick={() => setIsOpen(!isOpen)}
         className={`p-4 rounded-2xl shadow-2xl transition-all duration-300 flex items-center gap-2 group ${
           isOpen ? 'bg-slate-800 text-white rotate-90' : 'bg-blue-600 text-white hover:scale-110'
