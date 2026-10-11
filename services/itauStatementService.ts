@@ -41,7 +41,20 @@ export async function readOfxFile(file: File): Promise<OfxFile> {
   for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return { base64: btoa(binary), fileName: file.name };
 }
+export interface LegacyLinkPreview {
+ fingerprint:string;revision:number;
+ statement:{id:string;date:string;amountCents:number;name:string;fitid:string};
+ payment:{id:string;transactionId:string;date:string;amountCents:number;supplier:string;bankEvidence:'missing'|'same-account'};
+}
+export interface LegacyLink {
+ statementId:string;transactionId:string;active:boolean;revision:number;validation:'current'|'changed'|'missing'|'inactive';
+ statement:LegacyLinkPreview['statement'];payment:LegacyLinkPreview['payment'];
+ history:Array<{action:'confirm'|'unlink';at:string;actor:{uid:string;name:string};reason:string;reference?:string;transactionId:string}>;
+}
 export const ItauStatements = {
+ previewLegacyLink:(statementId:string,transactionId:string)=>request<LegacyLinkPreview>('legacy-links/preview',{statementId,transactionId}),
+ confirmLegacyLink:(body:{statementId:string;transactionId:string;requestId:string;revision:number;fingerprint:string;reason:string;reference:string;checkedEvidence:boolean})=>request('legacy-links/confirm',body),
+ unlinkLegacyLink:(body:{statementId:string;requestId:string;revision:number;reason:string})=>request('legacy-links/unlink',body),
   compare: (start:string,end:string,includeLegacy=false) => request<PaymentComparison>(`payment-comparison?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&includeLegacy=${includeLegacy}`),
   list: (start: string, end: string) => request<{ rows: StatementRow[]; imports: StatementImport[] }>(`statements?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
   preview: (file: OfxFile) => request<StatementPreview>('preview', file),
@@ -54,6 +67,7 @@ export interface LegacyComparison {
 }
 export interface PaymentComparison {
  legacy?:LegacyComparison;
+ legacyLinks?:LegacyLink[];
  rows:Array<{statement:StatementRow;reviewHint?:string;status:'suggestion'|'ambiguous'|'no-candidate'|'outside-scope';candidates:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>}>;
  counts:Record<string,number>;coverage:string;criterion:string;paymentCount:number;unmatchedPayments:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>;
  start:string;end:string;paymentStart:string;paymentEnd:string;generatedAt:string;

@@ -60,7 +60,7 @@ A prévia e o histórico exibem as referências separadamente. `LEDGERBAL` e sal
 
 Conferência local do arquivo real e soma independente concluídas; importação em produção e comparação com as baixas ainda dependem da publicação autorizada desta correção. O arquivo original e seus dados financeiros não estão no repositório. Fixtures de testes são fictícias.
 
-## Revisão separada de pagamentos antigos (preparada, não publicada)
+## Revisão separada de pagamentos antigos (PR #73 publicado)
 
 No Extrato Itaú, marque **Incluir conferência separada de pagamentos antigos** antes de comparar. Requer as mesmas permissões de extrato e contas a pagar, verificadas novamente antes de liberar o resultado. A consulta não altera lançamentos; registra apenas auditoria de leitura.
 
@@ -69,6 +69,21 @@ No Extrato Itaú, marque **Incluir conferência separada de pagamentos antigos**
 - Conta diferente da conta operacional fica fora; conta ausente aparece como comprovação necessária, sem presumir que pertence ao Itaú.
 - Mesmo valor e até três dias geram apenas candidatos. Vários candidatos ou o mesmo pagamento em vários movimentos aparecem como ambíguos.
 - Limite de 5.000 documentos encontrados. Ao exceder, bloqueia o resultado e pede período menor. Leituras sequenciais não constituem snapshot global transacional.
-- A lista fica separada das sugestões nativas. Não existe nesta entrega botão de confirmação, baixa, estorno ou associação automática. Confirmar vínculo documentado continua como próxima etapa.
+- A lista fica separada das sugestões nativas. No PR #73 não havia confirmação de vínculo. A próxima etapa está descrita abaixo; não haverá baixa, estorno ou associação automática.
 
 Validação com fixtures sintéticas e prévia local; nenhuma gravação financeira usada para teste.
+
+
+## Vínculos legados auditados (preparados, não publicados)
+
+Administrador ativo pode abrir **Revisar vínculo**, conferir débito e pagamento, informar justificativa e referência do comprovante e marcar a conferência de favorecido/conta/documento. **Confirmar vínculo bancário** grava somente metadados. O nome do responsável vem do usuário autenticado no servidor.
+
+- Prévia e confirmação releem a movimentação e o lançamento. A confirmação compara a impressão dos dados completos e a revisão do vínculo; mudanças bloqueiam a operação.
+- Uma transação Firestore controla a exclusividade por débito e pagamento, revalida o administrador, grava o histórico e registra a operação idempotente. O mesmo pagamento não pode ser associado a dois débitos pela ferramenta.
+- **Desfazer vínculo** exige justificativa e revisão atual. Libera o pagamento para nova revisão e preserva o histórico. Não estorna a baixa.
+- Ao consultar, vínculos ativos com fonte modificada ou ausente são marcados para revisão. Não há correção ou desvinculação automática.
+- Apenas pagamentos legados, valor pago explícito igual ao débito e até três dias de diferença. Não abrange baixas nativas, créditos, rateios, lotes ou pagamentos de valor diferente. A referência textual do comprovante não constitui upload nem verificação automática do documento; a confirmação depende da revisão humana.
+- Armazenamento: `bankLegacyLinks`, `bankLegacyPaymentLocks`, `bankLegacyLinkOperations`, mais eventos em `bankStatementAudit`. As coleções novas entram no backup padrão. Clientes Firestore continuam sem acesso direto; as rotas autenticadas do servidor aplicam as permissões.
+- A leitura dos vínculos limita-se a 1.000 por período; cada histórico comporta 100 ações. Limites bloqueiam resultados/operações em vez de truncar silenciosamente.
+
+Testes de concorrência, repetição, mudança de fonte, revogação, histórico e preservação dos documentos financeiros são sintéticos. Nenhum vínculo real foi confirmado para testar a interface. A homologação com comprovante verdadeiro permanece pendente após publicação autorizada.

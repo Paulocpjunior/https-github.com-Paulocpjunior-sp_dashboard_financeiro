@@ -255,3 +255,15 @@ test('legacy review is opt-in, protected, rechecked and separate from native sug
  let revoked;revoked=harness(profile,async()=>({rows:[]}),async()=>{revoked.store.set('users/u1',{...profile,active:false});return {rows:[]};});
  assert.equal((await revoked.call(path+'&includeLegacy=true',null,'valid','GET')).status,403);
 });
+
+test('legacy link routes deny non-admins and anonymous requests before reading sources',async()=>{
+ const operatorWithRead=harness({...operator,financialPermissions:['itau.openfinance.read','payables.read']});
+ for(const action of ['preview','confirm','unlink']){
+  assert.equal((await operatorWithRead.call('legacy-links/'+action,{})).status,403);
+  assert.equal((await operatorWithRead.call('legacy-links/'+action,{},'')).status,401);
+ }
+ assert.equal(operatorWithRead.getQueryCount(),0);
+ const admin=harness({active:true,role:'admin'});
+ assert.equal((await admin.call('legacy-links/preview',null)).status,400);
+ assert.equal((await admin.call('legacy-links/preview',{statementId:'../invalid',transactionId:'p1'})).status,400);
+});
