@@ -20,7 +20,7 @@ function projectPayments(events, start, end) {
     seen.add(key);
     if (reversed.has(key)) continue;
     if (p.date < start || p.date > end) continue;
-    rows.push({id:key, transactionId:event.transactionId, date:p.date, amountCents:p.amountCents,
+    rows.push({id:key, paymentRequestId:p.requestId, transactionId:event.transactionId, date:p.date, amountCents:p.amountCents,
       supplier:p.supplier || event.after.description || event.after.client || '', bankAccount:p.bankAccount || '',
       method:p.method || '', actor:p.actor || '', recordedAt:p.at || event.at || ''});
   }
