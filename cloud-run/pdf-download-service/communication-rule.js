@@ -87,8 +87,10 @@ async function execute({id,store,readSource,authorize,prepare,provider,enabled=f
  try {
   const receipt=await provider.send({...artifacts,idempotencyKey:job.id,from:job.sender,replyTo:job.replyTo,to:job.recipient.email});
   // Provider acceptance is NOT a delivery receipt. Ambiguous outcomes never auto-retry.
-  result=receipt?.accepted===true&&typeof receipt.messageId==='string'&&receipt.messageId.length>0&&receipt.messageId.length<=500
-   ?{status:'accepted',messageId:receipt.messageId}
+  const messageId=typeof receipt?.messageId==='string'&&receipt.messageId.length>0&&receipt.messageId.length<=500?receipt.messageId:null;
+  const correlation=receipt?.provider==='microsoft-graph'&&receipt.correlationId===job.id;
+  result=receipt?.accepted===true&&(messageId||correlation)
+   ?{status:'accepted',...(messageId?{messageId}:{provider:'microsoft-graph',correlationId:job.id})}
    :{status:'unknown',reason:'provider-result-unconfirmed'};
  }catch{result={status:'unknown',reason:'provider-result-unconfirmed'};}
  // Persistence failure propagates, leaving the claimed job unavailable to another sender.

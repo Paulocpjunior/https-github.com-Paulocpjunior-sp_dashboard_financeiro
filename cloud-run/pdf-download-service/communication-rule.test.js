@@ -61,3 +61,7 @@ test('revoked authorization or recipient blocks delivery even after preparation'
  const h=harness(),job=make();await h.store.enqueue(job);let n=0;
  assert.equal((await execute({...h.options,id:job.id,authorize:async()=>++n===1})).reason,'authorization-revoked');assert.equal(h.sends(),0);
 });
+test('Graph correlation is accepted without inventing a message identifier or delivery',async()=>{
+ const h=harness(),job=make();await h.store.enqueue(job);h.setReceipt({accepted:true,provider:'microsoft-graph',correlationId:job.id});
+ const result=await execute({...h.options,id:job.id});assert.equal(result.status,'accepted');assert.equal(result.messageId,undefined);assert.equal(result.correlationId,job.id);
+});
