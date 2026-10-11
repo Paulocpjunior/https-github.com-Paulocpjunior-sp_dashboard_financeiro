@@ -350,3 +350,12 @@ test("extras require active catalog accounts and server sums item amounts", () =
   assert.throws(() => buildEntry(input({extraItems: [{account: catalog.extras[0], amount: "1"}]}), client, actor, undefined, {...catalog, extras: []}));
   assert.equal(buildEntry(input({extraItems: []}), client, actor).record.totalCobranca, 100.1);
 });
+test('enabled approval policy blocks direct paid payable creation while preserving pending and receivable flows',async()=>{
+ const h=harness();const state=require('./maintenance').initial();state.payableApproval={enabled:true,thresholdCents:10000};h.store.set('financialSettings/nativeCatalog',state);
+ const paid={requestId:randomUUID(),entry:payable({paid:true,paidAmount:'100.30',paymentDate:'2026-10-09'}),attachments:[]};
+ assert.equal((await h.call('preview',paid)).status,403);
+ assert.equal((await h.call('commit',paid)).status,403);
+ assert.equal((await h.call('preview',{...paid,entry:payable()})).status,200);
+ assert.equal((await h.call('preview',{...paid,entry:input({paid:true,paidAmount:'100.30',paymentDate:'2026-10-09'})})).status,200);
+ assert.equal([...h.store.keys()].filter(k=>k.startsWith('transactions/')).length,0);
+});

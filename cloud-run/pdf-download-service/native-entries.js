@@ -426,6 +426,8 @@ function createNativeEntryHandler({
       const actor = { uid, name: user.name || uid };
       // Fixed timestamp for the review hash; real timestamps are assigned on commit.
       const built = buildEntry(input, client, actor, "", catalog);
+      if(input.kind === "pagar" && built.record.status === "Pago" && catalogState.payableApproval?.enabled && Math.round(built.record.valorOriginal*100) >= catalogState.payableApproval.thresholdCents)
+        throw new EntryError("Esta conta exige aprovação independente. Cadastre como pendente e solicite aprovação em Gerenciar conta antes de concluir a baixa.",403);
       const metadata = upload.map(({ bytes, ...meta }) => meta);
       const previewHash = hash([built.record, metadata]);
       const id = "native-" + hash([uid, body.requestId]);
