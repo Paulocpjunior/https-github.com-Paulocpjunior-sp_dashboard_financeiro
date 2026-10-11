@@ -11,6 +11,12 @@ Produção confirmada em `/version.json`: commit `7658c86`, build `20261011T0900
 - Aprovação por outro responsável e limite global disponíveis, mas desativados. Nenhuma ativação está pendente de autorização neste momento: a decisão é continuar sem essa exigência.
 - Manutenção de cadastros e plano de contas, recorrências e provisões mensais fazem parte da plataforma. UNAS `Backup_Fin` continua para configuração posterior do usuário.
 
+### Duas frentes bancárias — decisão de Paulo
+
+A conta operacional é única: Itaú 3145 / 99791-6. O retorno de boletos pelo Boleto Cloud continua responsável pela baixa dos recebíveis vinculados. A futura API direta do Itaú alimentará a conciliação de entradas e saídas, incluindo contas a receber e a pagar. OFX é a fonte intermediária do extrato, não substitui o retorno dos boletos. A mesma liquidação não pode gerar duas baixas.
+
+Arquitetura e critérios de entrega: [Integrações bancárias](arquitetura-integracoes-bancarias.md). A API Itaú não está implementada/habilitada nesta etapa; conciliação automática e vínculos entre fontes permanecem pendentes.
+
 ### Próxima sequência
 
 1. Comparação bancária: nesta etapa, sugestões entre débitos OFX e baixas nativas a pagar. Mesmo valor, mesma conta e até três dias corridos; estornos excluídos. Não registra conciliação nem baixa. Pagamentos legados, pendentes, recebimentos e agrupamentos permanecem fora do escopo inicial.
