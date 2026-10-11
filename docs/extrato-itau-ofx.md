@@ -59,3 +59,16 @@ O arquivo também declarou CHARSET:1252 com bytes UTF-8. A leitura usa UTF-8 est
 A prévia e o histórico exibem as referências separadamente. `LEDGERBAL` e saldo disponível diário não são tratados como equivalentes: datas/composição podem divergir e nenhuma diferença é corrigida automaticamente. Créditos agregados de boletos não comprovam o recebimento de um título individual.
 
 Conferência local do arquivo real e soma independente concluídas; importação em produção e comparação com as baixas ainda dependem da publicação autorizada desta correção. O arquivo original e seus dados financeiros não estão no repositório. Fixtures de testes são fictícias.
+
+## Revisão separada de pagamentos antigos (preparada, não publicada)
+
+No Extrato Itaú, marque **Incluir conferência separada de pagamentos antigos** antes de comparar. Requer as mesmas permissões de extrato e contas a pagar, verificadas novamente antes de liberar o resultado. A consulta não altera lançamentos; registra apenas auditoria de leitura.
+
+- Pesquisa `paymentDate` ISO e `dataPagamento` ISO/brasileiro dentro do intervalo, acrescido de três dias. Deduplica pelo ID do documento. Não cobre registros sem essas datas ou em outros formatos; não é uma auditoria completa da base.
+- Exige saída paga, `valorPago` explícito positivo e datas coerentes. Não usa `valuePaid`/valor provisionado como substituto. Exclui registros nativos, estornados, excluídos e Wix.
+- Conta diferente da conta operacional fica fora; conta ausente aparece como comprovação necessária, sem presumir que pertence ao Itaú.
+- Mesmo valor e até três dias geram apenas candidatos. Vários candidatos ou o mesmo pagamento em vários movimentos aparecem como ambíguos.
+- Limite de 5.000 documentos encontrados. Ao exceder, bloqueia o resultado e pede período menor. Leituras sequenciais não constituem snapshot global transacional.
+- A lista fica separada das sugestões nativas. Não existe nesta entrega botão de confirmação, baixa, estorno ou associação automática. Confirmar vínculo documentado continua como próxima etapa.
+
+Validação com fixtures sintéticas e prévia local; nenhuma gravação financeira usada para teste.

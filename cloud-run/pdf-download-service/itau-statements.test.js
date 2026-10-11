@@ -54,7 +54,7 @@ test('permissions default deny, require explicit active state and separate read/
   assert.throws(()=>interval('2026-01-01','2026-09-30'));
 });
 
-function harness(profile = operator, readLedger) {
+function harness(profile = operator, readLedger, readLegacy) {
   const store = new Map([['users/u1',profile]]);
   let sequence = 0, queryCount = 0, queue = Promise.resolve();
   const snap = ref => ({ exists:store.has(ref.path), data:()=>store.get(ref.path) });
@@ -86,7 +86,7 @@ function harness(profile = operator, readLedger) {
       queue=run.catch(()=>{}); return run;
     },
   };
-  const handler=createStatementHandler({ readLedger, getServices:()=>({adminDb:db,adminAuth:{verifyIdToken:async token=>{if(token!=='valid')throw new Error('revoked'); return {uid:'u1'};}}}),readBody:async request=>Buffer.from(JSON.stringify(request.body)),sendJson:(_req,res,status,body)=>Object.assign(res,{status,body}) });
+  const handler=createStatementHandler({ readLedger, readLegacy, getServices:()=>({adminDb:db,adminAuth:{verifyIdToken:async token=>{if(token!=='valid')throw new Error('revoked'); return {uid:'u1'};}}}),readBody:async request=>Buffer.from(JSON.stringify(request.body)),sendJson:(_req,res,status,body)=>Object.assign(res,{status,body}) });
   const call=async(path,body,token='valid',method='POST')=>{const res={};await handler({url:`/api/itau/${path}`,method,headers:{authorization:token?`Bearer ${token}`:''},body},res);return res;};
   return {store,call,getQueryCount:()=>queryCount};
 }
@@ -235,4 +235,23 @@ test('review hints explain fees and SISPAG without creating financial matches', 
   assert.equal(result.paymentCount,0);
   assert.ok(result.rows.every(row=>row.candidates.length===0));
   assert.equal(JSON.stringify(rows),before);
+});
+
+test('legacy review is opt-in, protected, rechecked and separate from native suggestions',async()=>{
+ const profile={...operator,financialPermissions:['itau.openfinance.read','payables.read']};
+ let calls=0;
+ const legacy=async()=>{calls++;return {rows:[{...payment('old'),bankEvidence:'missing'}],examined:1,excluded:{},coverage:'test'};};
+ const denied=harness(operator,async()=>({rows:[]}),legacy);
+ assert.equal((await denied.call('payment-comparison?start=2026-09-01&end=2026-09-30&includeLegacy=true',null,'valid','GET')).status,403);
+ assert.equal(calls,0);
+ const h=harness(profile,async()=>({rows:[]}),legacy);
+ h.store.set(`bankStatements/${ACCOUNT}/entries/one`,parse(ofx()).rows[0]);
+ const path='payment-comparison?start=2026-09-01&end=2026-09-30';
+ await h.call(path,null,'valid','GET');assert.equal(calls,0);
+ const r=await h.call(path+'&includeLegacy=true',null,'valid','GET');
+ assert.equal(r.status,200);assert.equal(calls,1);
+ assert.equal(r.body.rows[0].status,'no-candidate');
+ assert.equal(r.body.legacy.rows[0].candidates[0].bankEvidence,'missing');
+ let revoked;revoked=harness(profile,async()=>({rows:[]}),async()=>{revoked.store.set('users/u1',{...profile,active:false});return {rows:[]};});
+ assert.equal((await revoked.call(path+'&includeLegacy=true',null,'valid','GET')).status,403);
 });

@@ -2,11 +2,11 @@
 
 ## Status do projeto — 11/10/2026
 
-Produção verificada nesta rodada: commit `253dabce6c7fcaf349d5b3c5e2f98195e3ecf42f`, build `20261011T102658Z-253dabc` (PR #69). OFX real importado com 18 movimentos e reimportação bloqueada como duplicada. A aprovação independente permanece **desativada por decisão de Paulo**, sem alçada ou aprovadores a configurar agora.
+Produção verificada: commit `4bba03fbb459d9856c608106fc379a20847ee1e9` (PR #72). FiA publicada, autenticação e consulta de filtro verificadas no app. A aprovação independente permanece **desativada por decisão de Paulo**, sem alçada ou aprovadores a configurar agora.
 
 A investigação de 11/10 leu 46.459 documentos de transações em snapshot consistente, sem gravações financeiras. Três dos seis débitos têm candidatos legados por valor/data; não são vínculos confirmados. A conta bancária ausente nos candidatos impede assumir sua origem. Diferença entre último saldo disponível e saldo contábil: R$ 2.157,03, ainda sem causa comprovada.
 
-A nova triagem de conferência está em desenvolvimento nesta branch: filtros por resultado, cobertura explícita de baixas nativas e orientação para tarifas/SISPAG. Não inclui pagamentos legados no algoritmo nem confirma conciliação.
+A triagem de baixas nativas e orientações para tarifas/SISPAG foi publicada no PR #70. A revisão separada de pagamentos antigos está preparada nesta branch, ainda sem publicação: consulta opcional, valor pago explícito, conta ausente sinalizada e ambiguidades preservadas. Não confirma vínculos nem registra baixas.
 
 ### Entregas recentes
 
@@ -26,7 +26,7 @@ Arquitetura e critérios de entrega: [Integrações bancárias](arquitetura-inte
 1. Comparação bancária: nesta etapa, sugestões entre débitos OFX e baixas nativas a pagar. Mesmo valor, mesma conta e até três dias corridos; estornos excluídos. Não registra conciliação nem baixa. Pagamentos legados, pendentes, recebimentos e agrupamentos permanecem fora do escopo inicial.
 2. Evoluir a conferência para vínculos documentados e tratamento de divergências, preservando revisão humana em correspondências ambíguas.
 3. Régua de comunicação: o INVITE atual gera arquivos ICS/EML e anexos, sem envio automático pelo servidor. Implementar envio agendado e comprovação de entrega; validação dos destinatários e interrupção de lembretes após pagamento confirmado.
-4. MiA financeira: serviço autenticado preparado; relê o recorte no Firestore e consulta Vertex AI sem chave no navegador. Ativação depende de publicação do novo SHA e `FINANCIAL_AI_ENABLED=true`. Detalhes em [MiA financeira](mia-financeira.md).
+4. FiA financeira: publicada e habilitada; relê o recorte no Firestore e consulta Vertex AI sem chave no navegador. Consulta de filtro homologada em produção; análises financeiras ainda exigem validação pela equipe. Detalhes em [MiA financeira](mia-financeira.md).
 5. Alçadas por usuário e fila consolidada de aprovações ficam adiadas enquanto a política estiver desativada.
 
 O bloco seguinte preserva o levantamento de 03/10. Contagens de inconsistências e dados faltantes são históricos; não houve nova auditoria dos lançamentos nesta atualização. Publicar novos commits continua exigindo autorização do SHA completo.
