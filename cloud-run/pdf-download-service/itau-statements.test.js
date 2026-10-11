@@ -260,6 +260,8 @@ test('legacy link routes deny non-admins and anonymous requests before reading s
  const operatorWithRead=harness({...operator,financialPermissions:['itau.openfinance.read','payables.read']});
  for(const action of ['preview','confirm','unlink']){
   assert.equal((await operatorWithRead.call('legacy-links/'+action,{})).status,403);
+  assert.equal((await operatorWithRead.call('native-links/'+action,{})).status,403);
+  assert.equal((await operatorWithRead.call('native-links/'+action,{},'')).status,401);
   assert.equal((await operatorWithRead.call('legacy-links/'+action,{},'')).status,401);
  }
  assert.equal(operatorWithRead.getQueryCount(),0);

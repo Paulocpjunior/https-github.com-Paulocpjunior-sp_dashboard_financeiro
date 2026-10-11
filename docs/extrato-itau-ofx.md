@@ -87,3 +87,13 @@ Administrador ativo pode abrir **Revisar vínculo**, conferir débito e pagament
 - A leitura dos vínculos limita-se a 1.000 por período; cada histórico comporta 100 ações. Limites bloqueiam resultados/operações em vez de truncar silenciosamente.
 
 Testes de concorrência, repetição, mudança de fonte, revogação, histórico e preservação dos documentos financeiros são sintéticos. Nenhum vínculo real foi confirmado para testar a interface. A homologação com comprovante verdadeiro permanece pendente após publicação autorizada.
+
+## Vínculos de baixas nativas — implementação preparada
+
+A revisão nativa recebe o identificador do lançamento e da baixa individual. Confere `payablePayments`, ausência de estorno em `payableReversals` e igualdade com o evento original de `payableAudit`. O valor comparado é o efetivamente pago naquele evento, inclusive pagamento parcial, nunca o total provisionado. Conta Itaú, valor idêntico e margem de três dias continuam obrigatórios; favorecido e comprovante precisam ser conferidos pelo administrador.
+
+Rotas autenticadas: `POST /api/itau/native-links/preview`, `/confirm` e `/unlink`. Operadores sem papel de administrador não confirmam. A confirmação relê fontes e permissões dentro de transação e compara a impressão digital da prévia. Estorno ou alteração posterior sinaliza revisão; desfazer vínculo não estorna a baixa.
+
+As coleções `bankLegacyLinks`, `bankLegacyPaymentLocks` e `bankLegacyLinkOperations` são compartilhadas com o fluxo anterior para preservar backups e impedir dois vínculos para o mesmo débito. Registros novos têm `kind: native` e `paymentRequestId`; registros antigos sem `kind` continuam legados. A trava de pagamento nativo é por lançamento + baixa, permitindo conciliar separadamente parcelas reais. Histórico e auditoria identificam a baixa. Nenhuma operação escreve em `transactions`, `payableAudit` ou nas movimentações do extrato.
+
+A confirmação/desfazimento usa os mesmos controles de repetição segura e versões do vínculo antigo. Histórico limitado a 100 ações por débito; consultas acima de 1.000 vínculos bloqueiam em vez de apresentar cobertura parcial. Pagamentos agrupados, créditos e conciliação automática por API Itaú continuam fora desta entrega. A validação local usa dados fictícios; não equivale a homologação bancária real.
