@@ -28,3 +28,12 @@ test('inactive categories block recurrence even after rename; account identity r
  assert.throws(()=>assertActiveCategory(s,'1 - Outro nome'),/inativada/);
  assert(sameAccount('01 - Nome anterior','1 - Nome atual'));assert(!sameAccount('2 - Nome','1 - Nome'));
 });
+test('approval policy is disabled by default, validates limits and survives catalog edits',()=>{
+ const state=initial();assert.equal(state.payableApproval,undefined);
+ const body={group:'payableApproval',revision:0,enabled:true,thresholdCents:10000,reason:'Controle de alçada'};
+ const policy=change(state,body).next;
+ assert.deepEqual(policy.payableApproval,{enabled:true,thresholdCents:10000});
+ const next=change(policy,{group:'categories',revision:1,label:'999 - Teste',active:true,reason:'Novo cadastro'}).next;
+ assert.deepEqual(next.payableApproval,policy.payableApproval);
+ for(const invalid of [{thresholdCents:-1},{thresholdCents:1.5},{thresholdCents:'100'},{enabled:'true'},{revision:4},{reason:''}])assert.throws(()=>change(state,{...body,...invalid}));
+});

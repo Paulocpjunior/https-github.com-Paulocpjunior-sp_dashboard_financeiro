@@ -247,6 +247,9 @@ async function handlePayables(ctx) {
   const actor = { uid, role:user.role, name: String(user.name || uid).trim() || uid };
   // The authenticated profile adds only a default name, never permission or a persistent catalog entry.
   const paymentCatalog = { ...catalog, authorizedBy: [...new Set([actor.name, ...catalog.authorizedBy])] };
+  const policy = catalogState.payableApproval || {enabled:false,thresholdCents:0};
+  const needsApproval = r => policy.enabled && nominal(r) >= policy.thresholdCents;
+  const approvalKey = (transactionId, requester, version, payment, upload) => hash([transactionId,requester,version,payment,upload.map(({bytes,...m})=>m),catalogState.revision]);
   const recheck = async (tx) => {
     const currentUser = (await (tx ? tx.get(userRef) : userRef.get())).data();
     if (!allowed(currentUser))
@@ -280,7 +283,12 @@ async function handlePayables(ctx) {
   if (request.method === "GET" && attachment) {
     const ref = db.collection("transactions").doc(attachment[1]);
     const row = payable((await ref.get()).data());
-    const meta = row.attachments?.find(a=>a.sha256 === attachment[2]);
+    let meta = row.attachments?.find(a=>a.sha256 === attachment[2]);
+    if(!meta) {
+      const approvals=await db.collection("payableApprovals").where("transactionId","==",attachment[1]).limit(201).get();
+      if(approvals.docs.length>200) fail("Mais de 200 solicitações: revisão necessária.");
+      meta=approvals.docs.map(d=>d.data()).filter(a=>a.version===hash(row)).flatMap(a=>a.attachments||[]).find(a=>a.sha256===attachment[2]);
+    }
     if (!meta || !env.NATIVE_ENTRY_ATTACHMENT_BUCKET) fail("Anexo não encontrado.",404);
     const [bytes] = await getBucket(env.NATIVE_ENTRY_ATTACHMENT_BUCKET).file(`native-finance/${attachment[1]}/${attachment[2]}`).download();
     await recheck();
@@ -298,8 +306,12 @@ async function handlePayables(ctx) {
     const settings = (
       await db.collection("payableInviteSettings").doc(id).get()
     ).data();
+    const approvalRows = await db.collection("payableApprovals").where("transactionId","==",id).limit(201).get();
+    if(approvalRows.docs.length>200) fail("Mais de 200 solicitações: revisão necessária.");
     await recheck();
     reply({
+      approvalPolicy:policy,
+      approvals:approvalRows.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.version===hash(r)&&a.catalogRevision===catalogState.revision),
       transaction: { ...r, id },
       version: hash(r),
       recipients: settings?.recipients || [],
@@ -330,6 +342,55 @@ async function handlePayables(ctx) {
       fail("Tentativa já utilizada com outros dados.");
     return snap.result;
   };
+  if (path === "approvals/request" || path === "approvals/decide") {
+    if(path.endsWith("request")) {
+      const current=(await ref.get()).data();
+      if(hash(current)!==b.version) fail("Conta alterada. Reabra a revisão.");
+      payment(current,b.payment,paymentCatalog);
+      const upload=files(b.attachments||[]);
+      if(upload.some(f=>f.kind!=="comprovante")) fail("Anexe somente comprovantes na baixa.",400);
+      if(upload.length&&!env.NATIVE_ENTRY_ATTACHMENT_BUCKET) fail("Armazenamento não configurado.",503);
+      for(const f of upload) await getBucket(env.NATIVE_ENTRY_ATTACHMENT_BUCKET).file(`native-finance/${id}/${f.sha256}`).save(f.bytes,{resumable:false,metadata:{contentType:f.type},preconditionOpts:{ifGenerationMatch:0}}).catch(e=>{if(Number(e.code)!==412)throw e;});
+    }
+    const result = await db.runTransaction(async tx => {
+      await recheck(tx);
+      const prior = replay((await tx.get(op)).data()); if(prior) return prior;
+      const current = (await tx.get(ref)).data();
+      if(hash(current)!==b.version) fail("Conta alterada. Reabra a revisão.");
+      pending(current);
+      if(!needsApproval(current)) fail("A política atual não exige aprovação desta conta.");
+      let ar, record;
+      const at = new Date().toISOString();
+      if(path.endsWith("request")) {
+        if(user.role!=="admin" && b.payment?.authorizedBy!==actor.name) fail("O responsável deve ser o usuário autenticado.",403);
+        payment(current,b.payment,paymentCatalog);
+        const upload=files(b.attachments||[]);
+        if(upload.some(f=>f.kind!=="comprovante")) fail("Anexe somente comprovantes na baixa.",400);
+        const key=approvalKey(id,uid,b.version,b.payment,upload);
+        ar=db.collection("payableApprovals").doc(key);
+        const existing=(await tx.get(ar)).data();
+        if(existing) {const result={approval:{id:key,...existing}};tx.create(op,{digest,result,at});return result;}
+        record={transactionId:id,version:b.version,catalogRevision:catalogState.revision,requesterUid:uid,requesterName:actor.name,payment:b.payment,attachments:upload.map(({bytes,...m})=>m),status:"pending",createdAt:at};
+      } else {
+        if(!/^[a-f0-9]{64}$/.test(b.approvalId||"") || !["approved","rejected"].includes(b.decision)) fail("Decisão inválida.",400);
+        const reason=String(b.reason||"").trim();
+        if(reason.length<5||reason.length>500) fail("Informe o motivo da decisão (5 a 500 caracteres).",400);
+        ar=db.collection("payableApprovals").doc(b.approvalId);
+        const previous=(await tx.get(ar)).data();
+        if(!previous||previous.transactionId!==id||previous.version!==b.version||previous.catalogRevision!==catalogState.revision||previous.status!=="pending") fail("Solicitação indisponível ou alterada.");
+        if(previous.requesterUid===uid) fail("Outro responsável deve aprovar esta baixa, inclusive para administradores.",403);
+        const requester=(await tx.get(db.collection("users").doc(previous.requesterUid))).data();
+        if(!require("./payable-permissions").permits(requester,"settle")) fail("Solicitante sem permissão de baixa.",403);
+        record={...previous,status:b.decision,approverUid:uid,approverName:actor.name,decidedAt:at,reason};
+      }
+      const result={approval:{id:ar.path.split("/").pop(),...record}};
+      tx.set(ar,record);
+      tx.create(db.collection("payableAudit").doc(hash([uid,b.requestId])),{action:"approval-"+record.status,transactionId:id,uid,at,approval:record});
+      tx.create(op,{digest,result,at});
+      return result;
+    });
+    reply(result); return;
+  }
   if (path === "reversal/preview" || path === "reversal/commit") {
     const result = await db.runTransaction(async tx => {
       await recheck(tx);
@@ -374,7 +435,9 @@ async function handlePayables(ctx) {
     const upload = files(b.attachments || []);
     if (upload.some((f) => f.kind !== "comprovante"))
       fail("Anexe somente comprovantes na baixa.", 400);
+    const approvalId = approvalKey(id,uid,b.version,b.payment,upload);
     const reviewHash = hash([
+      catalogState.revision,
       b.id,
       b.version,
       b.payment,
@@ -383,7 +446,8 @@ async function handlePayables(ctx) {
     ]);
     if (path.endsWith("preview")) {
       await recheck();
-      reply({ reviewHash, before: { id, ...r }, after: { ...r, ...patch } });
+      const approval=(await db.collection("payableApprovals").doc(approvalId).get()).data();
+      reply({ reviewHash, approvalRequired:needsApproval(r), approvalStatus:approval?.status||null, before: { id, ...r }, after: { ...r, ...patch } });
       return;
     }
     if (b.confirmHash !== reviewHash)
@@ -413,6 +477,13 @@ async function handlePayables(ctx) {
       const current = (await tx.get(ref)).data();
       if (hash(current) !== b.version) fail("Conta alterada durante a baixa.");
       payment(current, b.payment, paymentCatalog);
+      let approval=null;
+      if(needsApproval(current)) {
+        approval=(await tx.get(db.collection("payableApprovals").doc(approvalId))).data();
+        if(!approval||approval.status!=="approved"||approval.requesterUid!==uid||approval.approverUid===uid||approval.transactionId!==id||approval.version!==b.version||approval.catalogRevision!==catalogState.revision) fail("Baixa exige aprovação de outro responsável.",403);
+        const approver=(await tx.get(db.collection("users").doc(approval.approverUid))).data();
+        if(!require("./payable-permissions").permits(approver,"approve")) fail("Aprovador perdeu o direito de aprovação. Solicite revisão.",403);
+      }
       const at = new Date().toISOString();
       const record = {
         ...current,
@@ -431,6 +502,7 @@ async function handlePayables(ctx) {
           requestId: b.requestId,
           note: b.payment.note,
           origin: "manual",
+          approval: approval ? {id:approvalId,uid:approval.approverUid,name:approval.approverName,at:approval.decidedAt,reason:approval.reason} : null,
           date: b.payment.date,
           amountCents: Math.round(Number(b.payment.amount) * 100),
           interestCents: Math.round(Number(b.payment.interest || 0) * 100),

@@ -1,4 +1,4 @@
-const actions = ['read','settle','reverse','recurrence','invite'];
+const actions = ['read','settle','reverse','recurrence','invite','approve'];
 function permits(user, action) {
   if (!user || user.active !== true || ['blocked','deleted'].includes(user.status)) return false;
   return user.role === 'admin' || (actions.includes(action) && Array.isArray(user.financialPermissions) && user.financialPermissions.includes(`payables.${action}`));
@@ -12,7 +12,7 @@ function routeAllowed(user, method, path) {
     return false;
   }
   if (method !== 'POST') return false;
-  const action = path.startsWith('payment/') ? 'settle' : path.startsWith('reversal/') ? 'reverse' : path.startsWith('rules/') ? 'recurrence' : path.startsWith('invite/') ? 'invite' : null;
+  const action = path === 'approvals/decide' ? 'approve' : path === 'approvals/request' ? 'settle' : path.startsWith('payment/') ? 'settle' : path.startsWith('reversal/') ? 'reverse' : path.startsWith('rules/') ? 'recurrence' : path.startsWith('invite/') ? 'invite' : null;
   return action !== null && permits(user,action);
 }
 module.exports = {permits, capabilities, routeAllowed};

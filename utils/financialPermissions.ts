@@ -5,6 +5,7 @@ export const FINANCIAL_PERMISSION_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
+  {value:'payables.approve', label:'Aprovar baixa de outro responsável', description:'Aprovar ou rejeitar solicitações sujeitas à política de alçada. Não permite aprovar a própria baixa.'},
   {value:'payables.read', label:'Consultar gestão de contas a pagar', description:'Consultar a conta, histórico de baixas e relatório de pagamentos. Sem autorização para alterações.'},
   {value:'payables.settle', label:'Registrar baixa de contas a pagar', description:'Registrar pagamentos integrais ou parciais com auditoria. Não executa transferência bancária.'},
   {value:'payables.reverse', label:'Estornar baixa de contas a pagar', description:'Estornar a última baixa ativa com motivo e auditoria. Não executa devolução bancária.'},

@@ -18,6 +18,8 @@ const row: any = {
   attachments: [],
 };
 const readOnlyPreview = new URLSearchParams(window.location.search).get('access') === 'read';
+const approvalPreview = new URLSearchParams(window.location.search).get('access') === 'approve';
+let approvals:any[] = approvalPreview ? [{id:'fixture-approval',transactionId:'demo',version:'demo',status:'pending',requesterUid:'another-user',requesterName:'Colaborador fictício',attachments:[],payment:{date:'2026-10-11',amount:'150.00',mode:'full',interest:'0',fine:'0',discount:'0',supplier:'Fornecedor fictício',personType:'PJ',bankAccount:catalog.banks[0],method:catalog.paymentMethods[2],paidBy:catalog.paidBy[0],authorizedBy:'Colaborador fictício',note:'Fatura de demonstração'}}] : [];
 let rules: any[] = [];
 let previousPayment: any = null;
 async function demo(path: string, b?: any) {
@@ -29,10 +31,16 @@ async function demo(path: string, b?: any) {
       transaction: { ...row },
       catalog: {...catalog, authorizedBy: ["Administrador fictício", ...catalog.authorizedBy]},
       actor: {uid:"demo-user",role:"admin",name:"Administrador fictício"},
-      capabilities:{read:true,settle:!readOnlyPreview,reverse:!readOnlyPreview,recurrence:!readOnlyPreview,invite:!readOnlyPreview},
+      approvalPolicy:{enabled:approvalPreview,thresholdCents:10000},
+      approvals,
+      capabilities:{approve:approvalPreview,read:true,settle:!readOnlyPreview,reverse:!readOnlyPreview,recurrence:!readOnlyPreview,invite:!readOnlyPreview},
       version: "demo",
       recipients: [],
     };
+  if(path === 'approvals/decide') {
+    approvals=approvals.map(a=>a.id===b.approvalId?{...a,status:b.decision,reason:b.reason,approverName:'Administrador fictício'}:a);
+    return {approval:approvals[0]};
+  }
   if (path === "payment/preview" || path === "payment/commit") {
     const p = b.payment;
     const old = row.payableBalance || {paidCents:0,interestCents:0,fineCents:0,discountCents:0,remainingCents:15000};

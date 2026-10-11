@@ -10,7 +10,8 @@ export type FinancialPermission =
   | 'payables.settle'
   | 'payables.reverse'
   | 'payables.recurrence'
-  | 'payables.invite';
+  | 'payables.invite'
+  | 'payables.approve';
 
 export interface User {
   id: string;
