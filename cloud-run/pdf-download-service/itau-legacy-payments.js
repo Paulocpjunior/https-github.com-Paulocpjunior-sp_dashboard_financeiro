@@ -29,7 +29,7 @@ function projectLegacy(records, start, end) {
     rows.push({id:r.id,transactionId:r.id,date,amountCents,supplier:String(r.client || r.description || '').slice(0,300),bankAccount:bank,bankEvidence:unknown?'missing':'same-account'});
   }
   rows.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
-  return {rows,excluded,examined:records.length,coverage:'Consulta por paymentDate (AAAA-MM-DD) e dataPagamento (DD/MM/AAAA ou AAAA-MM-DD). Registros sem essas datas ou em outros formatos não são cobertos. Usa somente valorPago explícito; valor provisionado não substitui pagamento. Nenhum vínculo ou baixa é registrado.'};
+  return {rows,excluded,examined:records.length,coverage:'Consulta pagamentos com data e valor pago informados. Registros sem data válida ficam fora desta revisão; o valor provisionado não substitui o pagamento. Os candidatos ainda precisam de conferência e confirmação.'};
 }
 async function readLegacyPayments(db,start,end) {
   if (!isoDate(start) || !isoDate(end) || start>end || (Date.parse(end)-Date.parse(start))/86400000>98) throw new StatementError('Período inválido para consulta de legados.');

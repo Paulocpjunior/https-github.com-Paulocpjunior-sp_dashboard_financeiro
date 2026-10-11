@@ -28,7 +28,7 @@ function BalanceReferences({ rows }: { rows?: StatementBalance[] }) {
   </details>;
 }
 export default function ItauStatement() {
-  const [access, setAccess] = useState({ ready: false, read: false, import: false, compare:false });
+  const [access, setAccess] = useState({ ready: false, read: false, import: false, compare:false,manageLinks:false });
   const [start, setStart] = useState(() => `${today().slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
   const [result, setResult] = useState<{ rows: StatementRow[]; imports: StatementImport[] } | null>(null);
@@ -46,21 +46,21 @@ export default function ItauStatement() {
     const unsubscribeAuth = onAuthStateChanged(auth, user => {
       unsubscribeProfile(); generation.current++;
       setResult(null); setComparison(null); setPreview(null); setFile(null); setBusy(false);
-      if (!user) { setAccess({ ready: true, read: false, import: false, compare:false }); return; }
+      if (!user) { setAccess({ ready: true, read: false, import: false, compare:false,manageLinks:false }); return; }
       unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), snapshot => {
         const p = snapshot.data();
         const active = p?.active === true && !['deleted', 'blocked'].includes(p?.status);
         const read = active && (p?.role === 'admin' || p?.financialPermissions?.includes('itau.openfinance.read') === true);
         const write = read && (p?.role === 'admin' || p?.financialPermissions?.includes('itau.statement.import') === true);
         generation.current++; setBusy(false);
-        setAccess({ ready: true, read: !!read, import: !!write, compare:!!read && (p?.role==='admin' || p?.financialPermissions?.some((x:string)=>['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'].includes(x))) });
+        setAccess({ ready: true, read: !!read, import: !!write, manageLinks:!!read && p?.role==='admin', compare:!!read && (p?.role==='admin' || p?.financialPermissions?.some((x:string)=>['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'].includes(x))) });
         setComparison(null);
         if (!read) setResult(null);
         // A pending response cannot resurrect data after profile revocation.
         setPreview(null); setFile(null);
       }, () => {
         generation.current++; setBusy(false); setResult(null); setComparison(null); setPreview(null); setFile(null);
-        setAccess({ ready: true, read: false, import: false, compare:false });
+        setAccess({ ready: true, read: false, import: false, compare:false,manageLinks:false });
       });
     });
     return () => { generation.current++; unsubscribeAuth(); unsubscribeProfile(); };
@@ -90,7 +90,7 @@ export default function ItauStatement() {
         <button className={button} disabled={busy || !validRange}>Consultar extrato</button><span className="text-xs text-slate-500">Até 93 dias por consulta.</span>
       </form>
       {access.compare && <section className={card}><h2 className="font-semibold">Conferência de pagamentos</h2><p className="text-sm text-slate-500 my-2">Compare o OFX importado com as baixas nativas de contas a pagar. A consulta opcional de pagamentos antigos aparece separadamente. Nenhuma sugestão dá baixa ou confirma conciliação.</p><label className="flex items-center gap-2 my-3 text-sm"><input type="checkbox" checked={includeLegacy} disabled={busy} onChange={e=>{setIncludeLegacy(e.target.checked);setComparison(null);}}/> Incluir conferência separada de pagamentos antigos</label><button className={button} disabled={busy||!validRange} onClick={()=>{const id=++generation.current;setComparison(null);void run(async()=>{const data=await ItauStatements.compare(start,end,includeLegacy);if(id===generation.current)setComparison(data);});}}>Comparar baixas com o extrato</button></section>}
-      {comparison && <StatementPaymentComparison comparison={comparison}/>}
+      {comparison && <StatementPaymentComparison key={comparison.generatedAt} comparison={comparison} canManageLinks={access.manageLinks} onLinksChanged={async()=>{const id=++generation.current;const data=await ItauStatements.compare(start,end,includeLegacy);if(id===generation.current)setComparison(data);}}/>}
       {access.import && <section className={card}><h2 className="font-semibold flex gap-2 items-center"><Upload size={19}/>Importar extrato OFX</h2><p className="text-sm text-slate-500 mt-1 mb-4">Selecione o arquivo original do Itaú. Confira a prévia antes de salvar. Até 2 MB e 400 movimentações por arquivo.</p><label className="text-sm font-medium">Arquivo OFX<input ref={uploadRef} type="file" accept=".ofx" disabled={busy} className="block mt-2 max-w-full" onChange={event => {
         const selected = event.target.files?.[0]; const id = ++generation.current; setPreview(null); setFile(null);
         if (!selected) return;

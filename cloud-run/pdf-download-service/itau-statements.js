@@ -16,10 +16,11 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
     let userId;
     try {
       const isComparison = request.method === 'GET' && url.pathname === '/api/itau/payment-comparison';
+      const linkAction = request.method === 'POST' ? ({'/api/itau/legacy-links/preview':'preview','/api/itau/legacy-links/confirm':'confirm','/api/itau/legacy-links/unlink':'unlink'})[url.pathname] : null;
       const isRead = request.method === 'GET' && url.pathname === '/api/itau/statements';
       const isPreview = request.method === 'POST' && url.pathname === '/api/itau/preview';
       const isCommit = request.method === 'POST' && url.pathname === '/api/itau/import';
-      if (!isRead && !isPreview && !isCommit && !isComparison) throw new StatementError('Rota não encontrada.', 404);
+      if (!isRead && !isPreview && !isCommit && !isComparison && !linkAction) throw new StatementError('Rota não encontrada.', 404);
       const { adminAuth, adminDb: db } = getServices();
       const bearer = String(request.headers.authorization || '').match(/^Bearer (\S+)$/);
       if (!bearer) throw new StatementError('Entre novamente para consultar o extrato.', 401);
@@ -27,12 +28,19 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
       try { token = await adminAuth.verifyIdToken(bearer[1], true); } catch { throw new StatementError('Sessão expirada. Entre novamente.', 401); }
       userId = token.uid;
       const profile = await db.collection('users').doc(userId).get();
-      const allowed = data => permitted(data, READ) && (isRead || isComparison || permitted(data, IMPORT)) && (!isComparison || require('./payable-permissions').capabilities(data).read);
+      const allowed = data => linkAction ? require('./itau-legacy-links').admin(data) : permitted(data, READ) && (isRead || isComparison || permitted(data, IMPORT)) && (!isComparison || require('./payable-permissions').capabilities(data).read);
       if (!profile.exists || !allowed(profile.data())) throw new StatementError('Sem permissão para esta operação na conta Itaú 3145 / 99791-6.', 403);
       const account = db.collection('bankStatements').doc(ACCOUNT);
       const audit = db.collection('bankStatementAudit');
       const actor = { userId, accountId: ACCOUNT, at: new Date().toISOString() };
-      if (isComparison) {
+      if (linkAction) {
+        let input;
+        try { input=JSON.parse((await readBody(request)).toString('utf8')); } catch { throw new StatementError('Solicitação inválida.',400); }
+        if(!input || typeof input!=='object' || Array.isArray(input)) throw new StatementError('Solicitação inválida.',400);
+        const links=require('./itau-legacy-links');
+        const result=linkAction==='preview'?await links.preview(db,userId,input):await links.mutate(db,userId,linkAction,input);
+        sendJson(request,response,200,result);
+      } else if (isComparison) {
         const start=url.searchParams.get('start'),end=url.searchParams.get('end'); interval(start,end);
         const expand=(date,days)=>new Date(Date.parse(date+'T00:00:00Z')+days*86400000).toISOString().slice(0,10);
         const [bank,ledger]=await Promise.all([
@@ -41,11 +49,12 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
         ]);
         if(bank.size>1000) throw new StatementError('Mais de 1.000 movimentações. Reduza o período.');
         const legacy = url.searchParams.get('includeLegacy') === 'true' ? await readLegacy(db,expand(start,-3),expand(end,3)) : null;
+        const legacyLinks = await require('./itau-legacy-links').list(db,start,end);
         if(!allowed((await db.collection('users').doc(userId).get()).data())) throw new StatementError('Acesso revogado.',403);
         const result=require('./itau-payment-comparison').comparePayments(bank.docs.map(d=>d.data()),ledger.rows);
         if(legacy) result.legacy = require('./itau-legacy-payments').compareLegacy(bank.docs.map(d=>d.data()),legacy);
         await audit.add({...actor,action:'payment-comparison',start,end,count:bank.size,includeLegacy:!!legacy});
-        sendJson(request,response,200,{...result,start,end,paymentStart:expand(start,-3),paymentEnd:expand(end,3),generatedAt:new Date().toISOString()});
+        sendJson(request,response,200,{...result,legacyLinks,start,end,paymentStart:expand(start,-3),paymentEnd:expand(end,3),generatedAt:new Date().toISOString()});
       } else if (isRead) {
         const start = url.searchParams.get('start'), end = url.searchParams.get('end');
         interval(start, end);

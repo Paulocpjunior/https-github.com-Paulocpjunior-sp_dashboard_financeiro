@@ -48,7 +48,7 @@ try {
 }
 console.log('OK: backup includes billing revisions, orphan histories, pagination and exact encoded paths; failures abort.');
 
-for (const name of ['boletoIssues','boletoIssueLocks','boletoReconciliations','boletoReconciliationAudit','boletoReconciliationSettlements','payableRecurrences','payableAudit','nativeEntryRequests','nativeEntryLocks','nativeEntryAudit','bankStatementAudit']) assert.ok(DEFAULT_COLLECTIONS.includes(name), name);
+for (const name of ['boletoIssues','boletoIssueLocks','boletoReconciliations','boletoReconciliationAudit','boletoReconciliationSettlements','payableRecurrences','payableAudit','nativeEntryRequests','nativeEntryLocks','nativeEntryAudit','bankStatementAudit','bankLegacyLinks','bankLegacyPaymentLocks','bankLegacyLinkOperations']) assert.ok(DEFAULT_COLLECTIONS.includes(name), name);
 const at='2026-10-10T12:00:00.000Z';
 const expanded = await collectBackupCollections('test', Object.keys(CHILD_COLLECTIONS), 'test', async (_p,name,_t,options) => {
   assert.equal(options.readTime,at);

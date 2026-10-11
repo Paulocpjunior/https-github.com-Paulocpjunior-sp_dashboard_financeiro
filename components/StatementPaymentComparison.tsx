@@ -1,10 +1,14 @@
+import {LegacyLinkHistory,LegacyLinkModal} from './LegacyLinkControls';
+import type {LegacyLink} from '../services/itauStatementService';
 import LegacyPaymentComparison from './LegacyPaymentComparison';
 import React, {useState} from 'react';
 import type {PaymentComparison} from '../services/itauStatementService';
 const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const displayDate=(date:string)=>date.split('-').reverse().join('/');
 const card='rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5';
-export default function StatementPaymentComparison({comparison}:{comparison:PaymentComparison}) {
+export default function StatementPaymentComparison({comparison,canManageLinks=false,onLinksChanged}:{comparison:PaymentComparison;canManageLinks?:boolean;onLinksChanged?:()=>Promise<void>}) {
+ const [linkTarget,setLinkTarget]=useState<{statementId:string;transactionId:string}|null>(null);
+ const [unlink,setUnlink]=useState<LegacyLink|null>(null);
  const [filter,setFilter]=useState('all');
  const rows=comparison.rows.filter(row=>filter==='all'||row.status===filter);
  return (<section className={`${card} space-y-4`}><h2 className="text-lg font-bold">Sugestões para conferência</h2><p className="text-sm">{comparison.coverage}</p><p className="text-sm">{comparison.criterion}</p><p>Extrato: {displayDate(comparison.start)} a {displayDate(comparison.end)} · Baixas examinadas: {displayDate(comparison.paymentStart)} a {displayDate(comparison.paymentEnd)}</p><p>{comparison.counts.suggestion} sugestões · {comparison.counts.ambiguous} ambíguas · {comparison.counts['no-candidate']} sem candidato · {comparison.counts['outside-scope']} créditos fora do escopo</p>
@@ -15,5 +19,8 @@ export default function StatementPaymentComparison({comparison}:{comparison:Paym
         {comparison.rows.length>0&&!rows.length&&<p>Nenhuma movimentação corresponde ao filtro escolhido.</p>}
         {!comparison.rows.length&&<p>Nenhuma movimentação importada neste período. Importe o OFX para comparar.</p>}
         <details><summary className="cursor-pointer">{comparison.unmatchedPayments.length} baixas sem candidato neste extrato</summary><p className="text-sm">Inclui a margem de 3 dias nas extremidades. Ausência de candidato não comprova falta de pagamento.</p>{comparison.unmatchedPayments.map(p=><p className="my-2 text-sm break-all" key={p.id}>{displayDate(p.date)} · {p.supplier} · {money(p.amountCents)} · {p.transactionId}</p>)}</details>
-        {comparison.legacy && <LegacyPaymentComparison comparison={comparison.legacy}/>}
+        {comparison.legacy && <LegacyPaymentComparison comparison={comparison.legacy} linkedStatements={(comparison.legacyLinks||[]).filter(l=>l.active).map(l=>l.statementId)} onReview={canManageLinks?(statementId,transactionId)=>setLinkTarget({statementId,transactionId}):undefined}/>}
+        <p className="text-xs text-slate-500">Consulta realizada em {new Date(comparison.generatedAt).toLocaleString('pt-BR')}.</p>
+        <LegacyLinkHistory links={comparison.legacyLinks||[]} onUnlink={canManageLinks?setUnlink:undefined}/>
+        {canManageLinks&&(linkTarget||unlink)&&<LegacyLinkModal target={linkTarget} unlink={unlink} onClose={()=>{setLinkTarget(null);setUnlink(null);}} onChanged={onLinksChanged}/>}
       </section>);}

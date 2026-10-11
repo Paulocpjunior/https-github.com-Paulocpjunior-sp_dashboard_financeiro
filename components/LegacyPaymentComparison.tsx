@@ -2,7 +2,7 @@ import React from 'react';
 import type {LegacyComparison} from '../services/itauStatementService';
 const money=(cents:number)=>(cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const date=(value:string)=>value.split('-').reverse().join('/');
-export default function LegacyPaymentComparison({comparison}:{comparison:LegacyComparison}) {
+export default function LegacyPaymentComparison({comparison,onReview,linkedStatements=[]}:{comparison:LegacyComparison;onReview?:(statementId:string,transactionId:string)=>void;linkedStatements?:string[]}) {
  const withCandidates=comparison.rows.filter(r=>r.candidates.length);
  return <section className="mt-6 border-t border-slate-300 dark:border-slate-700 pt-5 space-y-3" aria-label="Conferência de pagamentos antigos">
   <h3 className="text-lg font-bold">Pagamentos antigos — revisão separada</h3>
@@ -18,6 +18,7 @@ export default function LegacyPaymentComparison({comparison}:{comparison:LegacyC
     <p className="font-medium">{p.supplier} · {money(p.amountCents)}</p>
     <p className="text-sm">Pagamento informado: {date(p.date)} · {p.bankEvidence==='missing'?'Conta bancária não informada — comprovação necessária':'Mesma conta informada — conferir favorecido'}</p>
     <p className="text-xs break-all">Lançamento: {p.transactionId}</p>
+    {onReview&&!linkedStatements.includes(row.statement.id)&&<button className="mt-2 rounded-lg bg-blue-700 px-3 py-2 text-white font-semibold" onClick={()=>onReview(row.statement.id,p.transactionId)}>Revisar vínculo</button>}
    </div>)}
   </details>)}
  </section>;
