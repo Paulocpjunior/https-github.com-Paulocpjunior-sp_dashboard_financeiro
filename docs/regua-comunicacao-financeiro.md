@@ -1,4 +1,6 @@
-# Régua de comunicação — base técnica, 11/10/2026
+# Régua de comunicação — histórico técnico
+
+Estado atualizado e roteiro operacional: [entrega de 12/10/2026](comunicacao-publicacao-e-ativacao.md). As seções de 11/10 abaixo são histórico; não representam as pendências atuais.
 
 ## Estado real
 

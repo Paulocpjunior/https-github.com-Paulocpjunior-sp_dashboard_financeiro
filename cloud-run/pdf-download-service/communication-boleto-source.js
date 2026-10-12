@@ -1,7 +1,7 @@
 const {contactRecipients}=require('./communication-recipients');
 // Read-only adapter. No routes, scheduling, issuance or customer delivery are enabled here.
 const {createHash}=require('node:crypto');
-const {validateSituation}=require('./boleto-invite');
+const {validateSituation,artifacts:inviteArtifacts}=require('./boleto-invite');
 const {validateArtifacts}=require('./communication-rule');
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function createBoletoSource({base,apiKey,loadBinding,fetchImpl=fetch,now=()=>new Date(),statement=null}){
@@ -45,6 +45,7 @@ function createBoletoSource({base,apiKey,loadBinding,fetchImpl=fetch,now=()=>new
    const value=(first.source.amountCents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
    const date=first.source.dueDate.split('-').reverse().join('/');
    const result={subject:`Lembrete de vencimento — ${date} — SP Financeiro`,text:`Olá,\n\nSegue o boleto de ${value}, com vencimento em ${date}. Confira os dados do beneficiário no PDF antes de pagar.\n\nSe já realizou o pagamento, desconsidere este lembrete. Em caso de divergência, responda a este e-mail.\n\nEquipe Financeira — SP Assessoria Contábil`,attachments};
+   attachments.push({name:'vencimento.ics',type:'text/calendar',content:Buffer.from(inviteArtifacts(last.bank,pdf,now(),attachments[1]?.content).ics)});
    validateArtifacts(result);return result;
   }
  };

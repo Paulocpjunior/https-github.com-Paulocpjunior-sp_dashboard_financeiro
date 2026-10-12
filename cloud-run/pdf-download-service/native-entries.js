@@ -289,8 +289,8 @@ function createNativeEntryHandler({
       const enabled = env.NATIVE_ENTRY_ENABLED === "true";
       const reply = (body, status = 200) =>
         sendJson(request, response, status, body);
-      if(/^\/api\/financial-entries\/communications(?:\/(candidates|preview|draft|validate))?$/.test(url.pathname)) {
-        await require('./communication-workflow').handle({request,url,db,env,userRef,uid,allowed,readBody,reply});return true;
+      if(/^\/api\/financial-entries\/communications(?:\/(candidates|preview|draft|validate|contacts|catalog-preview|catalog-import|cancel|review))?$/.test(url.pathname)) {
+        await require('./communication-workflow').handle({request,url,db,env,userRef,uid,allowed,readBody,reply,getBucket});return true;
       }
       if(url.pathname === "/api/financial-entries/communication-settings") {
         await require('./communication-settings').handle({request,db,userRef,uid,allowed,readBody,reply,env});return true;

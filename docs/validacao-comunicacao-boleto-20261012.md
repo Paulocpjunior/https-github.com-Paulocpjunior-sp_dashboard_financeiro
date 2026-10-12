@@ -27,7 +27,7 @@ Os contatos confirmados ficam em `financialCommunicationContacts`, agora incluí
 1. Dias ficam para definir depois: manter rascunhos sem data. A política confirmada inclui todos os e-mails cadastrados e conferidos, com deduplicação e revisão da lista completa. Resolver contatos divergentes antes da confirmação.
 2. Publicar interface/serviço com autorização do SHA completo; homologar em produção a preparação com dados reais, sem envio em lote.
 3. Preparar ativação explícita e promoção revisada de rascunhos após as decisões. Provisionar índice e agendador somente na publicação/ativação autorizada.
-4. Integração automática completa do cadastro de pagadores, avisos internos de contas a pagar e calendário automático permanecem fora desta etapa. Os recursos homologados de INVITE não foram removidos.
+4. A etapa seguinte deste PR integrou importação de cadastros, avisos internos a pagar e anexos ICS. Consulte `comunicacao-publicacao-e-ativacao.md` para os limites e evidências atuais. Os recursos homologados de INVITE não foram removidos.
 5. Resultados incertos exigem conferência manual; não há retentativa automática nem exclusão do histórico para recomeçar.
 
 Consulta antes do envio reduz cobranças indevidas, mas não elimina o intervalo entre pagamento e aceite da mensagem pelo provedor. Não declarar recebimento com base apenas em HTTP 202.

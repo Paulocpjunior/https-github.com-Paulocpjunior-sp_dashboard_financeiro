@@ -9,7 +9,7 @@ function fixture(){
 }
 test('prepares exact PDF with GET only, stable revision and no tokens in returned artifacts',async()=>{
  const f=fixture(),job=await f.job(),result=await f.source.prepare(job);
- assert.equal(result.attachments.length,1);assert.match(result.text,/R\$\s10,00/);assert.ok(!JSON.stringify(result).includes('test-token'));
+ assert.equal(result.attachments.length,2);assert.match(result.attachments[1].content.toString(),/BEGIN:VCALENDAR/);assert.match(result.text,/R\$\s10,00/);assert.ok(!JSON.stringify(result).includes('test-token'));
  assert.equal(f.calls.length,4);assert.ok(f.calls.every(c=>c.options.method==='GET'&&c.options.redirect==='error'));
 });
 test('paid, partial, cancelled, unregistered and changed identity never prepare',async()=>{
