@@ -1,3 +1,4 @@
+const { assertJotformAccess } = require('./integration-access');
 // Leitura independente do checklist: não chama webhooks de lançamento nem grava transações.
 const { createHash } = require('node:crypto');
 const FORM_ID = '210135417457653';
@@ -65,6 +66,7 @@ function mapChecklist(questions, submissions) {
 }
 
 async function loadChecklist({ apiKey, fetcher = fetch }) {
+  assertJotformAccess();
   if (!apiKey) throw new Error('CHECKLIST_CREDENTIAL_MISSING');
   const request = async path => {
     const response = await fetcher(`https://api.jotform.com${path}`, {

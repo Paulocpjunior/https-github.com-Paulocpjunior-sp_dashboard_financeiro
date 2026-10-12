@@ -1,3 +1,5 @@
+// Legacy regression harness only: production has no environment bypass.
+require.cache[require.resolve('./integration-access')] = { exports: { JOTFORM_DISABLED: false, assertJotformAccess() {}, blockJotformIntegration(req, res, next) { next(); } } };
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -20,7 +22,7 @@ const pending = extractContasPagar({
   q284_identificacaoUnica: 'SP-CX46267',
 });
 
-assert.equal(WEBHOOK_VERSION, '6.15-identity-conflict-guard');
+assert.equal(WEBHOOK_VERSION, '6.16-jotform-retired');
 assert.equal(pending.docPago, 'NÃO');
 assert.equal(pending.valorNum, 449.98);
 assert.equal(pending.dataLancISO, '2026-08-03');

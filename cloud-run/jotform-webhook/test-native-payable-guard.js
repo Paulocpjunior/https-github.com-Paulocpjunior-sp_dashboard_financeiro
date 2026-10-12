@@ -1,3 +1,5 @@
+// Legacy regression harness only: production has no environment bypass.
+require.cache[require.resolve('./integration-access')] = { exports: { JOTFORM_DISABLED: false, assertJotformAccess() {}, blockJotformIntegration(req, res, next) { next(); } } };
 const assert=require('node:assert/strict');
 const {financialWritePrecondition}=require('./index');
 const original=global.fetch;
