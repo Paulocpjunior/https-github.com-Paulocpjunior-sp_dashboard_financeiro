@@ -1,3 +1,5 @@
+import './FinancialConsultation.css';
+import '../design-system/tokens.css';
 import { getOutstandingAmount } from "../utils/transactionAmounts";
 
 import React, { useState, useMemo } from 'react';
@@ -46,11 +48,11 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden transition-all duration-300 mb-6">
+    <div className="sp-ui sp-consultation-alerts overflow-hidden mb-6">
       <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
-            <Bell className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-pulse" />
+            <Bell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
             <h3 className="font-bold text-slate-800 dark:text-white text-sm">Central de Alertas Financeiros</h3>
@@ -59,12 +61,14 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
         </div>
         <div className="flex items-center gap-2">
           <button 
+            type="button" aria-label={isExpanded ? "Recolher detalhes dos alertas" : "Expandir detalhes dos alertas"} aria-expanded={isExpanded}
             onClick={() => setIsExpanded(!isExpanded)}
             className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-600 dark:text-slate-400"
           >
             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           <button 
+            type="button" aria-label="Fechar alertas financeiros"
             onClick={() => setIsVisible(false)}
             className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-slate-400 hover:text-red-500"
           >
@@ -75,7 +79,7 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
 
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Overdue */}
-        <div 
+        <button type="button"
           onClick={() => onAlertClick({ status: 'Pendente', dueDateEnd: todayStr })}
           className="cursor-pointer p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 hover:shadow-md transition-all group"
         >
@@ -87,10 +91,10 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
             <span className="text-2xl font-black text-red-600 dark:text-red-400">{alerts.overdue.length}</span>
             <span className="text-xs text-red-700/60 dark:text-red-300/60 font-medium">Contas</span>
           </div>
-        </div>
+        </button>
 
         {/* Due Today */}
-        <div 
+        <button type="button"
           onClick={() => onAlertClick({ status: 'Pendente', dueDateStart: todayStr, dueDateEnd: todayStr })}
           className="cursor-pointer p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 hover:shadow-md transition-all"
         >
@@ -102,10 +106,10 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
             <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{alerts.dueToday.length}</span>
             <span className="text-xs text-amber-700/60 dark:text-amber-300/60 font-medium">Contas</span>
           </div>
-        </div>
+        </button>
 
         {/* Due Soon */}
-        <div 
+        <button type="button"
           onClick={() => onAlertClick({ status: 'Pendente', dueDateStart: todayStr, dueDateEnd: threeDaysLaterStr })}
           className="cursor-pointer p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all"
         >
@@ -117,10 +121,10 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
             <span className="text-2xl font-black text-slate-600 dark:text-slate-400">{alerts.dueSoon.length}</span>
             <span className="text-xs text-slate-700/60 dark:text-slate-300/60 font-medium">Contas</span>
           </div>
-        </div>
+        </button>
 
         {/* Receivables Today */}
-        <div 
+        <button type="button"
           onClick={() => onAlertClick({ movement: 'Entrada', status: 'Pendente', dueDateStart: todayStr, dueDateEnd: todayStr })}
           className="cursor-pointer p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20 hover:shadow-md transition-all"
         >
@@ -132,7 +136,7 @@ export const AlertsBanner: React.FC<AlertsBannerProps> = ({ transactions, onAler
             <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{alerts.receivablesToday.length}</span>
             <span className="text-xs text-emerald-700/60 dark:text-emerald-300/60 font-medium">Contas</span>
           </div>
-        </div>
+        </button>
       </div>
 
       {isExpanded && (

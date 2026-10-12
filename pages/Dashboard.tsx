@@ -1,3 +1,4 @@
+import '../components/FinancialConsultation.css';
 import { getPaidAmount, getOutstandingAmount } from "../utils/transactionAmounts";
 import DashboardToolbar from '../components/DashboardToolbar';
 import PayablesModal from '../components/PayablesModal';
@@ -634,33 +635,27 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
         />
 
         {/* Quick View Modes (Similar to Reports) */}
-        <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-2 print:hidden">
+        <div className="sp-ui sp-view-switch print:hidden" role="group" aria-label="Visão dos lançamentos">
             <button
+                type="button" aria-pressed={!isContasAPagar && !isContasAReceber}
                 onClick={() => applyViewMode('general')}
-                className={`flex-1 py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
-                ${!isContasAPagar && !isContasAReceber
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white ring-2 ring-slate-400/20' 
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                className="sp-view-option"
             >
                 <Layers className="h-4 w-4" />
                 Visão Geral
             </button>
             <button
+                type="button" aria-pressed={isContasAPagar}
                 onClick={() => applyViewMode('payables')}
-                className={`flex-1 py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
-                ${isContasAPagar 
-                    ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 ring-2 ring-red-500/20' 
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-red-50/50 dark:hover:bg-red-900/10'}`}
+                className="sp-view-option"
             >
                 <ArrowDownCircle className="h-4 w-4" />
                 A Pagar (Aberto)
             </button>
             <button
+                type="button" aria-pressed={isContasAReceber}
                 onClick={() => applyViewMode('receivables')}
-                className={`flex-1 py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm font-semibold transition-all
-                ${isContasAReceber 
-                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20' 
-                    : 'text-slate-500 dark:text-slate-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'}`}
+                className="sp-view-option"
             >
                 <ArrowUpCircle className="h-4 w-4" />
                 A Receber (Aberto)
@@ -707,7 +702,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
 
         {/* Filters Panel - REDESENHADO */}
         {isFilterMenuOpen && (
-          <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm animate-in slide-in-from-top-2 print:hidden transition-colors">
+          <div className="sp-ui sp-consultation-filters print:hidden">
             
             {/* Header */}
             <div className="flex justify-between items-center mb-4">
@@ -726,7 +721,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1 block">Busca Geral</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
+                <input aria-label="Busca geral"
                   type="text"
                   placeholder="Pesquise por qualquer termo..."
                   value={filters.search}
@@ -737,7 +732,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
             </div>
 
             {/* SEÇÃO 1: PERÍODO RÁPIDO */}
-            <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="sp-filter-subsection mb-4 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Calendar className="h-4 w-4 text-blue-500" />
                 <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -773,7 +768,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 ))}
                 
                 {/* Datas personalizadas inline — usam dueDate quando em Contas a Pagar/Receber */}
-                <div className="flex items-center gap-2 ml-2">
+                <div className="sp-date-range flex flex-wrap items-center gap-2">
                   <input
                     type="date"
                     className="form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500 w-36"
@@ -819,7 +814,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               </button>
               
               {showAdvancedDates && (
-                <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="sp-filter-subsection mt-3 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   
                   {/* Data Vencimento */}
                   <div className="space-y-1">
@@ -827,15 +822,15 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                       <Clock className="h-3 w-3" />
                       Data Vencimento
                     </label>
-                    <div className="flex gap-2 items-center">
-                      <input
+                    <div className="sp-date-range flex flex-wrap gap-2 items-center">
+                      <input aria-label="Vencimento inicial"
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.dueDateStart || ''}
                         onChange={(e) => handleFilterChange('dueDateStart', e.target.value)}
                       />
                       <span className="text-slate-400 text-xs">-</span>
-                      <input
+                      <input aria-label="Vencimento final"
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.dueDateEnd || ''}
@@ -851,15 +846,15 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                       Última baixa
                       <span className="text-red-500 text-[10px]">(Saídas)</span>
                     </label>
-                    <div className="flex gap-2 items-center">
-                      <input
+                    <div className="sp-date-range flex flex-wrap gap-2 items-center">
+                      <input aria-label="Última baixa inicial"
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.paymentDateStart || ''}
                         onChange={(e) => handleFilterChange('paymentDateStart', e.target.value)}
                       />
                       <span className="text-slate-400 text-xs">-</span>
-                      <input
+                      <input aria-label="Última baixa final"
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.paymentDateEnd || ''}
@@ -875,15 +870,15 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                       Data Recebimento
                       <span className="text-green-500 text-[10px]">(Entradas)</span>
                     </label>
-                    <div className="flex gap-2 items-center">
-                      <input
+                    <div className="sp-date-range flex flex-wrap gap-2 items-center">
+                      <input aria-label="Recebimento inicial"
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.receiptDateStart || ''}
                         onChange={(e) => handleFilterChange('receiptDateStart', e.target.value)}
                       />
                       <span className="text-slate-400 text-xs">-</span>
-                      <input
+                      <input aria-label="Recebimento final"
                         type="date"
                         className="flex-1 form-input rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                         value={filters.receiptDateEnd || ''}
@@ -901,7 +896,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               {/* TIPO DE LANÇAMENTO */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tipo de Lançamento</label>
-                <select
+                <select aria-label="Tipo de lançamento"
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.type}
                   onChange={(e) => handleFilterChange('type', e.target.value)}
@@ -914,7 +909,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               {/* MOVIMENTAÇÃO */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Movimentação</label>
-                <select
+                <select aria-label="Movimentação"
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.movement}
                   onChange={(e) => handleFilterChange('movement', e.target.value)}
@@ -927,7 +922,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               {/* TIPO DE CONTA */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Conta (Banco)</label>
-                <select
+                <select aria-label="Conta (Banco)"
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.bankAccount}
                   onChange={(e) => handleFilterChange('bankAccount', e.target.value)}
@@ -940,7 +935,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               {/* STATUS */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Status</label>
-                <select
+                <select aria-label="Status"
                   className="w-full form-select rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500"
                   value={filters.status}
                   onChange={(e) => handleFilterChange('status', e.target.value)}
@@ -953,7 +948,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               {/* NOME EMPRESA / CREDOR */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Empresa / Credor</label>
-                <input
+                <input aria-label="Empresa / Credor"
                   list="clients-list"
                   type="text"
                   placeholder="Digite ou selecione..."

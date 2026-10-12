@@ -47,7 +47,7 @@ Todos os apps devem compartilhar os componentes de botão, campo, seleção, car
 ## Situação desta versão
 
 - Especificação, tokens e prévia: preparados no Financeiro.
-- Financeiro em produção: aparência anterior preservada; migração visual ainda pendente.
+- Financeiro em produção: navegação e barra de ações publicadas no commit `6225c51de322f64f0b2f4db5efca6623fcfa3c0f`; demais áreas em migração.
 - Fiscal, DP, Contábil, Legalização, Connect e demais apps: inventário e adoção pendentes.
 - Arquivo mestre de logo da suíte e distribuição por pacote: pendentes de definição/inventário; nenhum logo novo foi inventado.
 
@@ -59,6 +59,12 @@ Todos os apps devem compartilhar os componentes de botão, campo, seleção, car
 
 ## Piloto Financeiro — 12/10/2026
 
-Aplicação inicial em `Layout`, `DashboardToolbar` e `ThemeToggle`: navegação neutra, cores semânticas, tipografia nativa, controles consistentes, foco visível e tema sincronizado entre desktop e celular. Demais telas seguem em migração gradual. Este registro não confirma publicação em produção.
+Aplicação inicial em `Layout`, `DashboardToolbar` e `ThemeToggle`: navegação neutra, cores semânticas, tipografia nativa, controles consistentes, foco visível e tema sincronizado entre desktop e celular. Demais telas seguem em migração gradual. Piloto publicado e conferido em produção em 12/10/2026 (commit `6225c51`).
 
 Verificação local com dados fictícios: larguras de 390 e 1440 px, modos claro/escuro, fechamento do menu por Escape e callbacks de cadastro, recorrências, atualização, filtros, impressão, exportação e WhatsApp. A prévia isolada de revisão foi removida antes do commit. Nenhum dado financeiro foi alterado.
+
+## Consulta financeira — segunda etapa
+
+Abas de visão, painel de filtros, alertas e tabela adotam superfícies, bordas e raios compartilhados. Alertas passam a usar botões acessíveis pelo teclado; filtros e paginação recebem nomes acessíveis; tabela usa texto de 14 px e rolagem horizontal própria. As regras de seleção, datas, cálculos, permissões e emissão permanecem as existentes.
+
+Validado localmente com dados fictícios em 390 e 1440 px, nos temas claro e escuro: acionamento de alerta por Enter, expansão dos detalhes, preenchimento de datas e pesquisa, paginação e ausência de transbordamento horizontal da página. A revisão não realizou operações financeiras. Esta etapa ainda depende da publicação por SHA autorizado.
