@@ -365,3 +365,10 @@ test('communication configuration route requires active admin and stays disabled
  assert.equal((await harness({profile:{active:true,role:'operacional'}}).call('communication-settings',undefined,'good','GET')).status,403);
  const result=await h.call('communication-settings',undefined,'good','GET');assert.equal(result.status,200);
 });
+test('communication workflow routes reject unauthenticated and non-admin callers',async()=>{
+ for(const route of ['communications','communications/candidates','communications/preview','communications/draft','communications/validate']){
+  const method=['communications','communications/candidates'].includes(route)?'GET':'POST';
+  assert.equal((await harness().call(route,{},'',method)).status,401);
+  assert.equal((await harness({profile:{active:true,role:'operacional'}}).call(route,{},'good',method)).status,403);
+ }
+});

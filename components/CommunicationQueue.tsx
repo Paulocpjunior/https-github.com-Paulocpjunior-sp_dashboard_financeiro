@@ -1,0 +1,33 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {auth} from '../services/firebaseConfig';
+type Candidate={id:string;number:string;client:string;dueDate:string;amountCents:number};
+type Preview={reviewToken:string;number:string;client:string;dueDate:string;amountCents:number;email:string;stages:{scheduledAt:string;status:string}[]};
+type Job={id:string;number:string;client:string;status:string;recipient:string;scheduledAt:string;reason?:string;validation?:{status:string;reason?:string;checkedAt:string;attachments?:{name:string;bytes:number}[]}};
+async function request(path='',body?:unknown){
+ if(!auth.currentUser)throw Error('Entre novamente.');
+ const response=await fetch('/api/financial-entries/communications'+path,{method:body?'POST':'GET',headers:{Authorization:`Bearer ${await auth.currentUser.getIdToken()}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const data=await response.json();if(!response.ok)throw Error(data.error||'Não foi possível concluir a conferência.');return data;
+}
+const states:Record<string,string>={draft:'Rascunho — sem envio',queued:'Na fila',accepted:'Aceito pelo provedor',unknown:'Resultado incerto — revisar',blocked:'Bloqueado',suppressed:'Envio impedido',expired:'Prazo encerrado',sending:'Em processamento'};
+const date=(s:string)=>new Date(s).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'});
+export default function CommunicationQueue({onBusy,api=request}:{onBusy?:(value:boolean)=>void;api?:typeof request}){
+ const [query,setQuery]=useState(''),[candidates,setCandidates]=useState<Candidate[]>([]),[total,setTotal]=useState(0),[selected,setSelected]=useState<Candidate|null>(null),[email,setEmail]=useState(''),[reason,setReason]=useState(''),[preview,setPreview]=useState<Preview|null>(null),[jobs,setJobs]=useState<Job[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+ const gate=useRef(false),mounted=useRef(true);
+ async function run(action:()=>Promise<void>){if(gate.current)return;gate.current=true;setBusy(true);onBusy?.(true);setError('');setMessage('');try{await action();}catch(e){if(mounted.current)setError((e as Error).message);}finally{gate.current=false;if(mounted.current){setBusy(false);onBusy?.(false);}}}
+ async function refresh(){const result=await api();if(mounted.current)setJobs(result.rows);}
+ useEffect(()=>{mounted.current=true;void run(refresh);return()=>{mounted.current=false;};},[]);
+ const button='border rounded-lg px-3 py-2 disabled:opacity-50';
+ return <section className="space-y-4 border-t pt-5 mt-6"><h3 className="font-semibold text-lg">Preparação e acompanhamento de e-mails</h3><p className="text-sm">Rascunhos não são agendamentos ativos. Confirme um destinatário por cobrança; múltiplos e-mails aguardam definição da regra. Configure primeiro os dias dos lembretes acima.</p>
+ {error&&<p role="alert" className="bg-red-50 text-red-900 p-3 rounded">{error}</p>}{message&&<p role="status" className="bg-green-50 text-green-900 p-3 rounded">{message}</p>}
+ <div className="flex flex-wrap gap-2"><input aria-label="Pesquisar boleto para comunicação" className="border rounded p-2 text-slate-900" placeholder="Cliente, documento ou boleto" value={query} disabled={busy} onChange={e=>setQuery(e.target.value)}/><button type="button" disabled={busy} className={button} onClick={()=>void run(async()=>{const r=await api('/candidates?q='+encodeURIComponent(query));setCandidates(r.rows);setTotal(r.total);})}>Pesquisar boletos</button></div>
+ {total>0&&<p className="text-sm">Exibindo {candidates.length} de {total}. Refine a busca se necessário. A situação será consultada novamente ao preparar a prévia.</p>}
+ {candidates.length>0&&<ul className="space-y-2 max-h-64 overflow-auto">{candidates.map(c=><li key={c.id} className="border rounded p-3 flex gap-3 justify-between"><span>{c.client} · {c.number} · {c.dueDate.split('-').reverse().join('/')} · {(c.amountCents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span><button type="button" className={button} disabled={busy} onClick={()=>{setSelected(c);setPreview(null);setEmail('');setReason('');}}>Selecionar</button></li>)}</ul>}
+ {selected&&<div className="space-y-3 border rounded p-4"><strong>{selected.client} · boleto {selected.number}</strong><label className="block">Destinatário confirmado<input type="email" className="border rounded p-2 block w-full text-slate-900" value={email} disabled={busy} onChange={e=>{setEmail(e.target.value);setPreview(null);}}/></label><label className="block">Motivo da confirmação<textarea className="border rounded p-2 block w-full text-slate-900" value={reason} disabled={busy} onChange={e=>setReason(e.target.value)}/></label>
+ <button type="button" className={button} disabled={busy||!email} onClick={()=>void run(async()=>{setPreview(null);setPreview(await api('/preview',{historyId:selected.id,email}));})}>Conferir boleto e visualizar etapas</button>
+ {preview&&<div className="bg-slate-50 text-slate-900 p-3 rounded"><p><strong>Revisar:</strong> {preview.client} · {preview.number} · {preview.email}</p><ul>{preview.stages.map(s=><li key={s.scheduledAt}>{date(s.scheduledAt)} — {s.status==='expired'?'horário já encerrado; sem envio retroativo':'proposta'}</li>)}</ul><button type="button" className={button+' mt-3'} disabled={busy||reason.trim().length<5} onClick={()=>void run(async()=>{await api('/draft',{historyId:selected.id,email,reason,reviewToken:preview.reviewToken});setPreview(null);setSelected(null);await refresh();setMessage('Rascunhos salvos. Nenhum envio ou agendamento foi ativado.');})}>Confirmar rascunhos sem enviar</button></div>}
+ </div>}
+ <div className="flex justify-between"><h4 className="font-semibold">Últimas 100 etapas</h4><button type="button" className={button} disabled={busy} onClick={()=>void run(refresh)}>Atualizar acompanhamento</button></div>
+ {!jobs.length&&<p>Nenhuma etapa registrada.</p>}
+ <ul className="space-y-3">{jobs.map(j=><li key={j.id} className="border rounded p-3"><p><strong>{j.client} · {j.number}</strong></p><p>{j.recipient} · {date(j.scheduledAt)}</p><p>{states[j.status]||'Revisão necessária'}</p>{j.reason&&<p>Pendência: {j.reason}</p>}{j.validation&&<p>Conferência em {date(j.validation.checkedAt)}: {j.validation.status==='ready'?'PDFs preparados; nenhum envio realizado':j.validation.reason}</p>}{j.status==='draft'&&<button type="button" disabled={busy} className={button+' mt-2'} onClick={()=>void run(async()=>{await api('/validate',{id:j.id});await refresh();setMessage('Conferência concluída. Consulte o resultado da etapa. Nenhum e-mail enviado.');})}>Conferir PDFs sem enviar</button>}</li>)}</ul>
+ </section>;
+}

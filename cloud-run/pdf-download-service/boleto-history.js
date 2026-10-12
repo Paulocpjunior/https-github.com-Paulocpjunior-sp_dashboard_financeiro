@@ -75,7 +75,7 @@ function mergeSituation(old, body, at) {
     protestedAt:date(b.protesto?.dataBanco || b.protesto?.dataSistema),protestStatus:b.protesto?.situacao || null,
     protestDescription:b.protesto?.descricao || '',paymentOrigin:b.pagamento?.origem || null,manuallyPaid:b.pagamento?.marcadoComoPago === true, detailsSource:'api',syncedAt:at};
 }
-function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl=fetch}) {
+function createHistoryReader() {
   let cached=null;
   async function load(db) {
     const pointer=(await db.collection('boletoHistory').doc('production').get()).data();
@@ -114,6 +114,10 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
     }
     return cached;
   }
+  return {load, invalidate:()=>{cached=null;}};
+}
+function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl=fetch}) {
+  const reader=createHistoryReader(),load=reader.load;
   return async (req,res)=>{
     const url=new URL(req.url,'http://localhost');
     if(!url.pathname.startsWith('/api/boleto-cloud/history')) return false;
@@ -156,7 +160,7 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
         if(!account || account.beneficiaryDocument!==record.beneficiaryDocument || account.bank!==record.bank)
           throw new HistoryError('Beneficiário fora da conta de emissão homologada.',409);
         await require('./boleto-reconciliation').handleReconciliation({req,res,db,uid,record,operation:match[2],sendJson,env,fetchImpl});
-        cached=null;return true;
+        reader.invalidate();return true;
       }
       if(!env.BOLETO_CLOUD_API_KEY)throw new HistoryError('Credencial do emissor indisponível.',503);
       if (['invite','invite-email'].includes(match[2])) {
@@ -184,7 +188,7 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
           tx.set(ref,{record:next,syncedAt:at});
           tx.set(db.collection('boletoHistoryAudit').doc(),{action:'sync',uid,boletoId:record.id,at});
         });
-        cached=null;sendJson(req,res,200,{ok:true,syncedAt:at});
+        reader.invalidate();sendJson(req,res,200,{ok:true,syncedAt:at});
       } else {
         const bytes=Buffer.from(await result.arrayBuffer());
         if(bytes.length>10000000 || bytes.subarray(0,5).toString()!=='%PDF-')throw new HistoryError('PDF inválido.',502);
@@ -194,4 +198,4 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
     return true;
   };
 }
-module.exports={idFor,statusOf,totals,selections,report,validateImport,mergeSituation,createHistoryHandler};
+module.exports={createHistoryReader,idFor,statusOf,totals,selections,report,validateImport,mergeSituation,createHistoryHandler};

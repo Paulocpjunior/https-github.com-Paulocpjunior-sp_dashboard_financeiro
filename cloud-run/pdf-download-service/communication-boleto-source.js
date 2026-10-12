@@ -26,7 +26,7 @@ function createBoletoSource({base,apiKey,loadBinding,fetchImpl=fetch,now=()=>new
   let bank;try{bank=(await response.json()).boleto;}catch{throw Error('Resposta inválida do emissor.');}
   validateSituation(bank,binding.expected,today());
   // Bind both authoritative source and administrative recipient to the immutable job revision.
-  const source={id:ref.id,kind:'receivable',revision:digest([binding,bank]),status:'open',verified:true,amountCents:binding.expected.amountCents,dueDate:bank.vencimento};
+  const source={id:ref.id,kind:'receivable',revision:digest([binding,bank]),reviewRevision:digest([bank,binding.expected,binding.entry||null,email]),status:'open',verified:true,amountCents:binding.expected.amountCents,dueDate:bank.vencimento};
   return {source,binding,bank,email};
  }
  return {
