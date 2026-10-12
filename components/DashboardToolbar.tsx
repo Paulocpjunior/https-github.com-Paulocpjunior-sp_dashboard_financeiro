@@ -1,6 +1,8 @@
+import '../design-system/tokens.css';
+import './FinancialToolbar.css';
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Timer, RefreshCw, Filter, Printer, Download, MessageCircle, ArrowUpCircle, ArrowDownCircle, CalendarClock, Plus } from 'lucide-react';
+import { Timer, RefreshCw, Filter, Printer, Download, MessageCircle, ArrowUpCircle, ArrowDownCircle, CalendarClock } from 'lucide-react';
 interface Props {
  title: string; description?: string; entryActions?: boolean; isAdmin: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
  isRefreshing: boolean; hasFilters: boolean; filtersOpen: boolean;
@@ -10,47 +12,47 @@ interface Props {
 }
 export default function DashboardToolbar({title,description,entryActions = true,isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
  return (
-        <section aria-label="Ações do painel" className="space-y-4 print:hidden">
+        <section aria-label="Ações do painel" className="sp-ui sp-finance-toolbar space-y-4 print:hidden">
           <div className="print:hidden">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
-            <p className="text-slate-500 dark:text-slate-400">{description || 'Movimentos do período selecionado. Os saldos em aberto e o acumulado histórico permanecem no resumo acima.'}</p>
+            <h1 className="sp-toolbar-title">{title}</h1>
+            <p className="sp-muted">{description || 'Movimentos do período selecionado. Os saldos em aberto e o acumulado histórico permanecem no resumo acima.'}</p>
           </div>
           
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4">
+          <div className="sp-card space-y-4">
             {entryActions && (isAdmin || canRecurrences) && (
               <div role="group" aria-label="Lançamentos e recorrências" className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {isAdmin && <><button type="button" aria-label="Nova conta a receber" onClick={onNewReceivable}
-                  className="group flex min-h-28 items-center gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-left text-blue-950 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-50 dark:hover:bg-blue-900/60 dark:focus-visible:ring-offset-slate-900">
-                  <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white" aria-hidden="true">
-                    <ArrowUpCircle className="h-7 w-7" /><Plus className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-blue-800 p-0.5 ring-2 ring-blue-50 dark:ring-blue-950" />
+                  className="sp-entry-action">
+                  <span className="sp-entry-icon" aria-hidden="true">
+                    <ArrowUpCircle className="h-7 w-7" />
                   </span>
-                  <span className="min-w-0"><span className="block text-base font-semibold leading-6">Nova conta a receber</span><span className="mt-1 block text-sm leading-5 text-blue-800 dark:text-blue-200">Cadastrar uma receita</span></span>
+                  <span className="min-w-0"><span className="block text-base font-semibold leading-6">Nova conta a receber</span><span className="sp-muted mt-1 block text-sm leading-5">Cadastrar uma receita</span></span>
                 </button>
                 <button type="button" aria-label="Nova conta a pagar" onClick={onNewPayable}
-                  className="group flex min-h-28 items-center gap-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-left text-rose-950 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-50 dark:hover:bg-rose-900/60 dark:focus-visible:ring-offset-slate-900">
-                  <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rose-600 text-white" aria-hidden="true">
-                    <ArrowDownCircle className="h-7 w-7" /><Plus className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-rose-800 p-0.5 ring-2 ring-rose-50 dark:ring-rose-950" />
+                  className="sp-entry-action">
+                  <span className="sp-entry-icon" aria-hidden="true">
+                    <ArrowDownCircle className="h-7 w-7" />
                   </span>
-                  <span className="min-w-0"><span className="block text-base font-semibold leading-6">Nova conta a pagar</span><span className="mt-1 block text-sm leading-5 text-rose-800 dark:text-rose-200">Cadastrar uma despesa</span></span>
+                  <span className="min-w-0"><span className="block text-base font-semibold leading-6">Nova conta a pagar</span><span className="sp-muted mt-1 block text-sm leading-5">Cadastrar uma despesa</span></span>
                 </button>
                 </>}
                 {canRecurrences && <button type="button" aria-label="Recorrências a pagar" onClick={onRecurrences}
-                  className="group flex min-h-28 items-center gap-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-left text-violet-950 transition-colors hover:bg-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-50 dark:hover:bg-violet-900/60 dark:focus-visible:ring-offset-slate-900">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white" aria-hidden="true"><CalendarClock className="h-7 w-7" /></span>
-                  <span className="min-w-0"><span className="block text-base font-semibold leading-6">Recorrências a pagar</span><span className="mt-1 block text-sm leading-5 text-violet-800 dark:text-violet-200">Gerenciar despesas recorrentes</span></span>
+                  className="sp-entry-action">
+                  <span className="sp-entry-icon" aria-hidden="true"><CalendarClock className="h-7 w-7" /></span>
+                  <span className="min-w-0"><span className="block text-base font-semibold leading-6">Recorrências a pagar</span><span className="sp-muted mt-1 block text-sm leading-5">Gerenciar despesas recorrentes</span></span>
                 </button>}
               </div>
             )}
-            {!entryActions && <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-600 dark:text-slate-300">Para cadastrar ou gerenciar contas, acesse Lançamentos.</p><Link to="/lancamentos" className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500">Ir para Lançamentos</Link></div>}
+            {!entryActions && <div className="flex flex-wrap items-center justify-between gap-3"><p className="sp-muted text-sm">Para cadastrar ou gerenciar contas, acesse Lançamentos.</p><Link to="/lancamentos" className="sp-button sp-button-primary">Ir para Lançamentos</Link></div>}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div role="group" aria-label="Consulta e filtros" className="flex flex-wrap items-center gap-3">
             {/* REFRESH INDICATOR */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-500 dark:text-slate-400">
+            <div className="sp-refresh-status sp-muted">
               <Timer className="h-3.5 w-3.5" />
               {lastUpdated ? (
                 <span>
                   Atualizado: {lastUpdated.toLocaleTimeString('pt-BR')}
-                  <span className="ml-1.5 text-blue-500 dark:text-blue-400 font-medium">
+                  <span className="ml-1.5 font-medium">
                     ({refreshCountdown}s)
                   </span>
                 </span>
@@ -62,11 +64,7 @@ export default function DashboardToolbar({title,description,entryActions = true,
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm
-                ${isRefreshing 
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 text-blue-500 cursor-not-allowed' 
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-400'
-                }`}
+              className="sp-button"
               title="Atualizar dados agora"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -77,7 +75,7 @@ export default function DashboardToolbar({title,description,entryActions = true,
               onClick={onFilters}
               aria-expanded={filtersOpen}
               type="button"
-              className="flex min-h-11 items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-5 py-2.5 text-base font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+              className="sp-button sp-button-primary"
             >
               <Filter className="h-4 w-4" />
               <span>Filtros</span>{hasFilters && <span className="rounded bg-white/20 px-1.5 py-0.5 text-xs">Ativos</span>}
@@ -87,7 +85,7 @@ export default function DashboardToolbar({title,description,entryActions = true,
             <div role="group" aria-label="Relatórios e compartilhamento" className="flex flex-wrap items-center gap-3 lg:border-l lg:border-slate-200 lg:dark:border-slate-700 lg:pl-4">
             <button
               onClick={onPrint}
-              className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm"
+              className="sp-button"
             >
               <Printer className="h-4 w-4" />
               <span>Imprimir</span>
@@ -95,7 +93,7 @@ export default function DashboardToolbar({title,description,entryActions = true,
 
              <button
               onClick={onExport}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-800 dark:bg-slate-700 text-white border border-slate-800 dark:border-slate-700 rounded-lg hover:bg-slate-900 dark:hover:bg-slate-600 transition-colors text-sm"
+              className="sp-button"
             >
               <Download className="h-4 w-4" />
               <span>Exportar</span>
@@ -103,7 +101,7 @@ export default function DashboardToolbar({title,description,entryActions = true,
 
              <button
               onClick={onWhatsApp}
-              className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white border border-green-600 rounded-lg hover:bg-green-700 transition-colors text-sm"
+              className="sp-button"
             >
               <MessageCircle className="h-4 w-4" />
               <span className="inline">WhatsApp</span>

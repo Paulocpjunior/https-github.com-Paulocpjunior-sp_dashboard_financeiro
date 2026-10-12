@@ -1,3 +1,5 @@
+import '../design-system/tokens.css';
+import './FinancialShell.css';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle, ReceiptText } from 'lucide-react';
@@ -90,6 +92,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     };
   }, [loadAccumulatedBalances]);
 
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setIsSidebarOpen(false); document.querySelector<HTMLButtonElement>('[aria-label="Abrir navegação"]')?.focus(); }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isSidebarOpen]);
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
@@ -119,7 +130,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300">
+    <div className="sp-tokens sp-finance-layout flex h-screen overflow-hidden">
       
       {showMaintenance && <MaintenanceModal onClose={()=>setShowMaintenance(false)}/>}
       {/* Session Active Toast */}
@@ -133,7 +144,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <button 
                 onClick={() => setShowSessionAlert(false)}
-                className="text-white/60 hover:text-white p-1 transition-colors cursor-pointer"
+                aria-label="Fechar aviso de sessão" className="text-white/60 hover:text-white p-1 transition-colors cursor-pointer"
                 type="button"
               >
                  <X className="h-4 w-4" />
@@ -150,44 +161,44 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         />
       )}
 
-      {/* Sidebar - Hidden on Print - Updated to Royal Blue Theme */}
-      <aside 
+      {/* Sidebar - Hidden on Print - SP visual standard */}
+      <aside data-open={isSidebarOpen}
         className={`
-          fixed lg:static inset-y-0 left-0 z-50 w-64 bg-royal-950 dark:bg-slate-900 text-white transform transition-transform duration-200 ease-in-out print:hidden shadow-xl
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col border-r border-royal-900 dark:border-slate-800
+          sp-ui sp-finance-sidebar fixed lg:static inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-in-out print:hidden
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col
         `}
       >
         {/* LOGO AREA - PROMINENT */}
-        <div className="flex items-center justify-between h-24 px-6 bg-royal-900 dark:bg-slate-800/50 shrink-0 border-b border-royal-800/50 dark:border-slate-700">
+        <div className="sp-brand-row flex items-center justify-between h-24 px-6 shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="bg-gradient-to-br from-royal-500 to-royal-700 p-2.5 rounded-xl shadow-lg shadow-royal-900/40 border border-royal-400/20">
                 <Building2 className="h-7 w-7 text-white" />
             </div>
             <div className="flex flex-col">
-                <span className="font-extrabold text-xl tracking-tight leading-none text-white font-sans">SP Contábil</span>
-                <span className="text-[10px] text-royal-200 dark:text-slate-400 uppercase tracking-widest font-semibold mt-1">Gestão Financeira</span>
+                <span className="sp-brand-name text-xl tracking-tight leading-none font-semibold">SP Contábil</span>
+                <span className="sp-muted text-xs font-medium mt-1">Gestão Financeira</span>
             </div>
           </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-royal-200 hover:text-white cursor-pointer" type="button">
+          <button onClick={() => setIsSidebarOpen(false)} className="sp-icon-button lg:hidden" aria-label="Fechar navegação" type="button">
             <X className="h-6 w-6" />
           </button>
         </div>
 
-        <div className="flex-1 px-4 py-6 overflow-y-auto bg-royal-950 dark:bg-slate-900">
-          <div className="flex items-center space-x-3 px-4 py-3 mb-6 bg-royal-900/50 dark:bg-slate-800/50 rounded-xl border border-royal-800/30 dark:border-slate-700">
+        <div className="flex-1 px-4 py-6 overflow-y-auto">
+          <div className="sp-profile flex items-center space-x-3 px-3 py-3 mb-6">
             <img 
               src={`https://ui-avatars.com/api/?name=${user?.name}&background=1e40af&color=fff&bold=true`} 
               alt="Avatar" 
               className="h-10 w-10 rounded-full border-2 border-royal-700"
             />
             <div>
-              <p className="text-sm font-semibold text-white">{user?.name}</p>
-              <p className="text-xs text-royal-200 dark:text-slate-400 capitalize">{user?.role === 'admin' ? 'Administrador' : 'Operacional'}</p>
+              <p className="text-sm font-semibold">{user?.name}</p>
+              <p className="sp-muted text-xs capitalize">{user?.role === 'admin' ? 'Administrador' : 'Operacional'}</p>
             </div>
           </div>
 
-          <nav className="space-y-1.5">
-            {(user?.role || "").toLowerCase() === "admin" && <a href="https://consultor-fiscal-inteligente-631239634290.us-west1.run.app/?painel=comunicacao&departamento=financeiro" target="_blank" rel="noopener noreferrer" className="w-full min-h-12 flex items-center px-4 py-3 rounded-xl text-royal-200 dark:text-slate-400 hover:bg-royal-900/50" title="Abrir administração central de comunicação (acesso de admin no CFI)">Templates e agendamentos ↗</a>}
+          <nav aria-label="Navegação principal" className="space-y-1.5">
+            {(user?.role || "").toLowerCase() === "admin" && <a href="https://consultor-fiscal-inteligente-631239634290.us-west1.run.app/?painel=comunicacao&departamento=financeiro" target="_blank" rel="noopener noreferrer" className="sp-nav-item w-full min-h-12 flex items-center px-4 py-3" title="Abrir administração central de comunicação (acesso de admin no CFI)">Templates e agendamentos ↗</a>}
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -200,16 +211,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     setIsSidebarOpen(false);
                   }}
                   className={`
-                    w-full min-h-12 flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer relative z-10 text-left
-                    ${isActive 
-                        ? 'bg-royal-800 dark:bg-blue-900/50 text-white shadow-md border border-royal-700/50' 
-                        : 'text-royal-200 dark:text-slate-400 hover:bg-royal-900/50 dark:hover:bg-slate-800 hover:text-white'}
+                    sp-nav-item w-full min-h-12 flex items-center space-x-3 px-4 py-3 text-left
                   `}
                   aria-current={isActive ? 'page' : undefined}
                   aria-label={item.accessibleLabel || item.label}
                   title={item.accessibleLabel || item.label}
                 >
-                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-white' : 'text-royal-300 dark:text-slate-500'}`} />
+                  <Icon className="sp-icon shrink-0" aria-hidden="true" />
                   <span className="min-w-0 whitespace-normal leading-5 font-medium">{item.label}</span>
                 </button>
               );
@@ -221,25 +229,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   setShowWixTreasury(true);
                   setIsSidebarOpen(false);
                 }}
-                className="w-full min-h-12 flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer relative z-10 text-left text-royal-200 dark:text-slate-400 hover:bg-royal-900/50 dark:hover:bg-slate-800 hover:text-white"
+                className="sp-nav-item w-full min-h-12 flex items-center space-x-3 px-4 py-3 text-left"
                 aria-haspopup="dialog"
               >
-                <Wallet className="h-5 w-5 shrink-0 text-royal-300 dark:text-slate-500" />
+                <Wallet className="sp-icon shrink-0" />
                 <span className="min-w-0 whitespace-normal leading-5 font-medium">Tesouraria Wix</span>
               </button>
             )}
-            {(user?.role || "").toLowerCase() === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="w-full min-h-12 flex items-center px-4 py-3 rounded-xl text-royal-200 dark:text-slate-400 hover:bg-royal-900/50">Manutenção</button>}
+            {(user?.role || "").toLowerCase() === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="sp-nav-item w-full min-h-12 flex items-center px-4 py-3">Manutenção</button>}
           </nav>
         </div>
 
-        <div className="p-4 border-t border-royal-900 dark:border-slate-800 shrink-0 space-y-4 bg-royal-950 dark:bg-slate-900">
+        <div className="sp-sidebar-footer p-4 shrink-0 space-y-4">
           {/* Desktop Theme Toggle */}
           <div className="flex items-center justify-between px-2">
-              <span className="text-xs text-royal-300 dark:text-slate-500 uppercase font-bold tracking-wider">Modo</span>
+              <span className="sp-muted text-xs font-semibold">Modo</span>
               <ThemeToggle />
           </div>
 
-          <div className="rounded-lg p-3 text-xs font-medium flex items-center gap-2 border bg-emerald-950/30 border-emerald-900/50 text-emerald-400">
+          <div className="sp-connected rounded-lg p-3 text-sm font-medium flex items-center gap-2">
              <Wifi className="h-4 w-4" />
              <span>Conectado</span>
           </div>
@@ -247,7 +255,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <button 
             type="button"
             onClick={handleLogout}
-            className="w-full flex items-center space-x-3 px-4 py-3 text-royal-300 dark:text-slate-400 hover:text-white hover:bg-royal-900 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer relative z-10"
+            className="sp-nav-item w-full flex items-center space-x-3 px-4 py-3"
           >
             <LogOut className="h-5 w-5" />
             <span>Sair</span>
@@ -258,8 +266,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-0">
         {/* Mobile Header - Hidden on Print */}
-        <header className="lg:hidden flex items-center justify-between px-4 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 print:hidden transition-colors relative z-20">
-          <button onClick={() => setIsSidebarOpen(true)} className="text-royal-800 dark:text-slate-300 cursor-pointer p-1" type="button">
+        <header className="sp-ui sp-mobile-header lg:hidden flex items-center justify-between px-4 h-16 print:hidden relative z-20">
+          <button onClick={() => setIsSidebarOpen(true)} className="sp-icon-button" aria-label="Abrir navegação" aria-expanded={isSidebarOpen} type="button">
             <Menu className="h-6 w-6" />
           </button>
           <div className="flex items-center gap-3">
@@ -271,7 +279,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <ThemeToggle />
         </header>
 
-        <main className="flex-1 overflow-auto p-4 lg:p-8 bg-slate-50/50 dark:bg-slate-950/50 print:bg-white print:p-0 transition-colors relative z-0">
+        <main className="sp-finance-main flex-1 overflow-auto p-4 lg:p-8 print:bg-white print:p-0 relative z-0">
           <div className="max-w-7xl mx-auto">
             
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">

@@ -1,5 +1,5 @@
 /* SP SaaS v0.1 — shared foundation. Opt-in; never override legacy screens globally. */
-.sp-ui {
+.sp-ui, .sp-tokens {
   --sp-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --sp-bg: #f5f5f7; --sp-surface: #ffffff; --sp-text: #1d1d1f; --sp-muted: #626268;
   --sp-border: #d2d2d7; --sp-accent: #0066cc; --sp-accent-hover: #0055aa;
@@ -12,7 +12,7 @@
   font-family: var(--sp-font); font-size: 16px; line-height: 1.5;
   color: var(--sp-text); background: var(--sp-bg); color-scheme: light;
 }
-.sp-ui[data-theme="dark"] {
+.sp-ui[data-theme="dark"], .dark .sp-ui, .dark .sp-tokens {
   --sp-bg: #161617; --sp-surface: #232326; --sp-text: #f5f5f7; --sp-muted: #b2b2b9;
   --sp-border: #505057; --sp-accent: #8ac2ff; --sp-accent-hover: #b5d8ff;
   --sp-selected: #173454; --sp-success: #83d6a0; --sp-danger: #ffaca5; --sp-warning: #f6c66c;

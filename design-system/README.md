@@ -56,3 +56,9 @@ Todos os apps devem compartilhar os componentes de botão, campo, seleção, car
 - [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/)
 - [Fontes e licença da Apple](https://developer.apple.com/fonts/)
 - [Orientações de uso de marcas Apple](https://www.apple.com/legal/intellectual-property/guidelinesfor3rdparties.html)
+
+## Piloto Financeiro — 12/10/2026
+
+Aplicação inicial em `Layout`, `DashboardToolbar` e `ThemeToggle`: navegação neutra, cores semânticas, tipografia nativa, controles consistentes, foco visível e tema sincronizado entre desktop e celular. Demais telas seguem em migração gradual. Este registro não confirma publicação em produção.
+
+Verificação local com dados fictícios: larguras de 390 e 1440 px, modos claro/escuro, fechamento do menu por Escape e callbacks de cadastro, recorrências, atualização, filtros, impressão, exportação e WhatsApp. A prévia isolada de revisão foi removida antes do commit. Nenhum dado financeiro foi alterado.

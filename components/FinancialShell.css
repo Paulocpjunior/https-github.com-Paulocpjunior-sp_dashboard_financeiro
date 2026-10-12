@@ -1,0 +1,20 @@
+/* Pilot: common navigation only. No broad recoloring of financial screens. */
+.sp-finance-layout { font-family: var(--sp-font); background: var(--sp-bg); color: var(--sp-text); }
+.sp-finance-main { background: var(--sp-bg); }
+.sp-finance-sidebar { background: var(--sp-surface); border-right: 1px solid var(--sp-border); }
+.sp-brand-row { border-bottom: 1px solid var(--sp-border); }
+.sp-brand-name { color: var(--sp-text); }
+.sp-profile { border-radius: var(--sp-radius-card); background: var(--sp-bg); }
+.sp-sidebar-footer { border-top: 1px solid var(--sp-border); }
+.sp-ui .sp-nav-item { border-radius: var(--sp-radius-control); color: var(--sp-muted); cursor: pointer; transition: background-color var(--sp-fast) var(--sp-ease), color var(--sp-fast) var(--sp-ease); }
+.sp-ui .sp-nav-item:hover { background: var(--sp-bg); color: var(--sp-text); }
+.sp-ui .sp-nav-item[aria-current="page"] { background: var(--sp-selected); color: var(--sp-accent); font-weight: 600; }
+.sp-ui .sp-icon-button { min-width: 44px; min-height: 44px; border-radius: var(--sp-radius-control); cursor: pointer; }
+.sp-connected { color: var(--sp-success); }
+.sp-mobile-header { background: var(--sp-surface); border-bottom: 1px solid var(--sp-border); }
+@media print { .sp-finance-layout, .sp-finance-main { background: white; color: black; } }
+
+.sp-ui .sp-theme-toggle { min-width: 44px; min-height: 44px; background: var(--sp-bg); color: var(--sp-text); border: 1px solid var(--sp-border); }
+@media (max-width: 1023px) { .sp-finance-sidebar[data-open="false"] { visibility: hidden; } }
+
+@media (prefers-reduced-motion: reduce) { .sp-finance-sidebar { transition: none; } }
