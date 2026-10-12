@@ -6,7 +6,7 @@ function fail(message,status=400){throw Object.assign(Error(message),{status});}
 function change(state,body){
  if(!body||body.revision!==state.revision)fail('Configuração alterada. Recarregue antes de salvar.',409);
  if(body.enabled!==false)fail('Envio real depende da homologação do canal.');
- if(!Array.isArray(body.offsets)||body.offsets.length<1||body.offsets.length>5||body.offsets.some(n=>!Number.isInteger(n)||n< -30||n>0)||new Set(body.offsets).size!==body.offsets.length)fail('Informe até cinco dias distintos entre -30 e 0.');
+ if(!Array.isArray(body.offsets)||body.offsets.length>5||body.offsets.some(n=>!Number.isInteger(n)||n< -30||n>0)||new Set(body.offsets).size!==body.offsets.length)fail('Informe até cinco dias distintos entre -30 e 0.');
  if(!Array.isArray(body.payableRecipients)||body.payableRecipients.length>20||body.payableRecipients.some(v=>typeof v!=='string'||v.length>254||! /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(v)))fail('Confira os e-mails internos, no máximo 20.');
  const recipients=body.payableRecipients.map(v=>v.toLowerCase());if(new Set(recipients).size!==recipients.length)fail('E-mail repetido.');
  if(typeof body.reason!=='string'||body.reason.trim().length<5||body.reason.length>500)fail('Informe o motivo da alteração.');

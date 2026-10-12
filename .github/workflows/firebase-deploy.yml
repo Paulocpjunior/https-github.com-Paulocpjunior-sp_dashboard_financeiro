@@ -78,6 +78,11 @@ jobs:
           node -e 'require("fs").writeFileSync("/tmp/billing-rules-emulator.json", JSON.stringify({firestore:{rules:process.cwd()+"/firestore.rules"},emulators:{firestore:{port:8080},ui:{enabled:false},singleProjectMode:true}}))'
           npx --yes firebase-tools@14.27.0 emulators:exec --only firestore --project demo-financeiro-reviews --config /tmp/billing-rules-emulator.json "node scripts/test-billing-review-rules.mjs"
 
+      - name: Ensaiar comunicação e restauração em banco isolado
+        run: |
+          node -e 'require("fs").writeFileSync("/tmp/communication-drill-emulator.json", JSON.stringify({emulators:{firestore:{port:8189},ui:{enabled:false},singleProjectMode:true}}))'
+          npx --yes firebase-tools@14.27.0 emulators:exec --only firestore --project demo-financeiro-restore --config /tmp/communication-drill-emulator.json "node scripts/test-communication-recovery.mjs"
+
       - name: Build do projeto
         env:
           # Gate de departamento em BLOQUEIO (Paulo, 08/08, após teste):

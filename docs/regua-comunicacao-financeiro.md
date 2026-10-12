@@ -1,4 +1,6 @@
-# Régua de comunicação — base técnica, 11/10/2026
+# Régua de comunicação — histórico técnico
+
+Estado atualizado e roteiro operacional: [entrega de 12/10/2026](comunicacao-publicacao-e-ativacao.md). As seções de 11/10 abaixo são histórico; não representam as pendências atuais.
 
 ## Estado real
 
@@ -47,3 +49,9 @@ Em 11/10, consulta somente dos nomes de configuração do serviço `sp-pdf-downl
 Validação desta etapa: testes sintéticos do conector, autenticação da rota, alteração com revisão/auditoria, bloqueio de ativação e de reenvio; prévia local com revisão, salvamento simulado e recarga. Homologação com Microsoft 365 real e envio para destinatário autorizado continuam pendentes.
 
 Referência oficial: https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0 — resposta 202 significa aceite; não confirma processamento completo ou entrega.
+
+## Decisões confirmadas em 12/10/2026
+
+Paulo definiu: dias de lembrete serão escolhidos depois; manter rascunhos. Sem dias configurados, a prévia salva uma etapa sem data, sem expiração e sem agendamento. A preparação usa todos os e-mails cadastrados e conferidos para a cobrança, normalizados e sem repetição. A lista inteira precisa ser revisada; alteração em qualquer endereço invalida a conferência anterior. O limite por confirmação é 50 endereços; lista inválida é rejeitada integralmente. Esta entrega não importa nem considera conferidos automaticamente os contatos do cadastro do Boleto Cloud.
+
+Envio e agendador continuam desativados. Definir dias posteriormente não promove rascunhos existentes para a fila. Publicação depende da autorização do SHA completo.

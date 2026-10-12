@@ -2,8 +2,8 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {initial,change,handle}=require('./communication-settings');
 const body=()=>({revision:0,offsets:[0,-3],payableRecipients:['TESTE@example.com'],enabled:false,reason:'Configuração fictícia'});
 test('settings require explicit days, recipient validation and never enable sending',()=>{
- assert.deepEqual(initial().offsets,[]);const next=change(initial(),body());assert.equal(next.enabled,false);assert.deepEqual(next.offsets,[-3,0]);assert.deepEqual(next.payableRecipients,['teste@example.com']);
- for(const patch of [{enabled:true},{offsets:[]},{offsets:[1]},{offsets:[-31]},{offsets:[0,0]},{offsets:['0']},{revision:1},{reason:'x'},{payableRecipients:['a@b.com','A@b.com']},{payableRecipients:['a@b.com\r\nBcc: c@d.com']}])assert.throws(()=>change(initial(),{...body(),...patch}));
+ assert.deepEqual(initial().offsets,[]);assert.deepEqual(change(initial(),{...body(),offsets:[]}).offsets,[]);const next=change(initial(),body());assert.equal(next.enabled,false);assert.deepEqual(next.offsets,[-3,0]);assert.deepEqual(next.payableRecipients,['teste@example.com']);
+ for(const patch of [{enabled:true},{offsets:[1]},{offsets:[-31]},{offsets:[0,0]},{offsets:['0']},{revision:1},{reason:'x'},{payableRecipients:['a@b.com','A@b.com']},{payableRecipients:['a@b.com\r\nBcc: c@d.com']}])assert.throws(()=>change(initial(),{...body(),...patch}));
 });
 test('settings persist atomically with audit and recheck admin; stale writes and invalid method fail',async()=>{
  const data=new Map();let active=true;
