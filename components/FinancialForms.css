@@ -1,0 +1,31 @@
+/* Native dialogs preserve browser focus containment and existing financial guards. */
+.sp-ui.sp-entry-dialog { background: var(--sp-surface); color: var(--sp-text); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-modal); box-shadow: 0 24px 80px rgb(0 0 0 / .22); overflow-x: hidden; overflow-y: auto; }
+.sp-entry-dialog::backdrop { background: rgb(0 0 0 / .55); }
+.sp-entry-dialog .sp-form-header { align-items: flex-start; border-bottom: 1px solid var(--sp-border); padding-bottom: 20px; margin-bottom: 16px; }
+.sp-native-entry .sp-form-header { margin-bottom: 0; }
+.sp-entry-dialog .sp-form-header h2 { margin: 0; }
+.sp-entry-dialog .sp-form-header button { flex-shrink: 0; }
+.sp-entry-dialog .sp-form-field { display: block; width: 100%; min-width: 0; min-height: 44px; margin-top: 4px; padding: 10px 12px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); background: var(--sp-bg); color: var(--sp-text); font-size: 16px; }
+.sp-entry-dialog textarea.sp-form-field { min-height: 96px; resize: vertical; }
+.sp-entry-dialog label { line-height: 1.5; }
+.sp-entry-dialog input[type="checkbox"], .sp-entry-dialog input[type="radio"] { width: 20px; height: 20px; vertical-align: middle; accent-color: var(--sp-accent); flex-shrink: 0; }
+.sp-entry-dialog label:has(> input[type="checkbox"]), .sp-entry-dialog label:has(> input[type="radio"]) { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+.sp-entry-dialog button { min-width: 44px; min-height: 44px; padding: 10px 16px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); background: var(--sp-surface); color: var(--sp-text); cursor: pointer; line-height: 1.4; transition: background-color var(--sp-fast) var(--sp-ease); }
+.sp-entry-dialog button:hover:not(:disabled) { background: var(--sp-selected); }
+.sp-entry-dialog button.sp-form-primary { background: var(--sp-accent); color: var(--sp-surface); border-color: var(--sp-accent); }
+.sp-entry-dialog button.sp-form-primary:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--sp-accent-hover); }
+.sp-entry-dialog button.sp-form-confirm { background: var(--sp-success); color: var(--sp-surface); border-color: var(--sp-success); }
+.sp-entry-dialog button:disabled, .sp-entry-dialog fieldset:disabled { opacity: .55; cursor: not-allowed; }
+.sp-entry-dialog .text-xs { font-size: 13px; }
+.sp-entry-dialog .text-slate-500 { color: var(--sp-muted); }
+.sp-entry-dialog [role="alert"] { border-left: 4px solid var(--sp-danger); padding: 12px 16px; border-radius: var(--sp-radius-control); }
+.sp-entry-dialog .sp-form-tabs { padding: 8px; background: var(--sp-bg); border-radius: var(--sp-radius-card); }
+.sp-entry-dialog .sp-form-tabs button[aria-pressed="true"] { background: var(--sp-selected); color: var(--sp-accent); border-color: var(--sp-accent); }
+.sp-entry-dialog input[type="file"] { max-width: 100%; font-size: 14px; }
+@media (max-width: 639px) {
+ .sp-ui.sp-entry-dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 16px; }
+ .sp-ui.sp-native-entry { padding: 0; }
+ .sp-native-entry > div { padding: 16px; }
+ .sp-entry-dialog h2 { font-size: 20px; }
+ .sp-entry-dialog .flex.gap-2, .sp-entry-dialog .flex.gap-3 { flex-wrap: wrap; }
+}
