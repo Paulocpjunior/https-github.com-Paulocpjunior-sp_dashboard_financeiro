@@ -1,0 +1,7 @@
+.sp-finance-toolbar { background: transparent; }
+.sp-finance-toolbar .sp-toolbar-title { margin-bottom: 8px; }
+.sp-finance-toolbar .sp-entry-action { display: flex; align-items: center; gap: 16px; min-height: 104px; padding: 16px; text-align: left; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); background: var(--sp-surface); color: var(--sp-text); cursor: pointer; transition: background-color var(--sp-fast) var(--sp-ease); }
+.sp-finance-toolbar .sp-entry-action:hover { background: var(--sp-selected); }
+.sp-finance-toolbar .sp-entry-icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 40px; height: 40px; color: var(--sp-accent); }
+.sp-finance-toolbar svg { stroke-width: 1.75; }
+.sp-finance-toolbar .sp-refresh-status { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-variant-numeric: tabular-nums; }
