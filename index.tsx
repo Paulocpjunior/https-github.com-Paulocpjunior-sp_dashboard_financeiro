@@ -1,3 +1,6 @@
+// Inter embutida (reserva da fonte do sistema fora dos aparelhos Apple). Importada aqui, e não no CSS do Tailwind,
+// para o Vite resolver os caminhos dos arquivos .woff2.
+import '@fontsource-variable/inter';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

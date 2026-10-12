@@ -1,10 +1,10 @@
 # SP SaaS — padrão visual compartilhado
 
-Versão 0.1, 12/10/2026. Direção solicitada por Paulo: identidade comum nos apps, independentemente de implementação por Claude Code ou Codex. Esta entrega estabelece a base; não declara os aplicativos existentes migrados. Os valores abaixo são decisões do SP SaaS, não especificações oficiais da Apple.
+Versão 0.2, 12/10/2026 (0.1 na mesma data). Direção solicitada por Paulo: identidade comum nos apps, independentemente de implementação por Claude Code ou Codex. Esta entrega estabelece a base; não declara os aplicativos existentes migrados. Os valores abaixo são decisões do SP SaaS, não especificações oficiais da Apple.
 
 ## Identidade
 
-Referência: clareza e hierarquia das interfaces Apple. Marca, nome e símbolos de identificação continuam próprios do SP SaaS. Preservar o logo homologado de cada produto até a definição de um arquivo mestre de marca para toda a suíte. Não criar uma nova marca diferente a cada módulo nem usar a maçã como logo do SaaS.
+Referência: clareza e hierarquia das interfaces Apple. Marca, nome e símbolos de identificação continuam próprios do SP SaaS. Logo: o arquivo oficial da SP Contábil enviado por Paulo em 12/10/2026 (monograma "SP" com a caneta-tinteiro, `public/logo-sp.png`, com `favicon.png` e `apple-touch-icon.png` gerados dele) é usado sem redesenho no Financeiro e no DP, num quadrado branco de cantos arredondados no modo ícone (`components/Logo.tsx`). Não criar uma nova marca diferente a cada módulo nem usar a maçã como logo do SaaS.
 
 ## Regras para ambos os agentes
 
@@ -17,7 +17,7 @@ Referência: clareza e hierarquia das interfaces Apple. Marca, nome e símbolos 
 
 ## Tipografia
 
-Pilha nativa `-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif`. Em dispositivos Apple usa a fonte do sistema quando suportada pelo navegador. Em outros sistemas a fonte substituta muda: não prometer a mesma fonte exata em todas as plataformas. Não empacotar nem carregar arquivos SF Pro/ SF Symbols como recursos web. Se a equipe exigir uma família idêntica em todos os sistemas, escolher uma fonte web licenciada para esse uso em decisão separada.
+Pilha nativa `-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`. Em dispositivos Apple usa a fonte do sistema (San Francisco), que já está no aparelho. Nos demais sistemas usa a Inter (licença SIL OFL), embutida no app pelo pacote `@fontsource-variable/inter` e importada no entry JS (não por `@import` no CSS do Tailwind, que perde os caminhos dos `.woff2`); sem Google Fonts. A aparência fica próxima, não idêntica, entre plataformas. Não empacotar nem carregar arquivos SF Pro/ SF Symbols como recursos web.
 
 Texto base 16px/1.5; tabelas 14px no mínimo; legendas 13px; títulos 28–36px; subtítulos 22px. Peso normal 400 e destaque 600. Valores e datas alinhados com numerais tabulares. Zoom de 200% sem perda de controles.
 
@@ -44,12 +44,23 @@ Todos os apps devem compartilhar os componentes de botão, campo, seleção, car
 5. Revisar e publicar o commit autorizado, depois conferir a versão e o fluxo real. Marcar o módulo migrado somente após essa verificação.
 6. Repetir nos demais apps. A adoção por outro repositório exige instalação dos arquivos/instruções nesse repositório; esta documentação não controla automaticamente outras sessões.
 
+## Tema Tailwind alinhado — v0.2
+
+Pedido de Paulo ("algo parecido com o que a Apple usa: letra, tipografia, símbolos, logo"), aplicado igual ao DP. Nas telas que usam utilitários Tailwind, o bloco `@theme` de `index.css` redefine as escalas sem mudar classes:
+
+- `slate` = neutros Apple (50 #fbfbfd, 100 #f5f5f7, 200 #e8e8ed, 300 #d2d2d7, 400 #a1a1a6, 500 #6e6e73, 600 #515154, 700 #3a3a3c, 800 #2c2c2e, 900 #1c1c1e, 950 #000000);
+- `blue`, `indigo` e `royal` (a antiga cor principal do Financeiro) = um só azul de destaque (600 #0071e3 com texto branco; 700 #0066cc = `--sp-accent`);
+- verde, vermelho e âmbar continuam os da Tailwind, por serem semânticos (receita/despesa, pago/em atraso, alerta);
+- raios xs .25rem, sm .375rem, md .5rem, lg .625rem, xl .875rem, 2xl 1.25rem, 3xl 1.75rem.
+
+Os tokens `--sp-*` já seguiam esses valores; só a pilha de fontes mudou. O recolorido é de matiz, sem remover nem esconder funções. Conferir visualmente cada módulo na publicação.
+
 ## Situação desta versão
 
 - Especificação, tokens e prévia: preparados no Financeiro.
 - Financeiro em produção: navegação, barra de ações e consulta financeira publicadas até o commit `11b8f174f1775a3ff9460834c4ff1a014d60d8fa`; demais áreas em migração.
-- Fiscal, DP, Contábil, Legalização, Connect e demais apps: inventário e adoção pendentes.
-- Arquivo mestre de logo da suíte e distribuição por pacote: pendentes de definição/inventário; nenhum logo novo foi inventado.
+- Tema v0.2 (fonte do sistema com Inter de reserva, neutros e azul da Apple, raios) e logo oficial da SP Contábil (12/10/2026): adotados no DP, CFI, Contábil (CCI) e Legalização, cada um no próprio repositório; Financeiro por este PR, sujeito à autorização de publicação por SHA.
+- Connect e demais apps: inventário e adoção pendentes. Distribuição do logo por pacote: pendente; nenhum logo novo foi inventado.
 
 ## Referências
 

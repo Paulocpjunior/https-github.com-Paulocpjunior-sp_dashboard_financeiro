@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthService } from '../services/authService';
 import { BackendService } from '../services/backendService';
-import { Building2, User, Lock, Eye, EyeOff, ShieldCheck, Loader2, AlertCircle, ArrowLeft, Mail, CheckCircle2, UserPlus, Phone, BadgeCheck } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, ShieldCheck, Loader2, AlertCircle, ArrowLeft, Mail, CheckCircle2, UserPlus, Phone, BadgeCheck } from 'lucide-react';
 import { ThemeToggle } from '../components/ThemeToggle';
+import Logo from '../components/Logo';
 
 const Login: React.FC = () => {
   const [view, setView] = useState<'login' | 'forgot' | 'register'>('login');
@@ -155,7 +156,7 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-5 font-sans transition-colors duration-500
-      bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-royal-900 via-royal-950 to-slate-950 dark:from-slate-900 dark:to-slate-950 relative">
+      bg-slate-100 dark:bg-slate-950 relative">
       
       {/* Theme Toggle Positioned Absolute */}
       <div className="absolute top-5 right-5">
@@ -179,7 +180,7 @@ const Login: React.FC = () => {
 
       <div className={`w-full ${view === 'register' ? 'max-w-[480px]' : 'max-w-[420px]'}
         bg-white/95 dark:bg-slate-900/90 
-        backdrop-blur-sm rounded-[20px] shadow-[0_25px_50px_rgba(0,0,0,0.25)] dark:shadow-[0_25px_50px_rgba(0,0,0,0.5)] 
+        backdrop-blur-sm rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_40px_rgba(0,0,0,0.6)] 
         border border-white/20 dark:border-slate-700
         p-10 animate-slideUp overflow-hidden relative transition-all duration-300`}>
         
@@ -188,9 +189,7 @@ const Login: React.FC = () => {
           <div className="animate-in fade-in slide-in-from-left-4 duration-300">
             {/* Header with SP CONTABIL Branding */}
             <div className="text-center mb-8">
-              <div className="w-[80px] h-[80px] bg-royal-700 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-royal-700/40 transform rotate-3 hover:rotate-0 transition-transform duration-300">
-                <Building2 className="h-10 w-10 text-white" />
-              </div>
+              <Logo iconOnly className="h-20 w-20 mx-auto mb-5 shadow-lg shadow-black/10" />
               <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-1 tracking-tight">SP CONTÁBIL</h1>
               <p className="text-royal-600 dark:text-royal-400 text-xs font-semibold uppercase tracking-widest mb-2">SP FINANCIAL DASHBOARD</p>
               <p className="text-slate-500 dark:text-slate-400 text-sm">Faça login para acessar o painel</p>
@@ -216,7 +215,7 @@ const Login: React.FC = () => {
                     type="text"
                     value={username}
                     onChange={(e) => handleInput(setUsername, e.target.value)}
-                    className="w-full py-3.5 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                    className="w-full py-3.5 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                     placeholder="Digite seu usuário"
                     required
                     disabled={isLoading || loginSuccess}
@@ -234,7 +233,7 @@ const Login: React.FC = () => {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => handleInput(setPassword, e.target.value)}
-                    className="w-full py-3.5 pl-[45px] pr-10 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                    className="w-full py-3.5 pl-[45px] pr-10 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                     placeholder="Digite sua senha"
                     required
                     disabled={isLoading || loginSuccess}
@@ -264,7 +263,7 @@ const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || loginSuccess}
-                className="w-full py-3.5 bg-royal-700 hover:bg-royal-800 text-white rounded-[10px] text-base font-semibold shadow-lg shadow-royal-700/30 hover:-translate-y-0.5 disabled:opacity-70 disabled:transform-none disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-base font-semibold shadow-sm disabled:opacity-70 disabled:transform-none disabled:shadow-none transition-all flex items-center justify-center gap-2"
               >
                 {isLoading || loginSuccess ? (
                   <>
@@ -288,7 +287,7 @@ const Login: React.FC = () => {
                   resetRegisterForm();
                   setView('register');
                 }}
-                className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-[10px] text-sm font-semibold transition-all flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700"
+                className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700"
               >
                 <UserPlus className="h-4 w-4" />
                 <span>Criar Conta</span>
@@ -357,7 +356,7 @@ const Login: React.FC = () => {
                         type="text"
                         value={forgotUsername}
                         onChange={(e) => setForgotUsername(e.target.value)}
-                        className="w-full py-3.5 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                        className="w-full py-3.5 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                         placeholder="Ex: admin ou email@empresa.com"
                         required
                         disabled={forgotStatus === 'loading'}
@@ -375,7 +374,7 @@ const Login: React.FC = () => {
                   <button
                     type="submit"
                     disabled={forgotStatus === 'loading'}
-                    className="w-full py-3.5 bg-slate-800 dark:bg-slate-700 text-white rounded-[10px] text-base font-semibold shadow-md hover:bg-slate-900 dark:hover:bg-slate-600 disabled:opacity-70 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-3.5 bg-slate-800 dark:bg-slate-700 text-white rounded-xl text-base font-semibold shadow-md hover:bg-slate-900 dark:hover:bg-slate-600 disabled:opacity-70 transition-all flex items-center justify-center gap-2"
                   >
                     {forgotStatus === 'loading' ? (
                       <>
@@ -445,7 +444,7 @@ const Login: React.FC = () => {
                       type="text"
                       value={registerData.name}
                       onChange={(e) => handleRegisterInput('name', e.target.value)}
-                      className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                      className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                       placeholder="Seu nome completo"
                       required
                       disabled={registerStatus === 'loading'}
@@ -465,7 +464,7 @@ const Login: React.FC = () => {
                         type="email"
                         value={registerData.email}
                         onChange={(e) => handleRegisterInput('email', e.target.value)}
-                        className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                        className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                         placeholder="seu@email.com"
                         required
                         disabled={registerStatus === 'loading'}
@@ -482,7 +481,7 @@ const Login: React.FC = () => {
                         type="tel"
                         value={registerData.phone}
                         onChange={(e) => handleRegisterInput('phone', e.target.value)}
-                        className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                        className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                         placeholder="(11) 99999-9999"
                         disabled={registerStatus === 'loading'}
                       />
@@ -501,7 +500,7 @@ const Login: React.FC = () => {
                       type="text"
                       value={registerData.username}
                       onChange={(e) => handleRegisterInput('username', e.target.value.toLowerCase().replace(/\s/g, ''))}
-                      className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                      className="w-full py-3 pl-[45px] pr-3.5 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                       placeholder="Crie um nome de usuário"
                       required
                       disabled={registerStatus === 'loading'}
@@ -522,7 +521,7 @@ const Login: React.FC = () => {
                         type={showRegisterPassword ? "text" : "password"}
                         value={registerData.password}
                         onChange={(e) => handleRegisterInput('password', e.target.value)}
-                        className="w-full py-3 pl-[45px] pr-10 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
+                        className="w-full py-3 pl-[45px] pr-10 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:border-royal-600 focus:ring-4 focus:ring-royal-600/10 placeholder:text-slate-400"
                         placeholder="Mínimo 6 caracteres"
                         required
                         minLength={6}
@@ -547,7 +546,7 @@ const Login: React.FC = () => {
                         type={showRegisterPassword ? "text" : "password"}
                         value={registerData.confirmPassword}
                         onChange={(e) => handleRegisterInput('confirmPassword', e.target.value)}
-                        className={`w-full py-3 pl-[45px] pr-3.5 border-2 rounded-[10px] text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:ring-4 placeholder:text-slate-400
+                        className={`w-full py-3 pl-[45px] pr-3.5 border-2 rounded-xl text-[15px] text-slate-800 dark:text-white transition-all focus:outline-none focus:ring-4 placeholder:text-slate-400
                           ${registerData.confirmPassword && registerData.password !== registerData.confirmPassword 
                             ? 'border-red-400 focus:border-red-500 focus:ring-red-500/10 bg-red-50 dark:bg-red-900/10' 
                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:border-royal-600 focus:ring-royal-600/10'
@@ -572,7 +571,7 @@ const Login: React.FC = () => {
                 <button
                   type="submit"
                   disabled={registerStatus === 'loading'}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[10px] text-base font-semibold shadow-lg shadow-emerald-600/30 hover:-translate-y-0.5 disabled:opacity-70 disabled:transform-none disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-base font-semibold shadow-lg shadow-emerald-600/30 hover:-translate-y-0.5 disabled:opacity-70 disabled:transform-none disabled:shadow-none transition-all flex items-center justify-center gap-2"
                 >
                   {registerStatus === 'loading' ? (
                     <>
@@ -598,7 +597,7 @@ const Login: React.FC = () => {
       </div>
       
       {/* Footer / Credit */}
-      <div className="mt-8 text-center text-royal-200/60 dark:text-slate-500 text-xs font-medium tracking-wide animate-in fade-in duration-500 delay-150 flex flex-col gap-1">
+      <div className="mt-8 text-center text-slate-500 dark:text-slate-500 text-xs font-medium tracking-wide animate-in fade-in duration-500 delay-150 flex flex-col gap-1">
           <span>&copy; {new Date().getFullYear()} SP Contábil. Todos os direitos reservados.</span>
           <span className="font-bold opacity-80 tracking-widest">DESENVOLVIDO BY SP-CONTÁBIL</span>
       </div>
