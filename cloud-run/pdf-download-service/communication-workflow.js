@@ -74,7 +74,7 @@ function createWorkflow({db,env,allowed,fetchImpl=fetch,now=()=>new Date(),readH
    const settings=(await settingsRef.get()).data()||initial();
    const offsets=settings?.offsets;
    const planned=Array.isArray(offsets)&&offsets.length?plan({source,recipient:contact,offsets,now:now()}):plan({source,recipient:contact,offsets:[0],now:now()}).map(p=>({...p,id:fingerprint(['unscheduled-draft',source.kind,source.id]),status:'awaiting-schedule',offset:null,scheduledAt:null,expiresAt:null}));
-   return {historyId,kind,number:r.number,client:r.payerName,amountCents:r.amountCents,dueDate:r.dueDate,contact,settingsRevision:settings?.revision??0,source,planned};
+   return {historyId,kind,number:r.number,client:r.payerName,issuedAt:kind==='receivable'?(r.createdAt||null):null,dataOrigin:kind==='receivable'?'Boleto Cloud':'Contas a pagar internas',contactOrigin:registered.sourceName,amountCents:source.amountCents,dueDate:source.dueDate,contact,settingsRevision:settings?.revision??0,source,planned};
   },
   async saveDraft(preview,uid,userRef,reason){
    if(typeof reason!=='string'||reason.trim().length<5||reason.length>500)fail('Informe o motivo da confirmação.',400);
@@ -141,8 +141,8 @@ async function handle({request,url,db,env,userRef,uid,allowed,readBody,reply,fet
  if(!['preview','draft'].includes(action))fail('Rota não encontrada.',404);
  // Recompute previews server-side. Never trust a source or recipient confirmation supplied by a client.
  const preview=await workflow.preview(body,uid);await recheck();
- const digest=fingerprint({historyId:preview.historyId,kind:preview.kind,number:preview.number,amount:preview.amountCents,due:preview.dueDate,emails:preview.contact.emails,settings:preview.settingsRevision,source:preview.source.reviewRevision});
- if(action==='preview'){reply({reviewToken:digest,number:preview.number,client:preview.client,dueDate:preview.dueDate,amountCents:preview.amountCents,emails:preview.contact.emails,stages:preview.planned.map(p=>({scheduledAt:p.scheduledAt,status:p.status})),enabled:false});return;}
+ const digest=fingerprint({historyId:preview.historyId,kind:preview.kind,number:preview.number,amount:preview.amountCents,due:preview.dueDate,issuedAt:preview.issuedAt,client:preview.client,emails:preview.contact.emails,settings:preview.settingsRevision,source:preview.source.reviewRevision});
+ if(action==='preview'){reply({reviewToken:digest,number:preview.number,client:preview.client,issuedAt:preview.issuedAt,dataOrigin:preview.dataOrigin,contactOrigin:preview.contactOrigin,dueDate:preview.dueDate,amountCents:preview.amountCents,emails:preview.contact.emails,stages:preview.planned.map(p=>({scheduledAt:p.scheduledAt,status:p.status})),enabled:false});return;}
  if(body.reviewToken!==digest)fail('Prévia alterada. Confira novamente.');
  reply(await workflow.saveDraft(preview,uid,userRef,body.reason));
 }

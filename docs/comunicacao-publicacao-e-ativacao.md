@@ -36,3 +36,10 @@ O worker exige simultaneamente flag de servidor, configuração ativa e etapas `
 208 testes do serviço, TypeScript, build e contratos protegidos. Ensaio real de Firestore local: contas a receber e pagar, PDFs/ICS, auditoria, cancelamento e restauração de 9 documentos amostrados nas 4 coleções (13 documentos sintéticos no pacote). Zero escrita em produção e zero e-mails. A conferência visual usou dados fictícios.
 
 Arquivo de pagadores disponível para importação: 1.076 registros, 1.075 CPF/CNPJ distintos, 44 bloqueados no cadastro completo. A ocorrência de bloqueio só impede a cobrança que referenciar esse cadastro; a contagem não significa 44 cobranças ativas com problema.
+
+
+## Fonte dos dados definida por Paulo
+
+Para clientes e boletos a receber, usar o Boleto Cloud: cadastro de pagadores para todos os e-mails conferidos; histórico de boletos para identificação do cliente e emissão; consulta da situação no emissor para validar vencimento, valor e condição de pagamento. A prévia identifica a origem, o arquivo do cadastro e as datas. Ausência de emissão não deve ser preenchida com a data do lançamento ou do rascunho.
+
+O catálogo é uma importação do relatório oficial, não uma sincronização contínua. Alterações no Boleto Cloud exigem atualização dos relatórios e nova conferência. Divergências com lançamentos internos bloqueiam a preparação, sem sobrescrever dados financeiros ou substituir o cadastro central dos demais módulos. Contas a pagar e seus destinatários internos continuam com sua própria origem. Dias a definir e envios desativados permanecem inalterados.
