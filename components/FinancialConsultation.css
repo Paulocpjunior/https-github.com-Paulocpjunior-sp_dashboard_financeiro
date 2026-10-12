@@ -1,9 +1,9 @@
 /* Opt-in consultation surfaces; dialogs and financial logic remain independent. */
-.sp-view-switch { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); background: var(--sp-surface); }
+.sp-ui.sp-view-switch { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); background: var(--sp-surface); }
 .sp-view-switch .sp-view-option { flex: 1 1 180px; display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 10px 16px; border-radius: var(--sp-radius-control); color: var(--sp-muted); cursor: pointer; }
 .sp-view-switch .sp-view-option[aria-pressed="true"] { background: var(--sp-selected); color: var(--sp-accent); font-weight: 600; }
 .sp-view-switch .sp-view-option:hover { background: var(--sp-bg); }
-.sp-consultation-filters, .sp-consultation-alerts, .sp-consultation-table { background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); box-shadow: var(--sp-shadow); }
+.sp-ui.sp-consultation-filters, .sp-ui.sp-consultation-alerts, .sp-ui.sp-consultation-table { background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); box-shadow: var(--sp-shadow); }
 .sp-consultation-filters { padding: 24px; }
 .sp-consultation-filters input, .sp-consultation-filters select { min-height: 44px; min-width: 0; padding: 10px 12px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); background: var(--sp-surface); color: var(--sp-text); }
 .sp-consultation-filters input[placeholder="Pesquise por qualquer termo..."] { padding-left: 36px; }
