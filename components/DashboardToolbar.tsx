@@ -1,18 +1,18 @@
 import React from 'react';
 import { Timer, RefreshCw, Filter, Printer, Download, MessageCircle, ArrowUpCircle, ArrowDownCircle, CalendarClock, Plus } from 'lucide-react';
 interface Props {
- title: string; isAdmin: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
+ title: string; description?: string; isAdmin: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
  isRefreshing: boolean; hasFilters: boolean; filtersOpen: boolean;
  onNewReceivable: () => void; onNewPayable: () => void; onRecurrences: () => void;
  onRefresh: () => void; onFilters: () => void; onPrint: () => void;
  onExport: () => void; onWhatsApp: () => void;
 }
-export default function DashboardToolbar({title,isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
+export default function DashboardToolbar({title,description,isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
  return (
         <section aria-label="Ações do painel" className="space-y-4 print:hidden">
           <div className="print:hidden">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
-            <p className="text-slate-500 dark:text-slate-400">Movimentos do período selecionado. Os saldos em aberto e o acumulado histórico permanecem no resumo acima.</p>
+            <p className="text-slate-500 dark:text-slate-400">{description || 'Movimentos do período selecionado. Os saldos em aberto e o acumulado histórico permanecem no resumo acima.'}</p>
           </div>
           
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4">

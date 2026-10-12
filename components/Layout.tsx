@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle, ReceiptText } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, X, Wallet, FileText, Wifi, TrendingUp, TrendingDown, DollarSign, Building2, MessageCircle, CheckCircle, ReceiptText } from 'lucide-react';
 import { AuthService } from '../services/authService';
 import { DataService } from '../services/dataService';
 import { KPIData } from '../types';
@@ -111,12 +111,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navItems = [
     { path: '/', label: 'Painel Principal', icon: LayoutDashboard },
+    { path: '/lancamentos', label: 'Lançamentos', icon: ReceiptText },
     { path: '/relatorios', label: 'Relatórios', icon: FileText },
     { path: '/faturamento', label: 'Faturamento', accessibleLabel: 'Base de Faturamento', icon: ReceiptText },
     ...(hasFinancialPermission(user, 'billing.boleto-cloud.history.read') ? [{ path: '/boletos', label: 'Boletos Boleto Cloud', icon: ReceiptText }] : []),
     ...(hasFinancialPermission(user, 'itau.openfinance.read') ? [{ path: '/extrato-itau', label: 'Extrato Itaú', icon: Building2 }] : []),
-    // Verificação Case-Insensitive para Admin
-    ...((user?.role || '').toLowerCase() === 'admin' ? [{ path: '/admin', label: 'Usuários', icon: Users }] : []),
   ];
 
   return (
@@ -229,7 +228,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className="min-w-0 whitespace-normal leading-5 font-medium">Tesouraria Wix</span>
               </button>
             )}
-            {user?.role === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="w-full min-h-12 flex items-center px-4 py-3 rounded-xl text-royal-200 dark:text-slate-400 hover:bg-royal-900/50">Manutenção</button>}
+            {(user?.role || "").toLowerCase() === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="w-full min-h-12 flex items-center px-4 py-3 rounded-xl text-royal-200 dark:text-slate-400 hover:bg-royal-900/50">Manutenção</button>}
           </nav>
         </div>
 

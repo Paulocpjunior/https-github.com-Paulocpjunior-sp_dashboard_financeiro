@@ -62,7 +62,7 @@ const getFilterScopeKey = (filters: Partial<FilterState>) => [
   filters.receiptDateEnd || '',
 ].join('|');
 
-const Dashboard: React.FC = () => {
+const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false }) => {
   const currentUser = AuthService.getCurrentUser();
   const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
   const canManagePayable = (['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'] as const).some(p => hasFinancialPermission(currentUser,p));
@@ -622,7 +622,8 @@ const Dashboard: React.FC = () => {
         {payableModal && <PayablesModal id={payableModal.id} onClose={() => setPayableModal(null)} onSaved={() => { void handleManualRefresh(); }} />}
         {nativeEntryKind && <NativeEntryModal kind={nativeEntryKind} onClose={() => setNativeEntryKind(null)} onSaved={() => { void handleManualRefresh(); }} />}
         <DashboardToolbar
-          title={isContasAPagar ? 'Contas a pagar' : isContasAReceber ? 'Contas a receber' : 'Visão geral'}
+          title={entriesOnly ? 'Lançamentos' : isContasAPagar ? 'Contas a pagar' : isContasAReceber ? 'Contas a receber' : 'Visão geral'}
+          description={entriesOnly ? 'Consulte receitas e despesas, filtre o período e acompanhe cada lançamento. Use as ações abaixo para cadastrar contas.' : undefined}
           isAdmin={isAdmin} canRecurrences={canManageRecurrences} lastUpdated={lastUpdated} refreshCountdown={refreshCountdown}
           isRefreshing={isRefreshing} hasFilters={Object.values(filters).some(Boolean)} filtersOpen={isFilterMenuOpen}
           onNewReceivable={() => setNativeEntryKind('receber')} onNewPayable={() => setNativeEntryKind('pagar')}
@@ -1037,6 +1038,7 @@ const Dashboard: React.FC = () => {
 
         {/* Charts & Data */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+           {!entriesOnly && (
            <div className="lg:col-span-3 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm print:shadow-none print:border-none transition-colors">
              <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">
                {isContasAPagar ? 'Contas a Pagar por Vencimento' : 'Movimentação Recente'}
@@ -1067,6 +1069,7 @@ const Dashboard: React.FC = () => {
                </ResponsiveContainer>
              </div>
            </div>
+           )}
 
            <div className="lg:col-span-3">
               <DataTable

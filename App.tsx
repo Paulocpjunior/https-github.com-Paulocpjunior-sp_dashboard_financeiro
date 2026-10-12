@@ -29,6 +29,7 @@ const App: React.FC = () => {
           {MaintenancePreview && <Route path="/dev/manutencao" element={<MaintenancePreview />} />}
           {PayablesPreview && <Route path="/dev/pagar" element={<PayablesPreview />} />}
           {NativeEntryPreview && <Route path="/dev/lancamentos" element={<NativeEntryPreview />} />}
+          <Route path="/lancamentos" element={<ProtectedRoute><Dashboard entriesOnly /></ProtectedRoute>} />
           <Route path="/login" element={<Login />} />
           <Route
             path="/"
