@@ -74,3 +74,11 @@ test('cancellation and uncertain-result review never requeue or erase audit',asy
  assert([...f.store.values()].some(v=>v.action==='manual-review'));
  f.store.set('users/admin',{active:false});await assert.rejects(f.w.manage(id,'review','admin',f.userRef,'Outra conferência com acesso revogado'));
 });
+
+
+test('receivable preview identifies Boleto Cloud and preserves its emission date without inventing missing dates',async()=>{
+ const f=setup();f.row.createdAt='2026-10-09';
+ const p=await f.preview();assert.equal(p.dataOrigin,'Boleto Cloud');assert.equal(p.contactOrigin,'synthetic.xls');assert.equal(p.issuedAt,'2026-10-09');assert.equal(p.dueDate,f.bank.vencimento);
+ delete f.row.createdAt;assert.equal((await f.preview()).issuedAt,null);
+ f.bank.vencimento='2099-12-30';await assert.rejects(f.preview());
+});
