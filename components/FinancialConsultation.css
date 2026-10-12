@@ -1,0 +1,30 @@
+/* Opt-in consultation surfaces; dialogs and financial logic remain independent. */
+.sp-ui.sp-view-switch { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); background: var(--sp-surface); }
+.sp-view-switch .sp-view-option { flex: 1 1 180px; display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 10px 16px; border-radius: var(--sp-radius-control); color: var(--sp-muted); cursor: pointer; }
+.sp-view-switch .sp-view-option[aria-pressed="true"] { background: var(--sp-selected); color: var(--sp-accent); font-weight: 600; }
+.sp-view-switch .sp-view-option:hover { background: var(--sp-bg); }
+.sp-ui.sp-consultation-filters, .sp-ui.sp-consultation-alerts, .sp-ui.sp-consultation-table { background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); box-shadow: var(--sp-shadow); }
+.sp-consultation-filters { padding: 24px; }
+.sp-consultation-filters input, .sp-consultation-filters select { min-height: 44px; min-width: 0; padding: 10px 12px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); background: var(--sp-surface); color: var(--sp-text); }
+.sp-consultation-filters input[placeholder="Pesquise por qualquer termo..."] { padding-left: 36px; }
+.sp-consultation-filters button { min-height: 44px; }
+.sp-consultation-filters label { font-size: 13px; color: var(--sp-muted); text-transform: none; }
+.sp-consultation-filters .sp-date-range input { flex: 1 1 130px; }
+.sp-consultation-alerts > div:first-child { background: var(--sp-bg); border-color: var(--sp-border); }
+.sp-consultation-alerts button { min-height: 44px; min-width: 44px; text-align: left; }
+.sp-consultation-alerts .grid > button { border-radius: var(--sp-radius-control); }
+.sp-consultation-alerts .text-xs, .sp-consultation-alerts .text-\[10px\] { font-size: 13px; }
+.sp-consultation-alerts .font-black { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sp-consultation-table table { font-size: 14px; font-variant-numeric: tabular-nums; }
+.sp-consultation-table th { font-size: 13px; padding: 12px; }
+.sp-consultation-table td { font-size: 14px; padding: 12px; }
+.sp-consultation-table td span, .sp-consultation-table td button { font-size: 13px; }
+.sp-consultation-table thead { background: var(--sp-bg); }
+.sp-consultation-table button { min-height: 44px; min-width: 44px; }
+.sp-consultation-table input { min-height: 44px; font-size: 14px; border-color: var(--sp-border); background: var(--sp-surface); color: var(--sp-text); }
+.sp-table-scroll { overscroll-behavior-x: contain; }
+@media (max-width: 639px) { .sp-consultation-filters { padding: 16px; } }
+@media print { .sp-consultation-table { box-shadow: none; border: none; } .sp-consultation-table .sp-table-scroll { overflow: visible; } }
+
+.sp-consultation-filters .sp-filter-subsection { background: var(--sp-bg); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); }
+.sp-consultation-filters h3 { color: var(--sp-text); }

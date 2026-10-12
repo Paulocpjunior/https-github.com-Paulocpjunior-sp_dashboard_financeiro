@@ -1,3 +1,5 @@
+import './FinancialConsultation.css';
+import '../design-system/tokens.css';
 import NativeEntryDetails from './NativeEntryDetails';
 import BoletoIssueModal from './BoletoIssueModal';
 
@@ -231,7 +233,7 @@ const DataTable: React.FC<DataTableProps> = ({
 
   return (
     <>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-colors relative">
+      <div className="sp-ui sp-consultation-table overflow-hidden flex flex-col relative">
         {possibleDuplicates && possibleDuplicates.transactionCount > 0 && (
           <div className="px-3 py-2 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -264,7 +266,7 @@ const DataTable: React.FC<DataTableProps> = ({
           </div>
         )}
 
-        <div className="overflow-x-auto min-h-[400px]">
+        <div className="sp-table-scroll overflow-x-auto min-h-[400px]" tabIndex={0} role="region" aria-label="Tabela de lançamentos, role horizontalmente para ver todas as colunas">
           {/* ... (Tabela Principal Mantida Inalterada) ... */}
           <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-xs">
             <thead className="bg-slate-50 dark:bg-slate-800">
@@ -605,6 +607,7 @@ const DataTable: React.FC<DataTableProps> = ({
           </p>
           <div className="flex gap-1">
             <button
+              aria-label="Página anterior" type="button"
               onClick={() => onPageChange(page - 1)}
               disabled={page <= 1 || isLoading}
               className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -612,6 +615,7 @@ const DataTable: React.FC<DataTableProps> = ({
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
+              aria-label="Próxima página" type="button"
               onClick={() => onPageChange(page + 1)}
               disabled={page >= totalPages || isLoading}
               className="p-1.5 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
