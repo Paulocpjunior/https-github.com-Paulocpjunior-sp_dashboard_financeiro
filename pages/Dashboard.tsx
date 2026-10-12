@@ -619,11 +619,12 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
     <Layout>
       <div className="space-y-6">
         
-        {payableModal && <PayablesModal id={payableModal.id} onClose={() => setPayableModal(null)} onSaved={() => { void handleManualRefresh(); }} />}
-        {nativeEntryKind && <NativeEntryModal kind={nativeEntryKind} onClose={() => setNativeEntryKind(null)} onSaved={() => { void handleManualRefresh(); }} />}
+        {entriesOnly && payableModal && <PayablesModal id={payableModal.id} onClose={() => setPayableModal(null)} onSaved={() => { void handleManualRefresh(); }} />}
+        {entriesOnly && nativeEntryKind && <NativeEntryModal kind={nativeEntryKind} onClose={() => setNativeEntryKind(null)} onSaved={() => { void handleManualRefresh(); }} />}
         <DashboardToolbar
-          title={entriesOnly ? 'Lançamentos' : isContasAPagar ? 'Contas a pagar' : isContasAReceber ? 'Contas a receber' : 'Visão geral'}
-          description={entriesOnly ? 'Consulte receitas e despesas, filtre o período e acompanhe cada lançamento. Use as ações abaixo para cadastrar contas.' : undefined}
+          entryActions={entriesOnly}
+          title={entriesOnly ? 'Lançamentos' : isContasAPagar ? 'Contas a pagar' : isContasAReceber ? 'Contas a receber' : 'Painel Principal'}
+          description={entriesOnly ? 'Consulte receitas e despesas, filtre o período e acompanhe cada lançamento. Use as ações abaixo para cadastrar contas.' : 'Acompanhe saldos, indicadores, alertas e gráficos do Financeiro.'}
           isAdmin={isAdmin} canRecurrences={canManageRecurrences} lastUpdated={lastUpdated} refreshCountdown={refreshCountdown}
           isRefreshing={isRefreshing} hasFilters={Object.values(filters).some(Boolean)} filtersOpen={isFilterMenuOpen}
           onNewReceivable={() => setNativeEntryKind('receber')} onNewPayable={() => setNativeEntryKind('pagar')}
@@ -700,7 +701,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
           />
         )}
 
-        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Período da tabela: {getPeriodText()}</p>
+        <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">{entriesOnly ? 'Período da tabela' : 'Período da análise'}: {getPeriodText()}</p>
 
         {!isRefreshing && data.length === 0 && <p role="status" className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">Nenhum lançamento neste filtro. As pendências de meses anteriores continuam nos saldos acumulados acima.</p>}
 
@@ -1071,7 +1072,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
            </div>
            )}
 
-           <div className="lg:col-span-3">
+           {entriesOnly && <div className="lg:col-span-3">
               <DataTable
                 data={data}
                 allData={allFilteredData}
@@ -1096,10 +1097,10 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 onSortChange={handleSortChange}
                 possibleDuplicates={possibleDuplicates}
               />
-           </div>
+           </div>}
         </div>
 
-        {selectedClient && (
+        {entriesOnly && selectedClient && (
           <ClientProfile 
             clientName={selectedClient} 
             transactions={allFilteredData} 

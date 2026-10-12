@@ -1,13 +1,14 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Timer, RefreshCw, Filter, Printer, Download, MessageCircle, ArrowUpCircle, ArrowDownCircle, CalendarClock, Plus } from 'lucide-react';
 interface Props {
- title: string; description?: string; isAdmin: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
+ title: string; description?: string; entryActions?: boolean; isAdmin: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
  isRefreshing: boolean; hasFilters: boolean; filtersOpen: boolean;
  onNewReceivable: () => void; onNewPayable: () => void; onRecurrences: () => void;
  onRefresh: () => void; onFilters: () => void; onPrint: () => void;
  onExport: () => void; onWhatsApp: () => void;
 }
-export default function DashboardToolbar({title,description,isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
+export default function DashboardToolbar({title,description,entryActions = true,isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
  return (
         <section aria-label="Ações do painel" className="space-y-4 print:hidden">
           <div className="print:hidden">
@@ -16,7 +17,7 @@ export default function DashboardToolbar({title,description,isAdmin,canRecurrenc
           </div>
           
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4">
-            {(isAdmin || canRecurrences) && (
+            {entryActions && (isAdmin || canRecurrences) && (
               <div role="group" aria-label="Lançamentos e recorrências" className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {isAdmin && <><button type="button" aria-label="Nova conta a receber" onClick={onNewReceivable}
                   className="group flex min-h-28 items-center gap-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-left text-blue-950 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-50 dark:hover:bg-blue-900/60 dark:focus-visible:ring-offset-slate-900">
@@ -40,6 +41,7 @@ export default function DashboardToolbar({title,description,isAdmin,canRecurrenc
                 </button>}
               </div>
             )}
+            {!entryActions && <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-600 dark:text-slate-300">Para cadastrar ou gerenciar contas, acesse Lançamentos.</p><Link to="/lancamentos" className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500">Ir para Lançamentos</Link></div>}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div role="group" aria-label="Consulta e filtros" className="flex flex-wrap items-center gap-3">
             {/* REFRESH INDICATOR */}
