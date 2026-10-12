@@ -1042,14 +1042,14 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
              <div className="h-64 w-full">
                <ResponsiveContainer width="100%" height="100%">
                  <BarChart data={chartData} margin={{top: 5, right: 30, left: 20, bottom: 5}}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#475569" strokeOpacity={0.1} />
-                    <XAxis dataKey="date" stroke="#94a3b8" />
-                    <YAxis stroke="#94a3b8" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#515154" strokeOpacity={0.1} />
+                    <XAxis dataKey="date" stroke="#a1a1a6" />
+                    <YAxis stroke="#a1a1a6" />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+                      contentStyle={{ backgroundColor: '#2c2c2e', borderColor: '#3a3a3c', color: '#fbfbfd' }}
                       formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
                     />
-                    <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                    <Legend wrapperStyle={{ color: '#a1a1a6' }} />
                     {isContasAPagar ? (
                       <>
                         <Bar dataKey="Pago" fill="#16a34a" radius={[4, 4, 0, 0]} />

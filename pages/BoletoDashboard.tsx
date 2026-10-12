@@ -71,7 +71,7 @@ export default function BoletoDashboard() {
     finally{setAction('');}
   }
   function choose(value:string){setView(value);setPage(1);setSearch('');setQuery('');setTimeout(()=>document.getElementById('historico-boletos')?.scrollIntoView({behavior:'smooth'}),0);}
-  const charts=result?[['openMonth','#2563eb','Em aberto'],['overdueMonth','#e11d48','Em atraso'],['paidMonth','#059669','Pago']].map(([key,color,name])=>({name,color,count:result.metrics[key].count,value:result.metrics[key].amountCents/100})):[];
+  const charts=result?[['openMonth','#0071e3','Em aberto'],['overdueMonth','#e11d48','Em atraso'],['paidMonth','#059669','Pago']].map(([key,color,name])=>({name,color,count:result.metrics[key].count,value:result.metrics[key].amountCents/100})):[];
   const metric=(key:string)=>result&&<div key={key} className={card}><h3 className="text-sm font-semibold text-slate-500">{labels[key]}</h3><p className="text-2xl font-bold mt-2">{money(result.metrics[key].amountCents)}</p><Counts value={result.metrics[key]}/><button className="text-blue-600 dark:text-blue-400 mt-3 text-sm underline" onClick={()=>choose(key)}>Consultar {labels[key].toLowerCase()}</button></div>;
   return <Layout><div className="space-y-6 text-slate-900 dark:text-slate-100">
     <header className="flex flex-wrap gap-4 justify-between"><div><h1 className="text-2xl font-bold flex gap-2 items-center"><ReceiptText/>Boletos Boleto Cloud</h1><p className="text-slate-500 mt-1">Histórico do emissor · Valores em reais</p></div><a className="text-blue-600 underline self-center" href="https://app.boletocloud.com/" target="_blank" rel="noreferrer">Abrir Boleto Cloud</a></header>

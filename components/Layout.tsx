@@ -10,6 +10,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../services/firebaseConfig';
 import { AccumulatedBalancesService } from '../services/accumulatedBalancesService';
 import { ThemeToggle } from './ThemeToggle';
+import Logo from './Logo';
 import { logger } from '../utils/logger';
 import { WhatsAppSendModal } from './WhatsAppSendModal';
 import MaintenanceModal from './MaintenanceModal';
@@ -171,9 +172,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* LOGO AREA - PROMINENT */}
         <div className="sp-brand-row flex items-center justify-between h-24 px-6 shrink-0">
           <div className="flex items-center gap-3.5">
-            <div className="bg-gradient-to-br from-royal-500 to-royal-700 p-2.5 rounded-xl shadow-lg shadow-royal-900/40 border border-royal-400/20">
-                <Building2 className="h-7 w-7 text-white" />
-            </div>
+            <Logo iconOnly className="h-12 w-12" />
             <div className="flex flex-col">
                 <span className="sp-brand-name text-xl tracking-tight leading-none font-semibold">SP Contábil</span>
                 <span className="sp-muted text-xs font-medium mt-1">Gestão Financeira</span>
@@ -187,7 +186,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex-1 px-4 py-6 overflow-y-auto">
           <div className="sp-profile flex items-center space-x-3 px-3 py-3 mb-6">
             <img 
-              src={`https://ui-avatars.com/api/?name=${user?.name}&background=1e40af&color=fff&bold=true`} 
+              src={`https://ui-avatars.com/api/?name=${user?.name}&background=0071e3&color=fff&bold=true`} 
               alt="Avatar" 
               className="h-10 w-10 rounded-full border-2 border-royal-700"
             />
@@ -271,9 +270,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <Menu className="h-6 w-6" />
           </button>
           <div className="flex items-center gap-3">
-             <div className="bg-gradient-to-br from-royal-600 to-royal-800 p-1.5 rounded-lg shadow-sm">
-                <Building2 className="h-5 w-5 text-white" />
-             </div>
+             <Logo iconOnly className="h-9 w-9" />
              <span className="font-bold text-slate-800 dark:text-white tracking-tight">SP Contábil</span>
           </div>
           <ThemeToggle />
