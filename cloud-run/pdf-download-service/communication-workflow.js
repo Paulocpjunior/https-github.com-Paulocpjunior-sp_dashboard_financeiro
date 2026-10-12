@@ -1,3 +1,4 @@
+const {contactRecipients,recipients}=require('./communication-recipients');
 // Administrative preparation and observation only. HTTP routes never dispatch mail.
 const {createHash,randomUUID}=require('node:crypto');
 const {createHistoryReader}=require('./boleto-history');
@@ -8,8 +9,8 @@ const {createProvider}=require('./communication-provider');
 const fingerprint=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const fail=(message,status=409)=>{throw Object.assign(Error(message),{status});};
 const idValid=id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id);
-const contactValid=c=>c&&typeof c.email==='string'&&c.email.length<=254&&/^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(c.email);
-function publicJob(j){return {id:j.id,status:j.status,scheduledAt:j.scheduledAt,expiresAt:j.expiresAt,recipient:j.recipient?.email,number:j.number||'',client:j.client||'',createdAt:j.createdAt,validation:j.validation||null,reason:j.reason||null};}
+const contactValid=c=>{try{contactRecipients(c);return true;}catch{return false;}};
+function publicJob(j){return {id:j.id,status:j.status,scheduledAt:j.scheduledAt,expiresAt:j.expiresAt,recipient:contactRecipients(j.recipient).join('; '),number:j.number||'',client:j.client||'',createdAt:j.createdAt,validation:j.validation||null,reason:j.reason||null};}
 function createWorkflow({db,env,allowed,fetchImpl=fetch,now=()=>new Date(),readHistory=async()=>createHistoryReader().load(db)}){
  const settingsRef=db.collection('financialSettings').doc('communicationRule');
  const contacts=db.collection('financialCommunicationContacts');
@@ -34,7 +35,7 @@ function createWorkflow({db,env,allowed,fetchImpl=fetch,now=()=>new Date(),readH
   const settings=(await settingsRef.get()).data();
   const profile=(await db.collection('users').doc(job.createdBy).get()).data();
   const contact=(await contacts.doc(job.source.id).get()).data();
-  return settings?.enabled===true&&settings.revision===job.settingsRevision&&allowed(profile)&&contact?.active===true&&contact.email===job.recipient.email&&contact.confirmedAt===job.recipient.confirmedAt;
+  return settings?.enabled===true&&settings.revision===job.settingsRevision&&allowed(profile)&&contact?.active===true&&contactValid(contact)&&JSON.stringify(contactRecipients(contact))===JSON.stringify(contactRecipients(job.recipient))&&contact.confirmedAt===job.recipient.confirmedAt;
  }
  return {
   async candidates(query=''){
@@ -44,13 +45,14 @@ function createWorkflow({db,env,allowed,fetchImpl=fetch,now=()=>new Date(),readH
    const rows=h.rows.filter(r=>r.bank===account.bank&&r.beneficiaryDocument===account.beneficiaryDocument&&!r.paidAt&&!r.cancelledAt&&!(r.paidCents>0)&&[r.number,r.payerName,r.payerDocument].join(' ').toLocaleLowerCase('pt-BR').includes(q));
    return {total:rows.length,limit:30,rows:rows.slice(0,30).map(r=>({id:r.id,number:r.number,client:r.payerName,dueDate:r.dueDate,amountCents:r.amountCents})),note:'Histórico para seleção. A prévia consulta a situação atual no emissor.'};
   },
-  async preview({historyId,email},uid){
-   if(!contactValid({email}))fail('Informe um único e-mail confirmado para esta prévia.',400);
-   const contact={email:email.toLowerCase(),confirmedBy:uid,confirmedAt:now().toISOString(),active:true};
+  async preview({historyId,email,emails},uid){
+   if(!contactValid({email,emails}))fail('Informe todos os e-mails cadastrados e conferidos.',400);
+   const contact={emails:recipients(emails??email),confirmedBy:uid,confirmedAt:now().toISOString(),active:true};
    const {r}=await record(historyId),source=await adapter(contact).readSource({id:historyId,kind:'receivable'});
    const settings=(await settingsRef.get()).data();
-   const planned=plan({source,recipient:contact,offsets:settings?.offsets,now:now()});
-   return {historyId,number:r.number,client:r.payerName,amountCents:r.amountCents,dueDate:r.dueDate,contact,settingsRevision:settings.revision,source,planned};
+   const offsets=settings?.offsets;
+   const planned=Array.isArray(offsets)&&offsets.length?plan({source,recipient:contact,offsets,now:now()}):plan({source,recipient:contact,offsets:[0],now:now()}).map(p=>({...p,id:fingerprint(['unscheduled-draft',source.kind,source.id]),status:'awaiting-schedule',offset:null,scheduledAt:null,expiresAt:null}));
+   return {historyId,number:r.number,client:r.payerName,amountCents:r.amountCents,dueDate:r.dueDate,contact,settingsRevision:settings?.revision??0,source,planned};
   },
   async saveDraft(preview,uid,userRef,reason){
    if(typeof reason!=='string'||reason.trim().length<5||reason.length>500)fail('Informe o motivo da confirmação.',400);
@@ -99,8 +101,8 @@ async function handle({request,url,db,env,userRef,uid,allowed,readBody,reply,fet
  if(!['preview','draft'].includes(action))fail('Rota não encontrada.',404);
  // Recompute previews server-side. Never trust a source or recipient confirmation supplied by a client.
  const preview=await workflow.preview(body,uid);await recheck();
- const digest=fingerprint({historyId:preview.historyId,number:preview.number,amount:preview.amountCents,due:preview.dueDate,email:preview.contact.email,settings:preview.settingsRevision,source:preview.source.reviewRevision});
- if(action==='preview'){reply({reviewToken:digest,number:preview.number,client:preview.client,dueDate:preview.dueDate,amountCents:preview.amountCents,email:preview.contact.email,stages:preview.planned.map(p=>({scheduledAt:p.scheduledAt,status:p.status})),enabled:false});return;}
+ const digest=fingerprint({historyId:preview.historyId,number:preview.number,amount:preview.amountCents,due:preview.dueDate,emails:preview.contact.emails,settings:preview.settingsRevision,source:preview.source.reviewRevision});
+ if(action==='preview'){reply({reviewToken:digest,number:preview.number,client:preview.client,dueDate:preview.dueDate,amountCents:preview.amountCents,emails:preview.contact.emails,stages:preview.planned.map(p=>({scheduledAt:p.scheduledAt,status:p.status})),enabled:false});return;}
  if(body.reviewToken!==digest)fail('Prévia alterada. Confira novamente.');
  reply(await workflow.saveDraft(preview,uid,userRef,body.reason));
 }

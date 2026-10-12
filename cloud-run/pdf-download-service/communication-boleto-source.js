@@ -1,12 +1,9 @@
+const {contactRecipients}=require('./communication-recipients');
 // Read-only adapter. No routes, scheduling, issuance or customer delivery are enabled here.
 const {createHash}=require('node:crypto');
 const {validateSituation}=require('./boleto-invite');
 const {validateArtifacts}=require('./communication-rule');
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const normalizeEmail=value=>{
- if(typeof value!=='string'||value.length>254||! /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(value))throw Error('Destinatário não confirmado.');
- return value.toLowerCase();
-};
 function createBoletoSource({base,apiKey,loadBinding,fetchImpl=fetch,now=()=>new Date(),statement=null}){
  // Deployment must supply the already configured provider URL, never a URL from a job/client.
  if(!['https://app.boletocloud.com/api/v1','https://sandbox.boletocloud.com/api/v1'].includes(base)||!apiKey||typeof loadBinding!=='function')throw Error('Fonte indisponível.');
@@ -20,7 +17,7 @@ function createBoletoSource({base,apiKey,loadBinding,fetchImpl=fetch,now=()=>new
   const binding=await loadBinding(ref.id);
   if(!binding||binding.active!==true||typeof binding.revision!=='string'||!binding.revision||typeof binding.token!=='string'||!binding.token||!binding.expected||binding.expected.token!==binding.token)throw Error('Vínculo indisponível.');
   const recipient=binding.recipient;
-  const email=normalizeEmail(recipient?.email);
+  const email=JSON.stringify(contactRecipients(recipient));
   if(!recipient.confirmedBy||!Number.isFinite(Date.parse(recipient.confirmedAt))||Date.parse(recipient.confirmedAt)>now().getTime())throw Error('Destinatário não confirmado.');
   const response=await get(binding.token,'/situacao');
   let bank;try{bank=(await response.json()).boleto;}catch{throw Error('Resposta inválida do emissor.');}
@@ -33,7 +30,7 @@ function createBoletoSource({base,apiKey,loadBinding,fetchImpl=fetch,now=()=>new
   readSource:async ref=>(await inspect(ref)).source,
   async prepare(job){
    const first=await inspect(job.source);
-   if(first.source.revision!==job.source.revision||first.email!==normalizeEmail(job.recipient?.email))throw Error('Cobrança ou destinatário alterado.');
+   if(first.source.revision!==job.source.revision||first.email!==JSON.stringify(contactRecipients(job.recipient)))throw Error('Cobrança ou destinatário alterado.');
    const response=await get(first.binding.token,'/atualizado/vencimento/'+first.bank.vencimento);
    if(Number(response.headers?.get('content-length'))>3000000)throw Error('PDF excede o limite.');
    const pdf=Buffer.from(await response.arrayBuffer());

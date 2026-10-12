@@ -21,3 +21,10 @@ test('network failure and 429 do not trigger hidden automatic retries or leak re
  for(const status of [400,401,403,429,500]){let n=0;const p=createProvider({env,fetchImpl:async()=>++n===1?{ok:true,json:async()=>({access_token:'secret'})}:{status,text:async()=>assert.fail('must not expose provider body')}});await assert.rejects(()=>p.send(message()),/não confirmado/);assert.equal(n,2);}
  let n=0;await assert.rejects(()=>createProvider({env,fetchImpl:async()=>{n++;throw Error('timeout');}}).send(message()));assert.equal(n,1);
 });
+
+test('Graph receives every confirmed address exactly once; invalid list blocks the whole send',async()=>{
+ const calls=[],provider=createProvider({env,fetchImpl:async(url,options)=>{calls.push(options);return calls.length===1?{ok:true,json:async()=>({access_token:'synthetic'})}:{status:202};}});
+ await provider.send({...message(),to:['B@example.com','a@example.com','b@example.com']});
+ assert.deepEqual(JSON.parse(calls[1].body).message.toRecipients.map(r=>r.emailAddress.address),['a@example.com','b@example.com']);
+ for(const to of [[],['a@example.com','invalid'],['a@example.com','b@example.com\r\nBcc:x@example.com'],Array(51).fill('a@example.com')])await assert.rejects(createProvider({env,fetchImpl:async()=>assert.fail('no network')}).send({...message(),to}));
+});

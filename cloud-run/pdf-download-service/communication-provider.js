@@ -1,3 +1,4 @@
+const {recipients}=require('./communication-recipients');
 const {SENDER,validateArtifacts}=require('./communication-rule');
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const keys=['FINANCEIRO_GRAPH_TENANT_ID','FINANCEIRO_GRAPH_CLIENT_ID','FINANCEIRO_GRAPH_CLIENT_SECRET'];
@@ -6,9 +7,10 @@ function createProvider({env=process.env,fetchImpl=fetch}={}){
  return {async send(message){
   if(env.FINANCEIRO_COMMUNICATION_SEND_ENABLED!=='true')throw Error('Envio desativado.');
   if(!configuration(env).configured)throw Error('Canal do Financeiro não configurado.');
-  if(message.from!==SENDER||message.replyTo!==SENDER||! /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(message.to||'')||message.to.length>254||! /^[a-f0-9]{64}$/.test(message.idempotencyKey||''))throw Error('Envelope inválido.');
+  if(message.from!==SENDER||message.replyTo!==SENDER||! /^[a-f0-9]{64}$/.test(message.idempotencyKey||''))throw Error('Envelope inválido.');
+  const to=recipients(message.to);
   validateArtifacts(message);
-  const payload=JSON.stringify({message:{subject:message.subject,body:{contentType:'Text',content:message.text},toRecipients:[{emailAddress:{address:message.to}}],replyTo:[{emailAddress:{address:SENDER}}],internetMessageHeaders:[{name:'x-financeiro-reference',value:message.idempotencyKey}],attachments:message.attachments.map(a=>({'@odata.type':'#microsoft.graph.fileAttachment',name:a.name,contentType:a.type,contentBytes:a.content.toString('base64')}))},saveToSentItems:true});
+  const payload=JSON.stringify({message:{subject:message.subject,body:{contentType:'Text',content:message.text},toRecipients:to.map(address=>({emailAddress:{address}})),replyTo:[{emailAddress:{address:SENDER}}],internetMessageHeaders:[{name:'x-financeiro-reference',value:message.idempotencyKey}],attachments:message.attachments.map(a=>({'@odata.type':'#microsoft.graph.fileAttachment',name:a.name,contentType:a.type,contentBytes:a.content.toString('base64')}))},saveToSentItems:true});
   // Graph direct attachment requests must fit the request limit. Do not silently drop files.
   if(message.attachments.some(a=>a.content.length>=3000000)||Buffer.byteLength(payload)>3900000)throw Error('Mensagem excede o limite do canal.');
   const tokenResponse=await fetchImpl(`https://login.microsoftonline.com/${env[keys[0]]}/oauth2/v2.0/token`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env[keys[1]],client_secret:env[keys[2]],scope:'https://graph.microsoft.com/.default',grant_type:'client_credentials'}).toString()});

@@ -34,8 +34,8 @@ test('source account mismatch, paid snapshot and local ledger mismatch block',as
 test('payment after draft creation is recorded as blocked without requeue',async()=>{
  const f=setup(),p=await f.preview();await f.w.saveDraft(p,'admin',f.userRef,'Confirmar destinatário');f.bank.pagamento={valor:10};const v=await f.w.validate(p.planned[0].id,'admin',f.userRef);assert.equal(v.status,'blocked');assert.equal((await f.w.list()).rows[0].status,'draft');
 });
-test('missing days or multiple emails cannot silently activate defaults',async()=>{
- const f=setup();await assert.rejects(f.w.preview({historyId:f.id,email:'a@example.com;b@example.com'},'admin'));f.cfg.offsets=[];await assert.rejects(f.preview());
+test('missing days preserves an unscheduled draft and malformed recipients are rejected',async()=>{
+ const f=setup();await assert.rejects(f.w.preview({historyId:f.id,email:'a@example.com;b@example.com'},'admin'));f.cfg.offsets=[];const p=await f.preview();assert.equal(p.planned[0].scheduledAt,null);assert.equal(p.planned[0].expiresAt,null);assert.equal(p.planned[0].offset,null);assert.equal(p.planned[0].status,'awaiting-schedule');await f.w.saveDraft(p,'admin',f.userRef,'Dias ainda não definidos');assert.equal((await f.w.list()).rows[0].status,'draft');assert.equal((await f.w.validate(p.planned[0].id,'admin',f.userRef)).status,'ready');
 });
 test('public status excludes private source, token, confirmation metadata',()=>{
  const out=publicJob({id:'x',status:'unknown',source:{token:'secret'},recipient:{email:'a@example.com',confirmedBy:'private-user'},attemptId:'private-attempt'});assert(!JSON.stringify(out).includes('secret'));assert(!JSON.stringify(out).includes('private-user'));
@@ -44,4 +44,15 @@ test('server send flag alone cannot activate worker',async()=>{const f=setup();f
 
 test('worker is a no-op with server flag off, without accessing database',async()=>{
  const {run}=require('./communication-worker.cjs');assert.deepEqual(await run({db:null,env:{}}),{status:'disabled',processed:0});
+});
+
+test('all confirmed recipients survive preview and drafts; changing one blocks PDF validation',async()=>{
+ const f=setup(),p=await f.w.preview({historyId:f.id,emails:['B@example.com','a@example.com','b@example.com']},'admin');
+ assert.deepEqual(p.contact.emails,['a@example.com','b@example.com']);
+ await f.w.saveDraft(p,'admin',f.userRef,'Todos os endereços conferidos');
+ assert.equal((await f.w.list()).rows[0].recipient,'a@example.com; b@example.com');
+ assert.equal((await f.w.validate(p.planned[0].id,'admin',f.userRef)).status,'ready');
+ f.store.get('financialCommunicationContacts/'+f.id).emails=['a@example.com','c@example.com'];
+ assert.equal((await f.w.validate(p.planned[0].id,'admin',f.userRef)).status,'blocked');
+ await assert.rejects(f.w.preview({historyId:f.id,emails:['a@example.com','invalid']},'admin'));
 });

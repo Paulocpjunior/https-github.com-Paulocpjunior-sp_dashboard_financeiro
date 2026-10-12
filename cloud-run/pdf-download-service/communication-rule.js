@@ -1,3 +1,4 @@
+const {contactRecipients}=require('./communication-recipients');
 // Transport-independent foundation. No route, scheduler or live provider is enabled here.
 const {createHash,randomUUID}=require('node:crypto');
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -5,10 +6,6 @@ const SENDER='financeiro@spassessoriacontabil.com.br';
 function day(value) {
  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||new Date(value+'T12:00:00Z').toISOString().slice(0,10)!==value)throw Error('Data civil inválida.');
  return value;
-}
-function email(value){
- if(typeof value!=='string'||value.length>254||! /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(value))throw Error('Destinatário inválido.');
- return value.trim().toLowerCase();
 }
 function identity(source){
  if(!source||!['receivable','payable'].includes(source.kind)||typeof source.id!=='string'||!source.id||source.id.length>200||typeof source.revision!=='string'||!source.revision)throw Error('Fonte sem identidade ou revisão.');
@@ -25,7 +22,7 @@ function stopReason(source){
 }
 function plan({source,recipient,offsets,now=new Date()}){
  const reason=stopReason(source);if(reason)throw Error(reason);
- const snapshot=identity(source),to=email(recipient?.email);
+ const snapshot=identity(source),to=contactRecipients(recipient);
  if(typeof recipient?.confirmedBy!=='string'||!recipient.confirmedBy||!Number.isFinite(Date.parse(recipient.confirmedAt))||Date.parse(recipient.confirmedAt)>now.getTime())throw Error('Destinatário precisa de confirmação administrativa.');
  if(!Array.isArray(offsets)||!offsets.length||offsets.length>5||offsets.some(n=>!Number.isInteger(n)||n < -30||n>0)||new Set(offsets).size!==offsets.length)throw Error('Escolha até cinco dias distintos entre -30 e 0. Pós-vencimento exige fluxo próprio.');
  return [...offsets].sort((a,b)=>a-b).map(offset=>{
@@ -33,7 +30,7 @@ function plan({source,recipient,offsets,now=new Date()}){
   const scheduledAt=due.toISOString();
   // Keys do not include revision/email: editing either must not create a second reminder for the same stage.
   const id=hash(['financial-reminder-v1',snapshot.kind,snapshot.id,snapshot.dueDate,offset]);
-  return {id,status:due<now?'expired':'queued',scheduledAt,expiresAt:new Date(due.getTime()+86400000).toISOString(),source:snapshot,sourceFingerprint:hash(snapshot),recipient:{email:to,confirmedBy:recipient.confirmedBy,confirmedAt:recipient.confirmedAt},sender:SENDER,replyTo:SENDER,offset,createdAt:now.toISOString()};
+  return {id,status:due<now?'expired':'queued',scheduledAt,expiresAt:new Date(due.getTime()+86400000).toISOString(),source:snapshot,sourceFingerprint:hash(snapshot),recipient:{emails:to,...(to.length===1?{email:to[0]}:{}),confirmedBy:recipient.confirmedBy,confirmedAt:recipient.confirmedAt},sender:SENDER,replyTo:SENDER,offset,createdAt:now.toISOString()};
  });
 }
 function createStore(db){
@@ -85,7 +82,7 @@ async function execute({id,store,readSource,authorize,prepare,provider,enabled=f
  }catch{return finish({status:'blocked',reason:'preparation-or-verification-failed'});}
  let result;
  try {
-  const receipt=await provider.send({...artifacts,idempotencyKey:job.id,from:job.sender,replyTo:job.replyTo,to:job.recipient.email});
+  const receipt=await provider.send({...artifacts,idempotencyKey:job.id,from:job.sender,replyTo:job.replyTo,to:contactRecipients(job.recipient)});
   // Provider acceptance is NOT a delivery receipt. Ambiguous outcomes never auto-retry.
   const messageId=typeof receipt?.messageId==='string'&&receipt.messageId.length>0&&receipt.messageId.length<=500?receipt.messageId:null;
   const correlation=receipt?.provider==='microsoft-graph'&&receipt.correlationId===job.id;
