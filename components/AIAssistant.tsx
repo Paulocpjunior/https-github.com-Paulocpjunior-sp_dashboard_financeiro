@@ -25,7 +25,7 @@ const SUGGESTIONS = [
 ];
 
 const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions, service = GeminiService }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isAIAvailable, setAIAvailable] = useState(false);
@@ -39,7 +39,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
   const [messages, setMessages] = useState<Message[]>(() => [
     {
       role: 'assistant',
-      content: 'Olá! Sou a FiA do Financeiro. Posso ajudar a filtrar e analisar o recorte selecionado no painel. Minhas consultas não alteram lançamentos. Para análise, selecione até 300 registros.',
+      content: 'Olá! Sou a FiA, sua assistente financeira. Comece comigo: escolha uma sugestão abaixo ou conte o que precisa conferir. Posso filtrar lançamentos e analisar até 300 registros do recorte atual. Para cadastrar contas e emitir boletos, acesse Lançamentos. Minhas consultas não emitem boletos nem registram pagamentos; confira os documentos e os retornos bancários antes de concluir.',
     },
   ]);
   
@@ -114,6 +114,11 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
             </button>
           </div>
 
+          <div className="px-4 py-3 bg-blue-50 dark:bg-blue-950/40 border-b border-blue-100 dark:border-blue-900">
+            <p className="font-bold text-sm text-blue-900 dark:text-blue-100">Comece pela FiA</p>
+            <p className="text-xs mt-1 text-blue-800 dark:text-blue-200">Use a assistente para organizar sua conferência. Você continua responsável por validar os resultados.</p>
+          </div>
+
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
             {messages.map((msg, idx) => (
@@ -163,11 +168,12 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
           {/* Suggestions */}
           {messages.length === 1 && !isLoading && (
             <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
-              <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Sugestões</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Escolha como começar</p>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTIONS.map((s, i) => (
                   <button 
-                    key={i} 
+                    key={i}
+                    disabled={!isAIAvailable || isLoading}
                     onClick={() => handleSend(s)}
                     className="text-[11px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors text-slate-600 dark:text-slate-300 flex items-center gap-1"
                   >
@@ -186,7 +192,8 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Pergunte algo..."
+                aria-label="Pergunta para a FiA"
+                placeholder="O que você precisa conferir hoje?"
                 className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl py-3 pl-4 pr-12 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
               />
               <button 
@@ -213,7 +220,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onApplyFilters, transactions,
         {isOpen ? <X className="h-6 w-6" /> : (
           <>
             <Sparkles className="h-6 w-6" />
-            <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 font-bold whitespace-nowrap">Assistente IA</span>
+            <span className="font-bold whitespace-nowrap">Comece pela FiA</span>
           </>
         )}
       </button>
