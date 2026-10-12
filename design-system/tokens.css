@@ -1,0 +1,38 @@
+/* SP SaaS v0.1 — shared foundation. Opt-in; never override legacy screens globally. */
+.sp-ui {
+  --sp-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --sp-bg: #f5f5f7; --sp-surface: #ffffff; --sp-text: #1d1d1f; --sp-muted: #626268;
+  --sp-border: #d2d2d7; --sp-accent: #0066cc; --sp-accent-hover: #0055aa;
+  --sp-selected: #e8f2ff; --sp-success: #18733b; --sp-danger: #b42318; --sp-warning: #855000;
+  --sp-radius-control: 10px; --sp-radius-card: 16px; --sp-radius-modal: 20px;
+  --sp-space-1: 4px; --sp-space-2: 8px; --sp-space-3: 12px; --sp-space-4: 16px;
+  --sp-space-6: 24px; --sp-space-8: 32px; --sp-space-12: 48px;
+  --sp-fast: 140ms; --sp-normal: 220ms; --sp-ease: cubic-bezier(.2,.8,.2,1);
+  --sp-shadow: 0 4px 20px rgb(0 0 0 / .05);
+  font-family: var(--sp-font); font-size: 16px; line-height: 1.5;
+  color: var(--sp-text); background: var(--sp-bg); color-scheme: light;
+}
+.sp-ui[data-theme="dark"] {
+  --sp-bg: #161617; --sp-surface: #232326; --sp-text: #f5f5f7; --sp-muted: #b2b2b9;
+  --sp-border: #505057; --sp-accent: #8ac2ff; --sp-accent-hover: #b5d8ff;
+  --sp-selected: #173454; --sp-success: #83d6a0; --sp-danger: #ffaca5; --sp-warning: #f6c66c;
+  color-scheme: dark;
+}
+.sp-ui *, .sp-ui *::before, .sp-ui *::after { box-sizing: border-box; }
+.sp-ui button, .sp-ui input, .sp-ui select, .sp-ui textarea { font: inherit; }
+.sp-ui :focus-visible { outline: 3px solid var(--sp-accent); outline-offset: 3px; }
+.sp-ui h1 { font-size: clamp(28px, 3vw, 36px); line-height: 1.15; letter-spacing: -.025em; font-weight: 600; }
+.sp-ui h2 { font-size: 22px; line-height: 1.25; letter-spacing: -.015em; font-weight: 600; }
+.sp-ui .sp-muted { color: var(--sp-muted); }
+.sp-ui .sp-card { background: var(--sp-surface); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); padding: var(--sp-space-6); box-shadow: var(--sp-shadow); }
+.sp-ui .sp-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); background: var(--sp-surface); color: var(--sp-text); cursor: pointer; text-decoration: none; transition: background-color var(--sp-fast) var(--sp-ease), transform var(--sp-fast) var(--sp-ease); }
+.sp-ui .sp-button-primary { background: var(--sp-accent); color: var(--sp-surface); border-color: var(--sp-accent); }
+.sp-ui .sp-button-primary:hover { background: var(--sp-accent-hover); }
+.sp-ui .sp-button:active { transform: translateY(1px); }
+.sp-ui .sp-button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.sp-ui .sp-field { display: block; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--sp-border); border-radius: var(--sp-radius-control); background: var(--sp-surface); color: var(--sp-text); }
+.sp-ui .sp-numeric { font-variant-numeric: tabular-nums; }
+.sp-ui .sp-icon { width: 20px; height: 20px; stroke-width: 1.75; }
+@media (prefers-reduced-motion: reduce) {
+ .sp-ui *, .sp-ui *::before, .sp-ui *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
