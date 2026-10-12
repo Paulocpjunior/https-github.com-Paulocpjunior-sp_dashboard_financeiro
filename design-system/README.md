@@ -47,7 +47,7 @@ Todos os apps devem compartilhar os componentes de botão, campo, seleção, car
 ## Situação desta versão
 
 - Especificação, tokens e prévia: preparados no Financeiro.
-- Financeiro em produção: navegação e barra de ações publicadas no commit `6225c51de322f64f0b2f4db5efca6623fcfa3c0f`; demais áreas em migração.
+- Financeiro em produção: navegação, barra de ações e consulta financeira publicadas até o commit `11b8f174f1775a3ff9460834c4ff1a014d60d8fa`; demais áreas em migração.
 - Fiscal, DP, Contábil, Legalização, Connect e demais apps: inventário e adoção pendentes.
 - Arquivo mestre de logo da suíte e distribuição por pacote: pendentes de definição/inventário; nenhum logo novo foi inventado.
 
@@ -67,4 +67,10 @@ Verificação local com dados fictícios: larguras de 390 e 1440 px, modos claro
 
 Abas de visão, painel de filtros, alertas e tabela adotam superfícies, bordas e raios compartilhados. Alertas passam a usar botões acessíveis pelo teclado; filtros e paginação recebem nomes acessíveis; tabela usa texto de 14 px e rolagem horizontal própria. As regras de seleção, datas, cálculos, permissões e emissão permanecem as existentes.
 
-Validado localmente com dados fictícios em 390 e 1440 px, nos temas claro e escuro: acionamento de alerta por Enter, expansão dos detalhes, preenchimento de datas e pesquisa, paginação e ausência de transbordamento horizontal da página. A revisão não realizou operações financeiras. Esta etapa ainda depende da publicação por SHA autorizado.
+Validado localmente com dados fictícios em 390 e 1440 px, nos temas claro e escuro: acionamento de alerta por Enter, expansão dos detalhes, preenchimento de datas e pesquisa, paginação e ausência de transbordamento horizontal da página. A revisão não realizou operações financeiras. Etapa publicada e conferida em produção em 12/10/2026 (commit `11b8f17`).
+
+## Formulários financeiros — terceira etapa
+
+Nova conta a receber, Nova conta a pagar e gestão de contas/recorrências usam os tokens comuns em campos, botões, cabeçalhos e abas. Os diálogos nativos preservam o fechamento e o foco; revisão, confirmações, anexos, permissões e regras financeiras permanecem existentes.
+
+Verificação local com APIs fictícias: campos obrigatórios, revisão antes da confirmação, Escape, seleção obrigatória dos meses, layouts de 390 e 1440 px e temas claro/escuro. Testes existentes de lançamentos nativos, contas a pagar e permissões, lint, build e guard de publicação passaram. Nenhum dado financeiro real foi alterado. Esta etapa depende de publicação por SHA autorizado.

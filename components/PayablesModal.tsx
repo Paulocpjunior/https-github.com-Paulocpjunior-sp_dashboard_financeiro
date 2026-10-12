@@ -1,3 +1,5 @@
+import '../design-system/tokens.css';
+import './FinancialForms.css';
 import { CheckCircle2 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { auth } from "../services/firebaseConfig";
@@ -22,8 +24,8 @@ async function defaultApi(path: string, body?: unknown) {
   return data;
 }
 const cls =
-  "w-full border rounded p-2 bg-white text-slate-900 dark:bg-slate-800 dark:text-white";
-const btn = "rounded px-3 py-2 bg-blue-600 text-white disabled:opacity-50";
+  "sp-form-field";
+const btn = "sp-form-primary rounded px-3 py-2 bg-blue-600 text-white disabled:opacity-50";
 const fileInputClass =
   "block w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-3 file:font-semibold file:text-white hover:file:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500";
 const brl = (n: number) =>
@@ -334,10 +336,11 @@ export default function PayablesModal({
         e.preventDefault();
         if (!busy && !uncertain) onClose();
       }}
-      className="m-auto w-[min(900px,95vw)] max-h-[90vh] overflow-auto rounded-xl p-6 bg-white dark:bg-slate-900 text-slate-900 dark:text-white backdrop:bg-black/60"
+      aria-labelledby="payables-dialog-title"
+      className="sp-ui sp-entry-dialog m-auto w-[min(900px,95vw)] max-h-[90vh] overflow-auto p-6"
     >
-      <div className="flex justify-between gap-4">
-        <h2 className="text-xl font-bold">
+      <div className="sp-form-header flex justify-between gap-4">
+        <h2 id="payables-dialog-title" className="text-xl font-bold">
           Contas a pagar — baixa, recorrência e INVITE
         </h2>
         <button disabled={busy || uncertain} onClick={onClose}>
@@ -408,7 +411,7 @@ export default function PayablesModal({
               ))}
             </div>
           ) : null}
-          <nav className="flex flex-wrap gap-2 my-4">
+          <nav aria-label="Operações da conta" className="sp-form-tabs flex flex-wrap gap-2 my-4">
             {[
               ["history", "Histórico"],
               ["approvals", "Aprovações"],
@@ -420,6 +423,8 @@ export default function PayablesModal({
             ].filter(([key]) => key === "history" || key === "approvals" || data.capabilities?.[({payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
               <button
                 key={key}
+                aria-pressed={tab === key}
+                type="button"
                 className={tab === key ? btn : "border rounded px-3 py-2"}
                 disabled={busy || uncertain}
                 onClick={() =>
@@ -795,7 +800,7 @@ export default function PayablesModal({
             <div className="mt-4 border-t border-slate-200 bg-white py-4 dark:border-slate-700 dark:bg-slate-900">
             <p className="mb-2 text-sm text-slate-500">{review?.approvalRequired && review.approvalStatus!=="approved" ? "Esta baixa exige aprovação de outro responsável antes da conclusão." : review ? "Confira a revisão acima. A confirmação salva a baixa e fecha esta tela." : "Etapa 1 de 2: revise os dados antes de concluir a baixa."}</p>
             <button
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+              className="sp-form-confirm flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
               disabled={busy}
               onClick={() => void settle()}
             >

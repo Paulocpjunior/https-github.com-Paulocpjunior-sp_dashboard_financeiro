@@ -1,3 +1,6 @@
+import { X } from "lucide-react";
+import '../design-system/tokens.css';
+import './FinancialForms.css';
 import React, { useEffect, useRef, useState } from "react";
 import {
   EntryAPI,
@@ -45,7 +48,7 @@ const empty = (kind: EntryKind): EntryDraft => ({
 const money = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const inputClass =
-  "w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white";
+  "sp-form-field";
 export default function NativeEntryModal({
   kind,
   onClose,
@@ -282,9 +285,9 @@ export default function NativeEntryModal({
         if (canClose) onClose();
       }}
       aria-label={`Nova conta a ${kind}`}
-      className="m-auto w-[min(960px,96vw)] max-h-[94vh] rounded-2xl p-0 bg-white dark:bg-slate-900 text-slate-900 dark:text-white backdrop:bg-black/60"
+      className="sp-ui sp-entry-dialog sp-native-entry m-auto w-[min(960px,96vw)] max-h-[94vh] p-0"
     >
-      <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between gap-4">
+      <div className="sp-form-header p-6 flex justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold">Nova conta a {kind}</h2>
           <p className="text-sm text-slate-500">
@@ -299,7 +302,7 @@ export default function NativeEntryModal({
           disabled={!canClose}
           aria-label="Fechar lançamento"
         >
-          ✕
+          <X aria-hidden="true" className="sp-icon" />
         </button>
       </div>
       <div className="p-6 space-y-5">
@@ -333,7 +336,7 @@ export default function NativeEntryModal({
               {saved.client} · {money(Number(saved.valorOriginal))} ·{" "}
               {saved.dueDate.split("-").reverse().join("/")} · {saved.status}
             </p>
-            {receivable && !simulation && saved.extraItems && <button type="button" className="rounded-lg bg-blue-600 text-white px-4 py-3" onClick={() => downloadEntryStatement(saved.id).catch(e => setError(e.message))}>Baixar demonstrativo da cobrança (PDF)</button>}
+            {receivable && !simulation && saved.extraItems && <button type="button" className="sp-form-primary rounded-lg bg-blue-600 text-white px-4 py-3" onClick={() => downloadEntryStatement(saved.id).catch(e => setError(e.message))}>Baixar demonstrativo da cobrança (PDF)</button>}
             {saved.attachments?.map((a) => (
               <button
                 key={a.sha256}
@@ -356,12 +359,12 @@ export default function NativeEntryModal({
             </p>
             <div className="flex gap-3">
               <button
-                className="bg-blue-600 text-white rounded-lg px-4 py-2"
+                className="sp-form-primary bg-blue-600 text-white rounded-lg px-4 py-2"
                 onClick={reset}
               >
                 Lançar outra conta a {kind}
               </button>
-              <button className="min-h-12 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800" onClick={onClose}>Concluir e fechar lançamento</button>
+              <button className="sp-form-confirm min-h-12 rounded-lg bg-emerald-700 px-5 py-3 font-semibold text-white hover:bg-emerald-800" onClick={onClose}>Concluir e fechar lançamento</button>
             </div>
           </div>
         ) : !config ? (
@@ -450,7 +453,7 @@ export default function NativeEntryModal({
                           <button type="button" className="rounded-lg border px-3 py-2" aria-label={`Remover serviço extra ${index + 1}`} onClick={() => change("extraItems", draft.extraItems!.filter((_, i) => i !== index))}>Remover</button>
                         </div>
                       ))}
-                      <button type="button" disabled={(draft.extraItems?.length || 0) >= 30} className="rounded-lg bg-blue-600 text-white px-4 py-2" onClick={() => change("extraItems", [...(draft.extraItems || []), {account: "", amount: ""}])}>+ Adicionar serviço extra</button>
+                      <button type="button" disabled={(draft.extraItems?.length || 0) >= 30} className="sp-form-primary rounded-lg bg-blue-600 text-white px-4 py-2" onClick={() => change("extraItems", [...(draft.extraItems || []), {account: "", amount: ""}])}>+ Adicionar serviço extra</button>
                       <p className="text-sm">Total dos extras: {money((draft.extraItems || []).reduce((sum, item) => sum + Math.round(Number(item.amount || 0) * 100), 0) / 100)}. O boleto mantém o valor total da cobrança.</p>
                     </section>
                     {select(
@@ -674,7 +677,7 @@ export default function NativeEntryModal({
               </section>
             )}
             <button
-              className="rounded-lg bg-blue-600 text-white px-5 py-2 disabled:opacity-40"
+              className="sp-form-primary rounded-lg bg-blue-600 text-white px-5 py-2 disabled:opacity-40"
               disabled={
                 busy || (Boolean(review) && !checked) || (uncertain && !review)
               }
