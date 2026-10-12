@@ -30,8 +30,9 @@ export default function ChecklistReview() {
   }, [review]);
   return <section className="rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 p-5 space-y-4" aria-labelledby="checklist-heading">
     <h2 id="checklist-heading" className="text-lg font-bold">Checklist contratual — leitura e conferência</h2>
+    <p role="status" className="text-sm">Integração Jotform desativada. O histórico financeiro salvo permanece disponível. A consulta contratual precisa de uma nova fonte validada antes de ser retomada.</p>
     <p className="text-sm">O STATUS define o evento de cada resposta: entrada, saída, alteração ou suspensão. Datas incompatíveis com esse evento ficam apenas nos dados originais. Honorários, início da responsabilidade, dia de cobrança e última cobrança nas observações precisam de conferência humana.</p>
-    <button type="button" disabled={loading} onClick={load} className="bg-blue-700 text-white rounded-lg px-4 py-2 disabled:opacity-50">{loading ? 'Lendo e validando o checklist...' : 'Consultar checklist completo'}</button>
+    <button type="button" disabled={true} onClick={load} className="bg-blue-700 text-white rounded-lg px-4 py-2 disabled:opacity-50">Consulta ao Jotform desativada</button>
     {error && <p role="alert" className="text-red-700 dark:text-red-300">Checklist indisponível: {error} Nenhum fechamento foi liberado.</p>}
     {review && <>
       <p className="text-xs text-slate-500">Leitura completa em {new Date(review.readAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (Brasília). Atualize após alterações na fonte.</p>

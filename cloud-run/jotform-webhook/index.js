@@ -3,14 +3,16 @@ const { google } = require('googleapis');
 const multer = require('multer');
 const { assertExistingIdentity } = require('./identity-guard');
 
+const { JOTFORM_DISABLED, assertJotformAccess, blockJotformIntegration } = require('./integration-access');
 const app = express();
+app.use(blockJotformIntegration);
 const upload = multer();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'gen-lang-client-0888019226';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-const WEBHOOK_VERSION = '6.15-identity-conflict-guard';
+const WEBHOOK_VERSION = '6.16-jotform-retired';
 const JOTFORM_FORM_ID = process.env.JOTFORM_FORM_ID || '210020525580845';
 require('./checklist').installChecklistRoute(app, google, PROJECT_ID);
 
@@ -578,6 +580,7 @@ function isEmptyContasPagar(cp) {
 }
 
 async function fetchJotformSubmissionRaw(submissionId) {
+  assertJotformAccess();
   const apiKey = process.env.JOTFORM_API_KEY;
   if (!apiKey || !submissionId) return null;
 
@@ -1526,6 +1529,7 @@ function jotformDateToEpoch(value) {
 }
 
 async function listRecentJotformSubmissionIds(sinceHours) {
+  assertJotformAccess();
   const apiKey = process.env.JOTFORM_API_KEY;
   if (!apiKey) throw new Error('JOTFORM_API_KEY env nao configurada');
 
@@ -1694,7 +1698,7 @@ app.post('/jotform-update-submission', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.json({ status: 'jotform-webhook online', version: WEBHOOK_VERSION }));
+app.get('/', (req, res) => res.json({ status: JOTFORM_DISABLED ? 'jotform integration disabled' : 'jotform-webhook online', jotformEnabled: !JOTFORM_DISABLED, version: WEBHOOK_VERSION }));
 
 const PORT = process.env.PORT || 8080;
 if (require.main === module) {
