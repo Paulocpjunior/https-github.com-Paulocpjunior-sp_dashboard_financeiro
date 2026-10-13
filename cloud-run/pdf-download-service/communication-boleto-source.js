@@ -1,9 +1,10 @@
+const stableJson=require('./stable-json');
 const {contactRecipients}=require('./communication-recipients');
 // Read-only adapter. No routes, scheduling, issuance or customer delivery are enabled here.
 const {createHash}=require('node:crypto');
 const {validateSituation,artifacts:inviteArtifacts}=require('./boleto-invite');
 const {validateArtifacts}=require('./communication-rule');
-const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const digest=value=>createHash('sha256').update(stableJson(value)).digest('hex');
 function createBoletoSource({base,apiKey,loadBinding,fetchImpl=fetch,now=()=>new Date(),statement=null}){
  // Deployment must supply the already configured provider URL, never a URL from a job/client.
  if(!['https://app.boletocloud.com/api/v1','https://sandbox.boletocloud.com/api/v1'].includes(base)||!apiKey||typeof loadBinding!=='function')throw Error('Fonte indisponível.');

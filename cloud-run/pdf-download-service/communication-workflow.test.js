@@ -82,3 +82,26 @@ test('receivable preview identifies Boleto Cloud and preserves its emission date
  delete f.row.createdAt;assert.equal((await f.preview()).issuedAt,null);
  f.bank.vencimento='2099-12-30';await assert.rejects(f.preview());
 });
+
+test('PDF validation survives Firestore reordering object fields',async()=>{
+ const f=setup(),p=await f.preview();await f.w.saveDraft(p,'admin',f.userRef,'Preparação autorizada');
+ const reorder=v=>Array.isArray(v)?v.map(reorder):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,reorder(v[k])])):v;
+ for(const [k,v] of f.store)f.store.set(k,reorder(v));
+ const result=await f.w.validate(p.planned[0].id,'admin',f.userRef);
+ assert.equal(result.status,'ready');assert.equal(result.sent,false);
+});
+
+test('explicit refresh audits old revision while preserving unscheduled draft and financial terms',async()=>{
+ const f=setup();f.cfg.offsets=[];const p=await f.preview();await f.w.saveDraft(p,'admin',f.userRef,'Autorizado pelo administrador');
+ const id=p.planned[0].id,job=f.store.get('financialCommunications/'+id);job.source.revision='legacy-order-dependent';
+ const next=await f.preview();assert.equal((await f.w.refreshDraft(id,next,'admin',f.userRef,'Revisão autorizada sem envio')).sent,false);
+ assert.equal((await f.w.validate(id,'admin',f.userRef)).status,'ready');assert.equal(job.scheduledAt,null);
+ assert([...f.store.values()].some(x=>x.action==='draft-refreshed'));
+ for(const patch of [{status:'accepted'},{scheduledAt:'2099-01-01'},{attemptId:'attempt'}]){
+  const current=f.store.get('financialCommunications/'+id);f.store.set('financialCommunications/'+id,{...current,...patch});
+  await assert.rejects(f.w.refreshDraft(id,next,'admin',f.userRef,'Revisão autorizada sem envio'));
+  f.store.set('financialCommunications/'+id,current);
+ }
+ job.source.amountCents=999;f.store.set('financialCommunications/'+id,job);
+ await assert.rejects(f.w.refreshDraft(id,next,'admin',f.userRef,'Revisão autorizada sem envio'),/Valor/);
+});
