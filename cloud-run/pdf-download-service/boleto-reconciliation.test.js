@@ -387,3 +387,7 @@ test("baseline survives Firestore field ordering; lease and disabled flag preven
   );
   assert.equal(f.calls(), before);
 });
+
+test("recebimento manual impede nova baixa bancária",()=>{
+ assert.equal(evaluate(record,{...row,receivableSettlement:{origin:'manual'}},paid,'2026-10-12T12:00:00Z').state,'review');
+});

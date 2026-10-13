@@ -56,6 +56,7 @@ function differences(record, row) {
   if (row.dueDate !== record.dueDate) errors.push("Vencimento divergente.");
   if (record.bank !== "341" || row.bankAccount !== catalog.banks[0])
     errors.push("Conta bancária fora da conta Itaú homologada.");
+  if (row.receivableSettlement || row.receivableBalance) errors.push("Recebimento manual existente: conferir sem duplicar a baixa.");
   if (row.boletoSettlement || row.source === "native-finance")
     errors.push("Lançamento com vínculo nativo ou baixa bancária existente.");
   return errors;

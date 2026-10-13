@@ -1,0 +1,78 @@
+const {createHash}=require('node:crypto');
+const {amount,money}=require('./boleto-cloud');
+const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
+const permits=(user,action)=>user?.active===true&&!['blocked','deleted'].includes(user.status)&&(user.role==='admin'||user.financialPermissions?.includes(`receivables.${action}`));
+function routeAllowed(user,method,path){
+ return method==='GET'&&/^items\/[^/]+$/.test(path)?permits(user,'read')||permits(user,'settle'):method==='POST'&&['receipt/preview','receipt/commit'].includes(path)&&permits(user,'settle');
+}
+function receivable(row){
+ if(!row||row.isExcluded||row.deletedAt||norm(row.movement)!=='entrada'||/saida|pagar/.test(norm(row.type)))fail('Conta a receber indisponível.');
+ if(row.wixEntityId||row.wixInvoiceNumber||norm(row.source)==='wix'||String(row.id||'').startsWith('wix-inv-'))fail('Fatura Wix: registre e confira o recebimento na integração Wix.');
+ if(!Number.isSafeInteger(Math.round(amount(row)*100))||amount(row)<=0)fail('Valor original inválido.');
+ return row;
+}
+function balance(row){
+ receivable(row);
+ const nominalCents=Math.round(amount(row)*100), b=row.receivableBalance;
+ if(b){
+  if(b.version!==1||![b.receivedCents,b.interestCents,b.discountCents,b.remainingCents].every(v=>Number.isSafeInteger(v)&&v>=0)||nominalCents+b.interestCents-b.discountCents-b.receivedCents!==b.remainingCents||!row.receivableSettlement||Math.round(money(row.valueReceived)*100)!==b.receivedCents||row.paymentDate!==row.receivableSettlement.date)fail('Saldo de recebimento inconsistente. Confira o histórico.');
+  return b;
+ }
+ return {version:1,receivedCents:0,interestCents:0,discountCents:0,remainingCents:nominalCents};
+}
+function blocked(row){
+ if(row.boletoSettlement) return 'Recebimento bancário já registrado. Confira o retorno do boleto.';
+ if(!['pendente','agendado','vencida','vencido'].includes(norm(row.status)))return 'Conta já quitada ou com situação que exige conferência.';
+ if(row.receivableBalance){if(balance(row).remainingCents<=0)return 'Conta já quitada.';}
+ else if(row.receivableSettlement||row.paymentDate||row.dataPagamento||['pago','sim','s','true','recebido'].includes(norm(row.pago))||['valueReceived','valorPago','valuePaid'].some(k=>money(row[k])!==0))return 'Conta com informação anterior de recebimento. Confira antes de baixar.';
+ return null;
+}
+function receiptPatch(row,input,catalog){
+ receivable(row);const reason=blocked(row);if(reason)fail(reason);
+ const p=input||{}, today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(p.date||'')||!Number.isFinite(Date.parse(p.date))||new Date(p.date).toISOString().slice(0,10)!==p.date||p.date>today||row.receivableSettlement?.date>p.date)fail('Data de recebimento inválida, futura ou anterior à última baixa.',400);
+ const cents=(v,label)=>{if(typeof v!=='string'||!/^\d{1,10}(\.\d{1,2})?$/.test(v))fail(`${label} inválido.`,400);const n=Math.round(Number(v)*100);if(!Number.isSafeInteger(n))fail(`${label} inválido.`,400);return n;};
+ const received=cents(p.amount,'Valor recebido'), interest=cents(p.interest,'Juros'), discount=cents(p.discount,'Desconto');
+ if(received<=0)fail('Informe um valor efetivamente recebido maior que zero.',400);
+ if(!catalog.banks.includes(p.bankAccount)||!catalog.receiptMethods.includes(p.method))fail('Selecione conta bancária e forma de recebimento válidas.',400);
+ if(typeof p.note!=='string'||p.note.trim().length<5||p.note.length>1000)fail('Informe uma observação ou referência do comprovante (5 a 1000 caracteres).',400);
+ const b=balance(row), remaining=b.remainingCents+interest-discount-received;
+ if(remaining<0)fail('Recebimento e desconto ultrapassam o saldo disponível.');
+ const next={version:1,receivedCents:b.receivedCents+received,interestCents:b.interestCents+interest,discountCents:b.discountCents+discount,remainingCents:remaining};
+ return {status:remaining===0?'Pago':'Pendente',pago:remaining===0?'Pago':'Não',valueReceived:next.receivedCents/100,valorPago:(next.receivedCents/100).toFixed(2),paymentDate:p.date,dataPagamento:p.date.split('-').reverse().join('/'),receivableBalance:next};
+}
+async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed,catalog,catalogRef,catalogState}){
+ if(!enabled)fail('Lançamentos nativos não ativados.',503);
+ const path=url.pathname.replace('/api/financial-entries/receivables/','');
+ const recheck=async tx=>{const profile=(await(tx?tx.get(userRef):userRef.get())).data();if(!allowed(profile))fail('Acesso revogado.',403);if((profile.name||uid)!==(user.name||uid))fail('Usuário alterado. Reabra a revisão.');if(tx&&((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision)fail('Parâmetros alterados. Reabra a revisão.');};
+ if(request.method==='GET'){
+  const id=decodeURIComponent(path.slice(6));if(!/^[a-zA-Z0-9_-]{1,200}$/.test(id))fail('Identificador inválido.',400);
+  const row=receivable((await db.collection('transactions').doc(id).get()).data());await recheck();
+  reply({transaction:{...row,id},version:hash(row),catalog:{banks:catalog.banks,receiptMethods:catalog.receiptMethods},canSettle:permits(user,'settle'),blockedReason:blocked(row)});return;
+ }
+ let b;try{b=JSON.parse((await readBody(request)).toString('utf8'));}catch{fail('Dados inválidos.',400);}
+ if(!/^[a-zA-Z0-9_-]{1,200}$/.test(b.id||'')||! /^[a-f0-9-]{36}$/.test(b.requestId||''))fail('Identificador inválido.',400);
+ const ref=db.collection('transactions').doc(b.id), key=hash([uid,b.requestId]), op=db.collection('receivableOperations').doc(key), digest=hash(b);
+ const result=await db.runTransaction(async tx=>{
+  await recheck(tx);
+  const prior=(await tx.get(op)).data();
+  if(prior){if(prior.digest!==digest)fail('Tentativa já utilizada com outros dados.');return {...prior.result,replayed:true};}
+  const current=(await tx.get(ref)).data();if(!current)fail('Conta não encontrada.',404);
+  if(hash(current)!==b.version)fail('Conta alterada. Reabra e confira o saldo atual.');
+  const patch=receiptPatch(current,b.receipt,catalog);
+  const reviewHash=hash([uid,user.name||uid,b.id,b.version,b.receipt,catalogState.revision]);
+  if(path==='receipt/preview')return {reviewHash,before:{...current,id:b.id},after:{...current,...patch,id:b.id}};
+  if(b.confirmHash!==reviewHash)fail('Revise o recebimento antes de confirmar.');
+  const at=new Date().toISOString(), p=b.receipt;
+  const settlement={requestId:b.requestId,uid,actor:user.name||uid,at,origin:'manual',date:p.date,amountCents:Math.round(Number(p.amount)*100),interestCents:Math.round(Number(p.interest)*100),discountCents:Math.round(Number(p.discount)*100),remainingCents:patch.receivableBalance.remainingCents,bankAccount:p.bankAccount,method:p.method,note:p.note.trim()};
+  const receipts=[...(current.receivableReceipts||[]),settlement];if(receipts.length>100)fail('Limite de 100 recebimentos atingido. Solicite revisão.');
+  const record={...current,...patch,updatedAt:at,receivableSettlement:settlement,receivableReceipts:receipts};
+  const result={transaction:{...record,id:b.id}};
+  tx.set(ref,record);
+  tx.create(db.collection('receivableAudit').doc(key),{action:'receipt',transactionId:b.id,uid,at,before:current,after:record});
+  tx.create(op,{digest,result,at});return result;
+ });reply(result);
+}
+module.exports={handleReceivables,routeAllowed,receiptPatch,balance,blocked};

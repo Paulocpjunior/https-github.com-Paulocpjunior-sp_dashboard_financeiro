@@ -418,7 +418,7 @@ const Reports: React.FC = () => {
 
         // Detalhamento Entradas (Contas a Receber)
         if (isEntradaTransaction(curr)) {
-            if (isPaid) acc.settledReceivables += getPaidAmount(curr);
+            acc.settledReceivables += getPaidAmount(curr);
         }
 
         return acc;
@@ -438,7 +438,7 @@ const Reports: React.FC = () => {
       .filter(isEntradaTransaction)
       .reduce((total, transaction) => total + getOriginalAmount(transaction), 0);
     newKpi.pendingPayables = result.filter(isSaidaTransaction).reduce((sum, row) => sum + getOutstandingAmount(row), 0);
-    newKpi.pendingReceivables = Math.max(0, newKpi.totalReceived - newKpi.settledReceivables);
+    newKpi.pendingReceivables = result.filter(isEntradaTransaction).reduce((sum, row) => sum + getOutstandingAmount(row), 0);
     newKpi.balance = newKpi.totalReceived - newKpi.totalPaid;
 
     setKpi(newKpi);

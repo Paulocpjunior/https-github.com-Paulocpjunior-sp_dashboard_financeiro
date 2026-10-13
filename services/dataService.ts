@@ -367,7 +367,7 @@ const normalizeAndCacheTransactions = (
       } else {
         t.status = 'Pendente';
       }
-      if (t.status === 'Pendente' && t.paymentDate && !t.payableBalance) {
+      if (t.status === 'Pendente' && t.paymentDate && !t.payableBalance && !t.receivableBalance) {
         t.paymentDate = '';
       }
       t.date = normalizeDate(t.date) || t.date;
@@ -699,7 +699,7 @@ export const DataService = {
             else if (['pendente', 'nao', 'não', 'n', 'aberto', 'em aberto', ''].includes(sLower)) t.status = 'Pendente';
             else if (['agendado', 'programado'].includes(sLower)) t.status = 'Agendado';
           } else { t.status = 'Pendente'; }
-          if (t.status === 'Pendente' && t.paymentDate && !t.payableBalance) t.paymentDate = '';
+          if (t.status === 'Pendente' && t.paymentDate && !t.payableBalance && !t.receivableBalance) t.paymentDate = '';
           // FIX: Normalizar datas DD/MM/YYYY -> YYYY-MM-DD (ISO)
           t.date = normalizeDate(t.date) || t.date;
           t.dueDate = normalizeDate(t.dueDate) || t.dueDate;
@@ -781,7 +781,7 @@ export const DataService = {
         const isPaid = isPaidStatus(t.status);
         const isPending = !isPaid;
 
-        if (isPaid || t.payableBalance?.version === 1) {
+        if (isPaid || t.payableBalance?.version === 1 || t.receivableBalance?.version === 1) {
             // Saldo Realizado = Recebido - Pago
             const entryPaid = isEntradaTransaction(t) ? getPaidAmount(t) : 0;
             const payablePaid = isSaidaTransaction(t) ? getPaidAmount(t) : 0;
@@ -791,7 +791,7 @@ export const DataService = {
         if (isPending) {
             // Entradas Pendentes
             if (isEntradaTransaction(t)) {
-                pendingReceivables += getOriginalAmount(t);
+                pendingReceivables += getOutstandingAmount(t);
             }
             // Saídas Pendentes
             if (isSaidaTransaction(t)) {
@@ -888,8 +888,8 @@ export const DataService = {
     } else if (isContasAReceber) {
       // KPI Contexto Entrada: Total Recebido vs Total Pendente
       const totalGeralReceber = filtered.reduce((acc, curr) => acc + getOriginalAmount(curr), 0);
-      const totalRecebido = filtered.filter(i => isPaidStatus(i.status)).reduce((acc, curr) => acc + getPaidAmount(curr), 0);
-      const saldoReceber = totalGeralReceber - totalRecebido;
+      const totalRecebido = filtered.reduce((acc, curr) => acc + getPaidAmount(curr), 0);
+      const saldoReceber = filtered.reduce((acc, curr) => acc + getOutstandingAmount(curr), 0);
 
       kpi = { totalReceived: totalGeralReceber, totalPaid: totalRecebido, balance: saldoReceber };
     } else {

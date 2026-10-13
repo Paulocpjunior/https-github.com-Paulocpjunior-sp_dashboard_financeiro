@@ -22,6 +22,7 @@ const make = () => {
 test('only exact linked native bank payments can settle', () => {
   const f = make(); assert.equal(evaluate(id, f.issue, f.row, f.body, cfg, at).state, 'ready');
   const mutations = [
+    f => f.row.receivableSettlement = {origin:"manual"}, f => f.row.receivableBalance = {version:1},
     f => f.body.boleto.token = 'other', f => f.body.boleto.tokenControleUsuario = 'other', f => f.body.boleto.numero = 'other',
     f => f.body.boleto.valor = 20, f => f.body.boleto.pagador.cprf = 'other', f => f.body.boleto.pagamento.origem = 'USUARIO',
     f => delete f.body.boleto.pagamento.marcadoComoPago, f => f.body.boleto.pagamento.marcadoComoPago = true,

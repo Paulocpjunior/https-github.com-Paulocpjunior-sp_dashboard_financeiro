@@ -6,12 +6,13 @@ import BoletoIssueModal from './BoletoIssueModal';
 import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
 import { ChevronLeft, ChevronRight, ArrowUpCircle, ArrowDownCircle, AlertTriangle, Search, Loader2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown, Download, Ban } from 'lucide-react';
-import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isSaidaTransaction } from '../utils/transactionAmounts';
+import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isSaidaTransaction, isEntradaTransaction, isWixInvoice } from '../utils/transactionAmounts';
 import { getPaymentMethod } from '../utils/paymentMethod';
 import { PossibleDuplicateScan, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 interface DataTableProps {
   readOnly?: boolean;
+  onReceivable?: (id:string) => void;
   data: Transaction[];
   page: number;
   totalPages: number;
@@ -39,6 +40,7 @@ interface DataTableProps {
 const DataTable: React.FC<DataTableProps> = ({ 
     data, 
     readOnly = false,
+    onReceivable,
     page, 
     totalPages, 
     onPageChange, 
@@ -458,6 +460,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
                             {!readOnly && onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
+                            {!readOnly && onReceivable && isEntradaTransaction(row) && !isSaidaTransaction(row) && (isWixInvoice(row) ? <span className="text-xs text-slate-500" title="Recebimento controlado pela integração Wix">Via Wix</span> : <button className="px-2 py-2 rounded text-blue-600 border mr-2" onClick={() => onReceivable(row.id)}>{isPaidStatus(row.status) ? 'Ver recebimentos' : 'Registrar recebimento'}</button>)}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -539,6 +542,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
                             {!readOnly && onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
+                            {!readOnly && onReceivable && isEntradaTransaction(row) && !isSaidaTransaction(row) && (isWixInvoice(row) ? <span className="text-xs text-slate-500" title="Recebimento controlado pela integração Wix">Via Wix</span> : <button className="px-2 py-2 rounded text-blue-600 border mr-2" onClick={() => onReceivable(row.id)}>{isPaidStatus(row.status) ? 'Ver recebimentos' : 'Registrar recebimento'}</button>)}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -585,11 +589,12 @@ const DataTable: React.FC<DataTableProps> = ({
                                 {formatCurrency(getOriginalAmount(row))}
                               </span>
                             )}
-                            {row.payableBalance && <span className="block text-xs text-slate-500">Pago: {formatCurrency(getPaidAmount(row))} · Saldo: {formatCurrency(getOutstandingAmount(row))}</span>}
+                            {(row.payableBalance || row.receivableBalance) && <span className="block text-xs text-slate-500">{isEntradaTransaction(row) ? 'Recebido' : 'Pago'}: {formatCurrency(getPaidAmount(row))} · Saldo: {formatCurrency(getOutstandingAmount(row))}</span>}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
                             {!readOnly && onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
+                            {!readOnly && onReceivable && isEntradaTransaction(row) && !isSaidaTransaction(row) && (isWixInvoice(row) ? <span className="text-xs text-slate-500" title="Recebimento controlado pela integração Wix">Via Wix</span> : <button className="px-2 py-2 rounded text-blue-600 border mr-2" onClick={() => onReceivable(row.id)}>{isPaidStatus(row.status) ? 'Ver recebimentos' : 'Registrar recebimento'}</button>)}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
