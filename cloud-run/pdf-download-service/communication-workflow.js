@@ -1,3 +1,4 @@
+const stableJson=require('./stable-json');
 const {createPayableSource,inspectEntry}=require('./communication-payable-source');
 const catalog=require('./communication-catalog');
 const {initial}=require('./communication-settings');
@@ -9,7 +10,7 @@ const {config,eligible,amount,money}=require('./boleto-cloud');
 const {createBoletoSource}=require('./communication-boleto-source');
 const {plan,createStore,execute}=require('./communication-rule');
 const {createProvider}=require('./communication-provider');
-const fingerprint=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+const fingerprint=v=>createHash('sha256').update(stableJson(v)).digest('hex');
 const fail=(message,status=409)=>{throw Object.assign(Error(message),{status});};
 const idValid=id=>typeof id==='string'&&/^[a-f0-9]{64}$/.test(id);
 const contactValid=c=>{try{contactRecipients(c);return true;}catch{return false;}};
@@ -92,6 +93,25 @@ function createWorkflow({db,env,allowed,fetchImpl=fetch,now=()=>new Date(),readH
     for(const p of preview.planned)tx.create(jobs.doc(p.id),{...p,status:'draft',plannedStatus:p.status,createdBy:uid,settingsRevision:settings.revision,number:preview.number,client:preview.client});
     tx.create(db.collection('financialCommunicationEvents').doc(randomUUID()),{action:'draft-confirmed',historyId:preview.historyId,uid,at,reason:reason.trim(),previousContact:previous,newContact:preview.contact,jobIds:preview.planned.map(p=>p.id)});
     return {count:preview.planned.length,enabled:false};
+   });
+  },
+  // Explicit administrative re-review of unscheduled drafts, never a send/requeue.
+  async refreshDraft(id,preview,uid,userRef,reason){
+   if(!idValid(id)||typeof reason!=='string'||reason.trim().length<10||reason.length>500)fail('Informe a revisão do rascunho.');
+   const source=await adapter(preview.contact,preview.kind).readSource({id:preview.historyId,kind:preview.kind});
+   if(source.revision!==preview.source.revision)fail('Fonte alterada durante a revisão.');
+   return db.runTransaction(async tx=>{
+    const ref=jobs.doc(id),current=(await tx.get(ref)).data(),user=(await tx.get(userRef)).data(),settings=(await tx.get(settingsRef)).data()||initial();
+    if(!allowed(user))fail('Acesso revogado.',403);
+    if(settings.enabled!==false||settings.revision!==preview.settingsRevision||settings.offsets?.length)fail('Revisão exige envio desligado e dias a definir.');
+    if(!current||current.status!=='draft'||current.scheduledAt!==null||current.attemptId)fail('Somente rascunho sem agendamento ou tentativa pode ser revisado.');
+    const next=preview.planned.find(p=>p.id===id);
+    if(!next||next.scheduledAt!==null||current.source.id!==source.id||current.source.kind!==source.kind||current.source.amountCents!==source.amountCents||current.source.dueDate!==source.dueDate)fail('Valor, vencimento ou identidade alterados; revisão específica necessária.');
+    const at=now().toISOString();
+    tx.set(contactRef(preview.historyId,preview.kind),preview.contact);
+    tx.update(ref,{source:next.source,sourceFingerprint:next.sourceFingerprint,recipient:next.recipient,settingsRevision:settings.revision,validation:null,updatedAt:at});
+    tx.create(db.collection('financialCommunicationEvents').doc(randomUUID()),{action:'draft-refreshed',jobId:id,uid,at,reason:reason.trim(),previousSource:current.source,newSource:next.source,previousRecipient:current.recipient,newRecipient:next.recipient});
+    return {status:'draft',sent:false,scheduledAt:null};
    });
   },
   async manage(id,action,uid,userRef,reason){
