@@ -49,5 +49,44 @@ try {
   await assert.rejects(() => readAccumulatedBalances({ projectId, token: 'synthetic-token', checkSession: () => { throw new Error('Sessão mudou'); } }), /Sessão mudou/);
   const empty = await readAccumulatedBalances({ projectId, token: 'synthetic-token', checkSession: () => {}, fetcher: async () => ({ ok: true, json: async () => [{ readTime }] }) });
   assert.deepEqual(empty.kpi, { totalPaid: 0, totalReceived: 0, balance: 0 }, 'zero só pode ser concluído após leitura completa válida');
+  const retryRequests = [];
+  let retryCalls = 0;
+  const recovered = await readAccumulatedBalances({projectId, token:'synthetic-token', checkSession:()=>{}, fetcher:async (_url,init)=>{
+    retryRequests.push(JSON.parse(init.body));
+    retryCalls++;
+    if (retryCalls === 1) return {ok:true,json:async()=>Array.from({length:1000},(_,i)=>row(i))};
+    if (retryCalls === 2) throw new TypeError('Failed to fetch');
+    if (retryCalls === 3) return {ok:false,status:503};
+    return {ok:true,json:async()=>[row(1000)]};
+  }});
+  assert.equal(recovered.documentCount,1001,'repetir uma página não duplica registros');
+  assert.equal(recovered.kpi.totalReceived,1001);
+  assert.deepEqual(retryRequests[1],retryRequests[2]);
+  assert.deepEqual(retryRequests[2],retryRequests[3],'tentativas preservam cursor e readTime');
+  let deniedCalls=0;
+  await assert.rejects(()=>readAccumulatedBalances({projectId,token:'synthetic-token',checkSession:()=>{},fetcher:async()=>{
+    deniedCalls++; return {ok:false,status:403};
+  }}),/sem permissão/);
+  assert.equal(deniedCalls,1,'não repetir falhas de autorização');
+  let exhaustedCalls=0;
+  await assert.rejects(()=>readAccumulatedBalances({projectId,token:'synthetic-token',checkSession:()=>{},fetcher:async()=>{
+    exhaustedCalls++; throw new TypeError('Failed to fetch');
+  }}),/três tentativas/);
+  assert.equal(exhaustedCalls,3,'limitar tentativas sem liberar saldo parcial');
+  const abortController=new AbortController();
+  let abortedCalls=0;
+  const aborted=readAccumulatedBalances({projectId,token:'synthetic-token',signal:abortController.signal,checkSession:()=>{},fetcher:async()=>{
+    abortedCalls++; setTimeout(()=>abortController.abort(),20); return {ok:false,status:429};
+  }});
+  await assert.rejects(()=>aborted,{name:'AbortError'});
+  assert.equal(abortedCalls,1,'cancelamento interrompe a espera entre tentativas');
+  let sessionActive=true;
+  let sessionCalls=0;
+  await assert.rejects(()=>readAccumulatedBalances({projectId,token:'synthetic-token',checkSession:()=>{
+    if(!sessionActive) throw new Error('Sessão mudou');
+  },fetcher:async()=>{
+    sessionCalls++; setTimeout(()=>{sessionActive=false;},20); return {ok:false,status:503};
+  }}),/Sessão mudou/);
+  assert.equal(sessionCalls,1,'troca de sessão impede a próxima tentativa');
   console.log('OK: acumulados preservam meses anteriores, ignoram exclusões e exigem histórico completo, mesma versão e sessão válida.');
 } finally { await server.close(); }

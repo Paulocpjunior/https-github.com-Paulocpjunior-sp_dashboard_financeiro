@@ -11,6 +11,51 @@ const decode = (value: any): unknown => {
   return null;
 };
 
+const retryableStatus = new Set([408, 429, 500, 502, 503, 504]);
+const waitForRetry = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const abort = () => {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+    reject(new DOMException('Consulta cancelada.', 'AbortError'));
+  };
+  const timer = setTimeout(() => {
+    signal?.removeEventListener('abort', abort);
+    resolve();
+  }, ms);
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) abort();
+});
+
+// Retry only the current page, before accumulating any of its documents.
+async function readPage(fetcher: typeof fetch, url: string, init: RequestInit, checkSession: () => void) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    checkSession();
+    init.signal?.throwIfAborted();
+    let response: Response;
+    try {
+      response = await fetcher(url, init);
+      checkSession();
+      init.signal?.throwIfAborted();
+      if (response.ok) return await response.json();
+    } catch (error) {
+      checkSession();
+      init.signal?.throwIfAborted();
+      if (!(error instanceof TypeError)) throw error;
+      if (attempt === 2) throw new Error('A conexão com o histórico financeiro falhou após três tentativas. Tente atualizar os saldos.');
+      await waitForRetry(500 * 2 ** attempt, init.signal ?? undefined);
+      continue;
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Sessão sem permissão para ler o histórico financeiro. Entre novamente no aplicativo.');
+    }
+    if (!retryableStatus.has(response.status) || attempt === 2) {
+      throw new Error(`Não foi possível apurar o histórico completo (HTTP ${response.status}).`);
+    }
+    await waitForRetry(500 * 2 ** attempt, init.signal ?? undefined);
+  }
+  throw new Error('Não foi possível concluir a apuração do histórico.');
+}
+
 /** REST com o token Firebase do usuário: as mesmas regras Firestore continuam aplicadas. */
 export async function readAccumulatedBalances(options: {
   projectId: string; token: string; fetcher?: typeof fetch; signal?: AbortSignal; checkSession: () => void;
@@ -30,15 +75,12 @@ export async function readAccumulatedBalances(options: {
     if (cursor) query.startAt = { values: [{ referenceValue: cursor }], before: false };
     const body: any = { structuredQuery: query };
     if (readTime) body.readTime = readTime;
-    const response = await fetcher(`https://firestore.googleapis.com/v1/${root}:runQuery`, {
+    const rows = await readPage(fetcher, `https://firestore.googleapis.com/v1/${root}:runQuery`, {
       method: 'POST', headers: { Authorization: `Bearer ${options.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body), signal: options.signal,
-    });
+    }, options.checkSession);
     options.checkSession();
-    if (!response.ok) throw new Error(response.status === 401 || response.status === 403
-      ? 'Sessão sem permissão para ler o histórico financeiro. Entre novamente no aplicativo.'
-      : `Não foi possível apurar o histórico completo (HTTP ${response.status}).`);
-    const rows = await response.json();
+    options.signal?.throwIfAborted();
     if (!Array.isArray(rows) || !rows.length) throw new Error('Resposta incompleta na apuração dos saldos.');
     const pageTime = rows.find(row => row.readTime)?.readTime;
     if (!pageTime || (readTime && pageTime !== readTime)) throw new Error('O histórico mudou de versão durante a consulta. Atualize os saldos.');
