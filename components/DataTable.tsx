@@ -11,6 +11,7 @@ import { getPaymentMethod } from '../utils/paymentMethod';
 import { PossibleDuplicateScan, TransactionSortDirection, TransactionSortField } from '../utils/transactionTable';
 
 interface DataTableProps {
+  readOnly?: boolean;
   data: Transaction[];
   page: number;
   totalPages: number;
@@ -37,6 +38,7 @@ interface DataTableProps {
 
 const DataTable: React.FC<DataTableProps> = ({ 
     data, 
+    readOnly = false,
     page, 
     totalPages, 
     onPageChange, 
@@ -73,9 +75,9 @@ const DataTable: React.FC<DataTableProps> = ({
     }
   };
 
-  const canUseDelete = canDelete && Boolean(onDelete);
+  const canUseDelete = !readOnly && canDelete && Boolean(onDelete);
 
-  const renderDeleteButton = (id: string) => (
+  const renderDeleteButton = (id: string) => readOnly ? null : (
     <button
       onClick={() => canUseDelete && onDelete?.(id)}
       disabled={!canUseDelete}
@@ -244,7 +246,7 @@ const DataTable: React.FC<DataTableProps> = ({
         )}
         
         {/* Emissão e consulta de boletos em Contas a Receber */}
-        {isContasAReceber && canExportBoletoCloud && (
+        {!readOnly && isContasAReceber && canExportBoletoCloud && (
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
               📋 Contas a Receber
@@ -306,7 +308,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
-                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Ações</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly ? 'Detalhes' : 'Ações'}</th>
                   </>
                 )}
 
@@ -349,7 +351,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Recebido</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">Saldo</th>
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Método</th>
-                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Ações</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly ? 'Detalhes' : 'Ações'}</th>
                   </>
                 )}
 
@@ -386,7 +388,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <SortableHeader field="cpfCnpj" label="CPF/CNPJ" className="text-left" />
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
-                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Ações</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly ? 'Detalhes' : 'Ações'}</th>
                   </>
                 )}
               </tr>
@@ -431,7 +433,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td 
                             className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline" 
                             title={row.description || row.client || '-'}
-                            onClick={() => onClientClick && onClientClick(row.client)}
+                            onClick={() => !readOnly && onClientClick?.(row.client)}
                           >
                             {row.description || row.client || '-'}
                             {renderDuplicateBadge(row)}
@@ -455,7 +457,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
-                            {onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
+                            {!readOnly && onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -488,7 +490,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td 
                             className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline" 
                             title={row.client || '-'}
-                            onClick={() => onClientClick && onClientClick(row.client)}
+                            onClick={() => !readOnly && onClientClick?.(row.client)}
                           >
                             {row.client || '-'}
                             {renderDuplicateBadge(row)}
@@ -536,7 +538,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
-                            {onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
+                            {!readOnly && onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -555,7 +557,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td 
                             className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
-                            onClick={() => onClientClick && onClientClick(row.client)}
+                            onClick={() => !readOnly && onClientClick?.(row.client)}
                           >
                             {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
                             {renderDuplicateBadge(row)}
@@ -587,7 +589,7 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
-                            {onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
+                            {!readOnly && onPayable && isSaidaTransaction(row) && <button className="px-2 py-1 rounded text-blue-600 border mr-2" onClick={() => onPayable(row.id)}>Gerenciar conta</button>}
                             {renderDeleteButton(row.id)}
                           </td>
                         </>
@@ -628,7 +630,7 @@ const DataTable: React.FC<DataTableProps> = ({
 
       {nativeDetails && <NativeEntryDetails row={nativeDetails} onClose={() => setNativeDetails(null)} />}
       {/* MODAL DE EXPORTAÇÃO EM 2 ETAPAS */}
-      {showBoletoModal && <BoletoIssueModal rows={(allData.length ? allData : data).filter(row => !isSaidaTransaction(row) && normalizeText(getPaymentMethod(row)).includes('boleto'))} duplicates={possibleDuplicates} onClose={() => setShowBoletoModal(false)} />}
+      {!readOnly && showBoletoModal && <BoletoIssueModal rows={(allData.length ? allData : data).filter(row => !isSaidaTransaction(row) && normalizeText(getPaymentMethod(row)).includes('boleto'))} duplicates={possibleDuplicates} onClose={() => setShowBoletoModal(false)} />}
 
     </>
   );

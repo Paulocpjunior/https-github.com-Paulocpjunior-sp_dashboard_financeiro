@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 
 const server = await createServer({
@@ -102,6 +104,22 @@ try {
   assert.ok(!scan.byTransactionId.has('pay-a'), 'employee VR/VT benefit lines must not be flagged');
   assert.ok(scan.byTransactionId.get('shadow-open').reasons.includes('paid-open'));
   assert.ok(scan.byTransactionId.get('submission-a').reasons.includes('submission'));
+
+  const { default: DataTable } = await server.ssrLoadModule('/components/DataTable.tsx');
+  const renderTable = (readOnly, selectedType) => renderToStaticMarkup(React.createElement(DataTable, {
+    data: [transaction('visible', {client:'Conta de demonstração',description:'Conta de demonstração',source:'native-finance',movement:'Saída',type:'Saída de Caixa / Contas a Pagar'})],
+    page:1,totalPages:2,onPageChange(){},sortField:'none',sortDirection:'asc',onSortChange(){},
+    canDelete:true,canExportBoletoCloud:true,onDelete(){},onPayable(){},readOnly,selectedType,
+  }));
+  for (const type of ['', 'Saída de Caixa / Contas a Pagar', 'Entrada de Caixa / Contas a Receber']) {
+    const html=renderTable(true,type);
+    assert.ok(html.includes('Conta de demonstração'), 'consulta mantém as linhas em todas as visões');
+    assert.ok(html.includes('Próxima página'), 'consulta mantém paginação');
+    assert.ok(html.includes('Detalhes'), 'detalhes de leitura continuam disponíveis');
+    assert.ok(!html.includes('Gerenciar conta') && !html.includes('title="Excluir"') && !html.includes('Emitir / consultar boletos'), 'consulta não oferece mutações mesmo com permissões administrativas');
+  }
+  const editable=renderTable(false,'Saída de Caixa / Contas a Pagar');
+  assert.ok(editable.includes('Gerenciar conta') && editable.includes('title="Excluir"'), 'Lançamentos mantém gerenciamento e exclusão');
 
   console.log('OK: ordenação global e sinalização conservadora de duplicidades validadas.');
 } finally {

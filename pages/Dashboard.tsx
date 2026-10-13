@@ -1067,17 +1067,19 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
            </div>
            )}
 
-           {entriesOnly && <div className="lg:col-span-3">
+           <div className="lg:col-span-3">
+              {!entriesOnly && <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Contas do período selecionado</h2>}
               <DataTable
                 data={data}
                 allData={allFilteredData}
                 page={page}
                 totalPages={totalPages}
                 onPageChange={setPage}
-                canDelete={isAdmin}
-                canExportBoletoCloud={canExportBoletoCloud}
-                onDelete={handleDeleteTransaction}
-                onPayable={canManagePayable ? (id) => setPayableModal({id}) : undefined}
+                readOnly={!entriesOnly}
+                canDelete={entriesOnly && isAdmin}
+                canExportBoletoCloud={entriesOnly && canExportBoletoCloud}
+                onDelete={entriesOnly ? handleDeleteTransaction : undefined}
+                onPayable={entriesOnly && canManagePayable ? (id) => setPayableModal({id}) : undefined}
                 clientFilterValue={filters.client}
                 onClientFilterChange={(val) => handleFilterChange('client', val)}
                 clientOptions={options.clients}
@@ -1086,13 +1088,13 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 isLoading={isLoading}
                 selectedType={filters.type}
                 isReceivablesMode={isContasAReceber}
-                onClientClick={(name) => setSelectedClient(name)}
+                onClientClick={entriesOnly ? (name) => setSelectedClient(name) : undefined}
                 sortField={sortField}
                 sortDirection={sortDirection}
                 onSortChange={handleSortChange}
                 possibleDuplicates={possibleDuplicates}
               />
-           </div>}
+           </div>
         </div>
 
         {entriesOnly && selectedClient && (
