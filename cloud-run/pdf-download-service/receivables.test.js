@@ -143,3 +143,20 @@ test('revisão obrigatória e sessão autenticada',async()=>{
  const h=harness();assert.equal((await h.call('items/legacy',null,'')).status,401);
  const b=await body(h);assert.equal((await h.call('receipt/commit',b)).status,409);assert.equal(h.store.size,2);
 });
+
+// The browser collapses whitespace in option text when value is omitted.
+// Catalog identifiers must survive the selection unchanged.
+test('conta Itaú com espaços do cadastro aceita revisão e preserva identificação na baixa',async()=>{
+ const h=harness(), bank=catalog.banks[0];
+ assert.match(bank,/  /);
+ const method=catalog.receiptMethods.find(v=>/11.*Boleto.*ITAU/i.test(v));
+ assert.ok(method);
+ const b=await body(h,{bankAccount:bank,method});
+ const invalid=await h.call('receipt/preview',{...b,receipt:{...b.receipt,bankAccount:bank.replace(/\s+/g,' ')}});
+ assert.equal(invalid.status,400);
+ assert.equal(h.store.size,2);
+ const result=await commit(h,b);
+ assert.equal(result.status,200);
+ assert.equal(h.store.get('transactions/legacy').receivableSettlement.bankAccount,bank);
+ assert.equal(h.store.get('transactions/legacy').receivableSettlement.method,method);
+});
