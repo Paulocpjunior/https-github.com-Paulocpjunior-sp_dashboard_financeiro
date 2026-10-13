@@ -211,7 +211,7 @@ const BillingForecast: React.FC = () => {
     setSaving(true);
     try {
       const sourceRow = allRows.find(row => row.identityKey === editingProfile.identityKey);
-      if (!sourceRow) throw new Error('A empresa não está mais disponível na base recebida do Jotform. Atualize a tela.');
+      if (!sourceRow) throw new Error('A empresa não está mais disponível na base de lançamentos do Firestore. Atualize a tela.');
       const identityKey = sourceRow.identityKey;
       const conflictingProfile = profiles.find(item => item.id !== editingProfile.id && item.active !== false && (item.identityKey || getBillingIdentityKey(item)) === identityKey);
       if (conflictingProfile) {
@@ -307,14 +307,14 @@ const BillingForecast: React.FC = () => {
 
         <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/20 p-4 text-sm text-blue-900 dark:text-blue-200 flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
-          <p><strong>Relatório preparatório:</strong> o cadastro das empresas vem do Jotform. Aqui são mantidas somente as regras de cobrança e envio; esta tela não emite boleto Itaú, não cria fatura Wix e não envia cobranças automaticamente.</p>
+          <p><strong>Relatório preparatório:</strong> as empresas são identificadas pelos lançamentos salvos no Firestore. Aqui são mantidas somente as regras de cobrança e envio; esta tela não emite boleto Itaú, não cria fatura Wix e não envia cobranças automaticamente.</p>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
           <div className="xl:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 grid sm:grid-cols-3 gap-4">
             <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               Origem das empresas
-              <div className="mt-2 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2.5">Jotform • data de lançamento</div>
+              <div className="mt-2 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2.5">Firestore • data de lançamento</div>
             </div>
             <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
               Mês usado como base financeira
@@ -328,7 +328,7 @@ const BillingForecast: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
             <p className="text-xs uppercase tracking-wide text-slate-500 font-bold">{search || onlyPending ? 'Total filtrado' : 'Total de referência'}</p>
             <p className="text-2xl font-black text-blue-700 dark:text-blue-300 mt-1">{formatCurrency(summary.total)}</p>
-            <p className="text-xs text-slate-500 mt-1">{formatMonth(referenceMonth)} • lançamentos do Jotform</p>
+            <p className="text-xs text-slate-500 mt-1">{formatMonth(referenceMonth)} • lançamentos no Firestore</p>
           </div>
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 grid grid-cols-3 gap-2 text-center">
             <div><p className="text-xl font-black text-emerald-600">{summary.ready}</p><p className="text-[10px] uppercase text-slate-500">Prontos</p></div>
@@ -419,9 +419,9 @@ const BillingForecast: React.FC = () => {
             <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between"><div><h2 className="font-black text-lg text-slate-900 dark:text-white">Regra de faturamento e envio</h2><p className="text-xs text-slate-500">Associe empresas do mesmo grupo usando exatamente o mesmo nome de grupo.</p></div><button type="button" onClick={() => setEditingProfile(null)} className="p-2 text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button></div>
             <div className="p-6 overflow-y-auto space-y-5">
               <div className="grid sm:grid-cols-2 gap-4">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Empresa — recebida do Jotform<input readOnly value={editingProfile.client} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">CPF/CNPJ — Jotform<input readOnly value={editingProfile.cpfCnpj || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">N.Cliente — Jotform<input readOnly value={editingProfile.clientNumber || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Empresa — base do Firestore<input readOnly value={editingProfile.client} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">CPF/CNPJ — Firestore<input readOnly value={editingProfile.cpfCnpj || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">N.Cliente — Firestore<input readOnly value={editingProfile.clientNumber || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Grupo econômico<input value={editingProfile.groupName || ''} onChange={event => updateEditing({ groupName: event.target.value })} placeholder="Ex.: Grupo Empresa Alfa" className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
