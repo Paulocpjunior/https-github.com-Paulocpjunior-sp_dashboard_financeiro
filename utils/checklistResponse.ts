@@ -9,7 +9,7 @@ export function assertChecklistResponse(data: unknown): asserts data is Checklis
   const fail = () => { throw new Error('A fonte não confirmou uma leitura completa e válida.'); };
   if (!object(data)) return fail();
   const counts = ['expected','received','active','excluded','validRecords','conflictRecords','observationsToReview'];
-  if (data.complete !== true || data.canCloseMonth !== false || data.formId !== '210135417457653' ||
+  if (data.complete !== true || data.canCloseMonth !== false || !((data.source === 'firestore' && data.formId === 'firestore:financial-registry') || (data.source === undefined && data.formId === '210135417457653')) ||
       typeof data.title !== 'string' || !Array.isArray(data.records) ||
       counts.some(key => !Number.isSafeInteger(data[key]) || Number(data[key]) < 0) ||
       data.expected !== data.received || Number(data.active) + Number(data.excluded) !== data.received ||
@@ -19,7 +19,7 @@ export function assertChecklistResponse(data: unknown): asserts data is Checklis
   const ids = new Set<string>();
   let valid = 0, observations = 0;
   for (const row of data.records) {
-    if (!object(row) || typeof row.submissionId !== 'string' || !/^\d+$/.test(row.submissionId) || ids.has(row.submissionId) ||
+    if (!object(row) || typeof row.submissionId !== 'string' || !(data.source === 'firestore' ? /^(clientRegistry|billingProfiles)\/[^/]+$/.test(row.submissionId) && row.sourceCollection === row.submissionId.split('/')[0] : /^\d+$/.test(row.submissionId)) || ids.has(row.submissionId) ||
         typeof row.identity !== 'string' ||
         ['client','clientNumber','entryDate','exitDate','suspensionDate','status','notes','sourceUpdatedAt'].some(key => !nullableText(row[key])) ||
         (row.document !== undefined && typeof row.document !== 'string') ||

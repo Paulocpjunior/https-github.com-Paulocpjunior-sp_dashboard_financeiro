@@ -74,7 +74,7 @@ export function buildBillingObligations(transactions: Transaction[], records: Ch
     row.situation = !identified ? 'identificacao' : row.currentIds.length ? 'lancamento_localizado'
       : row.previousIds.length ? 'possivel_ausencia' : 'checklist_sem_lancamento';
     if (!row.checklist.length) row.issues.push('Nenhuma resposta do checklist vinculada por identificação.');
-    if (row.checklist.length > 1) row.issues.push('Há vários eventos para este cliente: confirmar sequência e vigência; nenhum foi escolhido como contrato atual.');
+    if (row.checklist.length > 1) row.issues.push(row.checklist.some(r=>r.sourceCollection) ? 'Há vários cadastros para este cliente: conferir as fontes; nenhum foi escolhido como contrato atual.' : 'Há vários eventos para este cliente: confirmar sequência e vigência; nenhum foi escolhido como contrato atual.');
     for (const record of row.checklist) {
       row.issues.push(checklistEventGuidance[checklistEvent(record.status)]);
       if (record.amount == null) row.issues.push('Honorários do checklist: conferir valor nas observações.');

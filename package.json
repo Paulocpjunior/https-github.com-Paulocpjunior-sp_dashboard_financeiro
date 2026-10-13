@@ -73,7 +73,7 @@
     "test:billing-confirmation": "node scripts/test-billing-confirmation.mjs && node scripts/test-billing-confirmation-lifecycle.mjs",
     "test:billing-obligations": "node scripts/test-billing-obligations.mjs",
     "test:checklist-status": "node scripts/test-checklist-status.mjs",
-    "test:checklist-response": "node scripts/test-checklist-response.mjs",
+    "test:checklist-response": "node scripts/test-checklist-response.mjs && node scripts/test-firestore-checklist.mjs",
     "test:billing-completeness": "node scripts/test-billing-completeness.mjs",
     "test:accumulated-balances": "node scripts/test-accumulated-balances.mjs",
     "test:payables": "node --test cloud-run/pdf-download-service/payables.test.js cloud-run/pdf-download-service/payable-ledger.test.js cloud-run/pdf-download-service/payable-provision-job.test.js",
