@@ -502,7 +502,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
 
     const reason = window.prompt(
       'Motivo da exclusão do lançamento:',
-      'Excluído do Jotform / cobrança indevida'
+      'Cobrança indevida'
     );
     if (reason === null) return;
 
@@ -668,8 +668,8 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
               🧭 Cadastro central: {confCentral.foraDoCadastro.length} CNPJ(s) que o Consultor Fiscal não conhece
             </div>
             <p className="text-xs text-slate-600 mb-2">
-              Ou o CNPJ foi digitado errado no Jotform (e a cobrança bate no cliente errado), ou o cliente está
-              fora do cadastro central — e de todos os módulos. Quem arruma é gente, na fonte.
+              Confira o CNPJ do lançamento salvo no Firestore e o cadastro central do Consultor Fiscal.
+              A divergência pode ser um erro de digitação ou um cadastro ausente; valide a identificação antes de cobrar.
               {confCentral.pessoasFisicas > 0 && ` (${confCentral.pessoasFisicas} transação(ões) de pessoa física ficam fora desta conferência.)`}
             </p>
             {confCentral.foraDoCadastro.slice(0, 8).map((f) => (

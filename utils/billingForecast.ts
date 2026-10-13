@@ -138,7 +138,7 @@ export const buildBillingForecastRows = (
     profilesByKey.set(key, profile);
   }
 
-  // O cadastro de empresas é originado pelo Jotform. Perfis salvos apenas
+  // As empresas são identificadas pelos lançamentos salvos no Firestore. Perfis apenas
   // complementam uma empresa existente; eles não podem criar novas linhas.
   // Faturas Wix isoladas também não criam um segundo cadastro sem documento.
   const keys = new Set(activeTransactions

@@ -2,17 +2,12 @@
  * services/cadastroCentralConferencia.ts — as cobranças do Financeiro
  * conferidas contra o cadastro central do CFI (08/08).
  *
- * Este app é BASE JOTFORM (Paulo, 08/08): o cliente da transação é texto
- * digitado, com cpfCnpj opcional. Não existe cadastro próprio de empresas —
- * então a conferência aqui NÃO vigia o passado inteiro (nome livre e CPF de
- * pessoa física virariam alarme sem ação): ela olha SÓ as transações com
- * CNPJ preenchido e acende as que apontam para um CNPJ que o cadastro
- * central não conhece.
- *
- * CNPJ fora do central = ou digitado errado no Jotform (a cobrança vai bater
- * no cliente errado), ou cliente fora do cadastro do CFI — e aí fora de
- * TODOS os módulos. Quem arruma é gente, na fonte. CPF (11 dígitos) fica de
- * fora: pessoa física não é empresa do cadastro central.
+ * Consulta transações salvas no Firestore, inclusive o histórico importado.
+ * O nome pode ser texto livre e cpfCnpj é opcional. A conferência considera
+ * somente transações com CNPJ preenchido e sinaliza os documentos que o
+ * cadastro central do CFI não conhece. CPF (pessoa física) fica fora do escopo.
+ * A equipe deve conferir o documento do lançamento e o cadastro central;
+ * a divergência não determina automaticamente qual fonte está incorreta.
  */
 
 const CFI_URL = 'https://consultor-fiscal-inteligente-zricstsjqa-uw.a.run.app';

@@ -8,7 +8,8 @@ const cleanPaymentMethod = (value: unknown): string => {
 };
 
 /**
- * Preserva o valor original do Jotform como fonte principal. Os aliases existem
+ * Preserva a precedência do campo metodoPagamento salvo no Firestore, inclusive
+ * nos registros importados do Jotform. Os aliases existem
  * para lançamentos de outras integrações e para registros legados.
  */
 export const getPaymentMethod = (transaction: PaymentMethodTransaction): string => {
