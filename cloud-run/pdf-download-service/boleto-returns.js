@@ -27,6 +27,7 @@ function evaluate(issueId, issue, row, body, cfg, at) {
   if (row.bankAccount !== catalog.banks[0] || digits(row.cpfCnpj) !== digits(f['boleto.pagador.cprf']) ||
       row.dueDate !== f['boleto.vencimento'] || cents(amount(row)) !== cents(f['boleto.valor']) || cents(row.valorOriginal) !== cents(f['boleto.valor']))
     return review('Identidade, conta, vencimento ou valor do lançamento foram alterados.');
+  if (row.receivableSettlement || row.receivableBalance) return review('Recebimento manual existente: confira o retorno sem duplicar a baixa.');
   if (b.situacao !== 'PAGO') {
     if (row.boletoSettlement) return review('Situação bancária mudou após a baixa; conferir sem estornar automaticamente.');
     if (b.situacao === 'BAIXADO') return review('Boleto cancelado no emissor; lançamento preservado.');

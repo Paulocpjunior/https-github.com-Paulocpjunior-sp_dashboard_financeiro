@@ -18,6 +18,12 @@ try {
   assert.deepEqual(balancesInReais(partialTotals),{totalPaid:60,totalReceived:0,balance:-40});
   const settled={...partial,status:'Pago',payableBalance:{version:1,paidCents:10100,interestCents:400,fineCents:100,discountCents:400,remainingCents:0}};
   assert.equal(getOriginalAmount(settled),100); assert.equal(getPaidAmount(settled),101); assert.equal(getOutstandingAmount(settled),0);
+  const receivablePartial=transaction('receipt-partial',{valorOriginal:100,valueReceived:40,receivableBalance:{version:1,receivedCents:4000,interestCents:200,discountCents:100,remainingCents:6100}});
+  assert.equal(getOriginalAmount(receivablePartial),100);
+  assert.equal(getPaidAmount(receivablePartial),40);
+  assert.equal(getOutstandingAmount(receivablePartial),61);
+  const receiptTotals={totalPaid:0,totalReceived:0,balance:0};accumulateBalances(receiptTotals,receivablePartial);
+  assert.deepEqual(balancesInReais(receiptTotals),{totalPaid:0,totalReceived:61,balance:40});
   const projectId = 'synthetic-project';
   const prefix = `projects/${projectId}/databases/(default)/documents/transactions/`;
   const readTime = '2026-10-01T10:00:00.000000Z';
@@ -38,6 +44,7 @@ try {
   assert.deepEqual(requests[1].structuredQuery.startAt, { values: [{ referenceValue: prefix + '000999' }], before: false });
   const partialRead = await readAccumulatedBalances({projectId,token:'synthetic-token',checkSession:()=>{},fetcher:async (_url,init)=>{
     assert.ok(JSON.parse(init.body).structuredQuery.select.fields.some(f=>f.fieldPath==='payableBalance'));
+    assert.ok(JSON.parse(init.body).structuredQuery.select.fields.some(f=>f.fieldPath==='receivableBalance'));
     const doc=row(0,{movement:'Saída',valuePaid:100});
     doc.document.fields.payableBalance={mapValue:{fields:Object.fromEntries(Object.entries(partial.payableBalance).map(([k,v])=>[k,{integerValue:String(v)}]))}};
     return {ok:true,json:async()=>[doc]};

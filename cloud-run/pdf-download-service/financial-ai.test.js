@@ -37,3 +37,8 @@ test('provider failures never expose raw error details and empty answers are ref
 test('projection preserves partial balance cent units without filling missing values with zero',()=>{
  const row=projectRow({id:'a',exists:true,data:()=>({payableBalance:{version:1,paidCents:1000,remainingCents:2000},valorOriginal:30})});assert.equal(row.payableBalance.remainingCents,2000);assert.equal(row.valuePaid,undefined);
 });
+
+test('FiA recebe somente totais do saldo parcial a receber, sem notas',()=>{
+ const row=projectRow({id:'r',exists:true,data:()=>({receivableBalance:{version:1,receivedCents:4000,remainingCents:6100,interestCents:200,discountCents:100,note:'privado'}})});
+ assert.deepEqual(row.receivableBalance,{receivedCents:4000,remainingCents:6100,interestCents:200,discountCents:100});
+});

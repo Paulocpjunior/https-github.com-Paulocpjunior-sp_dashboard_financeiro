@@ -6,6 +6,8 @@ export type FinancialPermission =
   | 'billing.boleto-cloud.history.read'
   | 'itau.openfinance.read'
   | 'itau.statement.import'
+  | 'receivables.read'
+  | 'receivables.settle'
   | 'payables.read'
   | 'payables.settle'
   | 'payables.reverse'
@@ -39,6 +41,9 @@ export interface Transaction {
   client: string; // Name/Creditor
   paidBy: string;
   movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
+  receivableBalance?: {version:1; receivedCents:number; interestCents:number; discountCents:number; remainingCents:number};
+  receivableSettlement?: {requestId:string; uid:string; actor:string; date:string; at:string};
+  receivableReceipts?: Array<{requestId:string;date:string;amountCents:number;interestCents:number;discountCents:number;remainingCents:number;bankAccount:string;method:string;actor:string;note:string}>;
   payableSettlement?: {requestId:string;uid:string;date:string;amountCents:number;actor:string};
   payableReversals?: Array<{requestId:string;paymentRequestId:string;amountCents:number;reason:string;uid:string;actor:string;at:string}>;
   payablePayments?: Array<{requestId:string;date:string;amountCents:number;interestCents:number;fineCents:number;discountCents:number;remainingCents:number;bankAccount:string;method:string;actor:string;note:string}>;

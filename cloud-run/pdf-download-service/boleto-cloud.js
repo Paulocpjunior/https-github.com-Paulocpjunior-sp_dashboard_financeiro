@@ -72,6 +72,7 @@ function eligible(row) {
   return (
     !row.isExcluded &&
     !row.boletoReconciliation &&
+    !row.receivableBalance && !row.receivableSettlement &&
     ["pendente", "agendado", "vencida"].includes(norm(row.status)) &&
     norm(row.movement) === "entrada" &&
     !/saida|pagar/.test(norm(row.type)) &&

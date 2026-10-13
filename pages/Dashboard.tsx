@@ -1,6 +1,7 @@
 import '../components/FinancialConsultation.css';
 import { getPaidAmount, getOutstandingAmount } from "../utils/transactionAmounts";
 import DashboardToolbar from '../components/DashboardToolbar';
+import ReceivablesModal from '../components/ReceivablesModal';
 import PayablesModal from '../components/PayablesModal';
 import NativeEntryModal from '../components/NativeEntryModal';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -66,6 +67,8 @@ const getFilterScopeKey = (filters: Partial<FilterState>) => [
 const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false }) => {
   const currentUser = AuthService.getCurrentUser();
   const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
+  const [receivableId, setReceivableId] = useState<string | null>(null);
+  const canManageReceivable = hasFinancialPermission(currentUser,'receivables.read') || hasFinancialPermission(currentUser,'receivables.settle');
   const canManagePayable = (['payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'] as const).some(p => hasFinancialPermission(currentUser,p));
   const canManageRecurrences = hasFinancialPermission(currentUser,'payables.recurrence');
   const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');
@@ -620,6 +623,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
     <Layout>
       <div className="space-y-6">
         
+        {entriesOnly && receivableId && <ReceivablesModal id={receivableId} onClose={() => setReceivableId(null)} onSaved={() => { void handleManualRefresh(); }} />}
         {entriesOnly && payableModal && <PayablesModal id={payableModal.id} onClose={() => setPayableModal(null)} onSaved={() => { void handleManualRefresh(); }} />}
         {entriesOnly && nativeEntryKind && <NativeEntryModal kind={nativeEntryKind} onClose={() => setNativeEntryKind(null)} onSaved={() => { void handleManualRefresh(); }} />}
         <DashboardToolbar
@@ -1079,6 +1083,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 canDelete={entriesOnly && isAdmin}
                 canExportBoletoCloud={entriesOnly && canExportBoletoCloud}
                 onDelete={entriesOnly ? handleDeleteTransaction : undefined}
+                onReceivable={entriesOnly && canManageReceivable ? setReceivableId : undefined}
                 onPayable={entriesOnly && canManagePayable ? (id) => setPayableModal({id}) : undefined}
                 clientFilterValue={filters.client}
                 onClientFilterChange={(val) => handleFilterChange('client', val)}

@@ -121,6 +121,11 @@ try {
   const editable=renderTable(false,'Saída de Caixa / Contas a Pagar');
   assert.ok(editable.includes('Gerenciar conta') && editable.includes('title="Excluir"'), 'Lançamentos mantém gerenciamento e exclusão');
 
+  const receiptProps={data:[transaction('receivable',{movement:'Entrada',type:'Entrada de Caixa / Contas a Receber',client:'Cliente teste',status:'Pendente'})],page:1,totalPages:1,onPageChange(){},onReceivable(){},sortField:'none',sortDirection:'asc',onSortChange(){}};
+  assert.ok(renderToStaticMarkup(React.createElement(DataTable,receiptProps)).includes('Registrar recebimento'));
+  assert.ok(!renderToStaticMarkup(React.createElement(DataTable,{...receiptProps,readOnly:true})).includes('Registrar recebimento'));
+  assert.ok(!renderToStaticMarkup(React.createElement(DataTable,{...receiptProps,onReceivable:undefined})).includes('Registrar recebimento'));
+  assert.ok(renderToStaticMarkup(React.createElement(DataTable,{...receiptProps,data:[{...receiptProps.data[0],source:'wix'}]})).includes('Via Wix'));
   console.log('OK: ordenação global e sinalização conservadora de duplicidades validadas.');
 } finally {
   await server.close();

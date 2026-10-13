@@ -110,6 +110,13 @@ try {
   const bounceIds = (bounceResult.allData ?? bounceResult.data).map((transaction) => transaction.id);
   assert.deepEqual(bounceIds, ['stale-july-launch']);
 
+  FirebaseService.fetchTransactionsByRange=async()=>[{id:'partial-receipt',date:'2026-10-01',dueDate:'2026-10-20',paymentDate:'2026-10-13',bankAccount:'Itaú',type:'Entrada de Caixa / Contas a Receber',movement:'Entrada',client:'Teste',status:'Pendente',valuePaid:0,valueReceived:40,valorOriginal:100,totalCobranca:100,receivableBalance:{version:1,receivedCents:4000,interestCents:200,discountCents:100,remainingCents:6100}}];
+  await DataService.loadDataForFilters({startDate:'2026-10-01',endDate:'2026-10-31'},true);
+  const partialResult=DataService.getTransactions({type:'Entrada de Caixa / Contas a Receber',receiptDateStart:'2026-10-13',receiptDateEnd:'2026-10-13'});
+  assert.equal(partialResult.result.data.length,1,'parcial mantém data de recebimento para filtro');
+  assert.equal(partialResult.kpi.totalPaid,40);
+  assert.equal(partialResult.kpi.balance,61);
+  assert.deepEqual(DataService.getGlobalStats(),{totalReceived:61,totalPaid:0,balance:40});
   console.log('OK: a consulta de período mais recente prevalece no cache.');
 } finally {
   await server.close();
