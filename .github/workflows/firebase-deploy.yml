@@ -42,6 +42,7 @@ jobs:
         run: |
           node scripts/guard-production.mjs --check
           node scripts/test-production-guard.mjs
+          python3 scripts/test-transaction-exclusion-guard.py
           python3 scripts/test-jotform-retirement.py
           npm run lint
           npm run test:firestore-backup

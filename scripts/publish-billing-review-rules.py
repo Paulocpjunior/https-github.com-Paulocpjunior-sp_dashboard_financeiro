@@ -4,16 +4,11 @@ from google.oauth2 import service_account
 from google.auth.transport.requests import Request
 PROJECT='gen-lang-client-0888019226'
 subprocess.run(['node','scripts/guard-production.mjs'],check=True)
-base=subprocess.check_output(['git','show','cc46956de30c5f87250644d70c1fa43b611436bd:firestore.rules'],text=True)
+# Base publicada antes da restrição de exclusão aprovada por Paulo.
+base=subprocess.check_output(['git','show','223d66099647db6d9d02aa3a168e174b053cc9e7:firestore.rules'],text=True)
 new=pathlib.Path('firestore.rules').read_text()
-# Somente a função de atualização e a condição de update de transactions mudam.
-# Todas as demais permissões precisam permanecer idênticas à versão homologada.
-def without_payment_guard(source):
- start=source.index('    function isLimitedPaymentUpdate()') if '    function isLimitedPaymentUpdate()' in source else source.index('    // Baixas usam o servidor,')
- end=source.index('    match /users/',start)
- return (source[:start]+source[end:]).replace('allow update: if isAdmin() || isLimitedPaymentUpdate();','allow update: if isAdministrativeExclusion();')
-assert without_payment_guard(new)==without_payment_guard(base),'Alteração fora do escopo da proteção de baixas.'
-assert 'allow update: if isAdministrativeExclusion();' in new
+from transaction_exclusion_guard import validate_exclusion_rules
+validate_exclusion_rules(base,new)
 credentials=service_account.Credentials.from_service_account_info(json.loads(os.environ['GCP_CREDENTIALS']),scopes=['https://www.googleapis.com/auth/cloud-platform'])
 credentials.refresh(Request());headers={'Authorization':'Bearer '+credentials.token}
 root='https://firebaserules.googleapis.com/v1/'
