@@ -21,12 +21,13 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
     if (!url.pathname.startsWith('/api/itau/')) return false;
     let userId;
     try {
+      const receivableAction = request.method === 'POST' ? ({'/api/itau/receivable-groups/list':'list','/api/itau/receivable-groups/preview':'preview','/api/itau/receivable-groups/confirm':'confirm','/api/itau/receivable-groups/unlink':'unlink'})[url.pathname] : null;
       const isComparison = request.method === 'GET' && url.pathname === '/api/itau/payment-comparison';
       const linkAction = request.method === 'POST' ? ({'/api/itau/legacy-links/preview':'preview','/api/itau/legacy-links/confirm':'confirm','/api/itau/legacy-links/unlink':'unlink','/api/itau/native-links/preview':'preview','/api/itau/native-links/confirm':'confirm','/api/itau/native-links/unlink':'unlink','/api/itau/group-links/preview':'preview','/api/itau/group-links/confirm':'confirm','/api/itau/group-links/unlink':'unlink'})[url.pathname] : null;
       const isRead = request.method === 'GET' && url.pathname === '/api/itau/statements';
       const isPreview = request.method === 'POST' && url.pathname === '/api/itau/preview';
       const isCommit = request.method === 'POST' && url.pathname === '/api/itau/import';
-      if (!isRead && !isPreview && !isCommit && !isComparison && !linkAction) throw new StatementError('Rota não encontrada.', 404);
+      if (!isRead && !isPreview && !isCommit && !isComparison && !linkAction && !receivableAction) throw new StatementError('Rota não encontrada.', 404);
       const { adminAuth, adminDb: db } = getServices();
       const bearer = String(request.headers.authorization || '').match(/^Bearer (\S+)$/);
       if (!bearer) throw new StatementError('Entre novamente para consultar o extrato.', 401);
@@ -34,12 +35,19 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
       try { token = await adminAuth.verifyIdToken(bearer[1], true); } catch { throw new StatementError('Sessão expirada. Entre novamente.', 401); }
       userId = token.uid;
       const profile = await db.collection('users').doc(userId).get();
-      const allowed = data => linkAction ? require('./itau-legacy-links').admin(data) : permitted(data, READ) && (isRead || isComparison || permitted(data, IMPORT)) && (!isComparison || require('./payable-permissions').capabilities(data).read);
+      const allowed = data => receivableAction ? require('./itau-receivable-groups')[receivableAction === 'list' ? 'canRead' : 'canWrite'](data) : linkAction ? require('./itau-legacy-links').admin(data) : permitted(data, READ) && (isRead || isComparison || permitted(data, IMPORT)) && (!isComparison || require('./payable-permissions').capabilities(data).read);
       if (!profile.exists || !allowed(profile.data())) throw new StatementError('Sem permissão para esta operação na conta Itaú 3145 / 99791-6.', 403);
       const account = db.collection('bankStatements').doc(ACCOUNT);
       const audit = db.collection('bankStatementAudit');
       const actor = { userId, accountId: ACCOUNT, at: new Date().toISOString() };
-      if (linkAction) {
+      if (receivableAction) {
+        let input;
+        try { input=JSON.parse((await readBody(request)).toString('utf8')); } catch { throw new StatementError('Solicitação inválida.',400); }
+        if(!input || typeof input!=='object' || Array.isArray(input)) throw new StatementError('Solicitação inválida.',400);
+        const groups=require('./itau-receivable-groups');
+        const result=receivableAction==='list'?await groups.list(db,userId,input.statementId):receivableAction==='preview'?await groups.preview(db,userId,input):await groups.mutate(db,userId,receivableAction,input);
+        sendJson(request,response,200,result);
+      } else if (linkAction) {
         let input;
         try { input=JSON.parse((await readBody(request)).toString('utf8')); } catch { throw new StatementError('Solicitação inválida.',400); }
         if(!input || typeof input!=='object' || Array.isArray(input)) throw new StatementError('Solicitação inválida.',400);

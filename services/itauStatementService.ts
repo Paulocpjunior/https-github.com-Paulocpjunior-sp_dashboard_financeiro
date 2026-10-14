@@ -82,3 +82,14 @@ export interface PaymentComparison {
  counts:Record<string,number>;coverage:string;criterion:string;paymentCount:number;unmatchedPayments:Array<{id:string;transactionId:string;date:string;amountCents:number;supplier:string}>;
  start:string;end:string;paymentStart:string;paymentEnd:string;generatedAt:string;
 }
+
+export interface ReceivableGroupMember {boletoId:string;transactionId:string}
+export interface ReceivableGroupPayment {boletoId:string;transactionId:string|null;name:string;number:string;payerDocument:string;amountCents:number;paidAt:string;creditedAt:string;eligible:boolean;reason:string}
+export interface ReceivableGroupPreview {statement:{id:string;date:string;amountCents:number;fitid:string};members:ReceivableGroupMember[];payments:ReceivableGroupPayment[];totalCents:number;fingerprint:string;revision:number}
+export interface ReceivableGroupList {payments:ReceivableGroupPayment[];canConfirm:boolean;link:(ReceivableGroupPreview & {active:boolean;reference:string;validation:'current'|'changed'|null})|null}
+export const ReceivableGroups = {
+ list:(statementId:string)=>request<ReceivableGroupList>('receivable-groups/list',{statementId}),
+ preview:(statementId:string,members:ReceivableGroupMember[])=>request<ReceivableGroupPreview>('receivable-groups/preview',{statementId,members}),
+ confirm:(body:{statementId:string;members:ReceivableGroupMember[];requestId:string;revision:number;fingerprint:string;reason:string;reference:string;checkedEvidence:boolean})=>request('receivable-groups/confirm',body),
+ unlink:(body:{statementId:string;requestId:string;revision:number;reason:string})=>request('receivable-groups/unlink',body),
+};

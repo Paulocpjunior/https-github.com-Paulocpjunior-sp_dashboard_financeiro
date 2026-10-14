@@ -22,7 +22,7 @@ export const DEFAULT_COLLECTIONS = [
   'boletoReconciliationPreviews', 'boletoReconciliationAudit', 'boletoReconciliationSettlements',
   'payableRecurrences', 'payableInviteSettings', 'payableOperations', 'payableAudit',
   'nativeEntryRequests', 'nativeEntryLocks', 'nativeEntryAudit', 'bankStatements', 'bankStatementAudit',
-  'bankLegacyLinks', 'bankLegacyPaymentLocks', 'bankLegacyLinkOperations', 'financialCommunicationContacts', 'financialCommunications', 'financialCommunicationEvents',
+  'bankReceivableGroups', 'bankReceivableClaims', 'bankReceivableGroupOperations', 'bankLegacyLinks', 'bankLegacyPaymentLocks', 'bankLegacyLinkOperations', 'financialCommunicationContacts', 'financialCommunications', 'financialCommunicationEvents',
 ];
 const REPORT_DIR = 'migration-backups';
 

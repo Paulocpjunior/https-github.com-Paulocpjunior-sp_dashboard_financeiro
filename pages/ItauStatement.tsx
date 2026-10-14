@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { Landmark, Upload, ShieldCheck } from 'lucide-react';
 import Layout from '../components/Layout';
+import ReceivableBankGroup from '../components/ReceivableBankGroup';
 import BankingFlowScope from '../components/BankingFlowScope';
 import { auth, db } from '../firebase';
 import { ItauStatements, StatementBalance, OfxFile, StatementImport, StatementPreview, StatementRequestError, StatementRow, readOfxFile } from '../services/itauStatementService';
@@ -15,9 +16,9 @@ const card = 'rounded-xl border border-slate-200 dark:border-slate-700 bg-white 
 const button = 'rounded-lg bg-blue-700 px-4 py-2.5 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed';
 const input = 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-950 px-3 py-2 text-slate-900 dark:text-white';
 
-function Movements({ rows }: { rows: StatementRow[] }) {
+function Movements({ rows, onGroup }: { rows: StatementRow[]; onGroup?: (row:StatementRow)=>void }) {
   return <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 dark:bg-slate-800"><tr>{['Data', 'Histórico do banco', 'Identificador da movimentação', 'Valor'].map(label => <th className="px-4 py-3" key={label}>{label}</th>)}</tr></thead><tbody>
-    {rows.map(row => <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-3 whitespace-nowrap">{displayDate(row.date)}</td><td className="px-4 py-3 min-w-64"><div>{row.name || row.memo || 'Sem histórico informado'}</div>{row.name && row.memo && <div className="text-slate-500">{row.memo}</div>}<span className="text-xs text-slate-500">{row.type}{row.checknum ? ` · Documento ${row.checknum}` : ''}</span></td><td className="px-4 py-3 break-all">{row.fitid}</td><td className={`px-4 py-3 text-right whitespace-nowrap font-semibold ${row.amountCents < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>{money(row.amountCents)}</td></tr>)}
+    {rows.map(row => <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800"><td className="px-4 py-3 whitespace-nowrap">{displayDate(row.date)}</td><td className="px-4 py-3 min-w-64"><div>{row.name || row.memo || 'Sem histórico informado'}</div>{row.name && row.memo && <div className="text-slate-500">{row.memo}</div>}<span className="text-xs text-slate-500">{row.type}{row.checknum ? ` · Documento ${row.checknum}` : ''}</span></td><td className="px-4 py-3 break-all">{row.fitid}</td><td className={`px-4 py-3 text-right whitespace-nowrap font-semibold ${row.amountCents < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>{money(row.amountCents)}{onGroup && /BOLETOS? RECEBIDOS?/i.test(`${row.name} ${row.memo}`) && <div className="sp-ui mt-2"><button className="sp-button" onClick={()=>onGroup(row)}>Conferir composição</button></div>}</td></tr>)}
   </tbody></table></div>;
 }
 function BalanceReferences({ rows }: { rows?: StatementBalance[] }) {
@@ -28,6 +29,7 @@ function BalanceReferences({ rows }: { rows?: StatementBalance[] }) {
   </details>;
 }
 export default function ItauStatement() {
+  const [group, setGroup] = useState<StatementRow|null>(null);
   const [access, setAccess] = useState({ ready: false, read: false, import: false });
   const [start, setStart] = useState(() => `${today().slice(0, 7)}-01`);
   const [end, setEnd] = useState(today);
@@ -42,7 +44,7 @@ export default function ItauStatement() {
   useEffect(() => {
     let unsubscribeProfile = () => {};
     const unsubscribeAuth = onAuthStateChanged(auth, user => {
-      unsubscribeProfile(); generation.current++;
+      unsubscribeProfile(); generation.current++; setGroup(null);
       setResult(null);  setPreview(null); setFile(null); setBusy(false);
       if (!user) { setAccess({ ready: true, read: false, import: false }); return; }
       unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), snapshot => {
@@ -50,14 +52,14 @@ export default function ItauStatement() {
         const active = p?.active === true && !['deleted', 'blocked'].includes(p?.status);
         const read = active && (p?.role === 'admin' || p?.financialPermissions?.includes('itau.openfinance.read') === true);
         const write = read && (p?.role === 'admin' || p?.financialPermissions?.includes('itau.statement.import') === true);
-        generation.current++; setBusy(false);
+        generation.current++; setBusy(false); setGroup(null);
         setAccess({ ready: true, read: !!read, import: !!write });
 
         if (!read) setResult(null);
         // A pending response cannot resurrect data after profile revocation.
         setPreview(null); setFile(null);
       }, () => {
-        generation.current++; setBusy(false); setResult(null);  setPreview(null); setFile(null);
+        generation.current++; setBusy(false); setGroup(null); setResult(null);  setPreview(null); setFile(null);
         setAccess({ ready: true, read: false, import: false });
       });
     });
@@ -99,9 +101,10 @@ export default function ItauStatement() {
           <li>Para entradas, localize a conta em <strong>Lançamentos → A Receber</strong>. Confira cliente, valor, data, conta bancária e o histórico de recebimentos antes de registrar uma baixa manual.</li>
           <li>Se ainda houver saldo, registre somente o valor recebido, revise e confirme. Depois confira o histórico, o valor recebido e o saldo restante: uma baixa parcial mantém a conta em aberto.</li>
         </ol>
-        <p className="text-sm">Se o Boleto Cloud já confirmou e baixou o recebimento, não registre outra baixa. Créditos agrupados como BOLETOS RECEBIDOS precisam do detalhamento por boleto para identificar cada cliente.</p>
+        <p className="text-sm">Se o Boleto Cloud já confirmou e baixou o recebimento, não registre outra baixa. Para BOLETOS RECEBIDOS, clique em Conferir composição na linha do crédito. Vincule as baixas individuais comprovadas pelo detalhamento bancário; não lance o valor agrupado para um cliente.</p>
         <div className="sp-ui"><Link className="sp-button" to="/lancamentos">Abrir Lançamentos</Link></div>
       </section>
+      {group && <ReceivableBankGroup key={group.id} statement={group} onClose={()=>setGroup(null)}/>}
       {busy && <p role="status">Processando…</p>}
       {preview && <section className={`${card} space-y-4`}><h2 className="text-lg font-bold">Conferência antes de importar</h2><p className="text-sm break-all">{preview.fileName} · {displayDate(preview.start)} a {displayDate(preview.end)}</p><p>{preview.newCount} novas · {preview.duplicateCount} já importadas · {preview.conflicts.length} divergências</p><p className="text-sm">Entradas para conferência: {money(preview.totals.credits)}</p>
         {preview.ledgerBalance && <p className="text-sm">Saldo informado pelo banco em {displayDate(preview.ledgerBalance.date)}: <strong>{money(preview.ledgerBalance.amountCents)}</strong></p>}
@@ -113,8 +116,8 @@ export default function ItauStatement() {
           const id = ++generation.current; void run(async () => { const saved = await ItauStatements.commit(file!, preview.fileHash); if (id !== generation.current) return; setMessage(saved.alreadyImported ? 'Arquivo já importado anteriormente.' : `Importação concluída: ${saved.inserted} novas movimentações; ${saved.duplicates} já existentes preservadas.`); setStart(preview.start); setEnd(preview.end); setPreview(null); setFile(null); setResult(null);  if(uploadRef.current) uploadRef.current.value = ''; });
         }}>Confirmar importação</button><button className="rounded-lg border px-4 py-2" disabled={busy} onClick={() => { generation.current++; setPreview(null); setFile(null); if(uploadRef.current) uploadRef.current.value = ''; }}>Cancelar</button></div>
       </section>}
-      {result && <><section className="grid sm:grid-cols-2 gap-4"><div className={card}><p className="text-sm text-slate-500">Créditos importados no período</p><strong className="text-xl text-emerald-700">{money(creditTotal)}</strong><p className="text-xs text-slate-500">Entradas bancárias para conferência; não representam baixas confirmadas.</p></div><div className={card}><p className="text-sm text-slate-500">Entradas para conferir</p><strong className="text-xl">{credits.length}</strong><p className="text-xs text-slate-500">Confirme a origem e o vínculo com a conta a receber.</p></div></section>
-        <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"><h2 className="p-5 font-semibold">Recebimentos — {credits.length} créditos importados</h2><p className="px-5 pb-3 text-sm text-slate-500">Somente entradas são exibidas nesta etapa. As demais movimentações permanecem preservadas no histórico do arquivo.</p>{credits.length ? <Movements rows={credits}/> : <p className="px-5 pb-5 text-slate-500">Nenhum crédito importado neste período. Isso não confirma ausência de recebimentos no banco.</p>}</section>
+      {result && <><section className="grid sm:grid-cols-2 gap-4"><div className={card}><p className="text-sm text-slate-500">Créditos importados no período</p><strong className="text-xl text-emerald-700">{money(creditTotal)}</strong><p className="text-xs text-slate-500">Entradas bancárias para conferência; não representam baixas confirmadas.</p></div><div className={card}><p className="text-sm text-slate-500">Entradas importadas</p><strong className="text-xl">{credits.length}</strong><p className="text-xs text-slate-500">Confirme a origem e o vínculo com a conta a receber.</p></div></section>
+        <section className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden"><h2 className="p-5 font-semibold">Recebimentos — {credits.length} créditos importados</h2><p className="px-5 pb-3 text-sm text-slate-500">Somente entradas são exibidas nesta etapa. As demais movimentações permanecem preservadas no histórico do arquivo.</p>{credits.length ? <Movements rows={credits} onGroup={setGroup}/> : <p className="px-5 pb-5 text-slate-500">Nenhum crédito importado neste período. Isso não confirma ausência de recebimentos no banco.</p>}</section>
         <section className={card}><h2 className="font-semibold mb-3">Últimas 20 importações da conta</h2>{!result.imports.length && <p className="text-slate-500">Nenhum arquivo importado.</p>}{result.imports.map(item => <div key={item.fileHash} className="py-3 border-t border-slate-100 dark:border-slate-800 text-sm"><p className="font-medium break-all">{item.fileName}</p><p>Período: {displayDate(item.start)} a {displayDate(item.end)} · {item.rowCount} movimentações</p><p className="text-slate-500">Importado em {new Date(item.importedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })} (Brasília)</p>{item.ledgerBalance && <p>Saldo do arquivo em {displayDate(item.ledgerBalance.date)}: {money(item.ledgerBalance.amountCents)}</p>}<BalanceReferences rows={item.balanceRows}/></div>)}</section></>}
     </>}
   </div></Layout>;
