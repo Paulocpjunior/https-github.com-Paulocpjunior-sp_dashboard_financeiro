@@ -8,6 +8,8 @@ export type FinancialPermission =
   | 'itau.statement.import'
   | 'receivables.read'
   | 'receivables.settle'
+  | 'receivables.reverse'
+  | 'payables.amend'
   | 'payables.read'
   | 'payables.settle'
   | 'payables.reverse'
@@ -30,6 +32,7 @@ export interface User {
 }
 
 export interface Transaction {
+  customerOriginal?: {client:string;cpfCnpj:string;clientNumber:string};
   id: string;
   date: string; // Data de Emissão/Lançamento (YYYY-MM-DD)
   dueDate: string; // Data de Vencimento (YYYY-MM-DD)
@@ -41,6 +44,8 @@ export interface Transaction {
   client: string; // Name/Creditor
   paidBy: string;
   movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
+  receivableReversals?: Array<{requestId:string;receiptRequestId:string;amountCents:number;reason:string;uid:string;actor:string;at:string}>;
+  invoiceAmendments?: Array<{requestId:string;beforeCents:number;afterCents:number;reason:string;actor:string;at:string}>;
   receivableBalance?: {version:1; receivedCents:number; interestCents:number; discountCents:number; remainingCents:number};
   receivableSettlement?: {requestId:string; uid:string; actor:string; date:string; at:string};
   receivableReceipts?: Array<{requestId:string;date:string;amountCents:number;interestCents:number;discountCents:number;remainingCents:number;bankAccount:string;method:string;actor:string;note:string}>;

@@ -5,6 +5,8 @@ export const FINANCIAL_PERMISSION_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
+  {value:'receivables.reverse', label:'Estornar baixa manual de contas a receber', description:'Desfazer a última baixa manual com motivo e histórico. Não devolve dinheiro nem altera o banco.'},
+  {value:'payables.amend', label:'Corrigir valor da fatura a pagar', description:'Corrigir o valor nominal de uma conta sem baixas ativas, preservando o histórico.'},
   {value:'receivables.read', label:'Consultar baixas de contas a receber', description:'Consultar recebimentos e histórico sem alterar valores.'},
   {value:'receivables.settle', label:'Registrar baixa de contas a receber', description:'Registrar recebimentos integrais ou parciais, juros e descontos com auditoria. Não movimenta dinheiro no banco.'},
   {value:'payables.approve', label:'Aprovar baixa de outro responsável', description:'Aprovar ou rejeitar solicitações sujeitas à política de alçada. Não permite aprovar a própria baixa.'},

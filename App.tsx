@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import { VersionUpdateNotice } from './components/VersionUpdateNotice';
 
+const CorrectionsPreview = import.meta.env.DEV ? React.lazy(() => import('./pages/CorrectionsPreview')) : null;
 const FinancialAIPreview = import.meta.env.DEV ? React.lazy(() => import('./pages/FinancialAIPreview')) : null;
 const StatementComparisonPreview = import.meta.env.DEV ? React.lazy(() => import('./pages/StatementComparisonPreview')) : null;
 const DashboardToolbarPreview = import.meta.env.DEV ? React.lazy(() => import('./pages/DashboardToolbarPreview')) : null;
@@ -23,6 +24,7 @@ const App: React.FC = () => {
       <VersionUpdateNotice />
       <Suspense fallback={null}>
         <Routes>
+          {CorrectionsPreview && <Route path="/dev/correcoes" element={<CorrectionsPreview />} />}
           {FinancialAIPreview && <Route path="/dev/mia" element={<FinancialAIPreview />} />}
           {StatementComparisonPreview && <Route path="/dev/conciliacao" element={<StatementComparisonPreview />} />}
           {DashboardToolbarPreview && <Route path="/dev/painel-acoes" element={<DashboardToolbarPreview />} />}

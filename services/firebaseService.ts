@@ -1,3 +1,4 @@
+import {customerApi,CustomerDirectory} from './customerDirectory';
 import { BillingReviewService } from './billingReviewService';
 import {
   collection,
@@ -73,6 +74,7 @@ const mapBillingProfilesSnapshot = (snapshot: { docs: Array<{ id: string; data: 
 };
 
 export const FirebaseService = {
+  fetchCustomerDirectory: ():Promise<CustomerDirectory> => customerApi('mappings'),
   /** Conferência mensal exige dados do servidor; cache e recortes não provam ausência. */
   fetchTransactionsForBillingReview: async (): Promise<Transaction[]> => {
     return (await BillingReviewService.fetch()).transactions;

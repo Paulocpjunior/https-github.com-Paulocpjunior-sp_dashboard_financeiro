@@ -21,6 +21,7 @@ try {
   const { DataService } = await server.ssrLoadModule('/services/dataService.ts');
   const calls = [];
 
+  FirebaseService.fetchCustomerDirectory = async () => ({revision:0,entries:{}});
   FirebaseService.fetchClientRegistry = async () => [];
   FirebaseService.fetchTransactionsByRange = async (field, startDate, endDate) => {
     calls.push({ field, startDate, endDate });

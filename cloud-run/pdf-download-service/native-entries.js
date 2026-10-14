@@ -279,7 +279,8 @@ function createNativeEntryHandler({
       const user = (await userRef.get()).data();
       const payablePath = url.pathname.startsWith("/api/financial-entries/payables/") ? url.pathname.replace("/api/financial-entries/payables/", "") : null;
       const receivablePath = url.pathname.startsWith("/api/financial-entries/receivables/") ? url.pathname.replace("/api/financial-entries/receivables/", "") : null;
-      const routeAllowed = receivablePath !== null ? profile => require("./receivables").routeAllowed(profile, request.method, receivablePath) : payablePath !== null
+      const customerPath = url.pathname.startsWith("/api/financial-entries/customers/");
+      const routeAllowed = customerPath ? profile => require("./customer-directory").allowed(profile,request.method) : receivablePath !== null ? profile => require("./receivables").routeAllowed(profile, request.method, receivablePath) : payablePath !== null
         ? profile => require("./payable-permissions").routeAllowed(profile, request.method, payablePath)
         : allowed;
       if (!routeAllowed(user))
@@ -299,6 +300,7 @@ function createNativeEntryHandler({
       if(url.pathname === "/api/financial-entries/maintenance") {
         await maintenance.handleMaintenance({request,db,userRef,uid,allowed,readBody,reply}); return true;
       }
+      if(customerPath){await require("./customer-directory").handle({request,url,db,userRef,user,uid,reply,readBody});return true;}
       const catalogRef=db.collection("financialSettings").doc("nativeCatalog");
       const catalogState=(await catalogRef.get()).data()||maintenance.initial();
       const catalog=maintenance.effective(catalogState);

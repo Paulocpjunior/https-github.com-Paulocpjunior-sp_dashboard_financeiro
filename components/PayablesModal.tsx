@@ -1,3 +1,4 @@
+import FinancialCorrection from './FinancialCorrection';
 import '../design-system/tokens.css';
 import './FinancialForms.css';
 import { CheckCircle2 } from "lucide-react";
@@ -62,6 +63,7 @@ export default function PayablesModal({
     paidBy: "", authorizedBy: "", supplier: "", personType: "",
     note: "",
   });
+  const [correctionLocked,setCorrectionLocked] = useState(false);
   const [approvalReason,setApprovalReason] = useState("");
   const [reversalReason, setReversalReason] = useState("");
   const [reversalReview, setReversalReview] = useState<any>(null);
@@ -133,7 +135,7 @@ export default function PayablesModal({
     setMessage("");
   }
   async function select(key: string) {
-    if (busy || uncertain) return;
+    if (busy || uncertain || correctionLocked) return;
     setReversalReview(null);
     setReversalReason("");
     setSelected(key);
@@ -334,7 +336,7 @@ export default function PayablesModal({
       ref={dialog}
       onCancel={(e) => {
         e.preventDefault();
-        if (!busy && !uncertain) onClose();
+        if (!busy && !uncertain && !correctionLocked) onClose();
       }}
       aria-labelledby="payables-dialog-title"
       className="sp-ui sp-entry-dialog m-auto w-[min(900px,95vw)] max-h-[90vh] overflow-auto p-6"
@@ -343,7 +345,7 @@ export default function PayablesModal({
         <h2 id="payables-dialog-title" className="text-xl font-bold">
           Contas a pagar — baixa, recorrência e INVITE
         </h2>
-        <button disabled={busy || uncertain} onClick={onClose}>
+        <button disabled={busy || uncertain || correctionLocked} onClick={onClose}>
           Fechar
         </button>
       </div>
@@ -354,7 +356,7 @@ export default function PayablesModal({
       {!id && <section className="my-4 rounded-lg border border-amber-400 p-3">
         <h3 className="font-semibold">Recorrentes aguardando valor da fatura ({drafts.length})</h3>
         <p className="text-sm">Pendências sem valor não entram nos saldos. Informe o valor de cada mês e confirme o lançamento.</p>
-        {drafts.map(d => <button key={d.id} disabled={busy || uncertain} className="block w-full text-left border rounded p-2 mt-2 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => {void select(d.ruleId).then(() => {setMonth(d.month);setVariableAmount("");setTab("generate");});}}>{d.description} · {d.month} · Informar valor obrigatório</button>)}
+        {drafts.map(d => <button key={d.id} disabled={busy || uncertain || correctionLocked} className="block w-full text-left border rounded p-2 mt-2 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => {void select(d.ruleId).then(() => {setMonth(d.month);setVariableAmount("");setTab("generate");});}}>{d.description} · {d.month} · Informar valor obrigatório</button>)}
         {!drafts.length && <p className="text-sm mt-2">Nenhuma pendência mensal gerada.</p>}
       </section>}
       {!id &&
@@ -364,7 +366,7 @@ export default function PayablesModal({
             className={cls}
             value={selected}
             onChange={(e) => void select(e.target.value)}
-            disabled={busy || uncertain}
+            disabled={busy || uncertain || correctionLocked}
           >
             <option value="">Selecione uma regra</option>
             {rules.map((r) => (
@@ -414,19 +416,20 @@ export default function PayablesModal({
           <nav aria-label="Operações da conta" className="sp-form-tabs flex flex-wrap gap-2 my-4">
             {[
               ["history", "Histórico"],
+              ["invoice", "Corrigir valor da fatura"],
               ["approvals", "Aprovações"],
               ["payment", "Registrar pagamento"],
               ["recurrence", "Recorrência"],
               ["generate", "Gerar competência"],
               ["invite", "INVITE"],
               ["reversal", "Estornar baixa"],
-            ].filter(([key]) => key === "history" || key === "approvals" || data.capabilities?.[({payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
+            ].filter(([key]) => key === "history" || key === "approvals" || data.capabilities?.[({invoice:"amend",payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
               <button
                 key={key}
                 aria-pressed={tab === key}
                 type="button"
                 className={tab === key ? btn : "border rounded px-3 py-2"}
-                disabled={busy || uncertain}
+                disabled={busy || uncertain || correctionLocked}
                 onClick={() =>
                   edit(() => {
                     setTab(key);
@@ -459,7 +462,8 @@ export default function PayablesModal({
             </article>)}
           </section>}
           {tab === "history" && <p className="text-sm">Consulta do histórico. As ações disponíveis dependem dos direitos definidos em Usuários.</p>}
-          <fieldset disabled={busy || uncertain} className="space-y-3">
+          {tab === "invoice" && <FinancialCorrection kind="invoice" id={selected} version={data.version} row={row} api={api} onLock={setCorrectionLocked} onSaved={()=>{onSaved();onClose();}}/>}
+          <fieldset disabled={busy || uncertain || correctionLocked} className="space-y-3">
             {tab === "reversal" && <section className="space-y-3 rounded-xl border border-amber-400 p-4">
               <h3 className="font-semibold">Estorno da última baixa ativa</h3>
               <p>Corrige o registro financeiro e restaura o saldo anterior. Não devolve dinheiro pelo banco. O pagamento original e seus comprovantes permanecem no histórico.</p>
@@ -781,6 +785,7 @@ export default function PayablesModal({
           {tab === "reversal" && row?.payableSettlement && <button className={btn + " mt-4 w-full min-h-12"} disabled={busy || reversalReason.trim().length < 10} onClick={reversePayment}>{busy ? "Aguarde…" : uncertain ? "Consultar resultado do estorno" : reversalReview ? "Confirmar estorno e concluir" : "Revisar estorno"}</button>}
           {row?.payableReversals?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de estornos</h3>{row.payableReversals.map((r:any)=><p key={r.requestId} className="my-2 text-sm">{brl(r.amountCents/100)} · {r.at} · {r.actor}<br/>{r.reason}</p>)}</section>}
           {(tab === "payment" || tab === "history") && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{(row.payableReversals || []).some((r:any)=>r.paymentRequestId === p.requestId) ? "ESTORNADA · " : ""}{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}{p.approval && <><br/>Aprovação independente: {p.approval.name} · {p.approval.at} · {p.approval.reason}</>}</p>)}</section>}
+          {!!row.invoiceAmendments?.length && <section className="sp-card my-3"><h3>Histórico de correções da fatura</h3>{row.invoiceAmendments.map(a=><p key={a.requestId}>{brl(a.beforeCents/100)} → {brl(a.afterCents/100)} · {a.actor} · {a.at}<br/>{a.reason}</p>)}</section>}
           {review && (
             <div className="border rounded p-3 my-3">
               <strong>

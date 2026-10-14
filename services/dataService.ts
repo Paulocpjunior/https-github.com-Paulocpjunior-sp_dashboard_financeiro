@@ -1,3 +1,4 @@
+import {applyCustomerDirectory,CustomerDirectory} from './customerDirectory';
 import { ClientRegistryEntry, FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { FirebaseService } from './firebaseService';
 import type { TransactionRangeField, TransactionsFingerprint } from './firebaseService';
@@ -17,6 +18,7 @@ type LoadedRange = {
 
 // In-memory cache
 let CACHED_TRANSACTIONS: Transaction[] = [];
+let CACHED_CUSTOMER_DIRECTORY:CustomerDirectory={revision:0,entries:{}};
 let CACHED_CLIENT_REGISTRY: ClientRegistryEntry[] = [];
 let isDataLoaded = false;
 let lastUpdatedAt: Date | null = null;
@@ -348,10 +350,12 @@ const filtersFromRange = (range: LoadedRange): Partial<FilterState> => {
 
 const normalizeAndCacheTransactions = (
   data: Transaction[],
-  clientRegistryResult: { entries: ClientRegistryEntry[]; available: boolean },
+  clientRegistryResult: { entries: ClientRegistryEntry[]; available: boolean; directory?:CustomerDirectory },
   loadedRange: LoadedRange | null
 ): void => {
+  CACHED_CUSTOMER_DIRECTORY=clientRegistryResult.directory||{revision:0,entries:{}};
   data.forEach(t => {
+    applyCustomerDirectory(t,CACHED_CUSTOMER_DIRECTORY);
     try {
       if (t.status != null) {
         const sLower = String(t.status).toLowerCase().trim();
@@ -416,13 +420,15 @@ const normalizeAndCacheTransactions = (
   lastLoadedRange = loadedRange;
 };
 
-const fetchClientRegistryResult = async (): Promise<{ entries: ClientRegistryEntry[]; available: boolean }> => {
-  return FirebaseService.fetchClientRegistry()
-    .then((entries) => ({ entries, available: true }))
-    .catch((registryError) => {
-      logger.warn('[DataService] Cadastro oficial de N.Cliente indisponivel. Usando fallback local.', registryError);
-      return { entries: [] as ClientRegistryEntry[], available: false };
-    });
+const fetchClientRegistryResult = async () => {
+  const [registry,directory]=await Promise.all([
+    FirebaseService.fetchClientRegistry().then(entries=>({entries,available:true})).catch(registryError=>{
+      logger.warn('[DataService] Cadastro oficial indisponível.',registryError);
+      return {entries:[] as ClientRegistryEntry[],available:false};
+    }),
+    FirebaseService.fetchCustomerDirectory(),
+  ]);
+  return {...registry,directory};
 };
 
 export const DataService = {
@@ -691,6 +697,7 @@ export const DataService = {
       // Aplica normalizações (mesmo pipeline do loadData). Exclusões são
       // determinadas apenas pelo Firestore para manter todos os navegadores iguais.
       data.forEach(t => {
+        applyCustomerDirectory(t,CACHED_CUSTOMER_DIRECTORY);
         try {
           if (t.status != null) {
             const sLower = String(t.status).toLowerCase().trim();

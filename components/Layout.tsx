@@ -13,6 +13,7 @@ import { ThemeToggle } from './ThemeToggle';
 import Logo from './Logo';
 import { logger } from '../utils/logger';
 import { WhatsAppSendModal } from './WhatsAppSendModal';
+import CustomerDirectoryModal from './CustomerDirectoryModal';
 import MaintenanceModal from './MaintenanceModal';
 import { WixTreasuryModal } from './WixTreasuryModal';
 import { canOpenWixTreasury, hasFinancialPermission } from '../utils/financialPermissions';
@@ -31,6 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showSessionAlert, setShowSessionAlert] = useState(true);
   const [globalWhatsAppText, setGlobalWhatsAppText] = useState<string | null>(null);
   const [showWixTreasury, setShowWixTreasury] = useState(false);
+  const [showCustomers,setShowCustomers]=useState(false);
   const [showMaintenance,setShowMaintenance]=useState(false);
   
   const navigate = useNavigate();
@@ -133,6 +135,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="sp-tokens sp-finance-layout flex h-screen overflow-hidden">
       
+      {showCustomers && <CustomerDirectoryModal onClose={()=>setShowCustomers(false)}/>}
       {showMaintenance && <MaintenanceModal onClose={()=>setShowMaintenance(false)}/>}
       {/* Session Active Toast */}
       {showSessionAlert && user && (
@@ -235,6 +238,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className="min-w-0 whitespace-normal leading-5 font-medium">Tesouraria Wix</span>
               </button>
             )}
+            {(user?.role || "").toLowerCase() === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowCustomers(true);setIsSidebarOpen(false);}} className="sp-nav-item w-full min-h-12 flex items-center px-4 py-3">Cadastros de clientes</button>}
             {(user?.role || "").toLowerCase() === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="sp-nav-item w-full min-h-12 flex items-center px-4 py-3">Manutenção</button>}
           </nav>
         </div>

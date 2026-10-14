@@ -5,7 +5,7 @@ const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
 const permits=(user,action)=>user?.active===true&&!['blocked','deleted'].includes(user.status)&&(user.role==='admin'||user.financialPermissions?.includes(`receivables.${action}`));
 function routeAllowed(user,method,path){
- return method==='GET'&&/^items\/[^/]+$/.test(path)?permits(user,'read')||permits(user,'settle'):method==='POST'&&['receipt/preview','receipt/commit'].includes(path)&&permits(user,'settle');
+ return method==='GET'&&/^items\/[^/]+$/.test(path)?permits(user,'read')||permits(user,'settle')||permits(user,'reverse'):method==='POST'&&(['receipt/preview','receipt/commit'].includes(path)?permits(user,'settle'):['reversal/preview','reversal/commit'].includes(path)&&permits(user,'reverse'));
 }
 function receivable(row){
  if(!row||row.isExcluded||row.deletedAt||norm(row.movement)!=='entrada'||/saida|pagar/.test(norm(row.type)))fail('Conta a receber indisponível.');
@@ -43,6 +43,21 @@ function receiptPatch(row,input,catalog){
  const next={version:1,receivedCents:b.receivedCents+received,interestCents:b.interestCents+interest,discountCents:b.discountCents+discount,remainingCents:remaining};
  return {status:remaining===0?'Pago':'Pendente',pago:remaining===0?'Pago':'Não',valueReceived:next.receivedCents/100,valorPago:(next.receivedCents/100).toFixed(2),paymentDate:p.date,dataPagamento:p.date.split('-').reverse().join('/'),receivableBalance:next};
 }
+// Only restore fields owned by the last manual receipt; never erase history.
+function reversal(row,event,reason){
+ receivable(row);
+ if(row.boletoSettlement)fail('Recebimento bancário: confira o retorno do boleto.');
+ if(typeof reason!=='string'||reason.trim().length<10||reason.length>2000)fail('Informe o motivo do estorno (10 a 2000 caracteres).',400);
+ const last=row.receivableSettlement;
+ if(!last?.requestId||last.origin!=='manual'||event?.action!=='receipt'||!event.before||hash(event.after?.receivableSettlement||null)!==hash(last)||(row.receivableReversals||[]).some(x=>x.receiptRequestId===last.requestId))fail('Baixa sem histórico íntegro ou já estornada. Solicite revisão.');
+ if(amount(row)!==amount(event.after)||amount(row)!==amount(event.before))fail('Valor original alterado após a baixa. Solicite revisão.');
+ const fields=['status','pago','valueReceived','valorPago','paymentDate','dataPagamento','receivableBalance','receivableSettlement'];
+ for(const k of fields)if(hash(row[k]??null)!==hash(event.after[k]??null))fail('Conta alterada após a baixa. Solicite revisão.');
+ const restored={...row};
+ for(const k of fields){if(Object.hasOwn(event.before,k))restored[k]=event.before[k];else delete restored[k];}
+ const reasonBlocked=blocked(restored);if(reasonBlocked)fail(reasonBlocked);
+ return restored;
+}
 async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed,catalog,catalogRef,catalogState}){
  if(!enabled)fail('Lançamentos nativos não ativados.',503);
  const path=url.pathname.replace('/api/financial-entries/receivables/','');
@@ -50,17 +65,31 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
  if(request.method==='GET'){
   const id=decodeURIComponent(path.slice(6));if(!/^[a-zA-Z0-9_-]{1,200}$/.test(id))fail('Identificador inválido.',400);
   const row=receivable((await db.collection('transactions').doc(id).get()).data());await recheck();
-  reply({transaction:{...row,id},version:hash(row),catalog:{banks:catalog.banks,receiptMethods:catalog.receiptMethods},canSettle:permits(user,'settle'),blockedReason:blocked(row)});return;
+  reply({transaction:{...row,id},version:hash(row),catalog:{banks:catalog.banks,receiptMethods:catalog.receiptMethods},canSettle:permits(user,'settle'),canReverse:permits(user,'reverse'),blockedReason:blocked(row)});return;
  }
  let b;try{b=JSON.parse((await readBody(request)).toString('utf8'));}catch{fail('Dados inválidos.',400);}
  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(b.id||'')||! /^[a-f0-9-]{36}$/.test(b.requestId||''))fail('Identificador inválido.',400);
- const ref=db.collection('transactions').doc(b.id), key=hash([uid,b.requestId]), op=db.collection('receivableOperations').doc(key), digest=hash(b);
+ const ref=db.collection('transactions').doc(b.id), key=hash([uid,b.requestId]), op=db.collection('receivableOperations').doc(key), digest=hash([path,b]);
  const result=await db.runTransaction(async tx=>{
   await recheck(tx);
   const prior=(await tx.get(op)).data();
   if(prior){if(prior.digest!==digest)fail('Tentativa já utilizada com outros dados.');return {...prior.result,replayed:true};}
   const current=(await tx.get(ref)).data();if(!current)fail('Conta não encontrada.',404);
   if(hash(current)!==b.version)fail('Conta alterada. Reabra e confira o saldo atual.');
+  if(path.startsWith('reversal/')){
+   const last=current.receivableSettlement;
+   if(!last?.uid||!last.requestId)fail('Baixa legada sem histórico de estorno. Solicite revisão.');
+   const event=(await tx.get(db.collection('receivableAudit').doc(hash([last.uid,last.requestId])))).data();
+   if(event?.transactionId!==b.id)fail('Histórico da baixa não corresponde à conta.');
+   const record=reversal(current,event,b.reason);
+   const reviewHash=hash([uid,user.name||uid,b.id,b.version,b.reason,last.requestId]);
+   if(path==='reversal/preview')return {reviewHash,before:current,after:record};
+   if(b.confirmHash!==reviewHash)fail('Revise o estorno antes de confirmar.');
+   const at=new Date().toISOString(),entry={requestId:b.requestId,receiptRequestId:last.requestId,amountCents:last.amountCents,reason:b.reason.trim(),uid,actor:user.name||uid,at};
+   record.receivableReversals=[...(current.receivableReversals||[]),entry];record.updatedAt=at;
+   const result={transaction:{...record,id:b.id}};
+   tx.set(ref,record);tx.create(db.collection('receivableAudit').doc(key),{action:'receipt-reversal',transactionId:b.id,uid,at,before:current,after:record,reversal:entry});tx.create(op,{digest,result,at});return result;
+  }
   const patch=receiptPatch(current,b.receipt,catalog);
   const reviewHash=hash([uid,user.name||uid,b.id,b.version,b.receipt,catalogState.revision]);
   if(path==='receipt/preview')return {reviewHash,before:{...current,id:b.id},after:{...current,...patch,id:b.id}};
@@ -75,4 +104,4 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
   tx.create(op,{digest,result,at});return result;
  });reply(result);
 }
-module.exports={handleReceivables,routeAllowed,receiptPatch,balance,blocked};
+module.exports={handleReceivables,routeAllowed,receiptPatch,balance,blocked,reversal};

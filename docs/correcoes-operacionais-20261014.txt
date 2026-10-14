@@ -1,0 +1,47 @@
+CORREÇÕES OPERACIONAIS DO FINANCEIRO — 14/10/2026
+Estado: implementação local; ainda não publicada.
+Base: b7aaebf66e2d10644beeb2ff34ce8fda5ba89ef7.
+
+1. CONTAS A RECEBER — DATA DE BAIXA INCORRETA
+Abra os recebimentos da conta e escolha Estornar baixa manual.
+Informe o motivo, revise o saldo que será restaurado e confirme.
+Reabra a conta e registre o recebimento com a data correta.
+A baixa original fica marcada como estornada; motivo, autor e momento ficam no histórico.
+Parciais são desfeitas da mais recente para a mais antiga.
+Permissão nova: receivables.reverse. Administradores já têm acesso.
+Baixas legadas sem trilha íntegra, retornos bancários e faturas Wix exigem tratamento de origem.
+Não há devolução de dinheiro nem cancelamento de boleto no banco.
+
+2. CONTAS A PAGAR — CORRIGIR VALOR DA FATURA
+Abra a conta e escolha Corrigir valor da fatura.
+Informe o valor final e uma justificativa com referência à fatura.
+Revise o valor anterior e o novo antes de confirmar.
+Depois registre o pagamento normalmente, sem juros/descontos fictícios.
+Contas com baixas ativas precisam ter essas baixas estornadas antes da correção.
+Permissão nova: payables.amend. Administradores já têm acesso.
+Cada correção preserva o valor anterior, o novo valor, o motivo, autor e data.
+A alteração não reescreve parcelas ou provisões já geradas de outras competências.
+
+3. CADASTROS DE CLIENTES
+Administradores: menu Cadastros de clientes, selecionar mês de vencimento, Consultar cadastros.
+Buscar nome, documento ou número e escolher Gerenciar.
+Corrigir nome do cadastro: corrige o nome de consulta, mantendo o nome original nos registros.
+Unificar com cadastro identificado: selecionar o destino, justificar e revisar a identificação.
+Desfazer vínculo: restaura a identificação original daquela origem.
+Documento e número não são editados livremente; são herdados do cadastro de destino conferido.
+Documentos conflitantes bloqueiam a unificação. Regras de faturamento ativas na origem também
+bloqueiam para não perder configurações homologadas. Esses casos precisam de revisão própria.
+Após confirmar, atualizar o painel/Base de Faturamento para consultar a identificação atual.
+O mês limita os exemplos encontrados, mas o vínculo alcança o histórico da mesma identificação.
+A unificação não soma nem apaga lançamentos e não corrige automaticamente cobranças duplicadas.
+Não altera e-mails, boletos, faturas ou cadastros externos do Boleto Cloud e Wix.
+Não oferece exclusão física de cadastro com histórico.
+
+4. PUBLICAÇÃO E VALIDAÇÃO
+Publicar backend e frontend compatíveis. O frontend consulta a nova rota de cadastros.
+Respeitar AGENTS.md: verificar remoto, testes e menus, autorizar o SHA completo e utilizar a trava
+FINANCEIRO_APPROVED_COMMIT. Nenhum deploy foi executado nesta implementação.
+As novas permissões não são concedidas automaticamente às colaboradoras.
+O envio automático de comunicação permanece desligado.
+Nenhum cliente, saldo, pagamento ou recebimento real foi alterado durante os testes.
+Os pares históricos de J.P. Pissato e J.A.C.J. continuam pendentes de saneamento próprio.

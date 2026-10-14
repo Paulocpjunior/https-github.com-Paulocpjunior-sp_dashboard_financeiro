@@ -160,3 +160,28 @@ test('conta Itaú com espaços do cadastro aceita revisão e preserva identifica
  assert.equal(h.store.get('transactions/legacy').receivableSettlement.bankAccount,bank);
  assert.equal(h.store.get('transactions/legacy').receivableSettlement.method,method);
 });
+
+test('estorno reabre recebimento integral, mantém histórico e permite data corrigida',async()=>{
+ const h=harness();assert.equal((await commit(h,await body(h,{amount:'100.00',interest:'0.00',discount:'0.00'}))).status,200);
+ const d=await h.call('items/legacy'),b={id:'legacy',requestId:randomUUID(),version:d.body.version,reason:'Data informada incorretamente no comprovante'};
+ const old=structuredClone([...h.store]);const p=await h.call('reversal/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));assert.deepEqual([...h.store],old);
+ const payload={...b,confirmHash:p.body.reviewHash};const r=await h.call('reversal/commit',payload);assert.equal(r.status,200);assert.equal(r.body.transaction.status,'Pendente');assert.equal(r.body.transaction.valueReceived,0);assert.equal(r.body.transaction.receivableReceipts.length,1);assert.equal(r.body.transaction.receivableReversals.length,1);
+ assert.equal((await h.call('reversal/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').receivableReversals.length,1);
+ assert.equal((await commit(h,await body(h,{date:'2026-01-01',amount:'100.00',interest:'0.00',discount:'0.00'}))).status,200);
+});
+test('estorna parciais em ordem inversa e preserva anexos',async()=>{
+ const h=harness();await commit(h,await body(h));await commit(h,await body(h,{amount:'61.00',interest:'0.00',discount:'0.00',date:'2026-01-03'}));
+ h.store.get('transactions/legacy').attachments=[{name:'prova.pdf'}];
+ for(const remaining of [6100,10000]){const d=await h.call('items/legacy'),b={id:'legacy',requestId:randomUUID(),version:d.body.version,reason:'Corrigir lançamento manual conferido'},p=await h.call('reversal/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));const r=await h.call('reversal/commit',{...b,confirmHash:p.body.reviewHash});assert.equal(r.status,200);assert.equal(r.body.transaction.receivableBalance?.remainingCents??10000,remaining);assert.equal(r.body.transaction.attachments[0].name,'prova.pdf');}
+ assert.equal(h.store.get('transactions/legacy').receivableReceipts.length,2);
+});
+test('estorno exige permissão própria, histórico íntegro e bloqueia retorno bancário',async()=>{
+ for(const mode of ['permission','bank','tamper','stale']){const h=harness();await commit(h,await body(h));const d=await h.call('items/legacy');
+ if(mode==='permission')h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.settle']});
+ if(mode==='bank')h.store.get('transactions/legacy').boletoSettlement={source:'return'};
+ if(mode==='tamper')h.store.get('transactions/legacy').valorPago='99';
+ const fresh=await h.call('items/legacy');const b={id:'legacy',requestId:randomUUID(),version:mode==='stale'?d.body.version:fresh.body.version,reason:'Corrigir data após conferência'};
+ if(mode==='stale')h.store.get('transactions/legacy').updatedAt='changed';
+ const r=await h.call('reversal/preview',b);assert.ok(r.status>=400,mode);
+ }
+});

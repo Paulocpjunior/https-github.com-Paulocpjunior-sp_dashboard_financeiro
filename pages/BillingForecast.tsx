@@ -1,3 +1,4 @@
+import {applyCustomerDirectory} from '../services/customerDirectory';
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import BillingCompletenessReview from '../components/BillingCompletenessReview';
@@ -86,10 +87,18 @@ const BillingForecast: React.FC = () => {
     setError('');
     try {
       const range = getMonthRange(referenceMonth);
-      const [loadedTransactions, loadedProfiles] = await Promise.all([
+      const [loadedTransactions, loadedProfiles, directory] = await Promise.all([
         FirebaseService.fetchTransactionsByRange('date', range.startDate, range.endDate),
         FirebaseService.fetchBillingProfiles(),
+        FirebaseService.fetchCustomerDirectory(),
       ]);
+      loadedTransactions.forEach(row=>applyCustomerDirectory(row,directory));
+      // Existing billing rules retain their identity and settings. Only display names follow the directory.
+      loadedProfiles.forEach(profile=>{
+        const display={...profile,movement:'Entrada'} as unknown as Transaction;
+        applyCustomerDirectory(display,directory);
+        profile.client=display.client;
+      });
       setTransactions(loadedTransactions);
       setProfiles(loadedProfiles);
     } catch (loadError: any) {

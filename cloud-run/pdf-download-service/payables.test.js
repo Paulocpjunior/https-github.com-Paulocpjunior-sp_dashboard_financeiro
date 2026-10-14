@@ -613,3 +613,20 @@ test('approval stores inspectable proof and rejects replacement bytes at settlem
  assert.equal((await h.call('payment/commit',{...b,confirmHash:preview.body.reviewHash})).status,403);
  assert.equal(h.store.get('transactions/legacy').status,'Pendente');
 });
+
+test('corrigir fatura não gera juros, preserva histórico e pagamento usa novo nominal',async()=>{
+ const h=harness(),d=await h.call('items/legacy'),b={id:'legacy',requestId:randomUUID(),version:d.body.version,invoice:{amount:'120.00',reason:'Fatura final conferida substitui a previsão'}};
+ const before=structuredClone([...h.store]),p=await h.call('invoice/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));assert.deepEqual([...h.store],before);
+ const payload={...b,confirmHash:p.body.reviewHash},r=await h.call('invoice/commit',payload);assert.equal(r.status,200);assert.equal(r.body.transaction.valuePaid,120);assert.equal(r.body.transaction.invoiceAmendments[0].beforeCents,10000);assert.equal(r.body.transaction.payableBalance,undefined);assert.equal(r.body.transaction.submissionId,'original');
+ assert.equal((await h.call('invoice/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').invoiceAmendments.length,1);
+ const pay=await payBody(h);pay.payment.amount='120.00';const preview=await h.call('payment/preview',pay);assert.equal(preview.status,200);assert.equal(preview.body.after.payableBalance.remainingCents,0);assert.equal(preview.body.after.payableBalance.interestCents,0);
+});
+test('correção exige permissão, motivo, versão atual e ausência de pagamentos',async()=>{
+ for(const mode of ['permission','paid','reason','negative','stale']){const h=harness(),d=await h.call('items/legacy');
+ const b={id:'legacy',requestId:randomUUID(),version:d.body.version,invoice:{amount:'90.00',reason:'Valor final conferido na fatura'}};
+ if(mode==='permission')h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['payables.settle']});
+ if(mode==='paid')h.store.get('transactions/legacy').paymentDate='2026-01-01';
+ if(mode==='reason')b.invoice.reason='';if(mode==='negative')b.invoice.amount='-1';if(mode==='stale')h.store.get('transactions/legacy').valuePaid=101;
+ const r=await h.call('invoice/preview',b);assert.ok(r.status>=400,mode);
+ }
+});

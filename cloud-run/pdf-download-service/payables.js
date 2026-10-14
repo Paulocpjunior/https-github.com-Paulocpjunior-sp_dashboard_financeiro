@@ -173,6 +173,16 @@ function reversal(r, event, reason) {
   pending(restored);
   return restored;
 }
+function amendInvoice(row,input){
+ pending(row);
+ if(/entrada|receber/.test(norm(row.type)))fail('Tipo de lançamento conflitante. Solicite revisão.');
+ if(row.payableSettlement||row.payableBalance||row.boletoSettlement||row.reconciliation||row.reconciledAt)fail('Estorne as baixas e confira a conciliação antes de corrigir a fatura.');
+ if(!input||typeof input.amount!=='string'||!/^\d{1,8}(\.\d{1,2})?$/.test(input.amount)||Number(input.amount)<=0)fail('Informe o valor correto da fatura.',400);
+ if(typeof input.reason!=='string'||input.reason.trim().length<10||input.reason.length>2000)fail('Informe o motivo e a referência da fatura (10 a 2000 caracteres).',400);
+ const next=Math.round(Number(input.amount)*100);
+ if(next===nominal(row))fail('O valor informado é igual ao valor atual.',400);
+ return {...row,valuePaid:next/100,valorOriginal:next/100};
+}
 function calendar(r, id, to, pdf) {
   pending(r);
   date(r.dueDate);
@@ -390,6 +400,24 @@ async function handlePayables(ctx) {
       return result;
     });
     reply(result); return;
+  }
+  if(path === 'invoice/preview' || path === 'invoice/commit'){
+    const result=await db.runTransaction(async tx=>{
+      await recheck(tx);
+      const prior=replay((await tx.get(op)).data());if(prior)return prior;
+      const current=(await tx.get(ref)).data();if(!current)fail('Conta não encontrada.',404);
+      if(hash(current)!==b.version)fail('Conta alterada. Reabra a revisão.');
+      const record=amendInvoice(current,b.invoice);
+      const reviewHash=hash([id,b.version,b.invoice,actor,catalogState.revision]);
+      if(path.endsWith('preview'))return {reviewHash,before:current,after:record};
+      if(b.confirmHash!==reviewHash)fail('Revise a correção antes de confirmar.');
+      const at=new Date().toISOString(),entry={requestId:b.requestId,beforeCents:nominal(current),afterCents:nominal(record),reason:b.invoice.reason.trim(),uid,actor:actor.name,at};
+      record.invoiceAmendments=[...(current.invoiceAmendments||[]),entry];
+      if(record.invoiceAmendments.length>100)fail('Limite de correções atingido. Solicite revisão.');
+      record.updatedAt=at;
+      const result={transaction:{...record,id}};
+      tx.set(ref,record);tx.create(db.collection('payableAudit').doc(hash([uid,b.requestId])),{action:'invoice-amendment',transactionId:id,uid,at,before:current,after:record});tx.create(op,{digest,result,at});return result;
+    });reply(result);return;
   }
   if (path === "reversal/preview" || path === "reversal/commit") {
     const result = await db.runTransaction(async tx => {
@@ -763,6 +791,7 @@ async function handlePayables(ctx) {
 }
 module.exports = {
   handlePayables,
+  amendInvoice,
   reversal,
   payment,
   calendar,
