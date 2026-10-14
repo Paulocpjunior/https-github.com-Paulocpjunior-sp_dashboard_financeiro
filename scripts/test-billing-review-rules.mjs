@@ -13,7 +13,14 @@ try {
  }
  await assertFails(updateDoc(doc(operator,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:'teste'}));
  await assertFails(updateDoc(doc(admin,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:''}));
- await assertSucceeds(updateDoc(doc(admin,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:'Exclusão administrativa sintética',excludedAt:new Date().toISOString(),excludedBy:'admin-test',excludedByName:'Admin'}));
+ await assertFails(updateDoc(doc(admin,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:'Exclusão administrativa sintética'}));
+ await assertFails(deleteDoc(doc(admin,'transactions/payment-pilot')));
+ await assertFails(deleteDoc(doc(operator,'transactions/payment-pilot')));
+ const masterUid='hpdsWehGGAYE3uKCar4pBiRVxFJ3';
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'users',masterUid),{active:true,role:'admin'});await setDoc(doc(c.firestore(),'transactions/delete-pilot'),{status:'Pendente'});});
+ const master=env.authenticatedContext(masterUid).firestore();
+ await assertSucceeds(updateDoc(doc(master,'transactions/payment-pilot'),{isExcluded:true,exclusionReason:'Exclusão do titular sintética'}));
+ await assertSucceeds(deleteDoc(doc(master,'transactions/delete-pilot')));
  const base={schemaVersion:1,month:'2026-10',identity:'number:123',client:'Cliente sintético',decision:'charge',amount:500,dueDate:'2026-10-10',startDate:'2026-10-01',billingDay:10,lastChargeDate:'',evidence:'Contrato sintético',event:'entrada',sourceFingerprint:'a'.repeat(64)};
  async function write(db,uid,id,data,old) {
   const parent=doc(db,'billingMonthlyReviews',id);const audit=doc(collection(parent,'revisions'));

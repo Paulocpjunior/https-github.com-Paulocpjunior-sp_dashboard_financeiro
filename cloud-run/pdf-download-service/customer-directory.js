@@ -4,7 +4,7 @@ const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLo
 const digits=x=>String(x||'').replace(/\D/g,'');
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
 const active=u=>u?.active===true&&!['blocked','deleted'].includes(u.status);
-const allowed=(u,method)=>active(u)&&(method==='GET'||u.role==='admin');
+const allowed=(u,method)=>active(u)&&['GET','POST'].includes(method);
 function identity(r){return digits(r.cpfCnpj)?'doc:'+digits(r.cpfCnpj):digits(r.clientNumber)?'number:'+digits(r.clientNumber):'name:'+norm(r.source)+':'+norm(r.client);}
 function resolve(key,entries){const seen=new Set();while(entries[key]?.target){if(seen.has(key)||seen.size>20)fail('Vínculo cadastral circular. Solicite revisão.');seen.add(key);key=entries[key].target;}return {key,profile:entries[key]};}
 function profile(r){return {client:String(r.client||'').trim(),cpfCnpj:digits(r.cpfCnpj),clientNumber:String(r.clientNumber||'').trim()};}
@@ -42,7 +42,7 @@ async function handle({request,url,db,userRef,user,uid,reply,readBody}){
  if(request.method==='GET'){
   const state=(await ref.get()).data()||{revision:0,entries:{}};await recheck();
   if(path==='mappings'){reply(state);return;}
-  if(path!=='list'||user.role!=='admin')fail('Acesso restrito ao administrador.',403);
+  if(path!=='list')fail('Acesso restrito ao administrador.',403);
   const month=url.searchParams.get('month');if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month||''))fail('Competência inválida.',400);
   const rows=await db.collection('transactions').where('dueDate','>=',month+'-01').where('dueDate','<=',month+'-31').limit(5001).get();
   if(rows.docs.length>5000)fail('Mais de 5000 lançamentos no período. Solicite revisão.');

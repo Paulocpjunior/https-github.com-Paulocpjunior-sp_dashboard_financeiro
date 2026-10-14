@@ -55,7 +55,7 @@ service cloud.firestore {
 
     // Baixas usam o servidor, que registra auditoria na mesma transação.
     function isAdministrativeExclusion() {
-      return isAdmin()
+      return isMaster()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'isExcluded', 'exclusionReason', 'excludedAt', 'excludedBy', 'excludedByName', 'updatedAt'
         ])
@@ -102,7 +102,7 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow create: if isAdmin();
       allow update: if isAdministrativeExclusion();
-      allow delete: if isAdmin();
+      allow delete: if isMaster();
     }
 
     match /clientRegistry/{entryId} {

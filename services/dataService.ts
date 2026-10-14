@@ -1,3 +1,4 @@
+import { isMasterAccount } from '../utils/masterAccount';
 import {applyCustomerDirectory,CustomerDirectory} from './customerDirectory';
 import { ClientRegistryEntry, FilterState, KPIData, PaginatedResult, Transaction } from '../types';
 import { FirebaseService } from './firebaseService';
@@ -575,9 +576,8 @@ export const DataService = {
 
   excludeTransaction: async (id: string, reason = 'Excluído pelo administrador'): Promise<void> => {
     const currentUser = AuthService.getCurrentUser();
-    const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
-    if (!isAdmin) {
-      throw new Error('Ação permitida apenas para administradores.');
+    if (!isMasterAccount(currentUser)) {
+      throw new Error('Exclusão permitida apenas para Paulo, titular da conta principal.');
     }
 
     const now = new Date().toISOString();

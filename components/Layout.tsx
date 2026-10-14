@@ -238,7 +238,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className="min-w-0 whitespace-normal leading-5 font-medium">Tesouraria Wix</span>
               </button>
             )}
-            {(user?.role || "").toLowerCase() === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowCustomers(true);setIsSidebarOpen(false);}} className="sp-nav-item w-full min-h-12 flex items-center px-4 py-3">Cadastros de clientes</button>}
+            {user?.active === true && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowCustomers(true);setIsSidebarOpen(false);}} className="sp-nav-item w-full min-h-12 flex items-center px-4 py-3">Cadastros de clientes</button>}
             {(user?.role || "").toLowerCase() === "admin" && <button type="button" aria-haspopup="dialog" onClick={()=>{setShowMaintenance(true);setIsSidebarOpen(false);}} className="sp-nav-item w-full min-h-12 flex items-center px-4 py-3">Manutenção</button>}
           </nav>
         </div>

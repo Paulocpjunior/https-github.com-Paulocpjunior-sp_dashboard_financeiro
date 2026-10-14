@@ -1,3 +1,4 @@
+import { isMasterAccount } from '../utils/masterAccount';
 import '../components/FinancialConsultation.css';
 import { getPaidAmount, getOutstandingAmount } from "../utils/transactionAmounts";
 import DashboardToolbar from '../components/DashboardToolbar';
@@ -498,8 +499,8 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
   };
   
   const handleDeleteTransaction = async (id: string) => {
-    if (!isAdmin) {
-      window.alert('Ação permitida apenas para administradores.');
+    if (!isMasterAccount(currentUser)) {
+      window.alert('Exclusão permitida apenas para Paulo, titular da conta principal.');
       return;
     }
 
@@ -1080,7 +1081,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 totalPages={totalPages}
                 onPageChange={setPage}
                 readOnly={!entriesOnly}
-                canDelete={entriesOnly && isAdmin}
+                canDelete={entriesOnly && isMasterAccount(currentUser)}
                 canExportBoletoCloud={entriesOnly && canExportBoletoCloud}
                 onDelete={entriesOnly ? handleDeleteTransaction : undefined}
                 onReceivable={entriesOnly && canManageReceivable ? setReceivableId : undefined}

@@ -17,7 +17,7 @@ test('edição mantém identidade; bloqueia fusão de documentos conflitantes e 
  assert.throws(()=>resolve('a',{a:{target:'b'},b:{target:'a'}}),/circular/);
 });
 test('permissões cadastrais não ampliam direitos financeiros',()=>{
- assert.equal(allowed({active:true,role:'operacional'},'POST'),false);assert.equal(allowed({active:true,role:'operacional'},'GET'),true);assert.equal(allowed({active:false,role:'admin'},'POST'),false);
+ assert.equal(allowed({active:true,role:'operacional'},'POST'),true);assert.equal(allowed({active:true,role:'operacional'},'GET'),true);assert.equal(allowed({active:false,role:'admin'},'POST'),false);
 });
 function fixture(){
  const store=new Map([['users/u',{active:true,role:'admin',name:'Teste'}],['transactions/a',source],['transactions/b',target]]);
