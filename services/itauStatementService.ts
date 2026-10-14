@@ -22,6 +22,7 @@ export class StatementRequestError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 async function request<T>(path: string, body?: unknown): Promise<T> {
+  await auth.authStateReady();
   const user = auth.currentUser;
   if (!user) throw new StatementRequestError('Entre novamente para acessar o extrato.', 401);
   const response = await fetch(`/api/itau/${path}`, {
@@ -35,7 +36,7 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
   return payload;
 }
 export async function readOfxFile(file: File): Promise<OfxFile> {
-  if (!/\.ofx$/i.test(file.name) || file.size === 0 || file.size > 2 * 1024 * 1024) throw new Error('Selecione um arquivo .ofx de até 2 MB.');
+  if (!/\.(ofx|pdf|xls|xlsx)$/i.test(file.name) || file.size === 0 || file.size > 2 * 1024 * 1024) throw new Error('Selecione OFX, PDF, XLS ou XLSX de até 2 MB.');
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = '';
   for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));

@@ -1,4 +1,10 @@
-const { ACCOUNT, StatementError, parseOfx, classifyRows } = require('./itau-ofx');
+const { ACCOUNT, StatementError, classifyRows } = require('./itau-ofx');
+const { parseStatementFile } = require('./itau-statement-file');
+function checkOverlap(statement, snapshot) {
+  if (snapshot.size > 400) throw new StatementError('Histórico de importações extenso. Solicite revisão antes de importar.');
+  const overlap = snapshot.docs.map(d => d.data()).some(i => i.start <= statement.end && i.fileHash !== statement.fileHash && (statement.format !== 'ofx' || (i.format || 'ofx') !== 'ofx'));
+  if (overlap) throw new StatementError('Este período já tem uma importação. PDF e Excel não possuem identificador bancário único: selecione um período sem sobreposição ou solicite revisão das importações anteriores.', 409);
+}
 const READ = 'itau.openfinance.read';
 const IMPORT = 'itau.statement.import';
 function permitted(profile, permission) {
@@ -72,12 +78,14 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
       } else {
         let body;
         try { body = JSON.parse((await readBody(request)).toString('utf8')); } catch { throw new StatementError('Arquivo inválido ou maior que o limite.'); }
-        if (typeof body.base64 !== 'string' || body.base64.length > 2800000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.base64)) throw new StatementError('Selecione um arquivo OFX válido de até 2 MB.');
-        const statement = parseOfx(Buffer.from(body.base64, 'base64'));
+        if (typeof body.base64 !== 'string' || body.base64.length > 2800000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(body.base64)) throw new StatementError('Selecione OFX, PDF, XLS ou XLSX de até 2 MB.');
+        const statement = await parseStatementFile(Buffer.from(body.base64, 'base64'), body.fileName || 'extrato.ofx');
+        const overlaps = account.collection('imports').where('end', '>=', statement.start).limit(401);
         const fileName = String(body.fileName || 'extrato.ofx').replace(/[\r\n/\\]/g, '_').slice(0, 180);
         const refs = statement.rows.map(row => account.collection('entries').doc(row.id));
         const importRef = account.collection('imports').doc(statement.fileHash);
         if (isPreview) {
+          checkOverlap(statement, await overlaps.get());
           const existing = refs.length ? await db.getAll(...refs) : [];
           const check = classifyRows(statement.rows, existing.map(s => s.exists ? s.data() : null));
           const imported = await importRef.get();
@@ -90,6 +98,7 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
           const result = await db.runTransaction(async tx => {
             const currentProfile = await tx.get(db.collection('users').doc(userId));
             if (!allowed(currentProfile.data())) throw new StatementError('Acesso revogado.', 403);
+            checkOverlap(statement, await tx.get(overlaps));
             const imported = await tx.get(importRef);
             const snapshots = refs.length ? await tx.getAll(...refs) : [];
             const check = classifyRows(statement.rows, snapshots.map(s => s.exists ? s.data() : null));
@@ -97,7 +106,7 @@ function createStatementHandler({ getServices, readBody, sendJson, readLedger = 
             const result = { alreadyImported: imported.exists, inserted: imported.exists ? 0 : check.fresh.length, duplicates: check.duplicates.length };
             if (!imported.exists) {
               check.fresh.forEach(row => tx.create(account.collection('entries').doc(row.id), { ...row, accountId: ACCOUNT, importHash: statement.fileHash, importedAt: actor.at }));
-              tx.create(importRef, { fileHash: statement.fileHash, fileName, start: statement.start, end: statement.end, ledgerBalance: statement.ledgerBalance, balanceRows: statement.balanceRows, totals: statement.totals, rowCount: statement.rows.length, inserted: result.inserted, duplicates: result.duplicates, importedAt: actor.at, importedBy: userId });
+              tx.create(importRef, { fileHash: statement.fileHash, fileName, format: statement.format, start: statement.start, end: statement.end, ledgerBalance: statement.ledgerBalance, balanceRows: statement.balanceRows, totals: statement.totals, rowCount: statement.rows.length, inserted: result.inserted, duplicates: result.duplicates, importedAt: actor.at, importedBy: userId });
             }
             tx.create(audit.doc(), { ...actor, action: 'import', fileHash: statement.fileHash, ...result });
             return result;

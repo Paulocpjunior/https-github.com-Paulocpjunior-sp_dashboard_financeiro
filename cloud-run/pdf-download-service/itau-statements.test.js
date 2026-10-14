@@ -78,7 +78,7 @@ function harness(profile = operator, readLedger, readLegacy) {
     runTransaction: fn => {
       const run = queue.then(async()=>{
         const writes=[];
-        const result=await fn({ get:async ref=>snap(ref), getAll:async(...refs)=>refs.map(snap), create:(ref,data)=>writes.push([ref.path,data]) });
+        const result=await fn({ get:async ref=>ref.path?snap(ref):ref.get(), getAll:async(...refs)=>refs.map(snap), create:(ref,data)=>writes.push([ref.path,data]) });
         for(const [path] of writes) assert.equal(store.has(path),false,'create must not overwrite');
         writes.forEach(([path,data])=>store.set(path,data));
         return result;
@@ -270,4 +270,28 @@ test('legacy link routes deny non-admins and anonymous requests before reading s
  const admin=harness({active:true,role:'admin'});
  assert.equal((await admin.call('legacy-links/preview',null)).status,400);
  assert.equal((await admin.call('legacy-links/preview',{statementId:'../invalid',transactionId:'p1'})).status,400);
+});
+
+test('overlapping PDF/Excel imports block before writes, including OFX after Excel',async()=>{
+ const h=harness();
+ h.store.set(`bankStatements/${ACCOUNT}/imports/previous`,{fileHash:'previous',format:'xlsx',start:'2026-09-01',end:'2026-09-30'});
+ const source=file();const parsed=parse(ofx());
+ assert.equal((await h.call('preview',source)).status,409);
+ assert.equal((await h.call('import',{...source,confirmHash:parsed.fileHash})).status,409);
+ assert.equal([...h.store.keys()].filter(k=>k.includes('/entries/')).length,0);
+});
+test('Excel preview/import and replay preserve financial records and reject overlapping new export',async()=>{
+ const X=require('xlsx'),h=harness();
+ const sheet=X.utils.aoa_to_sheet([['Agência:','3145'],['Conta:','0099791-6'],['Periodo:','01/09/2026 até 30/09/2026'],['Data','Lançamento','Razão Social','CPF/CNPJ','Valor (R$)','Saldo (R$)'],['15/09/2026','PIX RECEBIDO','CLIENTE FICTICIO','',123.45,'']]);
+ const w=X.utils.book_new();X.utils.book_append_sheet(w,sheet,'Lançamentos');
+ const source={base64:X.write(w,{bookType:'xlsx',type:'buffer'}).toString('base64'),fileName:'test.xlsx'};
+ h.store.set('transactions/protected',{status:'Pendente',value:123.45});
+ const p=await h.call('preview',source);assert.equal(p.status,200);assert.equal(p.body.rows.length,1);
+ assert.equal([...h.store.keys()].filter(k=>k.includes('/entries/')).length,0);
+ assert.equal((await h.call('import',{...source,confirmHash:p.body.fileHash})).body.inserted,1);
+ assert.equal((await h.call('import',{...source,confirmHash:p.body.fileHash})).body.inserted,0);
+ assert.deepEqual(h.store.get('transactions/protected'),{status:'Pendente',value:123.45});
+ sheet.E5.v=125;
+ const newer={...source,base64:X.write(w,{bookType:'xlsx',type:'buffer'}).toString('base64')};
+ assert.equal((await h.call('preview',newer)).status,409);
 });

@@ -10,7 +10,7 @@ export default function BankingFlowScope() {
     </article>
     <article className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-4">
       <h2 className="font-semibold flex items-center gap-2"><Landmark size={20} aria-hidden="true"/>Conciliação da conta Itaú</h2>
-      <p className="text-sm mt-2 font-medium">Hoje: importação OFX · API direta: pendente de habilitação</p>
+      <p className="text-sm mt-2 font-medium">Hoje: importação manual de extrato · API direta: pendente de habilitação</p>
       <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">O extrato reúne entradas e saídas da única conta bancária. Nesta etapa, a comparação sugere correspondências com baixas nativas a pagar. A integração direta está prevista para contas a pagar e receber.</p>
       <p className="text-sm mt-2">Pagamento já baixado deve ser conciliado sem gerar uma segunda baixa.</p>
     </article>
