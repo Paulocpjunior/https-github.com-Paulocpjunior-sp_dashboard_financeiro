@@ -67,6 +67,7 @@ jobs:
           npm run test:native-entries
           npm run test:dashboard-duplicates-sorting
           npm run test:data-loading
+          npm run test:customer-directory
           npm run test:payment-method
 
       - name: Preparar Java para testes de regras isolados
