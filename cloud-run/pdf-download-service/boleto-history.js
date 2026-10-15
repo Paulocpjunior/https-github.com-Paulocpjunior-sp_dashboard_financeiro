@@ -147,7 +147,14 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
           lastCycleSuccessfulAt:historyJob.lastCycleSuccessfulAt || null,remaining:historyJob.remaining ?? null,
           lastCycleErrors:historyJob.lastCycleErrors ?? null,counts:historyJob.counts || null,attention:historyJob.attention || [],
           stale:!historyJob.startedAt || Date.now()-Date.parse(historyJob.startedAt)>45*60*1000}:null;
-        await recheck();sendJson(req,res,200,{...result,automation,historyAutomation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
+        const retJob=(await db.collection('boletoReturnJobs').doc('cnab-production').get()).data();
+        const retPending=retJob?await db.collection('boletoReturnEvents').where('state','==','review').limit(31).get():{docs:[]};
+        const returnsAutomation=retJob?{state:retJob.state,lastSuccessAt:retJob.lastSuccessAt||null,
+          counts:retJob.counts||{},more:retJob.more===true,backfillDate:retJob.backfillDate||null,
+          stale:!retJob.startedAt||Date.now()-Date.parse(retJob.startedAt)>45*60*1000,
+          attentionMore:retPending.docs.length>30,
+          attention:retPending.docs.slice(0,30).map(d=>{const r=d.data();return {number:r.number||'Sem número',reason:r.reason,checkedAt:r.checkedAt};})}:null;
+        await recheck();sendJson(req,res,200,{...result,automation,historyAutomation,returnsAutomation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
       }
       const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf|invite|invite-email|reconcile|reconcile-preview|reconcile-confirm)$/);
       if(!match || (['sync','reconcile-preview','reconcile-confirm'].includes(match[2])?req.method!=='POST':req.method!=='GET'))throw new HistoryError('Rota não encontrada.',404);

@@ -113,3 +113,19 @@ test('a newer manual history query fences out the older automatic result', async
   f.data.set(`boletoHistoryUpdates/${idFor(f.body.boleto.token)}`, { syncedAt: '2099-01-01T00:00:00.000Z', record: { sentinel: true } });
   assert.equal((await f.run()).errors, 1); assert.equal(f.data.get('transactions/native-test').status, 'Pendente');
 });
+
+test('RET-triggered native settlement retains provenance, manual conflict and replay protection', async()=>{
+ const {settleEvent}=require('./boleto-ret-files');
+ for(const manual of [false,true]) {
+  const f=fixture(),base=f.db.collection;
+  f.db.collection=name=>{const c=base(name);return name==='boletoIssues'?{...c,where:()=>({limit:()=>({get:()=>c.get()})})}:c;};
+  const jobRef=f.db.collection('boletoReturnJobs').doc('cnab-production');
+  f.data.set(jobRef.path,{lease:'ret',leaseUntil:Date.now()+60000});
+  if(manual)f.data.get('transactions/native-test').receivableSettlement={method:'PIX'};
+  const event={token:f.body.boleto.token,number:'001',occurrence:{situacao:'LIQUIDACAO',info:{situacao:'LIQUIDACAO',valorPago:10,dataDePagamento:'2026-10-09'}}};
+  const args={db:f.db,cfg:{...cfg,base:'https://example.invalid',apiKey:'fake'},env,fetchImpl:f.fetchImpl,event,provenance:{fileId:'file',eventId:'event'},lease:'ret',jobRef,at:new Date().toISOString(),dryRun:false};
+  assert.equal((await settleEvent(args)).state,manual?'review':'settled');
+  if(manual){assert.equal(f.data.get('transactions/native-test').status,'Pendente');assert.equal([...f.data.keys()].some(k=>k.startsWith('boletoSettlementAudit/')),false);}
+  else {assert.deepEqual(f.data.get('transactions/native-test').boletoSettlement.returnEvidence,args.provenance);assert.equal((await settleEvent(args)).state,'settled');assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoSettlementAudit/')).length,1);}
+ }
+});

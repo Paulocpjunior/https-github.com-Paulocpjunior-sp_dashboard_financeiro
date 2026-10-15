@@ -13,6 +13,7 @@ type Boleto = { transactionId?:string; id:string; createdAt:string; bank:string;
   beneficiaryDocument:string; beneficiaryName:string; registeredAt:string|null; protestedAt:string|null; registrationStatus?:string; registrationError?:unknown;
   protestStatus?:string; protestDescription?:string; paymentOrigin?:string; manuallyPaid?:boolean; detailsSource:string; syncedAt:string|null; status:string; overdue:boolean };
 type Result = { today:string; month:string; page:number; pages:number; selected:Summary; metrics:Record<string,Summary>; rows:Boleto[];
+  returnsAutomation?:{state:string;lastSuccessAt:string|null;stale:boolean;more:boolean;backfillDate:string|null;counts:Record<string,number>;attentionMore:boolean;attention:{number:string;reason:string;checkedAt:string}[]}|null;
   historyAutomation?:{state:string;lastSuccessAt:string|null;lastCycleSuccessfulAt:string|null;remaining:number|null;lastCycleErrors:number|null;stale:boolean;attention:{number:string;reason:string;checkedAt:string}[]}|null;
   automation?:{state:string;lastSuccessAt:string|null;finishedAt:string|null;settlementEnabled:boolean;stale:boolean;attentionCount:number;attention:{number:string;reason:string;checkedAt:string}[]}|null;
   beneficiaries:{document:string;name:string}[]; source:{exportedAt:string;count:number;snapshot:string} };
@@ -84,6 +85,18 @@ export default function BoletoDashboard() {
       {error&&<p role="alert" className="rounded-lg bg-red-50 text-red-800 p-4">{error}</p>}
       {busy&&<p role="status">Consultando histórico…</p>}
       {result&&<>
+        <section className={card} aria-label="Arquivos de retorno RET">
+          <h2 className="font-semibold">Arquivos de retorno (.RET) — boletos individuais</h2>
+          <p className="text-sm mt-2">Consulta programada a cada 15 minutos aos retornos disponibilizados pelo Boleto Cloud. Cada liquidação é confrontada com o boleto e seu lançamento vinculado. A disponibilidade do arquivo depende do banco e do emissor.</p>
+          <p className="text-sm mt-2">{!result.returnsAutomation?'Aguardando a primeira execução da leitura de arquivos.':result.returnsAutomation.stale?'Sem execução recente. Verifique a rotina antes de considerar a conferência atualizada.':result.returnsAutomation.state==='error'?'Consulta com falhas; haverá nova tentativa.':result.returnsAutomation.more?'Processamento parcial; continuação nos próximos ciclos.':result.returnsAutomation.state==='running'?'Processamento em andamento.':'Último ciclo de consulta concluído; confira as pendências abaixo.'}</p>
+          {result.returnsAutomation&&<>
+            <p className="text-sm mt-2">Última consulta sem falhas: {result.returnsAutomation.lastSuccessAt?new Date(result.returnsAutomation.lastSuccessAt).toLocaleString('pt-BR'):'Ainda não registrada'}. No último ciclo: {result.returnsAutomation.counts.files||0} arquivo(s) examinado(s), {result.returnsAutomation.counts.settled||0} liquidação(ões) confirmada(s), incluindo baixas já existentes.</p>
+            <p className="text-sm mt-2">Próxima data da revisão histórica: {date(result.returnsAutomation.backfillDate)}. Consulta concluída não significa que todos os títulos foram baixados.</p>
+            <ul className="mt-3 space-y-2 text-sm">{result.returnsAutomation.attention.map((r,i)=><li key={i}>Boleto {r.number}: {r.reason}</li>)}</ul>
+            {result.returnsAutomation.attentionMore&&<p className="text-sm mt-2">Exibindo as primeiras 30 pendências de retorno.</p>}
+          </>}
+          <p className="text-sm mt-3">Pix ou depósito deve ser registrado com a forma efetivamente recebida. O boleto pode continuar em aberto no emissor. Um retorno posterior será encaminhado para conferência quando houver recebimento manual, sem segunda baixa automática.</p>
+        </section>
         <section className={card} aria-label="Retorno bancário automático"><h2 className="font-semibold">Retorno bancário automático</h2>
           <p className="text-sm mt-2">{!result.automation?'A rotina automática ainda não registrou uma execução.':result.automation.stale?'A rotina está sem execução recente. Verifique o processamento antes de considerar os saldos atualizados.':result.automation.state==='error'?'A última execução apresentou falha; os lançamentos afetados foram preservados.':result.automation.state==='running'?'Consulta automática em andamento.':'Última consulta automática concluída.'}</p>
           {result.automation&&<p className="text-sm mt-2">Última execução sem falhas: {result.automation.lastSuccessAt?new Date(result.automation.lastSuccessAt).toLocaleString('pt-BR'):'Ainda não registrada'}. Baixa automática: {result.automation.settlementEnabled?'habilitada para recebíveis nativos vinculados, com pagamento bancário integral conferido':'desativada'}.</p>}

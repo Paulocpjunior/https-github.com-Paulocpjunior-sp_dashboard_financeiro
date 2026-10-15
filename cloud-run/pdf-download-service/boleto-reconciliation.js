@@ -426,6 +426,7 @@ async function apply(tx, db, rowRef, row, linkRef, link, decision, at, body) {
         creditedAt: payment.creditedAt,
         appliedAt: at,
         kind: "confirmed-historical-link",
+        ...(decision.returnEvidence ? { returnEvidence: decision.returnEvidence } : {}),
       },
     };
     tx.create(

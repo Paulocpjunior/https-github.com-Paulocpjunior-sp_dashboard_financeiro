@@ -391,3 +391,18 @@ test("baseline survives Firestore field ordering; lease and disabled flag preven
 test("recebimento manual impede nova baixa bancária",()=>{
  assert.equal(evaluate(record,{...row,receivableSettlement:{origin:'manual'}},paid,'2026-10-12T12:00:00Z').state,'review');
 });
+
+test('RET settles only confirmed historical links, records provenance and fences manual receipts',async()=>{
+ const {settleEvent}=require('./boleto-ret-files'),{idFor}=require('./boleto-history'),{revision}=require('./boleto-reconciliation');
+ for(const manual of [false,true]) {
+  const f=fixture(),boletoId=idFor(record.token),linkedRecord={...record,id:boletoId};
+  const current=f.data.get('transactions/t');
+  if(manual)current.receivableSettlement={method:'PIX'};
+  f.data.set('boletoReconciliations/'+boletoId,{record:linkedRecord,transactionId:'t',state:'waiting',baseline:revision(current),accountFingerprint:config(env).accountFingerprint,uid:'u',confirmedAt:at});
+  const jobRef=f.db.collection('boletoReturnJobs').doc('cnab-production');f.data.set(jobRef.path,{lease:'ret',leaseUntil:Date.now()+60000});
+  const args={db:f.db,cfg:config(env),env,fetchImpl:f.fetchImpl,event:{token:record.token,number:'001',occurrence:{situacao:'LIQUIDACAO',info:{situacao:'LIQUIDACAO',valorPago:10,dataDePagamento:'2026-10-09'}}},provenance:{fileId:'file',eventId:'event'},jobRef,lease:'ret',at,dryRun:false};
+  assert.equal((await settleEvent(args)).state,manual?'review':'settled');
+  if(manual)assert.equal(f.data.get('transactions/t').status,'Pendente');
+  else{assert.deepEqual(f.data.get('transactions/t').boletoSettlement.returnEvidence,args.provenance);assert.equal((await settleEvent(args)).state,'settled');assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoReconciliationSettlements/')).length,1);}
+ }
+});

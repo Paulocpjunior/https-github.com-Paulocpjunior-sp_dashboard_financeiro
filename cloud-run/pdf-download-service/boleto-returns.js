@@ -67,7 +67,7 @@ function historyRow(issue, account) {
     paidAt: null, paidCents: null, creditedAt: null, cancelledAt: null };
 }
 
-async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun, lease, settlementEnabled }) {
+async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun, lease, settlementEnabled, leaseJob = 'production', returnEvidence = null }) {
   const issue = issueDoc.data();
   if (issue.state !== 'issued' || !issue.token) return { state: 'skipped' };
   const response = await fetchImpl(`${cfg.base}/boletos/${encodeURIComponent(issue.token)}/situacao`, {
@@ -79,7 +79,7 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
   const rowRef = db.collection('transactions').doc(issue.transactionId);
   if (dryRun) return evaluate(issueDoc.id, issue, (await rowRef.get()).data(), body, cfg, at);
   return db.runTransaction(async tx => {
-    const leaseRef = db.collection('boletoReturnJobs').doc('production');
+    const leaseRef = db.collection('boletoReturnJobs').doc(leaseJob);
     const owner = (await tx.get(leaseRef)).data();
     if (owner?.lease !== lease || owner.leaseUntil <= Date.now()) throw new Error('LEASE_LOST');
     const current = (await tx.get(issueDoc.ref)).data();
@@ -97,7 +97,7 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
     if (result.state === 'ready' && audit) result = { state: 'review', reason: 'Auditoria de baixa existente; conferir lançamento antes de reaplicar.' };
     if (result.state === 'ready' && !settlementEnabled) result = { state: 'review', reason: 'Pagamento confirmado; baixa automática ainda desativada.' };
     if (result.state === 'ready') {
-      const settlement = { ...result.evidence, evidenceId: result.evidenceId, appliedAt: at, creditedAt: body.boleto.pagamento.dataCredito || null };
+      const settlement = { ...(returnEvidence ? { returnEvidence } : {}), ...result.evidence, evidenceId: result.evidenceId, appliedAt: at, creditedAt: body.boleto.pagamento.dataCredito || null };
       const payment = { status: 'Pago', pago: 'Pago', paymentDate: result.evidence.paymentDate,
         dataPagamento: result.evidence.paymentDate.split('-').reverse().join('/'), valueReceived: result.evidence.paidCents / 100,
         valorPago: (result.evidence.paidCents / 100).toFixed(2), updatedAt: at, boletoSettlement: settlement };
@@ -114,7 +114,7 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
   });
 }
 
-async function runReturns({ db, env = process.env, fetchImpl = fetch, dryRun = false }) {
+async function runReturns({ db, env = process.env, fetchImpl = fetch, dryRun = false, deadline = Infinity }) {
   if (env.BOLETO_CLOUD_RETURN_ENABLED !== 'true' && !dryRun) return { disabled: true };
   const cfg = config(env);
   if (cfg.environment !== 'production' || !cfg.apiKey || !cfg.accountToken) throw new Error('RETURN_CONFIGURATION_INVALID');
@@ -138,7 +138,10 @@ async function runReturns({ db, env = process.env, fetchImpl = fetch, dryRun = f
     let query = db.collection('boletoIssues').orderBy('__name__').limit(PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
     const page = await query.get();
+    let lastCursor = cursor, processed = 0;
     for (const issueDoc of page.docs) {
+      if (Date.now() + 22000 >= deadline) break;
+      lastCursor = issueDoc.id; processed++;
       const issue = issueDoc.data(); counts.scanned++;
       if (issue.environment !== 'production' || issue.state !== 'issued') { counts.skipped++; continue; }
       const at = new Date().toISOString();
@@ -157,7 +160,7 @@ async function runReturns({ db, env = process.env, fetchImpl = fetch, dryRun = f
         });
       }
     }
-    const nextCursor = page.docs.length === PAGE_SIZE ? page.docs.at(-1).id : '';
+    const nextCursor = processed === page.docs.length && page.docs.length < PAGE_SIZE ? '' : lastCursor;
     if (!dryRun) await db.runTransaction(async tx => {
       const current = (await tx.get(jobRef)).data();
       if (current?.lease !== lease || current.leaseUntil <= Date.now()) throw new Error('LEASE_LOST');

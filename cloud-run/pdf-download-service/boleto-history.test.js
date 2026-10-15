@@ -32,7 +32,7 @@ function fixture(fetchImpl=async()=>{throw new Error('Unexpected provider call')
   const data=new Map([['users/u',{active:true,role:'admin'}],['boletoHistory/production',{snapshot:'s'}],['boletoHistorySnapshots/s',{...payload([row()]),complete:true}],['boletoHistorySnapshots/s/chunks/0',{records:[row()]}],['transactions/unchanged',{amount:42}]]);
   let seq=0;
   const snap=p=>({id:p.split('/').at(-1),data:()=>structuredClone(data.get(p))});
-  const collection=p=>({doc:(id)=>document(`${p}/${id||++seq}`),get:async()=>({docs:[...data.keys()].filter(k=>k.startsWith(p+'/')&&k.slice(p.length+1).split('/').length===1).map(snap)}),where:(key,op,value)=>({get:async()=>({docs:[...data.keys()].filter(k=>k.startsWith(p+'/')&&k.slice(p.length+1).split('/').length===1&&data.get(k)?.[key]===value).map(snap)})})});
+  const collection=p=>({doc:(id)=>document(`${p}/${id||++seq}`),get:async()=>({docs:[...data.keys()].filter(k=>k.startsWith(p+'/')&&k.slice(p.length+1).split('/').length===1).map(snap)}),where:(key,op,value)=>({limit(){return this;},get:async()=>({docs:[...data.keys()].filter(k=>k.startsWith(p+'/')&&k.slice(p.length+1).split('/').length===1&&data.get(k)?.[key]===value).map(snap)})})});
   const document=p=>({path:p,get:async()=>snap(p),collection:n=>collection(`${p}/${n}`)});
   const db={collection,runTransaction:async fn=>{const writes=[];const value=await fn({get:r=>r.get(),set:(r,v)=>writes.push([r.path,v])});for(const [p,v]of writes)data.set(p,v);return value;}};
   const handler=createHistoryHandler({getServices:()=>({adminAuth:{verifyIdToken:async()=>({uid:'u'})},adminDb:db}),env:{BOLETO_CLOUD_ENVIRONMENT:'production',BOLETO_CLOUD_API_KEY:'synthetic-secret'},fetchImpl,sendJson:(_q,r,status,body)=>Object.assign(r,{status,body})});
@@ -112,4 +112,9 @@ test('history read permission never grants reconciliation access',async()=>{
  for(const [action,method] of [['reconcile','GET'],['reconcile-preview','POST'],['reconcile-confirm','POST']]){
    const response=await f.call(`/api/boleto-cloud/history/${row().id}/${action}`,method);assert.equal(response.status,403);
  }
+});
+test('RET panel exposes pending reasons but never raw returns or provider tokens',async()=>{
+ const f=fixture();f.data.set('boletoReturnJobs/cnab-production',{state:'complete',startedAt:new Date().toISOString(),counts:{files:1},lease:'private-lease',backfillDate:'2026-10-10'});
+ f.data.set('boletoReturnEvents/event',{state:'review',number:'001',reason:'Recebimento manual existente.',checkedAt:'2026-10-15T09:00:00Z',token:'private-token',occurrence:{private:'private-occurrence'}});
+ const r=await f.call();assert.equal(r.status,200);assert.equal(r.body.returnsAutomation.attention.length,1);assert.equal(r.body.returnsAutomation.stale,false);assert.equal(JSON.stringify(r.body).includes('private-'),false);
 });

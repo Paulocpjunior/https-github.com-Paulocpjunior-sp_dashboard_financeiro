@@ -2,7 +2,7 @@
 
 ## Responsabilidades
 
-O Boleto Cloud mantém a comunicação Itaú API/VAN e o processamento do RET. O aplicativo consulta `GET /api/v1/boletos/{token}/situacao`; não reenvia remessas nem reprocessa o mesmo RET. Referência: https://developers.boleto.cloud/v1/boletos/situacao/ (conferida em 09/10/2026).
+O Boleto Cloud mantém a comunicação Itaú API/VAN e o processamento do RET. O aplicativo consulta os arquivos de retorno disponibilizados pela API e confronta as liquidações com `GET /api/v1/boletos/{token}/situacao`; não reenvia remessas nem faz upload repetido do mesmo RET. Referência: https://developers.boleto.cloud/v1/boletos/situacao/ (conferida em 09/10/2026).
 
 O Cloud Run Job `sp-boleto-returns` executa independentemente de sessões do navegador. O Cloud Scheduler chama a API autenticada do Cloud Run a cada 15 minutos. O job utiliza o `launcher` dos Buildpacks para preservar o ambiente Node.js da imagem homologada. Nenhuma rota pública de baixa foi adicionada. O invocador dedicado recebe `roles/run.invoker` somente nesse job; o worker reutiliza a conta de serviço e referências de segredos do backend homologado. Essa conta de execução já possui permissões amplas: o mecanismo não substitui controles IAM.
 
@@ -10,7 +10,7 @@ Referência de agendamento autenticado: https://docs.cloud.google.com/run/docs/e
 
 ## Critérios de baixa
 
-Somente emissões do aplicativo em produção, com vínculo explícito a um recebível `native-finance`. São conferidos token, controle de emissão, nosso número, CPF/CNPJ, conta configurada, emissão, vencimento e valor. A situação deve ser `PAGO`, com `PAGAMENTO_INFORMADO`, origem `BANCO`, `marcadoComoPago=false`, data válida e valor integral sem encargos ou desconto. A origem `BANCO` foi observada também em uma consulta real de título pago desta conta.
+Emissões do aplicativo em produção exigem vínculo explícito a um recebível `native-finance`. Boletos históricos exigem vínculo individual previamente confirmado no fluxo de conciliação. São conferidos token, controle de emissão, nosso número, CPF/CNPJ, conta configurada, emissão, vencimento e valor. A situação deve ser `PAGO`, com `PAGAMENTO_INFORMADO`, origem `BANCO`, `marcadoComoPago=false`, data válida e valor integral sem encargos ou desconto. A origem `BANCO` foi observada também em uma consulta real de título pago desta conta.
 
 Marcação manual, pagamento parcial, encargos, desconto, título cancelado, alteração do lançamento, identidade divergente e registros legados ficam para revisão. A rotina não associa o histórico importado por aproximação. Não modifica contas a pagar, checklist, fechamento ou Wix. A consulta individual do painel continua sem efeito financeiro.
 
@@ -42,3 +42,45 @@ O mesmo job agora executa uma etapa independente de atualização do histórico,
 Cada lote percorre até 60 títulos por ordem estável, exclui tokens gerenciados pela emissão nativa e retoma por cursor em `boletoReturnJobs/history-production`. A etapa respeita o prazo global de oito minutos desde o início do worker; consultas têm timeout de quinze segundos. Falhas preservam os dados e serão revistas na próxima volta. O painel distingue execução de lote e última volta completa sem falhas. Uma nova carga reinicia o cursor. O prazo de atualização de cada título depende da quantidade de candidatos e dos tempos da API; não equivale a consultar todos a cada quinze minutos.
 
 A escrita dessa etapa é restrita a `boletoHistoryUpdates` e ao estado do job. Não altera `transactions`, não cria auditoria de baixa e não associa recebíveis por semelhança. A concessão de execução, conferência da carga atual e comparação da data da resposta protegem contra concorrência e respostas antigas. As situações obtidas pela API passam pelas mesmas validações do sincronismo individual. Testes usam exclusivamente documentos sintéticos.
+
+## Leitura dos arquivos de retorno — atualização de 15/10/2026
+
+A rotina passa a consultar também `GET /arquivos/cnab/retornos?data=...&conta=...` e
+`GET /arquivos/cnab/retornos/{token}`. O agendamento existente permanece a cada 15
+minutos. Isso consulta os arquivos **já disponibilizados** pelo banco ao Boleto
+Cloud; não força o banco a gerar um arquivo nem reenvia um RET já processado.
+A rotina de consulta individual preexistente continua como conferência complementar.
+
+Cada execução revisita as datas recentes, uma data histórica desde o corte de
+produção e uma data com arquivo pendente. Há limite de tempo por execução;
+backlog ou indisponibilidade pode exigir vários ciclos. Arquivos e ocorrências
+são identificados de forma estável, por conta, e persistidos em
+`boletoReturnFiles` / `boletoReturnEvents`, incluídos no backup. Uma ocorrência
+informativa não quita um título. Somente LIQUIDACAO com valor e datas presentes,
+coincidentes com a consulta individual bancária, pode seguir para baixa.
+
+A baixa reutiliza as validações e transações existentes: emissão nativa vinculada
+ou vínculo histórico explicitamente confirmado; identidade, conta, valor e datas
+conferidos. Nenhum vínculo é inventado por semelhança de nome ou valor. A auditoria
+da baixa registra o identificador do arquivo e da ocorrência. Retorno sem token,
+vínculo ausente, encargos/descontos divergentes ou lançamento alterado ficam em
+conferência. Boletos não conhecidos não criam receitas automaticamente.
+
+Recebimentos via Pix ou depósito continuam manuais, com a forma efetiva registrada.
+Eles não cancelam o boleto no banco. Se houver recebimento manual no lançamento,
+uma liquidação posterior do boleto é sinalizada para revisão sem segunda baixa.
+O crédito agrupado no extrato continua separado: serve para conferir a composição,
+nunca para dividir valores entre clientes por suposição. Envios automáticos de
+mensagens continuam sujeitos às configurações existentes; esta rotina não envia mensagens.
+
+O painel Boletos Boleto Cloud mostra a execução da leitura de RET separadamente da
+consulta individual, as contagens do último ciclo e até 30 pendências de liquidação.
+Consulta concluída não significa que todos os boletos foram baixados.
+
+### Publicação
+
+Publicar serviço/hosting no SHA aprovado e atualizar **também** o Cloud Run Job com
+`scripts/deploy-boleto-returns.py --apply`. O script exige a revisão do serviço
+rotulada com o mesmo SHA e usa sua imagem imutável. Só publicar o frontend não
+atualiza o worker. Conferir a execução e o painel após a publicação. Não executar
+baixas fictícias em produção para testar.
