@@ -34,6 +34,29 @@ const identity = (r) => ({
   bank: r.bank,
 });
 const revision = (r) => hash(r);
+// Manual receipts are only eligible for a metadata link, never another settlement.
+function manualReceipt(row) {
+  const s = row?.receivableSettlement, b = row?.receivableBalance;
+  return row?.status === "Pago" && s?.origin === "manual" &&
+    typeof s.uid === "string" && typeof s.requestId === "string" &&
+    s.bankAccount === catalog.banks[0] &&
+    ["11-Boleto ITAU", "12-Boleto Wix"].includes(s.method) &&
+    Number.isSafeInteger(s.amountCents) && s.amountCents > 0 &&
+    s.amountCents === cents(amount(row)) && s.amountCents === cents(row.valueReceived) &&
+    s.date === row.paymentDate && s.remainingCents === 0 &&
+    s.interestCents === 0 && s.discountCents === 0 &&
+    b?.remainingCents === 0 && b.receivedCents === s.amountCents &&
+    b.interestCents === 0 && b.discountCents === 0;
+}
+async function manualEvidence(db, reader, transactionId, row) {
+  if (!manualReceipt(row)) return false;
+  const s = row.receivableSettlement;
+  const audit = (await reader.get(db.collection("receivableAudit").doc(hash([s.uid, s.requestId])))).data();
+  return audit?.action === "receipt" && audit.transactionId === transactionId &&
+    audit.uid === s.uid && ["receivableSettlement", "receivableBalance", "receivableReceipts",
+      "receivableReversals", "status", "pago", "paymentDate", "dataPagamento", "valueReceived", "valorPago"]
+      .every(k => hash(audit.after?.[k] ?? null) === hash(row[k] ?? null));
+}
 function differences(record, row) {
   const errors = [];
   if (
@@ -54,14 +77,14 @@ function differences(record, row) {
   if (cents(amount(row)) !== record.amountCents || record.amountCents <= 0)
     errors.push("Valor nominal divergente.");
   if (row.dueDate !== record.dueDate) errors.push("Vencimento divergente.");
-  if (record.bank !== "341" || row.bankAccount !== catalog.banks[0])
+  if (record.bank !== "341" || (row.bankAccount !== catalog.banks[0] && (row.bankAccount || !manualReceipt(row))))
     errors.push("Conta bancária fora da conta Itaú homologada.");
-  if (row.receivableSettlement || row.receivableBalance) errors.push("Recebimento manual existente: conferir sem duplicar a baixa.");
+  if ((row.receivableSettlement || row.receivableBalance) && !manualReceipt(row)) errors.push("Recebimento manual existente: conferir sem duplicar a baixa.");
   if (row.boletoSettlement || row.source === "native-finance")
     errors.push("Lançamento com vínculo nativo ou baixa bancária existente.");
   return errors;
 }
-function evaluate(record, row, body, at) {
+function evaluate(record, row, body, at, auditedManual = false) {
   const errors = differences(record, row),
     b = body?.boleto;
   if (
@@ -74,6 +97,8 @@ function evaluate(record, row, body, at) {
     digits(b.pagador?.cprf) !== digits(record.payerDocument)
   )
     errors.push("Resposta da API diverge do boleto revisado.");
+  if (row?.receivableSettlement && (!auditedManual || b?.pagamento?.forma !== "BOLETO" || b?.pagamento?.pix === true))
+    errors.push("Recebimento manual exige auditoria íntegra e confirmação bancária por boleto.");
   if (errors.length) return { state: "review", reason: errors.join(" ") };
   const paid = row.status === "Pago";
   if (
@@ -146,7 +171,9 @@ function evaluate(record, row, body, at) {
     return {
       state: "already-paid",
       reason:
-        "Registrar somente o vínculo: conta já paga com valor e data conferidos.",
+        row.receivableSettlement?.method === "12-Boleto Wix"
+          ? "Confirmar recebimento Itaú comprovado pelo banco, preservando a classificação original Wix e sem nova baixa."
+          : "Registrar somente o vínculo: conta já paga com valor e data conferidos.",
       payment,
     };
   }
@@ -182,7 +209,7 @@ function publicRow(id, r, record) {
     cpfCnpj: String(r.cpfCnpj || ""),
     dueDate: r.dueDate || "",
     amountCents: cents(amount(r)),
-    bankAccount: r.bankAccount || "",
+    bankAccount: r.bankAccount || (manualReceipt(r) ? r.receivableSettlement.bankAccount : ""),
     status: r.status || "",
     reference: String(r.document || r.description || r.submissionId || id),
     differences: differences(record, r),
@@ -278,7 +305,7 @@ async function handleReconciliation({
     if ((await linkRef.get()).data())
       fail("Este boleto já está vinculado. Recarregue os detalhes.");
     const body = await queryProvider(record, env, fetchImpl),
-      decision = evaluate(record, row, body, at);
+      decision = evaluate(record, row, body, at, await manualEvidence(db, { get: r => r.get() }, input.transactionId, row));
     if (
       decision.state === "ready" &&
       env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED !== "true"
@@ -357,7 +384,7 @@ async function handleReconciliation({
       hash(identity(record)) !== hash(preview.identity)
     )
       fail("Dados alterados após a revisão. Confira novamente.");
-    const decision = evaluate(record, row, body, at);
+    const decision = evaluate(record, row, body, at, await manualEvidence(db, tx, preview.transactionId, row));
     if (
       hash(decision) !== hash(preview.decision) ||
       decision.state === "review"
@@ -404,6 +431,12 @@ async function apply(tx, db, rowRef, row, linkRef, link, decision, at, body) {
     boletoId: link.record.id,
     confirmedBy: link.uid,
     confirmedAt: link.confirmedAt,
+    ...(row.receivableSettlement && decision.state === "already-paid" ? {
+      receiptRequestId: row.receivableSettlement.requestId,
+      originalMethod: row.receivableSettlement.method,
+      confirmedMethod: "11-Boleto ITAU",
+      evidence: "individual-bank-confirmation",
+    } : {}),
   };
   let update = { boletoReconciliation: marker };
   if (decision.state === "ready") {
@@ -563,6 +596,8 @@ module.exports = {
   handleReconciliation,
   runReconciliations,
   evaluate,
+  manualEvidence,
+  manualReceipt,
   differences,
   apply,
   admin,

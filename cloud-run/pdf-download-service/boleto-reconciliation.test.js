@@ -406,3 +406,76 @@ test('RET settles only confirmed historical links, records provenance and fences
   else{assert.deepEqual(f.data.get('transactions/t').boletoSettlement.returnEvidence,args.provenance);assert.equal((await settleEvent(args)).state,'settled');assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoReconciliationSettlements/')).length,1);}
  }
 });
+
+function auditedFixture(method = '11-Boleto ITAU') {
+  const f = fixture();
+  const receipt = { uid: 'operator', requestId: 'receipt-1', origin: 'manual', date: paid.boleto.pagamento.data,
+    amountCents: 1000, remainingCents: 0, interestCents: 0, discountCents: 0, bankAccount: row.bankAccount, method };
+  const original = { ...row, bankAccount: '', status: 'Pago', pago: 'Pago', valueReceived: 10,
+    paymentDate: receipt.date, receivableSettlement: receipt, receivableReceipts: [receipt],
+    receivableBalance: { receivedCents: 1000, remainingCents: 0, interestCents: 0, discountCents: 0 } };
+  f.data.set('transactions/t', structuredClone(original));
+  const auditKey = 'receivableAudit/' + require('node:crypto').createHash('sha256').update(JSON.stringify([receipt.uid, receipt.requestId])).digest('hex');
+  f.data.set(auditKey, { action: 'receipt', uid: receipt.uid, transactionId: 't', after: structuredClone(original) });
+  f.setBody({ boleto: { ...paid.boleto, pagamento: { ...paid.boleto.pagamento, forma: 'BOLETO' } } });
+  return { f, original, auditKey };
+}
+test('audited manual boleto links preserve every payment field and original method, including Wix classification', async () => {
+  for (const method of ['11-Boleto ITAU', '12-Boleto Wix']) {
+    const { f, original } = auditedFixture(method);
+    const p = await f.call('reconcile-preview', { transactionId: 't' });
+    assert.equal(p.decision.state, 'already-paid');
+    await f.call('reconcile-confirm', { previewId: p.previewId });
+    const { boletoReconciliation, ...after } = f.data.get('transactions/t');
+    assert.deepEqual(after, original);
+    assert.equal(boletoReconciliation.originalMethod, method);
+    assert.equal(boletoReconciliation.confirmedMethod, '11-Boleto ITAU');
+    assert.equal([...f.data.keys()].filter(k => k.startsWith('boletoReconciliationSettlements/')).length, 0);
+  }
+});
+test('missing/tampered audit, Pix, partial payment and adjustment never qualify as already paid manual boleto', async () => {
+  for (const mode of ['missing', 'tampered', 'pix', 'partial', 'interest']) {
+    const { f, auditKey } = auditedFixture();
+    if (mode === 'missing') f.data.delete(auditKey);
+    if (mode === 'tampered') f.data.get(auditKey).after.valueReceived = 9;
+    if (mode === 'pix') f.data.get('transactions/t').receivableSettlement.method = '3- Pix -ITAU';
+    if (mode === 'partial') f.data.get('transactions/t').receivableBalance.remainingCents = 1;
+    if (mode === 'interest') f.data.get('transactions/t').receivableSettlement.interestCents = 1;
+    const p = await f.call('reconcile-preview', { transactionId: 't' });
+    assert.equal(p.decision.state, 'review', mode);
+  }
+});
+test('audit is reread inside confirmation transaction, preventing changed proof after preview', async () => {
+  const { f, auditKey, original } = auditedFixture();
+  const p = await f.call('reconcile-preview', { transactionId: 't' });
+  f.data.delete(auditKey);
+  await assert.rejects(() => f.call('reconcile-confirm', { previewId: p.previewId }));
+  assert.deepEqual(f.data.get('transactions/t'), original);
+});
+test('RET recognizes audited linked receipt without writing money; later reversal or missing proof stays review', async () => {
+  const { settleEvent } = require('./boleto-ret-files');
+  const { idFor } = require('./boleto-history');
+  for (const mode of ['valid', 'reversed', 'audit-missing']) {
+    const { f, auditKey } = auditedFixture();
+    const p = await f.call('reconcile-preview', { transactionId: 't' });
+    await f.call('reconcile-confirm', { previewId: p.previewId });
+    const boletoId = idFor(record.token), link = f.data.get('boletoReconciliations/' + record.id);
+    f.data.delete('boletoReconciliations/' + record.id);
+    link.record.id = boletoId;
+    const current = f.data.get('transactions/t');
+    current.boletoReconciliation.boletoId = boletoId;
+    link.baseline = require('./boleto-reconciliation').revision(current);
+    f.data.set('boletoReconciliations/' + boletoId, link);
+    if (mode === 'reversed') { current.status = 'Pendente'; current.valueReceived = 0; }
+    if (mode === 'audit-missing') f.data.delete(auditKey);
+    const before = structuredClone(current);
+    const jobRef = f.db.collection('boletoReturnJobs').doc('cnab-production');
+    f.data.set(jobRef.path, { lease: 'ret', leaseUntil: Date.now() + 60000 });
+    const outcome = await settleEvent({ db: f.db, cfg: config(env), env, fetchImpl: f.fetchImpl,
+      event: { token: record.token, number: '001', occurrence: { situacao: 'LIQUIDACAO', info: { situacao: 'LIQUIDACAO', valorPago: 10, dataDePagamento: '2026-10-09' } } },
+      provenance: { fileId: 'file', eventId: 'event' }, jobRef, lease: 'ret', at, dryRun: false });
+    assert.equal(outcome.state, mode === 'valid' ? 'settled' : 'review');
+    assert.deepEqual(f.data.get('transactions/t'), before);
+    assert.equal([...f.data.keys()].filter(k => k.startsWith('boletoReconciliationSettlements/')).length, 0);
+  }
+});

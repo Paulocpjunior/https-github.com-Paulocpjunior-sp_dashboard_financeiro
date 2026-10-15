@@ -76,6 +76,13 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
             return { state: 'review', reason: 'Emissão nativa vinculada ao lançamento; conferir antes de aplicar retorno histórico.' };
         if (row?.boletoSettlement?.boletoId === idFor(event.token))
             return row.status === 'Pago' && row.paymentDate === body.boleto.pagamento.data && cents(row.valueReceived) === cents(body.boleto.pagamento.valor) ? { state: 'settled', reason: 'Baixa existente preservada; nenhuma nova baixa.' } : { state: 'review', reason: 'Baixa existente diverge do retorno; conferir sem reaplicar.' };
+        if (link.state === 'already-paid' && row?.boletoReconciliation?.boletoId === idFor(event.token) && reconciliation.revision(row) === link.baseline) {
+            const audited = await reconciliation.manualEvidence(db, tx, link.transactionId, row);
+            const checked = reconciliation.evaluate(link.record, row, body, at, audited);
+            return checked.state === 'already-paid'
+                ? { state: 'settled', reason: 'Recebimento existente conferido com o RET; nenhuma nova baixa.' }
+                : { state: 'review', reason: checked.reason };
+        }
         if (link.state !== 'waiting' || !row || reconciliation.revision(row) !== link.baseline)
             return { state: 'review', reason: 'Vínculo ou lançamento alterado, ou recebimento manual existente. Conferir sem duplicar.' };
         const decision = reconciliation.evaluate(link.record, row, body, at);
