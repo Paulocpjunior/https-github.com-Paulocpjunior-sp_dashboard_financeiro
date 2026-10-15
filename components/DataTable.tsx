@@ -12,6 +12,7 @@ import { PossibleDuplicateScan, TransactionSortDirection, TransactionSortField }
 
 interface DataTableProps {
   readOnly?: boolean;
+  allowReadOnlyDelete?: boolean;
   onReceivable?: (id:string) => void;
   data: Transaction[];
   page: number;
@@ -40,6 +41,7 @@ interface DataTableProps {
 const DataTable: React.FC<DataTableProps> = ({ 
     data, 
     readOnly = false,
+    allowReadOnlyDelete = false,
     onReceivable,
     page, 
     totalPages, 
@@ -77,10 +79,11 @@ const DataTable: React.FC<DataTableProps> = ({
     }
   };
 
-  const canUseDelete = !readOnly && canDelete && Boolean(onDelete);
+  const canUseDelete = (!readOnly || allowReadOnlyDelete) && canDelete && Boolean(onDelete);
 
-  const renderDeleteButton = (id: string) => readOnly ? null : (
+  const renderDeleteButton = (id: string) => readOnly && !canUseDelete ? null : (
     <button
+      aria-label="Excluir lançamento"
       onClick={() => canUseDelete && onDelete?.(id)}
       disabled={!canUseDelete}
       className={`p-1 transition-colors rounded-md ${
@@ -88,7 +91,7 @@ const DataTable: React.FC<DataTableProps> = ({
           ? 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
           : 'text-slate-300 dark:text-slate-700 opacity-50 cursor-not-allowed'
       }`}
-      title={canUseDelete ? 'Excluir' : 'Apenas administradores podem excluir'}
+      title={canUseDelete ? 'Excluir' : 'Exclusão permitida apenas para Paulo'}
     >
       <Ban className="h-4 w-4" />
     </button>
@@ -310,7 +313,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">A Pagar</th>
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Pago</th>
-                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly ? 'Detalhes' : 'Ações'}</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly && !canUseDelete ? 'Detalhes' : 'Ações'}</th>
                   </>
                 )}
 
@@ -353,7 +356,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <th className="px-2 py-2 text-right font-medium text-green-600 dark:text-green-400 uppercase">Recebido</th>
                     <th className="px-2 py-2 text-right font-medium text-amber-600 dark:text-amber-400 uppercase">Saldo</th>
                     <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">Método</th>
-                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly ? 'Detalhes' : 'Ações'}</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly && !canUseDelete ? 'Detalhes' : 'Ações'}</th>
                   </>
                 )}
 
@@ -390,7 +393,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     <SortableHeader field="cpfCnpj" label="CPF/CNPJ" className="text-left" />
                     <th className="px-2 py-2 text-left font-medium text-slate-500 dark:text-slate-400 uppercase">Status</th>
                     <th className="px-2 py-2 text-right font-medium text-slate-500 dark:text-slate-400 uppercase">Valor</th>
-                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly ? 'Detalhes' : 'Ações'}</th>
+                    <th className="px-2 py-2 text-center font-medium text-slate-500 dark:text-slate-400 uppercase">{readOnly && !canUseDelete ? 'Detalhes' : 'Ações'}</th>
                   </>
                 )}
               </tr>
@@ -435,9 +438,13 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td 
                             className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline" 
                             title={row.description || row.client || '-'}
-                            onClick={() => !readOnly && onClientClick?.(row.client)}
                           >
-                            {row.description || row.client || '-'}
+                            {onClientClick && row.client ? <button type="button"
+                              className="min-h-[44px] max-w-full truncate text-left text-[var(--sp-accent)] hover:underline"
+                              title={row.client} aria-label={`Abrir perfil de ${row.client}`}
+                              onClick={() => onClientClick(row.client)}>
+                              {row.description || row.client || '-'}
+                            </button> : row.description || row.client || '-'}
                             {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
@@ -493,9 +500,13 @@ const DataTable: React.FC<DataTableProps> = ({
                           <td 
                             className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[160px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline" 
                             title={row.client || '-'}
-                            onClick={() => !readOnly && onClientClick?.(row.client)}
                           >
-                            {row.client || '-'}
+                            {onClientClick && row.client ? <button type="button"
+                              className="min-h-[44px] max-w-full truncate text-left text-[var(--sp-accent)] hover:underline"
+                              title={row.client} aria-label={`Abrir perfil de ${row.client}`}
+                              onClick={() => onClientClick(row.client)}>
+                              {row.client || '-'}
+                            </button> : row.client || '-'}
                             {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center text-xs font-bold text-blue-600 dark:text-blue-400">
@@ -561,9 +572,13 @@ const DataTable: React.FC<DataTableProps> = ({
                           </td>
                           <td 
                             className="px-2 py-2 text-slate-900 dark:text-slate-100 font-medium truncate max-w-[180px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
-                            onClick={() => !readOnly && onClientClick?.(row.client)}
                           >
-                            {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                            {onClientClick && row.client ? <button type="button"
+                              className="min-h-[44px] max-w-full truncate text-left text-[var(--sp-accent)] hover:underline"
+                              title={row.client} aria-label={`Abrir perfil de ${row.client}`}
+                              onClick={() => onClientClick(row.client)}>
+                              {isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
+                            </button> : isRowSaida ? (row.description || row.client || '-') : (row.client || '-')}
                             {renderDuplicateBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">

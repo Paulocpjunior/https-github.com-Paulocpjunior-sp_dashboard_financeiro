@@ -126,6 +126,26 @@ try {
   assert.ok(!renderToStaticMarkup(React.createElement(DataTable,{...receiptProps,readOnly:true})).includes('Registrar recebimento'));
   assert.ok(!renderToStaticMarkup(React.createElement(DataTable,{...receiptProps,onReceivable:undefined})).includes('Registrar recebimento'));
   assert.ok(renderToStaticMarkup(React.createElement(DataTable,{...receiptProps,data:[{...receiptProps.data[0],source:'wix'}]})).includes('Via Wix'));
+  const {isMasterAccount, MASTER_USER_ID}=await server.ssrLoadModule('/utils/masterAccount.ts');
+  for (const user of [
+    {id:MASTER_USER_ID,role:'admin',active:true},
+    {id:'other-admin',role:'admin',active:true},
+    {id:MASTER_USER_ID,role:'operacional',active:true},
+    {id:MASTER_USER_ID,role:'admin',active:false},
+  ]) {
+    const master=isMasterAccount(user);
+    const html=renderToStaticMarkup(React.createElement(DataTable,{
+      ...receiptProps,readOnly:true,canDelete:master,allowReadOnlyDelete:master,
+      onDelete:master?()=>{}:undefined,onClientClick(){},
+    }));
+    assert.equal(html.includes('aria-label="Excluir lançamento"'),master,'só o titular ativo pode excluir no painel');
+    assert.ok(html.includes('aria-label="Abrir perfil de Cliente teste"'),'perfil acessível também no painel de consulta');
+    assert.ok(!html.includes('Registrar recebimento'),'liberação de exclusão não libera demais mutações');
+  }
+  const denied=renderToStaticMarkup(React.createElement(DataTable,{
+    ...receiptProps,readOnly:true,allowReadOnlyDelete:true,canDelete:false,onDelete(){},
+  }));
+  assert.ok(!denied.includes('aria-label="Excluir lançamento"'),'exceção visual não substitui permissão');
   console.log('OK: ordenação global e sinalização conservadora de duplicidades validadas.');
 } finally {
   await server.close();

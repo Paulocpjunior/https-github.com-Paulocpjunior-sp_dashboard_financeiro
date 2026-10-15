@@ -1081,9 +1081,10 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 totalPages={totalPages}
                 onPageChange={setPage}
                 readOnly={!entriesOnly}
-                canDelete={entriesOnly && isMasterAccount(currentUser)}
+                canDelete={isMasterAccount(currentUser)}
+                allowReadOnlyDelete={isMasterAccount(currentUser)}
                 canExportBoletoCloud={entriesOnly && canExportBoletoCloud}
-                onDelete={entriesOnly ? handleDeleteTransaction : undefined}
+                onDelete={isMasterAccount(currentUser) ? handleDeleteTransaction : undefined}
                 onReceivable={entriesOnly && canManageReceivable ? setReceivableId : undefined}
                 onPayable={entriesOnly && canManagePayable ? (id) => setPayableModal({id}) : undefined}
                 clientFilterValue={filters.client}
@@ -1094,7 +1095,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 isLoading={isLoading}
                 selectedType={filters.type}
                 isReceivablesMode={isContasAReceber}
-                onClientClick={entriesOnly ? (name) => setSelectedClient(name) : undefined}
+                onClientClick={(name) => setSelectedClient(name)}
                 sortField={sortField}
                 sortDirection={sortDirection}
                 onSortChange={handleSortChange}
@@ -1103,7 +1104,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
            </div>
         </div>
 
-        {entriesOnly && selectedClient && (
+        {selectedClient && (
           <ClientProfile 
             clientName={selectedClient} 
             transactions={allFilteredData} 
