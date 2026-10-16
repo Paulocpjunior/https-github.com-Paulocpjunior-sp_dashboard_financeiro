@@ -479,3 +479,38 @@ test('RET recognizes audited linked receipt without writing money; later reversa
     assert.equal([...f.data.keys()].filter(k => k.startsWith('boletoReconciliationSettlements/')).length, 0);
   }
 });
+function retFixture() {
+ const f=fixture(), id='e'.repeat(64);
+ f.data.set('transactions/t',{...row,bankAccount:''});
+ f.data.set('boletoReturnEvents/'+id,{boletoId:record.id,fileId:'file',number:record.number,state:'review',occurrenceCode:'06',occurrence:{situacao:'LIQUIDACAO',info:{situacao:'LIQUIDACAO',dataDePagamento:'2026-10-09',valorPago:10}}});
+ f.data.set('boletoReturnFiles/file',{accountFingerprint:config(env).accountFingerprint});
+ return {...f,eventId:id};
+}
+test('confirmed RET establishes an empty account, retains provenance and settles exactly once',async()=>{
+ const f=retFixture();
+ const p=await f.call('reconcile-preview',{transactionId:'t',retEventId:f.eventId});
+ assert.equal(p.decision.state,'ready');assert.equal(f.data.get('transactions/t').status,'Pendente');
+ await f.call('reconcile-confirm',{previewId:p.previewId});
+ assert.equal(f.data.get('transactions/t').bankAccount,row.bankAccount);
+ assert.equal(f.data.get('transactions/t').boletoSettlement.returnEvidence.eventId,f.eventId);
+ assert.equal(f.data.get('boletoReturnEvents/'+f.eventId).state,'settled');
+ await f.call('reconcile-confirm',{previewId:p.previewId});
+ assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoReconciliationSettlements/')).length,1);
+});
+test('RET cannot override another account, missing evidence, wrong title or changed proof',async()=>{
+ const f=retFixture();f.data.set('transactions/t',{...row,bankAccount:'Outra conta'});
+ const bad=await f.call('reconcile-preview',{transactionId:'t',retEventId:f.eventId});assert.equal(bad.decision.state,'review');
+ await assert.rejects(f.call('reconcile-preview',{transactionId:'t',retEventId:'d'.repeat(64)}));
+ const g=retFixture();const p=await g.call('reconcile-preview',{transactionId:'t',retEventId:g.eventId});
+ g.data.get('boletoReturnEvents/'+g.eventId).occurrence.info.valorPago=12;
+ await assert.rejects(g.call('reconcile-confirm',{previewId:p.previewId}));assert.equal(g.data.get('transactions/t').status,'Pendente');
+ const h=retFixture();h.data.get('boletoReturnFiles/file').accountFingerprint='other';
+ await assert.rejects(h.call('reconcile-preview',{transactionId:'t',retEventId:h.eventId}));
+});
+test('RET paid-account link preserves money and records no second settlement',async()=>{
+ const f=retFixture();f.data.set('transactions/t',{...row,status:'Pago',valueReceived:10,paymentDate:'2026-10-09'});
+ const p=await f.call('reconcile-preview',{transactionId:'t',retEventId:f.eventId});assert.equal(p.decision.state,'already-paid');
+ await f.call('reconcile-confirm',{previewId:p.previewId});
+ assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoReconciliationSettlements/')).length,0);
+ assert.equal(f.data.get('transactions/t').valueReceived,10);
+});

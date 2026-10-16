@@ -156,6 +156,15 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
           attention:retPending.docs.slice(0,30).map(d=>{const r=d.data();return {number:r.number||'Sem número',reason:r.reason,checkedAt:r.checkedAt};})}:null;
         await recheck();sendJson(req,res,200,{...result,automation,historyAutomation,returnsAutomation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
       }
+      if(req.method==='GET' && url.pathname==='/api/boleto-cloud/history/ret-review') {
+        if(!require('./boleto-reconciliation').admin((await profile.get()).data()))throw new HistoryError('Somente administradores podem conferir vínculos RET.',403);
+        const cursor=url.searchParams.get('cursor')||'';
+        if(cursor && !/^[a-f0-9]{64}$/.test(cursor))throw new HistoryError('Página inválida.',400);
+        const result=await require('./boleto-ret-review').reviewQueue(db,data.rows,cursor);
+        await recheck();
+        if(!require('./boleto-reconciliation').admin((await profile.get()).data()))throw new HistoryError('Acesso revogado.',403);
+        sendJson(req,res,200,result);return true;
+      }
       const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf|invite|invite-email|reconcile|reconcile-preview|reconcile-confirm)$/);
       if(!match || (['sync','reconcile-preview','reconcile-confirm'].includes(match[2])?req.method!=='POST':req.method!=='GET'))throw new HistoryError('Rota não encontrada.',404);
       const record=data.rows.find(r=>r.id===match[1]);

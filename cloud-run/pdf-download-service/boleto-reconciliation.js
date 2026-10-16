@@ -57,7 +57,7 @@ async function manualEvidence(db, reader, transactionId, row) {
       "receivableReversals", "status", "pago", "paymentDate", "dataPagamento", "valueReceived", "valorPago"]
       .every(k => hash(audit.after?.[k] ?? null) === hash(row[k] ?? null));
 }
-function differences(record, row) {
+function differences(record, row, confirmedRet = false) {
   const errors = [];
   if (
     !row ||
@@ -77,15 +77,15 @@ function differences(record, row) {
   if (cents(amount(row)) !== record.amountCents || record.amountCents <= 0)
     errors.push("Valor nominal divergente.");
   if (row.dueDate !== record.dueDate) errors.push("Vencimento divergente.");
-  if (record.bank !== "341" || (row.bankAccount !== catalog.banks[0] && (row.bankAccount || !manualReceipt(row))))
+  if (record.bank !== "341" || (row.bankAccount !== catalog.banks[0] && (row.bankAccount || (!manualReceipt(row) && !confirmedRet))))
     errors.push("Conta bancária fora da conta Itaú homologada.");
   if ((row.receivableSettlement || row.receivableBalance) && !manualReceipt(row)) errors.push("Recebimento manual existente: conferir sem duplicar a baixa.");
   if (row.boletoSettlement || row.source === "native-finance")
     errors.push("Lançamento com vínculo nativo ou baixa bancária existente.");
   return errors;
 }
-function evaluate(record, row, body, at, auditedManual = false) {
-  const errors = differences(record, row),
+function evaluate(record, row, body, at, auditedManual = false, confirmedRet = false) {
+  const errors = differences(record, row, confirmedRet),
     b = body?.boleto;
   if (
     !b ||
@@ -215,6 +215,16 @@ function publicRow(id, r, record) {
     differences: differences(record, r),
   };
 }
+async function retEvidence(db, reader, eventId, record, body, env) {
+  if (typeof eventId !== 'string' || !/^[a-f0-9]{64}$/.test(eventId)) fail('Ocorrência RET inválida.',400);
+  const event=(await reader.get(db.collection('boletoReturnEvents').doc(eventId))).data();
+  if (!event || event.boletoId!==record.id || !['review','settled'].includes(event.state)) fail('Ocorrência RET indisponível ou de outro boleto.');
+  const file=(await reader.get(db.collection('boletoReturnFiles').doc(event.fileId))).data();
+  if(file?.accountFingerprint!==config(env).accountFingerprint) fail('Arquivo RET fora da conta homologada.');
+  if(!require('./boleto-ret-files').paymentMatches({token:record.token,number:event.number,occurrence:event.occurrence},body))
+    fail('Liquidação RET diverge da confirmação individual. Confira antes de baixar.');
+  return {provider:'boleto-cloud',fileId:event.fileId,eventId,occurrenceCode:event.occurrenceCode || null,evidenceHash:hash(event.occurrence)};
+}
 async function handleReconciliation({
   req,
   res,
@@ -304,13 +314,15 @@ async function handleReconciliation({
       fail("Este lançamento já está vinculado a um boleto.");
     if ((await linkRef.get()).data())
       fail("Este boleto já está vinculado. Recarregue os detalhes.");
-    const body = await queryProvider(record, env, fetchImpl),
-      decision = evaluate(record, row, body, at, await manualEvidence(db, { get: r => r.get() }, input.transactionId, row));
+    const body = await queryProvider(record, env, fetchImpl);
+    const evidence = input.retEventId ? await retEvidence(db,{get:r=>r.get()},input.retEventId,record,body,env) : null;
+    const decision = evaluate(record, row, body, at, await manualEvidence(db, { get: r => r.get() }, input.transactionId, row), !!evidence);
     if (
       decision.state === "ready" &&
       env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED !== "true"
     )
       fail("Baixa bancária desativada na configuração.", 503);
+    if(evidence) decision.returnEvidence = evidence;
     const previewId = randomUUID();
     if (!admin((await profile.get()).data())) fail("Acesso revogado.", 403);
     await db
@@ -384,7 +396,9 @@ async function handleReconciliation({
       hash(identity(record)) !== hash(preview.identity)
     )
       fail("Dados alterados após a revisão. Confira novamente.");
-    const decision = evaluate(record, row, body, at, await manualEvidence(db, tx, preview.transactionId, row));
+    const evidence = preview.decision.returnEvidence ? await retEvidence(db,tx,preview.decision.returnEvidence.eventId,record,body,env) : null;
+    const decision = evaluate(record, row, body, at, await manualEvidence(db, tx, preview.transactionId, row), !!evidence);
+    if(evidence) decision.returnEvidence = evidence;
     if (
       hash(decision) !== hash(preview.decision) ||
       decision.state === "review"
@@ -403,6 +417,9 @@ async function handleReconciliation({
       baseline: revision(row),
     };
     await apply(tx, db, rowRef, row, linkRef, link, decision, at, body);
+    if (evidence && ['ready','already-paid'].includes(decision.state)) tx.update(db.collection('boletoReturnEvents').doc(evidence.eventId), {
+      state:'settled', checkedAt:at, reason:decision.state==='ready'?'Baixa individual confirmada na conferência RET.':'Recebimento existente conferido com o RET; nenhuma nova baixa.', transactionId:preview.transactionId,
+    });
     tx.update(previewRef, { usedAt: at });
     tx.create(db.collection("boletoReconciliationAudit").doc(input.previewId), {
       action: "confirm-link",
@@ -431,6 +448,7 @@ async function apply(tx, db, rowRef, row, linkRef, link, decision, at, body) {
     boletoId: link.record.id,
     confirmedBy: link.uid,
     confirmedAt: link.confirmedAt,
+    ...(decision.returnEvidence ? {returnEvidence:decision.returnEvidence} : {}),
     ...(row.receivableSettlement && decision.state === "already-paid" ? {
       receiptRequestId: row.receivableSettlement.requestId,
       originalMethod: row.receivableSettlement.method,
@@ -443,6 +461,7 @@ async function apply(tx, db, rowRef, row, linkRef, link, decision, at, body) {
     const payment = decision.payment;
     update = {
       ...update,
+      ...(decision.returnEvidence && !row.bankAccount ? {bankAccount:catalog.banks[0]} : {}),
       status: "Pago",
       pago: "Pago",
       paymentDate: payment.date,
@@ -599,6 +618,7 @@ module.exports = {
   manualEvidence,
   manualReceipt,
   differences,
+  retEvidence,
   apply,
   admin,
   revision,

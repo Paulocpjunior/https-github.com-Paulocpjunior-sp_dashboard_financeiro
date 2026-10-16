@@ -34,9 +34,9 @@ const date = (s: string) => (s ? s.split("-").reverse().join("/") : "—");
 const button =
   "rounded-lg bg-blue-700 px-4 py-2 text-white font-semibold disabled:opacity-40";
 export default function BoletoReconciliation({
-  boletoId,
+  boletoId, retEventId, proposedTransactionId,
 }: {
-  boletoId: string;
+  boletoId: string; retEventId?: string; proposedTransactionId?: string;
 }) {
   const [result, setResult] = useState<Result | null>(null),
     [preview, setPreview] = useState<Preview | null>(null),
@@ -84,7 +84,7 @@ export default function BoletoReconciliation({
     setError("");
     setPreview(null);
     try {
-      setPreview(await request("reconcile-preview", { transactionId: id }));
+      setPreview(await request("reconcile-preview", { transactionId: id, ...(retEventId ? {retEventId} : {}) }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível revisar.");
     } finally {
@@ -123,6 +123,7 @@ export default function BoletoReconciliation({
         API. A confirmação autoriza a baixa integral quando o banco informar o
         pagamento. Nenhuma receita nova será criada.
       </p>
+      {retEventId && proposedTransactionId && !preview && !confirmed && <button className={button} disabled={busy} onClick={()=>review(proposedTransactionId)}>Conferir lançamento selecionado com o RET</button>}
       {busy && <p role="status">Conferindo dados…</p>}
       {error && (
         <p role="alert" className="text-red-600 dark:text-red-300">
