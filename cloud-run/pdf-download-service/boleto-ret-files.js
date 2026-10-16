@@ -36,6 +36,30 @@ function eventsFrom(body, token) {
     }
     return { events, protocol: a.protocolo, createdAt: a.meta.criado || null };
 }
+// Only credit-date enrichment is mutable. Every other occurrence field is evidence.
+function eventCore(event) {
+    const occurrence = structuredClone(event.occurrence);
+    if (occurrence?.info && typeof occurrence.info === 'object')
+        delete occurrence.info.dataDeCredito;
+    return hash(canonical({ number: event.number, boletoId: event.boletoId ?? (event.token ? idFor(event.token) : null), occurrence }));
+}
+function manifestFor(events) {
+    const manifest = {};
+    for (const event of events) {
+        const key = eventCore(event), credit = event.occurrence?.info?.dataDeCredito || null;
+        if (Object.hasOwn(manifest, key)) throw Error('RETURN_AMBIGUOUS_OCCURRENCE');
+        if (credit && !validDay(credit)) throw Error('RETURN_CREDIT_DATE_INVALID');
+        manifest[key] = credit;
+    }
+    return manifest;
+}
+function validateRevision(previous, current) {
+    for (const [key, credit] of Object.entries(previous)) {
+        if (!Object.hasOwn(current, key) || (credit && current[key] !== credit))
+            throw Error('RETURN_EVIDENCE_CONFLICT');
+    }
+}
+const errorCode = e => /^RETURN_[A-Z_]+$/.test(e?.message || '') ? e.message : 'RETURN_PROCESSING_FAILED';
 function paymentMatches(event, body) {
     const info = event.occurrence?.info, p = body?.boleto?.pagamento;
     return event.occurrence?.situacao === 'LIQUIDACAO' && info?.situacao === 'LIQUIDACAO' &&
@@ -140,15 +164,29 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                         break;
                     }
                     const fileId = hash([cfg.accountFingerprint, token]), ref = db.collection('boletoReturnFiles').doc(fileId), old = (await ref.get()).data() || {};
-                    if (old.state === 'complete')
-                        continue;
                     const parsed = eventsFrom(await get(cfg, `arquivos/cnab/retornos/${encodeURIComponent(token)}`, fetchImpl), token);
                     const digest = hash(canonical(parsed.events));
+                    const stored = (await db.collection('boletoReturnEvents').where('fileId', '==', fileId).get()).docs;
+                    const priorEvents = stored.map(doc => ({ ...doc.data(), storedId: doc.id }));
+                    const manifest = manifestFor(parsed.events);
+                    // Legacy files have no manifest. Require a complete persisted evidence set before
+                    // accepting a changed response; never guess the missing baseline.
+                    if (old.digest && !old.manifest && old.digest !== digest && priorEvents.length !== old.eventCount)
+                        throw Error('RETURN_BASELINE_INCOMPLETE');
+                    const previousManifest = old.manifest || manifestFor(priorEvents);
+                    try {
+                        validateRevision(previousManifest, manifest);
+                    } catch (e) {
+                        await write(ref, { state: 'pending', lastError: errorCode(e), errorAt: new Date().toISOString() });
+                        throw e;
+                    }
+                    const previousByCore = new Map(priorEvents.map(event => [eventCore(event), event]));
                     if (old.digest && old.digest !== digest)
-                        throw Error('RETURN_FILE_CHANGED');
+                        await write(db.collection('boletoReturnFileVersions').doc(hash([fileId, old.digest])), { fileId, digest: old.digest, manifest: previousManifest, eventCount: old.eventCount, capturedAt: old.checkedAt || null });
+                    await write(db.collection('boletoReturnFileVersions').doc(hash([fileId, digest])), { fileId, digest, manifest, eventCount: parsed.events.length });
                     counts.files++;
-                    await write(ref, { provider: 'boleto-cloud', accountFingerprint: cfg.accountFingerprint, date, digest, protocol: parsed.protocol, createdAt: parsed.createdAt, eventCount: parsed.events.length, state: 'pending' });
-                    let done = true, eventCursor = Number.isInteger(old.cursor) && old.cursor >= 0 && old.cursor < parsed.events.length ? old.cursor : 0;
+                    await write(ref, { provider: 'boleto-cloud', accountFingerprint: cfg.accountFingerprint, date, digest, manifest, lastError: null, protocol: parsed.protocol, createdAt: parsed.createdAt, eventCount: parsed.events.length, state: 'pending' });
+                    let done = true, eventCursor = old.digest === digest && Number.isInteger(old.cursor) && old.cursor >= 0 && old.cursor < parsed.events.length ? old.cursor : 0;
                     for (let index = eventCursor; index < parsed.events.length; index++) {
                         const event = parsed.events[index];
                         if (Date.now() + 22000 >= deadline) {
@@ -156,12 +194,14 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                             more = true;
                             break;
                         }
-                        const eventRef = db.collection('boletoReturnEvents').doc(hash([fileId, event.id])), previous = (await eventRef.get()).data();
+                        const known = previousByCore.get(eventCore(event));
+                        const eventId = known?.storedId || hash([fileId, eventCore(event)]);
+                        const eventRef = db.collection('boletoReturnEvents').doc(eventId), previous = known;
                         if (previous && ['settled', 'informational'].includes(previous.state)) {
                             eventCursor = index + 1;
                             continue;
                         }
-                        const at = new Date().toISOString(), provenance = { provider: 'boleto-cloud', fileId, eventId: hash([fileId, event.id]), occurrenceCode: event.occurrence.codigo || null };
+                        const at = new Date().toISOString(), provenance = { provider: 'boleto-cloud', fileId, eventId, fileDigest: digest, occurrenceCode: event.occurrence.codigo || null };
                         try {
                             const result = await settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, jobRef, at, dryRun });
                             counts.events++;
@@ -175,7 +215,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                                 throw e;
                             counts.errors++;
                             done = false;
-                            await write(eventRef, { ...provenance, number: event.number, state: 'error', reason: 'Consulta não concluída; nova tentativa nos próximos ciclos.', checkedAt: at });
+                            await write(eventRef, { ...provenance, number: event.number, state: 'error', boletoId: event.token ? idFor(event.token) : null, occurrence: event.occurrence, reason: 'Consulta não concluída; nova tentativa nos próximos ciclos.', errorCode: errorCode(e), checkedAt: at });
                         }
                         eventCursor = index + 1;
                         await write(ref, { cursor: eventCursor });
@@ -192,6 +232,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                 if (e.message === 'LEASE_LOST')
                     throw e;
                 counts.errors++;
+                counts.lastError = errorCode(e);
                 dateDone = false;
             }
             if (date === backfill)
@@ -205,4 +246,4 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
         throw Error('RETURN_FILES_JOB_FAILED');
     }
 }
-module.exports = { runRetFiles, filesFrom, eventsFrom, paymentMatches, settleEvent };
+module.exports = { runRetFiles, filesFrom, eventsFrom, paymentMatches, settleEvent, eventCore, manifestFor, validateRevision };
