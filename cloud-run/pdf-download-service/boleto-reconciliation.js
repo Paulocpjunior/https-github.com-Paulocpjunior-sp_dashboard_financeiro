@@ -21,6 +21,11 @@ const admin = (p) =>
   p?.active === true &&
   p.role === "admin" &&
   !["blocked", "deleted"].includes(p.status);
+const canReconcile = (p) =>
+  p?.active === true &&
+  !["blocked", "deleted"].includes(p.status) &&
+  (admin(p) || ["billing.boleto-cloud.history.read", "receivables.read", "receivables.settle"]
+    .every(permission => p.financialPermissions?.includes(permission)));
 const fail = (message, status = 409) => {
   throw Object.assign(new Error(message), { status, reconciliation: true });
 };
@@ -238,8 +243,8 @@ async function handleReconciliation({
 }) {
   const profile = db.collection("users").doc(uid),
     linkRef = db.collection("boletoReconciliations").doc(record.id);
-  if (!admin((await profile.get()).data()))
-    fail("Somente administradores podem conciliar boletos antigos.", 403);
+  if (!canReconcile((await profile.get()).data()))
+    fail("Sem permissão para conferir e baixar recebimentos de boletos.", 403);
   if (record.transactionId)
     fail("Boleto já possui vínculo de emissão. Utilize a consulta existente.");
   if (req.method === "GET" && operation === "reconcile") {
@@ -261,7 +266,7 @@ async function handleReconciliation({
       (a, b) =>
         a.differences.length - b.differences.length || a.id.localeCompare(b.id),
     );
-    if (!admin((await profile.get()).data())) fail("Acesso revogado.", 403);
+    if (!canReconcile((await profile.get()).data())) fail("Acesso revogado.", 403);
     sendJson(req, res, 200, {
       rows,
       truncated: docs.docs.length > 200,
@@ -324,7 +329,7 @@ async function handleReconciliation({
       fail("Baixa bancária desativada na configuração.", 503);
     if(evidence) decision.returnEvidence = evidence;
     const previewId = randomUUID();
-    if (!admin((await profile.get()).data())) fail("Acesso revogado.", 403);
+    if (!canReconcile((await profile.get()).data())) fail("Acesso revogado.", 403);
     await db
       .collection("boletoReconciliationPreviews")
       .doc(previewId)
@@ -384,7 +389,7 @@ async function handleReconciliation({
     ).data();
     if (nativeIssue)
       fail("Emissão nativa encontrada para o lançamento. Revise o vínculo.");
-    if (!admin(p)) fail("Acesso revogado.", 403);
+    if (!canReconcile(p)) fail("Acesso revogado.", 403);
     if (existing?.previewId === input.previewId && currentPreview?.usedAt)
       return { state: existing.state, reason: existing.reason };
     if (existing || row?.boletoReconciliation || currentPreview?.usedAt)
@@ -621,5 +626,6 @@ module.exports = {
   retEvidence,
   apply,
   admin,
+  canReconcile,
   revision,
 };

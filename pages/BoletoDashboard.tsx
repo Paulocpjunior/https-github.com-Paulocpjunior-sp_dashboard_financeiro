@@ -42,7 +42,7 @@ export default function BoletoDashboard() {
       stop();epoch.current++;setResult(null);setSelected(null);setAccess({ready:!user,allowed:false,canReconcile:false});
       if(user)stop=onSnapshot(doc(db,'users',user.uid),snap=>{
         epoch.current++;setResult(null);setSelected(null);
-        const p=snap.data();setAccess({ready:true,canReconcile:p?.active===true && p?.role==='admin' && !['blocked','deleted'].includes(p?.status),allowed:p?.active===true && !['blocked','deleted'].includes(p?.status) && (p?.role==='admin'||p?.financialPermissions?.includes('billing.boleto-cloud.history.read'))});
+        const p=snap.data();setAccess({ready:true,canReconcile:p?.active===true && !['blocked','deleted'].includes(p?.status) && (p?.role==='admin'||['billing.boleto-cloud.history.read','receivables.read','receivables.settle'].every(permission=>p?.financialPermissions?.includes(permission))),allowed:p?.active===true && !['blocked','deleted'].includes(p?.status) && (p?.role==='admin'||p?.financialPermissions?.includes('billing.boleto-cloud.history.read'))});
       },()=>{epoch.current++;setResult(null);setSelected(null);setAccess({ready:true,allowed:false,canReconcile:false});});
     });
     return()=>{epoch.current++;stop();unsub();};

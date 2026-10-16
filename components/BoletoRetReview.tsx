@@ -13,6 +13,7 @@ export default function BoletoRetReview(){
  return <section id="conferencia-ret" className="sp-tokens rounded-xl border p-5 space-y-4" aria-label="Conferência individual do RET" style={{borderColor:'var(--sp-border)',background:'var(--sp-surface)'}}>
  <h2 className="text-xl font-semibold">Conferência individual do RET</h2>
  <p>Compare cada liquidação com Contas a Receber. Sugestões não registram baixas. A confirmação consulta novamente o boleto e o lançamento.</p>
+ <p className="text-sm">Quando houver divergência ou vínculo existente, Revisar vínculo fica bloqueado para todos os usuários. Confira o motivo indicado na linha antes de solicitar a correção; não registre outra baixa para contornar o bloqueio.</p>
  <button className={button} disabled={busy} onClick={()=>{setCursor('');setRevision(x=>x+1);}}>Atualizar pendências</button>
  {busy&&<p role="status">Cruzando os recebimentos…</p>}{error&&<p role="alert">{error}</p>}
  {data?.rows.map(r=><article key={r.eventId} className="border rounded-lg p-4 space-y-3" style={{borderColor:'var(--sp-border)'}}>

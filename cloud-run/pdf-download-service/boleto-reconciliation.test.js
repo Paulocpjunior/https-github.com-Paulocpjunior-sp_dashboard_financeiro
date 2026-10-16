@@ -514,3 +514,36 @@ test('RET paid-account link preserves money and records no second settlement',as
  assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoReconciliationSettlements/')).length,0);
  assert.equal(f.data.get('transactions/t').valueReceived,10);
 });
+
+test('collaborator with receipt permissions can review and confirm without admin role', async () => {
+  const f = fixture();
+  f.data.set('users/u', {active:true,role:'operacional',financialPermissions:['billing.boleto-cloud.history.read','receivables.read','receivables.settle']});
+  await f.call('reconcile');
+  const p = await f.call('reconcile-preview', {transactionId:'t'});
+  await f.call('reconcile-confirm', {previewId:p.previewId});
+  assert.equal(f.data.get('transactions/t').status, 'Pago');
+});
+test('missing permissions and blocked collaborators cannot review or confirm', async () => {
+  const permissions = ['billing.boleto-cloud.history.read','receivables.read','receivables.settle'];
+  for (const patch of [...permissions.map(missing=>({financialPermissions:permissions.filter(p=>p!==missing)})), {active:false}, {status:'blocked'}, {status:'deleted'}]) {
+    const f = fixture();
+    const p = await f.call('reconcile-preview', {transactionId:'t'});
+    f.data.set('users/u', {active:true,role:'operacional',financialPermissions:permissions,...patch});
+    for (const [operation,input] of [['reconcile',undefined],['reconcile-preview',{transactionId:'t'}],['reconcile-confirm',{previewId:p.previewId}]]) {
+      await assert.rejects(()=>f.call(operation,input), e=>e.status===403);
+    }
+    assert.equal(f.data.get('transactions/t').status, 'Pendente');
+  }
+});
+test('collaborator access preserves due-date and existing-bank-settlement blockers', async () => {
+  for (const patch of [{dueDate:'2026-10-10'}, {boletoSettlement:{boletoId:'existing'}}]) {
+    const f = fixture();
+    f.data.set('users/u', {active:true,role:'operacional',financialPermissions:['billing.boleto-cloud.history.read','receivables.read','receivables.settle']});
+    Object.assign(f.data.get('transactions/t'),patch);
+    const before=structuredClone(f.data.get('transactions/t'));
+    const preview=await f.call('reconcile-preview',{transactionId:'t'});
+    assert.equal(preview.decision.state,'review');
+    await assert.rejects(()=>f.call('reconcile-confirm',{previewId:preview.previewId}));
+    assert.deepEqual(f.data.get('transactions/t'),before);
+  }
+});

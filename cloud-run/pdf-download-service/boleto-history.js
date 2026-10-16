@@ -157,12 +157,12 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
         await recheck();sendJson(req,res,200,{...result,automation,historyAutomation,returnsAutomation,source:{exportedAt:data.meta.exportedAt,count:data.meta.totals.count,snapshot:data.snapshot}});return true;
       }
       if(req.method==='GET' && url.pathname==='/api/boleto-cloud/history/ret-review') {
-        if(!require('./boleto-reconciliation').admin((await profile.get()).data()))throw new HistoryError('Somente administradores podem conferir vínculos RET.',403);
+        if(!require('./boleto-reconciliation').canReconcile((await profile.get()).data()))throw new HistoryError('Sem permissão para conferir e baixar recebimentos do RET.',403);
         const cursor=url.searchParams.get('cursor')||'';
         if(cursor && !/^[a-f0-9]{64}$/.test(cursor))throw new HistoryError('Página inválida.',400);
         const result=await require('./boleto-ret-review').reviewQueue(db,data.rows,cursor);
         await recheck();
-        if(!require('./boleto-reconciliation').admin((await profile.get()).data()))throw new HistoryError('Acesso revogado.',403);
+        if(!require('./boleto-reconciliation').canReconcile((await profile.get()).data()))throw new HistoryError('Acesso revogado.',403);
         sendJson(req,res,200,result);return true;
       }
       const match=url.pathname.match(/^\/api\/boleto-cloud\/history\/([a-f0-9]{64})\/(sync|pdf|invite|invite-email|reconcile|reconcile-preview|reconcile-confirm)$/);
@@ -170,7 +170,7 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
       const record=data.rows.find(r=>r.id===match[1]);
       if(!record)throw new HistoryError('Boleto não encontrado no histórico.',404);
       if(match[2].startsWith('reconcile')) {
-        if(!require('./boleto-reconciliation').admin((await profile.get()).data()))throw new HistoryError('Somente administradores podem conciliar boletos antigos.',403);
+        if(!require('./boleto-reconciliation').canReconcile((await profile.get()).data()))throw new HistoryError('Sem permissão para conferir e baixar recebimentos de boletos.',403);
         const cfg=require('./boleto-cloud').config(env);
         const account=data.meta.issuanceAccounts?.[cfg.accountFingerprint];
         if(!account || account.beneficiaryDocument!==record.beneficiaryDocument || account.bank!==record.bank)
