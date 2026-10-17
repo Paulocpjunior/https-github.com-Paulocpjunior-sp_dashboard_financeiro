@@ -110,3 +110,28 @@ assert.equal(report.counts.critical, 0, 'test data should not produce critical f
 assert.equal(report.counts.high, 4, 'test data should produce exactly four high findings');
 
 console.log('Finance integrity audit tests passed');
+
+const {hasCoherentPartialPayment} = await import('./audit-partial-payments.mjs');
+const partial = {movement:'Entrada',valorOriginal:100,paymentDate:'2026-10-13',receivableBalance:{version:1,receivedCents:4000,interestCents:0,discountCents:0,remainingCents:6000},receivableSettlement:{requestId:'receipt-1',date:'2026-10-13',remainingCents:6000}};
+assert.equal(hasCoherentPartialPayment(partial),true);
+assert.equal(hasCoherentPartialPayment({...partial,receivableBalance:{...partial.receivableBalance,remainingCents:5000}}),false);
+assert.equal(hasCoherentPartialPayment({...partial,receivableSettlement:null}),false);
+const payable = {movement:'Saída',valorOriginal:100,paymentDate:'2026-10-13',payableBalance:{version:1,paidCents:4000,interestCents:0,discountCents:0,fineCents:0,remainingCents:6000},payableSettlement:{requestId:'payment-1',date:'2026-10-13',remainingCents:6000}};
+assert.equal(hasCoherentPartialPayment(payable),true);
+// Exercise both CLI auditors: valid partials and original Wix totals are not missing payments.
+const regressionBackup = {...backup,collections:[{name:'transactions',count:4,documents:[
+  doc('partial-receivable',{...partial,client:'Partial receivable'}),
+  doc('partial-payable',{...payable,client:'Partial payable',type:'Saída de Caixa / Contas a Pagar',valuePaid:100}),
+  doc('wix-original',{client:'Wix original',source:'wix',totalCobranca:0,valorOriginal:600}),
+  doc('broken-partial',{...partial,client:'Broken partial',receivableBalance:{...partial.receivableBalance,remainingCents:5000}}),
+]}]};
+writeFileSync(backupPath,JSON.stringify(regressionBackup));
+for (const script of ['audit-finance-integrity.mjs','audit-transactions-data.mjs']) {
+  execFileSync(process.execPath,[`scripts/${script}`,'--input',backupPath,'--out',reportPath],{stdio:'pipe'});
+  const result=JSON.parse(readFileSync(reportPath,'utf8'));
+  const findings=result.findingsByCode;
+  assert.equal(findings[script.includes('integrity')?'OPEN_WITH_PAYMENT_EVIDENCE':'OPEN_WITH_PAYMENT_DATE']?.count,1);
+  assert.equal(findings.ENTRADA_WITHOUT_RECEIVABLE_VALUE?.count || 0,0);
+  assert.equal(findings.EMPTY_VALUES?.count || 0,0);
+}
+console.log('Partial payments and original amount CLI regressions passed');

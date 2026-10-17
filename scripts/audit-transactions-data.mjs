@@ -3,6 +3,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+import { hasCoherentPartialPayment } from './audit-partial-payments.mjs';
+
 const REPORT_DIR = 'migration-backups';
 const DEFAULT_COLLECTION = 'transactions';
 const DEFAULT_MAX_EXAMPLES = 25;
@@ -382,7 +384,7 @@ const auditDocument = (report, document, seenDataIds) => {
   }
 
   const money = {};
-  for (const field of ['valuePaid', 'valueReceived', 'honorarios', 'valorExtra', 'totalCobranca']) {
+  for (const field of ['valuePaid', 'valueReceived', 'honorarios', 'valorExtra', 'totalCobranca', 'valorOriginal']) {
     const parsed = parseMoney(data[field]);
     money[field] = parsed.value;
 
@@ -415,7 +417,7 @@ const auditDocument = (report, document, seenDataIds) => {
   const honorarios = money.honorarios || 0;
   const valorExtra = money.valorExtra || 0;
 
-  if (valuePaid === 0 && valueReceived === 0 && totalCobranca === 0) {
+  if (valuePaid === 0 && valueReceived === 0 && totalCobranca === 0 && !(money.valorOriginal > 0)) {
     addFinding(report, 'medium', 'EMPTY_VALUES', subject, 'Transaction has no payable or receivable value.', {});
   }
 
@@ -426,7 +428,7 @@ const auditDocument = (report, document, seenDataIds) => {
     });
   }
 
-  if (movement.canonical === 'Entrada' && valueReceived === 0 && totalCobranca === 0) {
+  if (movement.canonical === 'Entrada' && valueReceived === 0 && totalCobranca === 0 && !(money.valorOriginal > 0)) {
     addFinding(report, 'high', 'ENTRADA_WITHOUT_RECEIVABLE_VALUE', subject, 'Entrada has no receivable value.', {
       valueReceived,
       totalCobranca,
@@ -443,7 +445,7 @@ const auditDocument = (report, document, seenDataIds) => {
     addFinding(report, 'medium', 'PAID_WITHOUT_PAYMENT_DATE', subject, 'Paid transaction has no paymentDate.', {});
   }
 
-  if ((status.canonical === 'Pendente' || status.canonical === 'Agendado') && !isEmpty(data.paymentDate)) {
+  if ((status.canonical === 'Pendente' || status.canonical === 'Agendado') && !isEmpty(data.paymentDate) && !hasCoherentPartialPayment(data)) {
     addFinding(report, 'medium', 'OPEN_WITH_PAYMENT_DATE', subject, 'Open transaction has paymentDate filled.', {
       status: data.status,
       paymentDate: data.paymentDate,

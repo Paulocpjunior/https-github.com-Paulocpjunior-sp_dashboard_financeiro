@@ -185,3 +185,12 @@ test('estorno exige permissão própria, histórico íntegro e bloqueia retorno 
  const r=await h.call('reversal/preview',b);assert.ok(r.status>=400,mode);
  }
 });
+test('estorno aceita ordem distinta de campos do Firestore, mas rejeita valor alterado',async()=>{
+ const h=harness();await commit(h,await body(h,{amount:'100.00',interest:'0',discount:'0'}));
+ const current=h.store.get('transactions/legacy');
+ for(const key of ['receivableSettlement','receivableBalance'])current[key]=Object.fromEntries(Object.entries(current[key]).reverse());
+ const d=await h.call('items/legacy'),b={id:'legacy',requestId:randomUUID(),version:d.body.version,reason:'Corrigir data após conferência'};
+ const p=await h.call('reversal/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));
+ current.receivableSettlement.amountCents++;const changed=await h.call('items/legacy');
+ assert.ok((await h.call('reversal/preview',{...b,version:changed.body.version})).status>=400);
+});

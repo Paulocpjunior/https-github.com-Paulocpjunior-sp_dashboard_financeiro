@@ -2,6 +2,8 @@ const {createHash}=require('node:crypto');
 const {amount,money}=require('./boleto-cloud');
 const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
+const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+const evidenceHash=v=>hash(canonical(v));
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
 const permits=(user,action)=>user?.active===true&&!['blocked','deleted'].includes(user.status)&&(user.role==='admin'||user.financialPermissions?.includes(`receivables.${action}`));
 function routeAllowed(user,method,path){
@@ -49,10 +51,10 @@ function reversal(row,event,reason){
  if(row.boletoSettlement)fail('Recebimento bancário: confira o retorno do boleto.');
  if(typeof reason!=='string'||reason.trim().length<10||reason.length>2000)fail('Informe o motivo do estorno (10 a 2000 caracteres).',400);
  const last=row.receivableSettlement;
- if(!last?.requestId||last.origin!=='manual'||event?.action!=='receipt'||!event.before||hash(event.after?.receivableSettlement||null)!==hash(last)||(row.receivableReversals||[]).some(x=>x.receiptRequestId===last.requestId))fail('Baixa sem histórico íntegro ou já estornada. Solicite revisão.');
+ if(!last?.requestId||last.origin!=='manual'||event?.action!=='receipt'||!event.before||evidenceHash(event.after?.receivableSettlement||null)!==evidenceHash(last)||(row.receivableReversals||[]).some(x=>x.receiptRequestId===last.requestId))fail('Baixa sem histórico íntegro ou já estornada. Solicite revisão.');
  if(amount(row)!==amount(event.after)||amount(row)!==amount(event.before))fail('Valor original alterado após a baixa. Solicite revisão.');
  const fields=['status','pago','valueReceived','valorPago','paymentDate','dataPagamento','receivableBalance','receivableSettlement'];
- for(const k of fields)if(hash(row[k]??null)!==hash(event.after[k]??null))fail('Conta alterada após a baixa. Solicite revisão.');
+ for(const k of fields)if(evidenceHash(row[k]??null)!==evidenceHash(event.after[k]??null))fail('Conta alterada após a baixa. Solicite revisão.');
  const restored={...row};
  for(const k of fields){if(Object.hasOwn(event.before,k))restored[k]=event.before[k];else delete restored[k];}
  const reasonBlocked=blocked(restored);if(reasonBlocked)fail(reasonBlocked);

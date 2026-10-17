@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { DEFAULT_COLLECTIONS, CHILD_COLLECTIONS, collectBackupCollections, listCollection } from './export-firestore-data.mjs';
 
-for (const name of ['transactions', 'jotformEvents', 'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps']) assert.ok(DEFAULT_COLLECTIONS.includes(name));
+for (const name of ['boletoReturnFileVersions', 'customerAudit', 'customerOperations', 'financialAIUsage', 'payableApprovals', 'payableAutomationStatus', 'payableMonthlyDrafts', 'receivableAudit', 'receivableOperations', 'transactions', 'jotformEvents', 'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps']) assert.ok(DEFAULT_COLLECTIONS.includes(name));
 const followUps=await collectBackupCollections('test',['billingFollowUps'],'test',async(_project,name)=>name==='billingFollowUps'?[{path:'projects/test/databases/(default)/documents/billingFollowUps/task',id:'task',data:{revision:1}}]:[{id:'audit',data:{revision:1}}]);
 assert.ok(followUps.some(c=>c.name==='billingFollowUps/task/revisions'&&c.count===1),'histórico da fila também deve entrar no backup');
 const prefix = 'projects/test/databases/(default)/documents/';

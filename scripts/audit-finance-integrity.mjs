@@ -3,6 +3,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+import { hasCoherentPartialPayment } from './audit-partial-payments.mjs';
+
 const REPORT_DIR = 'migration-backups';
 const DEFAULT_COLLECTION = 'transactions';
 const DEFAULT_MAX_EXAMPLES = 40;
@@ -545,7 +547,7 @@ const auditDocuments = (report, documents, args) => {
       }));
     }
 
-    if (status.canonical !== 'Pago' && explicitPaymentEvidence) {
+    if (status.canonical !== 'Pago' && explicitPaymentEvidence && !hasCoherentPartialPayment(data)) {
       addFinding(report, 'high', 'OPEN_WITH_PAYMENT_EVIDENCE', 'Open record has evidence that it was paid/settled.', summarizeDoc(doc, {
         direction,
         amount,
