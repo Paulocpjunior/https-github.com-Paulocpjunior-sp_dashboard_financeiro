@@ -18,7 +18,7 @@ export const DEFAULT_COLLECTIONS = [
   'users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents',
   'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps',
   'boletoIssues', 'boletoIssueLocks', 'boletoHistory', 'boletoHistorySnapshots', 'boletoHistoryUpdates',
-  'boletoHistoryAudit', 'boletoReturnJobs', 'boletoReturnFiles', 'boletoReturnEvents', 'boletoSettlementAudit', 'boletoReconciliations',
+  'boletoHistoryAudit', 'boletoReturnJobs', 'boletoReturnFiles', 'boletoReturnEvents', 'boletoManualResolutions', 'boletoSettlementAudit', 'boletoReconciliations',
   'boletoReconciliationPreviews', 'boletoReconciliationAudit', 'boletoReconciliationSettlements',
   'receivableAudit', 'receivableOperations', 'boletoReturnFileVersions',
   'customerAudit', 'customerOperations', 'financialAIUsage',

@@ -1,4 +1,7 @@
 // Read-only matching. Suggestions never authorize a settlement.
+const {createHash} = require('node:crypto');
+const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+const evidenceVersion=e=>createHash('sha256').update(JSON.stringify(canonical([e.occurrence,e.evidenceConflict||null]))).digest('hex');
 const { amount, money } = require('./boleto-cloud');
 const { differences } = require('./boleto-reconciliation');
 const digits = v => String(v || '').replace(/\D/g, '');
@@ -35,11 +38,11 @@ async function reviewQueue(db, records, cursor='') {
   const docs=(await q.limit(11).get()).docs, index=new Map(records.map(r=>[r.id,r]));
   const rows=await Promise.all(docs.slice(0,10).map(async doc=>{
     const e=doc.data(),r=index.get(e.boletoId),c=await loadCandidates(db,r);
-    return {eventId:doc.id,fileId:e.fileId,boletoId:e.boletoId,number:e.number,reason:e.reason,
+    return {eventId:doc.id,fileId:e.fileId,boletoId:e.boletoId,number:e.number,reason:e.reason, evidenceVersion:evidenceVersion(e), evidenceConflict:e.evidenceConflict||null, manualResolution:e.manualResolution||null,
       paidCents:Math.round(money(e.occurrence?.info?.valorPago)*100),paymentDate:e.occurrence?.info?.dataDePagamento || '',
       record:r?{id:r.id,payerName:r.payerName,payerDocument:r.payerDocument,dueDate:r.dueDate,amountCents:r.amountCents,number:r.number}:null,
       candidates:c.rows,truncated:c.truncated,classification:classify(r,c.rows,c.truncated)};
   }));
   return {rows,nextCursor:docs.length>10?docs[9].id:null};
 }
-module.exports={candidatesFor,classify,loadCandidates,reviewQueue};
+module.exports={evidenceVersion,candidatesFor,classify,loadCandidates,reviewQueue};

@@ -129,3 +129,10 @@ test('RET-triggered native settlement retains provenance, manual conflict and re
   else {assert.deepEqual(f.data.get('transactions/native-test').boletoSettlement.returnEvidence,args.provenance);assert.equal((await settleEvent(args)).state,'settled');assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoSettlementAudit/')).length,1);}
  }
 });
+test('manual treatment or RET hold blocks automatic settlement without changing the account',async()=>{
+ const f=fixture(),before=structuredClone(f.data.get('transactions/native-test'));
+ f.data.set('boletoManualResolutions/'+require('./boleto-history').idFor(f.body.boleto.token),{requiresManualReview:true});
+ assert.equal((await f.run()).review,1);
+ assert.deepEqual(f.data.get('transactions/native-test'),before);
+ assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoSettlementAudit/')).length,0);
+});

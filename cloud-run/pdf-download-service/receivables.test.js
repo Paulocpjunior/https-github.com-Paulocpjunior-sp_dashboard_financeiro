@@ -194,3 +194,40 @@ test('estorno aceita ordem distinta de campos do Firestore, mas rejeita valor al
  current.receivableSettlement.amountCents++;const changed=await h.call('items/legacy');
  assert.ok((await h.call('reversal/preview',{...b,version:changed.body.version})).status>=400);
 });
+
+function retFixture(h){
+ const eventId='a'.repeat(64),boletoId='b'.repeat(64);
+ h.store.get('transactions/legacy').cpfCnpj='12345678000199';
+ const event={state:'review',boletoId,number:'123',fileId:'file',occurrence:{situacao:'LIQUIDACAO',info:{valorPago:105,dataDePagamento:'2026-01-02'}}};
+ h.store.set('boletoReturnEvents/'+eventId,event);
+ h.store.set('boletoHistoryUpdates/'+boletoId,{record:{payerDocument:'12345678000199'}});
+ return {eventId,evidenceVersion:require('./boleto-ret-review').evidenceVersion(event)};
+}
+test('RET manual resolution records fine, evidence and actor atomically; replay cannot duplicate',async()=>{
+ const h=harness(),retReview=retFixture(h),b={...await body(h,{amount:'105',interest:'2',fine:'3',discount:'0',note:'PIX recebido; comprovante banco ABC 12345'}),retReview};
+ const preview=await h.call('receipt/preview',b);assert.equal(preview.status,200);
+ const confirmed={...b,confirmHash:preview.body.reviewHash};const result=await h.call('receipt/commit',confirmed);assert.equal(result.status,200);
+ const r=h.store.get('transactions/legacy');assert.equal(r.valueReceived,105);assert.equal(r.receivableBalance.remainingCents,0);assert.equal(r.receivableSettlement.fineCents,300);assert.equal(r.receivableSettlement.interestCents,500);assert.equal(r.receivableSettlement.retEvidence.eventId,retReview.eventId);
+ assert.equal(h.store.get('boletoReturnEvents/'+retReview.eventId).state,'manual-resolved');
+ assert.equal(h.store.get('boletoManualResolutions/'+'b'.repeat(64)).transactionId,'legacy');
+ const replay=await h.call('receipt/commit',confirmed);assert.equal(replay.status,200);assert.equal(h.store.get('transactions/legacy').receivableReceipts.length,1);
+});
+test('partial RET manual receipt stays in review and reversal reopens it preserving evidence',async()=>{
+ const h=harness(),retReview=retFixture(h),b={...await body(h,{interest:'0',discount:'0',note:'Deposito parcial; comprovante ABC 12345'}),retReview};
+ assert.equal((await commit(h,b)).status,200);
+ assert.equal(h.store.get('boletoReturnEvents/'+retReview.eventId).state,'review');
+ const item=await h.call('items/legacy');const rb={id:'legacy',version:item.body.version,requestId:randomUUID(),reason:'Data de recebimento informada incorretamente'};
+ const preview=await h.call('reversal/preview',rb);assert.equal(preview.status,200,JSON.stringify(preview.body));
+ assert.equal((await h.call('reversal/commit',{...rb,confirmHash:preview.body.reviewHash})).status,200);
+ const event=h.store.get('boletoReturnEvents/'+retReview.eventId);assert.equal(event.state,'review');assert.equal(event.manualResolution,null);assert.equal(event.occurrence.info.valorPago,105);
+ assert.equal(h.store.get('transactions/legacy').valueReceived,0);
+});
+test('stale RET evidence, mismatching document, existing title claim and weak explanation block manual writes',async()=>{
+ for(const mutate of [
+ (h,b)=>{h.store.get('boletoReturnEvents/'+b.retReview.eventId).occurrence.info.valorPago=999;},
+ h=>{h.store.get('transactions/legacy').cpfCnpj='99999999000100';},
+ h=>{h.store.set('boletoManualResolutions/'+'b'.repeat(64),{transactionId:'other'});},
+ h=>{h.store.set('boletoReconciliations/'+'b'.repeat(64),{transactionId:'other'});},
+ (h,b)=>{b.receipt.note='curto';}
+ ]){const h=harness(),retReview=retFixture(h),b={...await body(h,{note:'PIX; comprovante bancario ABC 12345'}),retReview};mutate(h,b);const before=structuredClone(h.store.get('transactions/legacy'));const result=await h.call('receipt/preview',b);assert.ok(result.status>=400,JSON.stringify(result));assert.deepEqual(h.store.get('transactions/legacy'),before);}
+});

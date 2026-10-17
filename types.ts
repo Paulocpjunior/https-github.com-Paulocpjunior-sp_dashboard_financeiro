@@ -48,7 +48,7 @@ export interface Transaction {
   invoiceAmendments?: Array<{requestId:string;beforeCents:number;afterCents:number;reason:string;actor:string;at:string}>;
   receivableBalance?: {version:1; receivedCents:number; interestCents:number; discountCents:number; remainingCents:number};
   receivableSettlement?: {requestId:string; uid:string; actor:string; date:string; at:string};
-  receivableReceipts?: Array<{requestId:string;date:string;amountCents:number;interestCents:number;discountCents:number;remainingCents:number;bankAccount:string;method:string;actor:string;note:string}>;
+  receivableReceipts?: Array<{requestId:string;date:string;amountCents:number;interestCents:number;fineCents?:number;discountCents:number;remainingCents:number;bankAccount:string;method:string;actor:string;note:string;retEvidence?:{eventId:string;fileId:string;number:string;evidenceVersion:string}}>;
   payableSettlement?: {requestId:string;uid:string;date:string;amountCents:number;actor:string};
   payableReversals?: Array<{requestId:string;paymentRequestId:string;amountCents:number;reason:string;uid:string;actor:string;at:string}>;
   payablePayments?: Array<{requestId:string;date:string;amountCents:number;interestCents:number;fineCents:number;discountCents:number;remainingCents:number;bankAccount:string;method:string;actor:string;note:string}>;

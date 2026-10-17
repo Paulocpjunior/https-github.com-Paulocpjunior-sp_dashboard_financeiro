@@ -139,16 +139,27 @@ test('legacy 3-to-26 enrichment preserves existing settled event IDs, processes 
     assert.equal([...f.records.keys()].some(k => k.startsWith('transactions/')), false);
     assert.ok([...f.records.keys()].filter(k => k.startsWith('boletoReturnFileVersions/')).length >= 2);
 });
-test('value changes, removals, credit-date replacements fail closed with actionable error', async () => {
+test('changed titles are quarantined without blocking independent occurrences', async () => {
     for (const mutate of [b => b.arquivo.titulos[0].ocorrencias[0].info.valorPago = 11,
         b => b.arquivo.titulos = [], b => b.arquivo.titulos[0].ocorrencias[0].info.dataDeCredito = '2026-10-11']) {
         const f = evolvingFixture();
         await runRetFiles(f);
         mutate(f.response);
+        f.response.arquivo.titulos.push({token:null,numero:'unaffected',ocorrencias:[{situacao:'REGISTRO',info:null}]});
         const result = await runRetFiles(f);
-        assert.equal(result.errors, 1);
-        assert.equal(result.lastError, 'RETURN_EVIDENCE_CONFLICT');
-        assert.equal(result.events, 0);
+        assert.equal(result.errors, 0);
+        assert.equal(result.review, 1);
+        assert.equal(result.informational, 1);
+        const event=[...f.records.values()].find(e=>e.evidenceConflict);
+        assert.equal(event.state,'review');
+        assert.equal(event.evidenceConflict.code,'RETURN_EVIDENCE_CONFLICT');
+        assert.deepEqual(event.occurrence,event.evidenceConflict.original);
+        assert.equal((await runRetFiles(f)).review,1);
+        event.manualResolution={evidenceVersion:event.evidenceVersion,remainingCents:1};
+        assert.equal((await runRetFiles(f)).review,1);
+        const updated=[...f.records.values()].find(e=>e.evidenceConflict);
+        updated.manualResolution={evidenceVersion:updated.evidenceVersion,remainingCents:0};
+        assert.equal((await runRetFiles(f)).review,0);
     }
 });
 test('ambiguous occurrences and incomplete legacy baselines remain blocked', async () => {

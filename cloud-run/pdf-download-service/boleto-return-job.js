@@ -9,8 +9,10 @@ initializeApp();
   const options = { db: getFirestore(), dryRun: process.argv.includes('--dry-run') };
   const deadline = Date.now() + 8 * 60000;
   const returns = await runRetFiles({ ...options, deadline: Math.min(deadline, Date.now()+120000) });
-  const native = await runReturns({ ...options, deadline: Math.min(deadline, Date.now()+120000) });
-  const reconciliations = await runReconciliations({ ...options, deadline: Math.min(deadline,Date.now()+90000) });
+  // Only the RET pipeline may settle automatically. Status refresh cannot bypass a RET exception.
+  const statusOnlyEnv = { ...process.env, BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED: 'false' };
+  const native = await runReturns({ ...options, env: statusOnlyEnv, deadline: Math.min(deadline, Date.now()+120000) });
+  const reconciliations = await runReconciliations({ ...options, env: statusOnlyEnv, deadline: Math.min(deadline,Date.now()+90000) });
   const history = await runHistorySync({ ...options, deadline });
   return { ...native, returns, history, reconciliations, errors: (returns.errors || 0) + (native.errors || 0) + (history.errors || 0) + (reconciliations.errors || 0) };
 })()

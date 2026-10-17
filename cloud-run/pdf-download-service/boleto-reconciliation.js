@@ -224,6 +224,7 @@ async function retEvidence(db, reader, eventId, record, body, env) {
   if (typeof eventId !== 'string' || !/^[a-f0-9]{64}$/.test(eventId)) fail('Ocorrência RET inválida.',400);
   const event=(await reader.get(db.collection('boletoReturnEvents').doc(eventId))).data();
   if (!event || event.boletoId!==record.id || !['review','settled'].includes(event.state)) fail('Ocorrência RET indisponível ou de outro boleto.');
+  if(event.evidenceConflict) fail('RET alterado: registre a conferência e o recebimento manual com a referência do comprovante.');
   const file=(await reader.get(db.collection('boletoReturnFiles').doc(event.fileId))).data();
   if(file?.accountFingerprint!==config(env).accountFingerprint) fail('Arquivo RET fora da conta homologada.');
   if(!require('./boleto-ret-files').paymentMatches({token:record.token,number:event.number,occurrence:event.occurrence},body))
@@ -296,6 +297,7 @@ async function handleReconciliation({
   }
   const at = new Date().toISOString();
   if (operation === "reconcile-preview") {
+    if ((await db.collection("boletoManualResolutions").doc(record.id).get()).data()) fail("Boleto em tratamento manual. Confira o histórico de recebimentos e o comprovante.");
     if (
       typeof input.transactionId !== "string" ||
       !/^[-\w]{1,200}$/.test(input.transactionId)
@@ -387,6 +389,7 @@ async function handleReconciliation({
           .doc(hash(["production", preview.transactionId])),
       )
     ).data();
+    if ((await tx.get(db.collection("boletoManualResolutions").doc(record.id))).data()) fail("Boleto em tratamento manual. Confira o histórico de recebimentos e o comprovante.");
     if (nativeIssue)
       fail("Emissão nativa encontrada para o lançamento. Revise o vínculo.");
     if (!canReconcile(p)) fail("Acesso revogado.", 403);

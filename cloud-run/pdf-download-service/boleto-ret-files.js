@@ -59,6 +59,20 @@ function validateRevision(previous, current) {
             throw Error('RETURN_EVIDENCE_CONFLICT');
     }
 }
+// Quarantine the individual title, preserving the original evidence. Unrelated titles continue.
+const titleKey = event => hash([event.boletoId ?? (event.token ? idFor(event.token) : null), event.number]);
+function revisionConflicts(previous, current, priorEvents) {
+    const blocked = new Set();
+    for (const [key, credit] of Object.entries(previous)) {
+        if (Object.hasOwn(current, key) && (!credit || current[key] === credit)) continue;
+        const original = priorEvents.find(e => eventCore(e) === key);
+        if (!original) throw Error('RETURN_BASELINE_INCOMPLETE');
+        blocked.add(titleKey(original));
+    }
+    // A previously quarantined title cannot become automatic just because the provider changes back.
+    for (const event of priorEvents) if (event.evidenceConflict) blocked.add(titleKey(event));
+    return blocked;
+}
 const errorCode = e => /^RETURN_[A-Z_]+$/.test(e?.message || '') ? e.message : 'RETURN_PROCESSING_FAILED';
 function paymentMatches(event, body) {
     const info = event.occurrence?.info, p = body?.boleto?.pagamento;
@@ -91,6 +105,8 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
             if (owner?.lease !== lease || owner.leaseUntil <= Date.now())
                 throw Error('LEASE_LOST');
         }
+        const manual = (await tx.get(db.collection('boletoManualResolutions').doc(idFor(event.token)))).data();
+        if (manual) return {state:'review', reason:'Boleto com tratamento manual registrado. Confira o histórico; não reaplicar automaticamente.'};
         const link = (await tx.get(linkRef)).data();
         if (!link || link.record?.token !== event.token || link.accountFingerprint !== cfg.accountFingerprint)
             return { state: 'review', reason: 'Boleto sem vínculo individual confirmado com Contas a Receber.' };
@@ -147,7 +163,10 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
     const dates = [...new Set([backfill, pendingDate, today, dayOffset(today, -1), dayOffset(today, -2)])].filter(d => validDay(d) && d >= cutover && d <= today);
     const write = async (ref, value) => { if (dryRun)
         return; await db.runTransaction(async (tx) => { const owner = (await tx.get(jobRef)).data(); if (owner?.lease !== lease || owner.leaseUntil <= Date.now())
-        throw Error('LEASE_LOST'); tx.set(ref, value, { merge: true }); }); };
+        throw Error('LEASE_LOST');
+        const latest = ref.path.startsWith('boletoReturnEvents/') ? (await tx.get(ref)).data() : null;
+        if (latest?.manualResolution && latest.manualResolution.evidenceVersion === require('./boleto-ret-review').evidenceVersion({...latest,...value}) && latest.manualResolution.remainingCents === 0) value = {...value,state:'manual-resolved'};
+        tx.set(ref, value, { merge: true }); }); };
     try {
         for (const date of dates) {
             let dateDone = true;
@@ -174,21 +193,32 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                     if (old.digest && !old.manifest && old.digest !== digest && priorEvents.length !== old.eventCount)
                         throw Error('RETURN_BASELINE_INCOMPLETE');
                     const previousManifest = old.manifest || manifestFor(priorEvents);
-                    try {
-                        validateRevision(previousManifest, manifest);
-                    } catch (e) {
-                        await write(ref, { state: 'pending', lastError: errorCode(e), errorAt: new Date().toISOString() });
-                        throw e;
+                    const conflicts = revisionConflicts(previousManifest, manifest, priorEvents);
+                    let unresolved = 0;
+                    for (const original of priorEvents.filter(e => conflicts.has(titleKey(e)))) {
+                        const incoming = parsed.events.filter(e => titleKey(e) === titleKey(original)).map(e => ({number:e.number, occurrence:e.occurrence}));
+                        const evidenceConflict = {original:original.evidenceConflict?.original || original.occurrence, incoming, code:'RETURN_EVIDENCE_CONFLICT'};
+                        const evidenceVersion = require('./boleto-ret-review').evidenceVersion({...original,evidenceConflict});
+                        const resolved = original.manualResolution?.evidenceVersion === evidenceVersion && original.manualResolution?.remainingCents === 0;
+                        unresolved += resolved ? 0 : 1;
+                        await write(db.collection('boletoReturnEvents').doc(original.storedId), {
+                            state:resolved ? 'manual-resolved' : 'review', evidenceConflict, evidenceVersion,
+                            reason:'Retorno alterado ou removido pelo emissor. Conferência manual obrigatória; demais boletos continuam.',
+                            checkedAt:new Date().toISOString()
+                        });
+                        if (original.boletoId) await write(db.collection('boletoManualResolutions').doc(original.boletoId), {reason:'RETURN_EVIDENCE_CONFLICT', eventId:original.storedId, requiresManualReview:true});
+                        counts.review += resolved ? 0 : 1;
                     }
                     const previousByCore = new Map(priorEvents.map(event => [eventCore(event), event]));
                     if (old.digest && old.digest !== digest)
                         await write(db.collection('boletoReturnFileVersions').doc(hash([fileId, old.digest])), { fileId, digest: old.digest, manifest: previousManifest, eventCount: old.eventCount, capturedAt: old.checkedAt || null });
                     await write(db.collection('boletoReturnFileVersions').doc(hash([fileId, digest])), { fileId, digest, manifest, eventCount: parsed.events.length });
                     counts.files++;
-                    await write(ref, { provider: 'boleto-cloud', accountFingerprint: cfg.accountFingerprint, date, digest, manifest, lastError: null, protocol: parsed.protocol, createdAt: parsed.createdAt, eventCount: parsed.events.length, state: 'pending' });
-                    let done = true, eventCursor = old.digest === digest && Number.isInteger(old.cursor) && old.cursor >= 0 && old.cursor < parsed.events.length ? old.cursor : 0;
+                    await write(ref, { provider: 'boleto-cloud', accountFingerprint: cfg.accountFingerprint, date, digest, manifest: conflicts.size ? {...previousManifest, ...manifestFor(parsed.events.filter(e => !conflicts.has(titleKey(e))))} : manifest, lastError: null, manualReviewTitles: conflicts.size, protocol: parsed.protocol, createdAt: parsed.createdAt, eventCount: parsed.events.length, state: 'pending' });
+                    let done = unresolved === 0, eventCursor = old.digest === digest && Number.isInteger(old.cursor) && old.cursor >= 0 && old.cursor < parsed.events.length ? old.cursor : 0;
                     for (let index = eventCursor; index < parsed.events.length; index++) {
                         const event = parsed.events[index];
+                        if (conflicts.has(titleKey(event))) { eventCursor = index + 1; continue; }
                         if (Date.now() + 22000 >= deadline) {
                             done = false;
                             more = true;
@@ -197,7 +227,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                         const known = previousByCore.get(eventCore(event));
                         const eventId = known?.storedId || hash([fileId, eventCore(event)]);
                         const eventRef = db.collection('boletoReturnEvents').doc(eventId), previous = known;
-                        if (previous && ['settled', 'informational'].includes(previous.state)) {
+                        if (previous && ['settled', 'informational', 'manual-resolved'].includes(previous.state)) {
                             eventCursor = index + 1;
                             continue;
                         }
@@ -246,4 +276,4 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
         throw Error('RETURN_FILES_JOB_FAILED');
     }
 }
-module.exports = { runRetFiles, filesFrom, eventsFrom, paymentMatches, settleEvent, eventCore, manifestFor, validateRevision };
+module.exports = { revisionConflicts, titleKey, runRetFiles, filesFrom, eventsFrom, paymentMatches, settleEvent, eventCore, manifestFor, validateRevision };

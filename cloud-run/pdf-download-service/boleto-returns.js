@@ -77,7 +77,10 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
   if (!response.ok) throw new Error('PROVIDER_UNAVAILABLE');
   const body = await response.json();
   const rowRef = db.collection('transactions').doc(issue.transactionId);
-  if (dryRun) return evaluate(issueDoc.id, issue, (await rowRef.get()).data(), body, cfg, at);
+  if (dryRun) {
+    if ((await db.collection('boletoManualResolutions').doc(idFor(issue.token)).get()).data()) return {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
+    return evaluate(issueDoc.id, issue, (await rowRef.get()).data(), body, cfg, at);
+  }
   return db.runTransaction(async tx => {
     const leaseRef = db.collection('boletoReturnJobs').doc(leaseJob);
     const owner = (await tx.get(leaseRef)).data();
@@ -86,6 +89,8 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
     if (hash(current) !== hash(issue)) throw new Error('ISSUE_CHANGED');
     const row = (await tx.get(rowRef)).data();
     let result = evaluate(issueDoc.id, current, row, body, cfg, at);
+    const manual = (await tx.get(db.collection('boletoManualResolutions').doc(idFor(issue.token)))).data();
+    if (manual && result.state === 'ready') result = {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
     const updateRef = db.collection('boletoHistoryUpdates').doc(idFor(issue.token));
     const previous = (await tx.get(updateRef)).data();
     if (previous?.syncedAt > at || current.returnSync?.checkedAt > at) throw new Error('STALE_RESPONSE');
