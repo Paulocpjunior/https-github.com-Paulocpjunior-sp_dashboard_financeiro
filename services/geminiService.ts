@@ -17,7 +17,7 @@ function answer(result:any):string {
  return `${result.explanation}\n\nFonte: ${result.source.count} lançamentos do recorte atual, relidos no Firestore em ${new Date(result.source.readAt).toLocaleString('pt-BR')}. Não abrange necessariamente todo o histórico.`;
 }
 export const GeminiService={
- status:async():Promise<{enabled:boolean;readOnly:boolean;maxRecords:number}>=>request('status'),
+ status:async():Promise<{enabled:boolean;readOnly:boolean;maxRecords:number;model?:string|null;modelOrigin?:string|null}>=>request('status'),
  detectMode:async(query:string):Promise<'filter'|'analysis'|'forecast'>=>{
   const q=query.toLowerCase();
   if(/previsão|projetar|forecast|futuro/.test(q))return 'forecast';

@@ -71,7 +71,7 @@ function createAIHandler({getServices,readBody,sendJson,generateAnswer=generate,
    const userRef=db.collection('users').doc(token.uid);
    const check=async()=>{const profile=await userRef.get();if(!profile.exists||!active(profile.data()))throw new AIError('Sem acesso à FiA financeira.',403);};
    await check();
-   if(req.method==='GET'){sendJson(req,res,200,{enabled:enabled(),model:enabled()?(estadoMotor()?.modelo||null):null,readOnly:true,maxRecords:300});return true;}
+   if(req.method==='GET'){sendJson(req,res,200,{enabled:enabled(),model:enabled()?(estadoMotor()?.modelo||null):null,modelOrigin:enabled()?(estadoMotor()?.origem||null):null,readOnly:true,maxRecords:300});return true;}
    if(!enabled())throw new AIError('FiA ainda não habilitada no servidor.',503);
    let body;try{const bytes=await readBody(req);if(bytes.length>80000)throw Error();body=JSON.parse(bytes.toString('utf8'));}catch{throw new AIError('Consulta inválida ou muito grande.');}
    const input=validateInput(body);
