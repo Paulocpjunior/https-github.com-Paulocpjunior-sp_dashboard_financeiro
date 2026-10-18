@@ -89,11 +89,11 @@ function marcarRecusado(modelo, agora = Date.now(), status = null) {
 }
 
 // Codex no #95 (P1): `thinkingBudget` está obsoleto no Gemini 3+ e pode voltar
-// 400. Do 3 em diante vai `thinkingLevel: 'low'` (resposta curta, 45 s); antes
+// 400. Do 3 em diante vai `thinkingLevel: 'LOW'` (enum do Vertex em maiúsculas — Codex no #97; resposta curta, 45 s); antes
 // do 3, o orçamento zero de sempre.
 function configDePensamento(modelo, versaoDoModelo) {
   const v = versaoDoModelo(modelo);
-  return v !== null && v >= 3 ? { thinkingLevel: 'low' } : { thinkingBudget: 0 };
+  return v !== null && v >= 3 ? { thinkingLevel: 'LOW' } : { thinkingBudget: 0 };
 }
 
 /**

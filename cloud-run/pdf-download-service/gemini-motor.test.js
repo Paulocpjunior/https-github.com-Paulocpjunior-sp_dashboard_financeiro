@@ -38,15 +38,15 @@ test('segue a paginação e manda o token',async()=>{
 // Codex no #95 (P1): pensamento compatível com o Gemini 3+ e modelo recusado não derruba a FiA.
 test('Gemini 3+ recebe thinkingLevel; antes do 3, thinkingBudget 0',async()=>{
  const {versaoDoModelo}=await import('./gemini-modelo.mjs');
- assert.deepEqual(motor.configDePensamento('gemini-3.8-flash',versaoDoModelo),{thinkingLevel:'low'});
- assert.deepEqual(motor.configDePensamento('gemini-4.1-flash',versaoDoModelo),{thinkingLevel:'low'});
+ assert.deepEqual(motor.configDePensamento('gemini-3.8-flash',versaoDoModelo),{thinkingLevel:'LOW'});
+ assert.deepEqual(motor.configDePensamento('gemini-4.1-flash',versaoDoModelo),{thinkingLevel:'LOW'});
  assert.deepEqual(motor.configDePensamento('gemini-2.5-flash',versaoDoModelo),{thinkingBudget:0});
 });
 test('400 tenta de novo sem configuração de pensamento, no mesmo modelo',async()=>{
  const chamadas=[];const chamar=async(m,p)=>{chamadas.push([m,p]);return p?{ok:false,status:400}:{ok:true,status:200};};
  const r=await motor.gerarComReserva({modelo:'gemini-3.8-flash',chamar,agora:T0});
  assert.equal(r.ok,true);
- assert.deepEqual(chamadas,[['gemini-3.8-flash',{thinkingLevel:'low'}],['gemini-3.8-flash',null]]);
+ assert.deepEqual(chamadas,[['gemini-3.8-flash',{thinkingLevel:'LOW'}],['gemini-3.8-flash',null]]);
 });
 test('modelo novo recusado (403) cai no ID conferido na MESMA consulta e sai da escolha por 6 h',async()=>{
  const lista=[...VERTEX,{name:'publishers/google/models/gemini-4.1-flash'}];const fetchImpl=async()=>ok({publisherModels:lista});
