@@ -16,7 +16,7 @@ Implementação preparada em 11/10/2026; não habilitada em produção até a pu
 
 ## Infraestrutura e implantação
 
-Vertex AI no mesmo projeto, autenticação pela identidade do Cloud Run via ADC. Nenhuma chave no navegador. Modelo `gemini-2.5-flash`, endpoint global; testado com prompt técnico sem informações financeiras em 11/10/2026. Não é promessa de disponibilidade futura do modelo.
+Vertex AI no mesmo projeto, autenticação pela identidade do Cloud Run via ADC. Nenhuma chave no navegador. Modelo escolhido sozinho desde 18/10/2026 (`cloud-run/pdf-download-service/gemini-motor.js`): o mais novo Gemini Flash que o Vertex lista, conferido a cada 6 h com a régua do CFI (`gemini-modelo.mjs`); sem lista, `gemini-3.8-flash`. Pino manual: env `FINANCIAL_AI_MODEL`. Endpoint global. Antes: `gemini-2.5-flash`, testado com prompt técnico sem informações financeiras em 11/10/2026. Não é promessa de disponibilidade futura do modelo.
 
 API aiplatform habilitada. A conta de serviço existente já possuía permissões; nenhuma nova atribuição IAM foi adicionada. Não é necessário criar chave de API.
 
