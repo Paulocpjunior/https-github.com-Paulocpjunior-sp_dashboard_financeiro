@@ -91,6 +91,10 @@ jobs:
           # Gate de departamento em BLOQUEIO (Paulo, 08/08, após teste):
           # app estático — o modo entra no build.
           VITE_DEPARTAMENTO_GATE_MODO: bloqueio
+          # G5 (18/10/2026): o WhatsApp mora no SP Connect. Com a variável do
+          # repositório, o envio do Financeiro vai ao Connect e aparece na
+          # conversa do atendimento; sem ela, segue o CFI (padrão do código).
+          VITE_SP_CONNECT_API_URL: ${{ vars.VITE_SP_CONNECT_API_URL }}
         run: npm run build
 
       - name: Publicar regras das conferências com preservação e backup
