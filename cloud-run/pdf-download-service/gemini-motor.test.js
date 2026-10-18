@@ -34,3 +34,19 @@ test('segue a paginação e manda o token',async()=>{
  assert.equal(await motor.modeloFiA({...base,fetchImpl,agora:T0}),'gemini-3.8-flash');
  assert.match(pedidos[1].url,/pageToken=p2/);assert.equal(pedidos[0].auth,'Bearer t');
 });
+test('Gemini 3+ usa thinkingLevel; o 2.x segue com thinkingBudget 0',()=>{
+  assert.deepEqual(motor.pensamentoDoModelo('gemini-3.8-flash'),{thinkingLevel:'low'});
+  assert.deepEqual(motor.pensamentoDoModelo('gemini-4-argon'),{thinkingLevel:'low'});
+  assert.deepEqual(motor.pensamentoDoModelo('gemini-2.5-flash'),{thinkingBudget:0});
+});
+test('modelo da lista que recusa a consulta é rebaixado ao ID conferido até a próxima lista',async()=>{
+  test.mock.method(console,'warn',()=>{});
+  const lista=[{name:'publishers/google/models/gemini-3.9-flash'},...VERTEX];
+  const fetchImpl=async()=>ok({publisherModels:lista});
+  assert.equal(await motor.modeloFiA({...base,fetchImpl,agora:T0}),'gemini-3.9-flash');
+  assert.equal(motor.rebaixarModelo('gemini-3.9-flash',403,T0),true);
+  assert.equal(await motor.modeloFiA({...base,fetchImpl,agora:T0+60_000}),motor.MODELO_CONFERIDO);
+  assert.equal(motor.estadoMotor().origem,'rebaixado');
+  assert.equal(motor.rebaixarModelo(motor.MODELO_CONFERIDO,400,T0),false);
+  assert.equal(await motor.modeloFiA({...base,fetchImpl,agora:T0+motor.TTL_MS+1}),'gemini-3.9-flash');
+});

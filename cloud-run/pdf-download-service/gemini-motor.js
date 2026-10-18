@@ -64,6 +64,24 @@ async function resolverMotor({ obterToken, fetchImpl, env = process.env, agora =
   return estado;
 }
 
+// O catálogo do Vertex lista modelos que este projeto pode não ter liberado
+// (allowlist, política da organização). Se o escolhido recusa (400/403/404),
+// a FiA volta ao ID conferido até a próxima consulta à lista (6 h).
+function rebaixarModelo(modelo, status, agora = Date.now()) {
+  if (!estado || estado.modelo !== modelo || modelo === MODELO_CONFERIDO || estado.origem === 'env') return false;
+  estado = { ...estado, modelo: MODELO_CONFERIDO, origem: 'rebaixado', resolvidoEm: estado.resolvidoEm ?? agora,
+    motivo: `${modelo} recusou a consulta (HTTP ${status}) — seguindo em ${MODELO_CONFERIDO} até a próxima lista.` };
+  console.warn(`[gemini] FiA=${MODELO_CONFERIDO} (rebaixado) · ${modelo} HTTP ${status}`);
+  return true;
+}
+
+// Gemini 3 em diante usa thinkingLevel; o thinkingBudget é legado (aceito com
+// aviso, e com 400 intermitente relatado no 3.x). O 2.x segue com budget 0.
+function pensamentoDoModelo(modelo) {
+  const m = String(modelo || '').match(/^gemini-(\d+)/i);
+  return m && Number(m[1]) >= 3 ? { thinkingLevel: 'low' } : { thinkingBudget: 0 };
+}
+
 async function modeloFiA(opts = {}) {
   const agora = opts.agora ?? Date.now();
   const venceu = !estado || agora - estado.resolvidoEm > (estado.erroDaLista ? TTL_FALHA_MS : TTL_MS);
@@ -75,6 +93,6 @@ async function modeloFiA(opts = {}) {
 }
 
 module.exports = {
-  modeloFiA, estadoMotor: () => estado, MODELO_CONFERIDO, TTL_MS, TTL_FALHA_MS,
+  modeloFiA, estadoMotor: () => estado, rebaixarModelo, pensamentoDoModelo, MODELO_CONFERIDO, TTL_MS, TTL_FALHA_MS,
   _zerarMotorParaTeste: () => { estado = null; emCurso = null; },
 };
