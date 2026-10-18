@@ -234,6 +234,13 @@ export function resolverModelosGemini({ modelos, envPro, envFlash, familia = FAM
 export function versaoAtendeAlvo(modelVersion, familia = FAMILIA_ALVO_GEMINI) {
     const v = normalizarNomeModelo(modelVersion);
     if (!v) return null; // sem resposta não se afirma nada — nem sim, nem não
+    // FAMÍLIA É PISO (Codex no sp-plataforma #16, 18/10): o seletor já sobe
+    // sozinho para uma geração mais nova (`gemini-5-xenon`), e o veredito não
+    // pode chamar isso de "fora da família 4". Com versão legível no nome,
+    // vale a comparação numérica; sem ela, a régua antiga do texto.
+    const versao = versaoDoModelo(v);
+    const piso = versaoDoModelo(`gemini-${familia}`);
+    if (versao !== null && piso !== null) return versao >= piso;
     const escapada = String(familia).replace(/\./g, '\\.');
     return new RegExp(`(^|-)${escapada}(?=[-.]|$)`).test(v) || new RegExp(`^gemini-${escapada}(?=[-.]|$)`, 'i').test(v);
 }
