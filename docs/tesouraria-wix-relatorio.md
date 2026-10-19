@@ -14,14 +14,17 @@ Situações por pedido: **Resgatado**, **Disponível para resgate**, **Em libera
 
 **Somente leitura.** Não grava nada na Wix nem em `transactions`; o resgate continua sendo feito na página oficial de transferências pelo botão **Abrir Tesouraria Wix**.
 
-## Conta Wix Pagamentos Brasil: importar o relatório de pagamentos
+## Conta Wix Pagamentos Brasil: liberações calculadas automaticamente
 
-A conta da SPcontabil é do Wix Pagamentos Brasil (`/wix-payments/br/`, conta N.º 002). As APIs públicas de saldo e resgates acima foram feitas para o Wix Payments dos EUA e da Europa, e o painel brasileiro não mostra o ID da conta. Por isso o confronto de liberado x a receber usa o arquivo que a própria Wix exporta:
+A conta da SPcontabil é do Wix Pagamentos Brasil (`/wix-payments/br/`, conta N.º 002). As APIs de saldo e resgates acima são do Wix Payments dos EUA e da Europa, e o painel brasileiro não mostra o ID da conta. Sem `WIX_PAYMENTS_ACCOUNT_ID`, o servidor lê as transações do caixa da Wix (`GET /payments/v2/transactions`, de 400 dias antes do período até hoje, para pegar parcelas de cartão ainda em aberto) e prevê cada parcela com as regras da Wix Brasil:
 
-1. Em Wix Pagamentos > **Relatório de pagamentos**, exportar o CSV (`funds-report-*.csv`).
-2. No modal, gerar o relatório de vendas e clicar em **Importar relatório de pagamentos**.
+| Forma | Taxa | Liberação |
+| --- | --- | --- |
+| Cartão | 3,7% + R$ 0,30 por venda, dividida pelas parcelas | parcela k em 30·k + 1 dias, passando o fim de semana para segunda |
+| Pix | 0,95% | no mesmo dia |
+| Boleto | R$ 2,99 | 5 dias depois (o arquivo da Wix varia de 2 a 8) |
 
-O arquivo é lido só no navegador (`services/wixFundsReport.ts`): não vai ao servidor nem grava nada. Cada parcela é casada com o pedido pelo `externalOrderId`. Parcela `Pago` conta como **Liberado pela Wix** e `Aguardando pagamento` como **A receber**, com a data prevista. Também aparecem o total liberado nas datas escolhidas, o total a receber hoje com a próxima liberação, as parcelas sem pedido da loja (faturas e links de pagamento) e os estornos. Teste: `npm run test:wix-funds`.
+As regras foram conferidas no Relatório de pagamentos exportado do painel (2.280 parcelas, 2022–2026): as taxas batem no centavo, e as datas de cartão batem ou ficam a 1 dia. Parcela com data já passada conta como **Liberado pela Wix**; as demais, como **A receber**. Faturas Wix e links de pagamento entram em "Recebimentos sem pedido da loja". Os valores aparecem como previstos no modal. Se a chave não puder ler as transações, o relatório de vendas continua saindo e mostra o motivo.
 
 ## Onde roda
 

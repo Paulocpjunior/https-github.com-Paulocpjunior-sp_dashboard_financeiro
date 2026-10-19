@@ -1,4 +1,5 @@
 import { auth } from '../firebase';
+import type { WixFundsPayable } from './wixFundsReport';
 
 export type WixSaleSituation =
   | 'resgatado'
@@ -89,6 +90,9 @@ export interface WixTreasuryReport {
   otherRecords?: WixOtherRecord[];
   payouts?: WixPayoutRow[];
   totals?: WixTreasuryTotals;
+  // Parcelas previstas do Wix Pagamentos Brasil, calculadas pelo servidor.
+  payables?: WixFundsPayable[];
+  paymentsError?: string;
 }
 
 export class WixTreasuryRequestError extends Error {

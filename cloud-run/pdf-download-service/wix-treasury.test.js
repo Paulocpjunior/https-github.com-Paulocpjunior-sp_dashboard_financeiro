@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { cents, config, createWixTreasuryHandler, normalizeOrder, normalizeRecord, period, reconcile } = require('./wix-treasury');
+const { cents, config, createWixTreasuryHandler, estimatePayables, normalizeOrder, normalizeRecord, period, reconcile } = require('./wix-treasury');
 
 const money = value => ({ amount: value, formattedAmount: `R$ ${value}` });
 const order = (id, extra = {}) => ({
@@ -144,4 +144,67 @@ test('handler turns Wix permission errors into a clear message', async () => {
   const r = await f.call();
   assert.equal(r.status, 502);
   assert.match(r.body.error, /permissões/);
+});
+
+const tx = (id, method, amount, createdAt, extra = {}) => ({
+  transactionId: id, status: 'APPROVED', provider: 'com.wix.wixpay', paymentMethod: method, type: 'SALE',
+  appId: '1380b703-ce81-ff05-f115-39571d94dfcd', createdAt, amount: { amount, currency: 'BRL' },
+  order: { description: { wixAppOrderId: `order-${id}` } }, paymentMethodData: {}, refunds: [], ...extra,
+});
+
+test('Wix Pagamentos Brasil: parcelas previstas pelas regras conferidas no relatório da Wix', () => {
+  const payables = estimatePayables([
+    // Valores reais do relatório: cartão 3x de 4.999,25 → líquido 1.604,66 por parcela.
+    tx('card', 'creditCard', 4999.25, '2026-10-05T19:39:50Z', { paymentMethodData: { installments: '3' } }),
+    tx('pix', 'pix', 339, '2026-10-15T15:41:30Z', { appId: '13ee94c1-b635-8505-3391-97919052c16f' }),
+    tx('boleto', 'boleto', 237, '2026-10-15T14:48:48Z', { refunds: [{ amount: { amount: 37 }, createdAt: '2026-10-18T12:00:00Z' }] }),
+    tx('presencial', 'inPerson', 500, '2026-10-06T16:44:33Z', { provider: 'NA' }),
+    tx('recusada', 'creditCard', 100, '2026-10-05T14:43:33Z', { status: 'DECLINED' }),
+  ], '2026-10-19');
+  const card = payables.filter(p => p.transactionId === 'card');
+  assert.deepEqual(card.map(p => p.netCents), [160466, 160466, 160466]);
+  assert.equal(card.reduce((t, p) => t + p.feeCents, 0), 18527);
+  assert.deepEqual(card.map(p => p.paymentDate), ['2026-11-05', '2026-12-07', '2027-01-04']);
+  assert.ok(card.every(p => p.status === 'aguardando' && p.orderId === 'order-card' && p.estimated));
+  const pix = payables.find(p => p.transactionId === 'pix');
+  assert.deepEqual([pix.feeCents, pix.netCents, pix.paymentDate, pix.status, pix.orderId], [322, 33578, '2026-10-15', 'liberado', null]);
+  const boleto = payables.filter(p => p.transactionId === 'boleto');
+  assert.deepEqual(boleto.map(p => [p.netCents, p.paymentDate, p.status]), [[23401, '2026-10-20', 'aguardando'], [-3700, '2026-10-18', 'liberado']]);
+  assert.equal(payables.some(p => ['presencial', 'recusada'].includes(p.transactionId)), false);
+});
+
+test('sem conta Wix Payments, o relatório busca as transações e devolve as parcelas previstas', async () => {
+  const urls = [];
+  const f = fixture({
+    env: { WIX_API_KEY: 'synthetic-key' },
+    fetchImpl: async url => {
+      urls.push(url);
+      const body = url.includes('/orders/search') ? { orders: [order('o1')], metadata: { hasNext: false } }
+        : { transactions: [tx('o1', 'pix', 100, '2026-10-05T12:00:00Z')] };
+      return { ok: true, status: 200, json: async () => body };
+    },
+  });
+  const r = await f.call();
+  assert.equal(r.status, 200);
+  assert.equal(r.body.paymentsEnabled, false);
+  assert.equal(r.body.payables.length, 1);
+  assert.equal(r.body.payables[0].netCents, 9905);
+  const txUrl = new URL(urls.find(url => url.includes('/payments/v2/transactions')));
+  assert.equal(txUrl.searchParams.get('from'), '2025-08-27T03:00:00.000Z', '400 dias antes do período');
+  assert.equal(txUrl.searchParams.get('to'), '2026-11-01T03:00:00.000Z');
+  assert.ok(!urls.some(url => url.includes('wixpay-balances') || url.includes('wixpay-payouts')));
+});
+
+test('se a Wix recusar as transações, as vendas continuam saindo com o motivo', async () => {
+  const f = fixture({
+    env: { WIX_API_KEY: 'synthetic-key' },
+    fetchImpl: async url => (url.includes('/orders/search')
+      ? { ok: true, status: 200, json: async () => ({ orders: [order('o1')], metadata: { hasNext: false } }) }
+      : { ok: false, status: 403, json: async () => ({ message: 'Forbidden' }) }),
+  });
+  const r = await f.call();
+  assert.equal(r.status, 200);
+  assert.equal(r.body.totals.soldCents, 10000);
+  assert.equal(r.body.payables, undefined);
+  assert.match(r.body.paymentsError, /403/);
 });

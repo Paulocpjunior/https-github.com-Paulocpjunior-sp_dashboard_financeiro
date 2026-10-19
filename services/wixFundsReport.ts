@@ -1,8 +1,9 @@
 import type { WixSaleRow, WixTreasuryReport } from './wixTreasuryService';
 
-// Relatório de pagamentos exportado do painel Wix Pagamentos Brasil
-// ("funds-report-all-to-all.csv"). A conta brasileira não é coberta pelas APIs
-// públicas de saldo e resgates, então o confronto usa este arquivo, lido só no navegador.
+// Parcelas do Wix Pagamentos Brasil, no formato do Relatório de pagamentos do painel
+// ("funds-report-all-to-all.csv"). A conta brasileira não é coberta pelas APIs públicas de
+// saldo e resgates: o servidor prevê as parcelas a partir das transações (wix-treasury.js),
+// e o leitor do CSV fica para conferir essas regras contra o arquivo real nos testes.
 
 export type WixFundsStatus = 'liberado' | 'aguardando' | 'outro';
 
@@ -17,6 +18,8 @@ export interface WixFundsPayable {
   installment: number | null;
   transactionId: string;
   orderId: string | null;
+  method?: string | null;
+  estimated?: boolean;
 }
 
 export interface WixFundsSummary {

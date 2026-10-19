@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, Loader2, LockKeyhole, RefreshCw, Upload, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, Loader2, LockKeyhole, RefreshCw, Wallet, X } from 'lucide-react';
 import {
   fetchWixTreasuryReport,
   WIX_SITUATION_LABELS,
@@ -7,7 +7,7 @@ import {
   WixSaleSituation,
   WixTreasuryReport,
 } from '../services/wixTreasuryService';
-import { applyWixFunds, parseWixFundsCsv, WixFundsPayable } from '../services/wixFundsReport';
+import { applyWixFunds } from '../services/wixFundsReport';
 
 interface WixTreasuryModalProps {
   open: boolean;
@@ -58,25 +58,10 @@ const WixSalesReport: React.FC = () => {
   const [baseReport, setReport] = useState<WixTreasuryReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [funds, setFunds] = useState<{ payables: WixFundsPayable[]; fileName: string } | null>(null);
-  const [fundsError, setFundsError] = useState('');
-  const funded = useMemo(() => (baseReport && funds ? applyWixFunds(baseReport, funds.payables, funds.fileName) : null), [baseReport, funds]);
+  // Conta Wix Pagamentos Brasil: o servidor devolve as parcelas previstas a partir das transações.
+  const funded = useMemo(() => (baseReport?.payables ? applyWixFunds(baseReport, baseReport.payables, 'Wix Pagamentos') : null), [baseReport]);
   const report = funded?.report || baseReport;
   const fundsSummary = funded?.summary || null;
-
-  // O arquivo é lido só no navegador: nada é enviado ao servidor nem gravado no Financeiro.
-  const importFunds = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    setFundsError('');
-    try {
-      setFunds({ payables: parseWixFundsCsv(await file.text()), fileName: file.name });
-    } catch (err) {
-      setFunds(null);
-      setFundsError(err instanceof Error ? err.message : 'Não foi possível ler o relatório de pagamentos da Wix.');
-    }
-  };
 
   const generate = async () => {
     if (loading) return;
@@ -130,21 +115,7 @@ const WixSalesReport: React.FC = () => {
             Exportar CSV
           </button>
         )}
-        {report?.configured && (
-          <label className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-within:ring-2 focus-within:ring-blue-600 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-            <Upload className="h-4 w-4" aria-hidden="true" />
-            {funds ? 'Trocar relatório de pagamentos' : 'Importar relatório de pagamentos'}
-            <input type="file" accept=".csv,text/csv" onChange={importFunds} className="sr-only" />
-          </label>
-        )}
       </div>
-
-      {fundsError && (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-          <p>{fundsError}</p>
-        </div>
-      )}
 
       {error && (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
@@ -172,15 +143,14 @@ const WixSalesReport: React.FC = () => {
             <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
               <p>
-                Confrontado com <strong>{fundsSummary.fileName}</strong>: {fundsSummary.payables} parcela(s) de {formatDate(fundsSummary.fileStart)} a {formatDate(fundsSummary.fileEnd)}, {fundsSummary.matchedOrders} pedido(s) do período encontrados.
-                {!fundsSummary.coversPeriod && ' O arquivo não cobre todo o período escolhido: exporte de novo com as datas certas.'}
+                Liberações calculadas automaticamente a partir das transações do Wix Pagamentos ({fundsSummary.matchedOrders} pedido(s) do período encontrados). Taxas e datas são <strong>previstas</strong> pelas regras da Wix Brasil: cartão 3,7% + R$ 0,30 com parcelas a cada 30 dias, Pix 0,95% no mesmo dia e boleto R$ 2,99 em poucos dias.
               </p>
             </div>
           )}
           {!report.paymentsEnabled && !fundsSummary && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-              <p>Mostrando só as vendas. Para confrontar com o que a Wix já liberou e o que falta receber, exporte em Wix Pagamentos &gt; <strong>Relatório de pagamentos</strong> e use <strong>Importar relatório de pagamentos</strong>.</p>
+              <p>Mostrando só as vendas: a Wix não devolveu as transações do Wix Pagamentos para calcular o que já foi liberado e o que falta receber.{report.paymentsError ? ` ${report.paymentsError}` : ''}</p>
             </div>
           )}
           {report.truncated && (
@@ -206,7 +176,7 @@ const WixSalesReport: React.FC = () => {
             <SummaryCard label="A receber de clientes" value={formatCents(totals.awaitingCustomersCents)} hint="Pedidos ainda não pagos" />
             <SummaryCard label="Pago pelos clientes" value={formatCents(totals.paidByCustomersCents)} />
             <SummaryCard label="Taxas Wix Payments" value={formatCents(totals.feesCents)} />
-            <SummaryCard label="Pago fora do Wix Payments" value={formatCents(totals.outsideWixPaymentsCents)} hint={fundsSummary ? 'Pedidos pagos sem parcela no relatório da Wix' : 'Conferir no banco ou no pedido'} />
+            <SummaryCard label="Pago fora do Wix Payments" value={formatCents(totals.outsideWixPaymentsCents)} hint={fundsSummary ? 'Pedidos pagos sem transação no Wix Pagamentos' : 'Conferir no banco ou no pedido'} />
             <SummaryCard label="Não lançados no Financeiro" value={String(totals.notInFinance)} hint="Pedidos pagos sem lançamento Wix" />
           </div>
 
@@ -275,7 +245,7 @@ const WixSalesReport: React.FC = () => {
               Também entraram no saldo Wix Payments {report.otherRecords!.length} movimento(s) sem pedido da loja neste período (faturas Wix, estornos ou ajustes), somando {formatCents(totals.otherRecordsNetCents)} líquidos.
             </p>
           )}
-          <p className="text-xs text-slate-500 dark:text-slate-400">Consulta somente leitura à Wix em {formatDate(report.generatedAt)}. {fundsSummary ? 'O relatório de pagamentos é lido só neste navegador. ' : ''}Nenhum valor ou lançamento é alterado.</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Consulta somente leitura à Wix em {formatDate(report.generatedAt)}. Nenhum valor ou lançamento é alterado.</p>
         </>
       )}
     </div>
@@ -368,7 +338,7 @@ export const WixTreasuryModal: React.FC<WixTreasuryModalProps> = ({ open, onClos
 
             <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
               <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" />
-              <p>O Dashboard apenas abre a Wix para o resgate. Ele não recebe senha, não prepara transferências e não confirma movimentações financeiras. O relatório de vendas só lê pedidos e o relatório de pagamentos exportado da Wix.</p>
+              <p>O Dashboard apenas abre a Wix para o resgate. Ele não recebe senha, não prepara transferências e não confirma movimentações financeiras. O relatório de vendas só lê pedidos e transações da Wix.</p>
             </div>
           </div>
         ) : (
