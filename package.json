@@ -48,6 +48,7 @@
     "test:data-loading": "node scripts/test-data-loading-concurrency.mjs",
     "test:dashboard-duplicates-sorting": "node scripts/test-dashboard-duplicates-sorting.mjs",
     "test:payment-method": "node scripts/test-payment-method.mjs",
+    "test:wix-funds": "node scripts/test-wix-funds-report.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
     "test:user-deletion": "node scripts/test-user-deletion.mjs",
     "test:financial-permissions": "node scripts/test-financial-permissions.mjs",

@@ -14,6 +14,15 @@ Situações por pedido: **Resgatado**, **Disponível para resgate**, **Em libera
 
 **Somente leitura.** Não grava nada na Wix nem em `transactions`; o resgate continua sendo feito na página oficial de transferências pelo botão **Abrir Tesouraria Wix**.
 
+## Conta Wix Pagamentos Brasil: importar o relatório de pagamentos
+
+A conta da SPcontabil é do Wix Pagamentos Brasil (`/wix-payments/br/`, conta N.º 002). As APIs públicas de saldo e resgates acima foram feitas para o Wix Payments dos EUA e da Europa, e o painel brasileiro não mostra o ID da conta. Por isso o confronto de liberado x a receber usa o arquivo que a própria Wix exporta:
+
+1. Em Wix Pagamentos > **Relatório de pagamentos**, exportar o CSV (`funds-report-*.csv`).
+2. No modal, gerar o relatório de vendas e clicar em **Importar relatório de pagamentos**.
+
+O arquivo é lido só no navegador (`services/wixFundsReport.ts`): não vai ao servidor nem grava nada. Cada parcela é casada com o pedido pelo `externalOrderId`. Parcela `Pago` conta como **Liberado pela Wix** e `Aguardando pagamento` como **A receber**, com a data prevista. Também aparecem o total liberado nas datas escolhidas, o total a receber hoje com a próxima liberação, as parcelas sem pedido da loja (faturas e links de pagamento) e os estornos. Teste: `npm run test:wix-funds`.
+
 ## Onde roda
 
 Backend `sp-pdf-download` (Cloud Run, `us-central1`), módulo `cloud-run/pdf-download-service/wix-treasury.js`, rota interna `/api/wix-treasury/report` pelo Hosting (mesmo padrão de `/api/itau/**`). Exige sessão Firebase válida e usuário ativo, o mesmo critério de acesso ao modal. Mesmo padrão de credencial da integração da loja no app da Legalização (`backend/wix-provider.js`): API key no header `Authorization` + `wix-site-id`.
