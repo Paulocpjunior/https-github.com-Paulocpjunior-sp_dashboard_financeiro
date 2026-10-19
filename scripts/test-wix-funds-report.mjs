@@ -114,7 +114,19 @@ try {
   assert.match(printable, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/, 'nome do cliente escapado');
   assert.doesNotMatch(printable, /<script>/);
   assert.match(printable, /A &amp; B/);
-  assert.match(wixReportToPrintHtml({ ...report, rows: [] }, null), /Nenhuma venda na loja Wix/);
+  const salesOnly = wixReportToPrintHtml({ ...report, rows: [], paymentsError: 'Wix fora do ar.' }, null);
+  assert.match(salesOnly, /Nenhuma venda na loja Wix/);
+  assert.match(salesOnly, /Mostrando só as vendas.*Wix fora do ar\./);
+  // Conta com accountId: saldo e resgates reais, sem parcelas previstas.
+  const live = wixReportToPrintHtml({
+    ...report, paymentsEnabled: true, balance: { pendingCents: 12345, availableCents: 6789 },
+    payouts: [{ id: 'p1' }], otherRecords: [{ id: 'r1' }], totals: { ...report.totals, payoutsSentCents: 50000, otherRecordsNetCents: -1000 },
+  }, null);
+  assert.doesNotMatch(live, /Mostrando só as vendas/);
+  assert.match(live, /consultados diretamente no Wix Payments/);
+  assert.match(live, /Saldo disponível para resgate hoje/);
+  assert.match(live, /1 transferência\(s\)/);
+  assert.match(live, /1 movimento\(s\) sem pedido/);
 
   console.log('Relatório de pagamentos da Wix: confronto validado.');
 } finally {

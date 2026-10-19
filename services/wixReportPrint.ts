@@ -52,6 +52,10 @@ export function wixReportToPrintHtml(report: WixTreasuryReport, summary: WixFund
       card('A receber da Wix hoje', money(summary.pendingAllCents), summary.nextRelease ? `Próxima ${day(summary.nextRelease.date)}: ${money(summary.nextRelease.cents)}` : 'Nenhuma parcela pendente'),
       card('Recebimentos sem pedido da loja', money(summary.noOrderInPeriodCents), `${summary.noOrderInPeriodCount} parcela(s)`),
       card('Estornos e chargebacks', money(summary.reversalsInPeriodCents), `${summary.reversalsInPeriodCount} no período`),
+    ] : report.paymentsEnabled ? [
+      card('Saldo Wix em liberação hoje', money(report.balance?.pendingCents)),
+      card('Saldo disponível para resgate hoje', money(report.balance?.availableCents)),
+      card('Resgates enviados no período', money(totals.payoutsSentCents), `${(report.payouts || []).length} transferência(s)${totals.payoutsFailed ? `, ${totals.payoutsFailed} com falha` : ''}`),
     ] : []),
   ].join('') : '';
 
@@ -68,9 +72,13 @@ export function wixReportToPrintHtml(report: WixTreasuryReport, summary: WixFund
 </tr>`;
   }).join('\n') : '<tr><td colspan="7" class="empty">Nenhuma venda na loja Wix neste período.</td></tr>';
 
+  // Mesmos avisos do modal: previsão (conta Brasil), saldo e resgates reais da Wix, ou só vendas.
   const note = summary
     ? 'Liberações calculadas automaticamente a partir das transações do Wix Pagamentos. Taxas e datas futuras são previstas pelas regras da Wix Brasil: cartão 3,7% + R$ 0,30 com parcelas a cada 30 dias, Pix 0,95% no mesmo dia e boleto R$ 2,99 em poucos dias.'
-    : 'Mostrando só as vendas: a Wix não devolveu as transações do Wix Pagamentos para calcular liberações.';
+    : report.paymentsEnabled
+      ? 'Situações, saldo e resgates consultados diretamente no Wix Payments.'
+      : `Mostrando só as vendas: a Wix não devolveu as transações do Wix Pagamentos para calcular o que já foi liberado e o que falta receber.${report.paymentsError ? ` ${report.paymentsError}` : ''}`;
+  const others = report.otherRecords || [];
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -117,6 +125,7 @@ ${cards ? `<section class="cards">${cards}</section>` : ''}
 ${body}
 </tbody>
 </table>
+${others.length && totals ? `<p class="note">Também entraram no saldo Wix Payments ${others.length} movimento(s) sem pedido da loja neste período (faturas Wix, estornos ou ajustes), somando ${esc(money(totals.otherRecordsNetCents))} líquidos.</p>` : ''}
 ${report.truncated ? '<p class="note">O período tem mais registros do que o limite de uma consulta. Reduza o período para ver todos.</p>' : ''}
 <footer>Consulta somente leitura à Wix. Nenhum valor ou lançamento é alterado.</footer>
 </body>
