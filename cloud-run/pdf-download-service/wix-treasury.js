@@ -221,6 +221,9 @@ function split(total, n) {
 }
 
 const APPROVED = new Set(['APPROVED', 'REFUNDED', 'PARTIALLY_REFUNDED']);
+// Só estorno concluído reduz o valor; pendente, com falha ou revertido não (ciclo de reembolso da Wix).
+const REFUND_DONE = new Set(['SUCCEEDED', 'COMPLETED', 'APPROVED']);
+const isChargeback = value => /CHARGEBACK/i.test(String(value || ''));
 
 /**
  * Parcelas previstas (mesmo formato do Relatório de pagamentos da Wix) a partir das
@@ -229,14 +232,24 @@ const APPROVED = new Set(['APPROVED', 'REFUNDED', 'PARTIALLY_REFUNDED']);
 function estimatePayables(transactions, today) {
   const payables = [];
   for (const tx of transactions) {
-    if (tx?.provider !== WIX_PAY_PROVIDER || !APPROVED.has(tx.status) || tx.type !== 'SALE') continue;
+    if (tx?.provider !== WIX_PAY_PROVIDER) continue;
     const createdMs = Date.parse(tx.createdAt);
-    const amountCents = cents(tx.amount);
-    if (Number.isNaN(createdMs) || !(amountCents > 0)) continue;
+    const amountCents = Math.abs(cents(tx.amount) || 0);
+    if (Number.isNaN(createdMs) || !amountCents) continue;
+    const orderId = tx.appId === ECOM_APP_ID ? tx.order?.description?.wixAppOrderId || null : null;
+    // Chargeback desconta o valor inteiro na data em que a Wix registra a disputa.
+    if (isChargeback(tx.type) || isChargeback(tx.status)) {
+      payables.push({
+        paymentDate: brDay(createdMs), transactionDate: brDay(createdMs), type: 'Chargeback',
+        amountCents: -amountCents, feeCents: 0, netCents: -amountCents, status: 'liberado', installment: null,
+        transactionId: String(tx.transactionId || ''), orderId, method: tx.paymentMethod || null, estimated: true,
+      });
+      continue;
+    }
+    if (!APPROVED.has(tx.status) || tx.type !== 'SALE') continue;
     const rule = BR_RULES[tx.paymentMethod];
     const installments = rule === BR_RULES.creditCard ? Math.min(Math.max(Number(tx.paymentMethodData?.installments) || 1, 1), 12) : 1;
     const feeCents = rule ? Math.round(amountCents * rule.rate) + rule.fixedCents : 0;
-    const orderId = tx.appId === ECOM_APP_ID ? tx.order?.description?.wixAppOrderId || null : null;
     const amounts = split(amountCents, installments);
     const nets = split(amountCents - feeCents, installments);
     for (let k = 1; k <= installments; k += 1) {
@@ -257,6 +270,7 @@ function estimatePayables(transactions, today) {
       });
     }
     for (const refund of tx.refunds || []) {
+      if (refund.status && !REFUND_DONE.has(String(refund.status).toUpperCase())) continue;
       const refundCents = cents(refund.amount);
       const refundMs = Date.parse(refund.createdAt || refund.dateCreated || refund.createdDate || '');
       if (!(refundCents > 0) || Number.isNaN(refundMs)) continue;

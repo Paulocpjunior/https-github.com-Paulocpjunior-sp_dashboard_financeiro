@@ -157,7 +157,12 @@ test('Wix Pagamentos Brasil: parcelas previstas pelas regras conferidas no relat
     // Valores reais do relatório: cartão 3x de 4.999,25 → líquido 1.604,66 por parcela.
     tx('card', 'creditCard', 4999.25, '2026-10-05T19:39:50Z', { paymentMethodData: { installments: '3' } }),
     tx('pix', 'pix', 339, '2026-10-15T15:41:30Z', { appId: '13ee94c1-b635-8505-3391-97919052c16f' }),
-    tx('boleto', 'boleto', 237, '2026-10-15T14:48:48Z', { refunds: [{ amount: { amount: 37 }, createdAt: '2026-10-18T12:00:00Z' }] }),
+    tx('boleto', 'boleto', 237, '2026-10-15T14:48:48Z', { refunds: [
+      { amount: { amount: 37 }, createdAt: '2026-10-18T12:00:00Z', status: 'SUCCEEDED' },
+      { amount: { amount: 50 }, createdAt: '2026-10-18T13:00:00Z', status: 'FAILED' },
+      { amount: { amount: 60 }, createdAt: '2026-10-18T14:00:00Z', status: 'PENDING' },
+    ] }),
+    tx('disputa', 'creditCard', 733.33, '2026-10-10T12:00:00Z', { type: 'CHARGEBACK' }),
     tx('presencial', 'inPerson', 500, '2026-10-06T16:44:33Z', { provider: 'NA' }),
     tx('recusada', 'creditCard', 100, '2026-10-05T14:43:33Z', { status: 'DECLINED' }),
   ], '2026-10-19');
@@ -170,6 +175,8 @@ test('Wix Pagamentos Brasil: parcelas previstas pelas regras conferidas no relat
   assert.deepEqual([pix.feeCents, pix.netCents, pix.paymentDate, pix.status, pix.orderId], [322, 33578, '2026-10-15', 'liberado', null]);
   const boleto = payables.filter(p => p.transactionId === 'boleto');
   assert.deepEqual(boleto.map(p => [p.netCents, p.paymentDate, p.status]), [[23401, '2026-10-20', 'aguardando'], [-3700, '2026-10-18', 'liberado']]);
+  const chargeback = payables.find(p => p.transactionId === 'disputa');
+  assert.deepEqual([chargeback.type, chargeback.netCents, chargeback.paymentDate, chargeback.status], ['Chargeback', -73333, '2026-10-10', 'liberado']);
   assert.equal(payables.some(p => ['presencial', 'recusada'].includes(p.transactionId)), false);
 });
 
