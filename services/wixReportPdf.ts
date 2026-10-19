@@ -104,7 +104,7 @@ export function buildWixReportPDF(report: WixTreasuryReport, summary: WixFundsSu
       column(1, GREEN, `RESGATADO: ${money(totals.withdrawnCents)}`, [
         `- Taxas Wix Payments: ${money(totals.feesCents)}`,
         `- Pago fora do Wix Payments: ${money(totals.outsideWixPaymentsCents)}`,
-        ...(report.paymentsEnabled ? [`- Resgates enviados: ${money(totals.payoutsSentCents)} (${(report.payouts || []).length})`] : []),
+        ...(report.paymentsEnabled ? [`- Resgates enviados: ${money(totals.payoutsSentCents)} (${(report.payouts || []).filter(payout => payout.status === 'SENT').length})${totals.payoutsFailed ? `, ${totals.payoutsFailed} com falha` : ''}`] : []),
       ]);
       column(2, ORANGE, `A RECEBER DA WIX: ${money(totals.pendingReleaseCents === null || totals.availableCents === null ? null : totals.pendingReleaseCents + totals.availableCents)}`,
         report.paymentsEnabled ? [

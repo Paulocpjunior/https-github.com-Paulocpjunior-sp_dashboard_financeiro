@@ -133,12 +133,14 @@ try {
   // Conta com accountId: saldo e resgates reais, sem parcelas previstas.
   const live = pdfText({
     ...report, paymentsEnabled: true, balance: { pendingCents: 12345, availableCents: 6789 },
-    payouts: [{ id: 'p1' }], otherRecords: [{ id: 'r1' }], totals: { ...report.totals, payoutsSentCents: 50000, otherRecordsNetCents: -1000 },
+    payouts: [{ id: 'p1', status: 'SENT' }, { id: 'p2', status: 'FAILED' }], otherRecords: [{ id: 'r1' }],
+    totals: { ...report.totals, payoutsSentCents: 50000, payoutsFailed: 1, otherRecordsNetCents: -1000 },
   }, null, user).text;
   assert.doesNotMatch(live, /Mostrando s. as vendas/);
   assert.match(live, /RESGATADO/);
   assert.match(live, /Dispon.vel para resgate hoje/);
   assert.match(live, /1 movimento\(s\) sem pedido/);
+  assert.match(live, /Resgates enviados: R\$.500,00 \(1\), 1 com falha/, 'conta só os enviados e mantém o aviso de falha');
 
   console.log('Relatório de pagamentos da Wix: confronto validado.');
 } finally {
