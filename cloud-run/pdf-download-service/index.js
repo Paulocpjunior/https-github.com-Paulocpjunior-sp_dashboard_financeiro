@@ -83,7 +83,7 @@ function createServer() {
     if (await createBoletoHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
 
     if (await createStatementHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
-    if (await createWixTreasuryHandler({ getServices: getAdminServices, sendJson })(request, response)) return;
+    if (await createWixTreasuryHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
 
     if (request.method === 'POST' && request.url === '/api/boleto-cloud-csv') {
       sendJson(request, response, 410, { error: 'Exportação CSV encerrada. Use a emissão de boletos no app.' });

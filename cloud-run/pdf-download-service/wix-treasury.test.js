@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { cents, config, createWixTreasuryHandler, normalizeOrder, normalizeRecord, period, reconcile } = require('./wix-treasury');
+const { brCents, brDate, buildReport, cents, config, createWixTreasuryHandler, normalizeOrder, normalizeRecord, parseFundsReport, period, reconcile } = require('./wix-treasury');
 
 const money = value => ({ amount: value, formattedAmount: `R$ ${value}` });
 const order = (id, extra = {}) => ({
@@ -94,13 +94,14 @@ function fixture({ profile = { active: true, role: 'user' }, env = { WIX_API_KEY
   const handler = createWixTreasuryHandler({
     getServices: () => ({ adminAuth: { verifyIdToken: async token => { if (token !== 'ok') throw new Error('bad'); return { uid: 'u' }; } }, adminDb: db }),
     sendJson: (_req, res, status, body) => Object.assign(res, { status, body }),
+    readBody: async req => { if (req.tooLarge) throw new Error('request too large'); return Buffer.from(req.body || ''); },
     env, fetchImpl: wix, now: () => new Date('2026-10-19T12:00:00Z'),
   });
   return {
     calls,
-    async call(url = '/api/wix-treasury/report?start=2026-10-01&end=2026-10-31', auth = 'Bearer ok') {
+    async call(url = '/api/wix-treasury/report?start=2026-10-01&end=2026-10-31', auth = 'Bearer ok', extra = {}) {
       const res = {};
-      const handled = await handler({ url, method: 'GET', headers: { authorization: auth } }, res);
+      const handled = await handler({ url, method: 'GET', headers: { authorization: auth }, ...extra }, res);
       return { handled, ...res };
     },
   };
@@ -144,4 +145,91 @@ test('handler turns Wix permission errors into a clear message', async () => {
   const r = await f.call();
   assert.equal(r.status, 502);
   assert.match(r.body.error, /permissões/);
+});
+
+// Relatório de pagamentos do Wix Pagamentos Brasil (CSV do painel). Dados sintéticos.
+const FUNDS_HEADER = '﻿"paymentDate","transactionCreationDate","payableType","amount","wixFee","netAmount","payableStatus","installmentNumber","payableId","anticipationFee","daysAnticipated","transactionId","externalTransactionId","customerName","externalOrderId"';
+const fundsLine = (paid, created, type, amount, fee, net, status, inst, id, orderId, customer = 'Cliente Teste') =>
+  `"${paid}","${created}","${type}","${amount}","${fee}","${net}","${status}",${inst},"${id}","0,00",,"t-${id}","t-${id}","${customer}","${orderId}"`;
+const FUNDS_CSV = [
+  FUNDS_HEADER,
+  // o1: venda à vista já paga pela Wix.
+  fundsLine('09/10/26 06:00', '05/10/26 10:00', 'Crédito', '100,00', '4,00', '96,00', 'Pago', '', 'p-o1', 'o1'),
+  // o2: parcelada em 2, uma paga e outra em liberação.
+  fundsLine('06/10/26 06:00', '05/10/26 11:00', 'Crédito', '1.000,00', '37,00', '963,00', 'Pago', 1, 'p-o2-1', 'o2'),
+  fundsLine('05/11/26 06:00', '05/10/26 11:00', 'Crédito', '1.000,00', '37,00', '963,00', 'Aguardando pagamento', 2, 'p-o2-2', 'o2'),
+  // Venda sem pedido da loja (link de pagamento) e estorno antigo fora do período.
+  fundsLine('20/10/26 06:00', '12/10/26 09:00', 'Crédito', '50,00', '2,00', '48,00', 'Pago', '', 'p-avulso', ''),
+  fundsLine('10/07/25 06:00', '09/06/25 19:16', 'Reembolsar', '-364,00', '-13,77', '-350,23', 'Pago', '', 'p-reemb', 'antigo'),
+  // Venda de setembro ainda em liberação: entra no saldo a liberar, não no período.
+  fundsLine('20/11/26 06:00', '20/09/26 09:00', 'Crédito', '200,00', '8,00', '192,00', 'Aguardando pagamento', 3, 'p-set', 'set'),
+].join('\r\n');
+
+test('Brazilian money and dates from the Wix Pagamentos export', () => {
+  assert.equal(brCents('1.666,43'), 166643);
+  assert.equal(brCents('-364,00'), -36400);
+  assert.equal(brCents(''), null);
+  assert.deepEqual(brDate('05/01/27 06:00'), { day: '2027-01-05', iso: '2027-01-05T09:00:00.000Z' });
+  assert.equal(brDate('31/02/26 06:00'), null);
+});
+
+test('funds report rows become balance records by installment', () => {
+  const records = parseFundsReport(FUNDS_CSV);
+  assert.equal(records.length, 6);
+  const by = Object.fromEntries(records.map(r => [r.id, r]));
+  assert.deepEqual({ type: by['p-o1'].type, status: by['p-o1'].status, net: by['p-o1'].netCents, order: by['p-o1'].orderId, payout: by['p-o1'].payoutId },
+    { type: 'CREDIT', status: 'PAID_OUT', net: 9600, order: 'o1', payout: 'wix-br-2026-10-09' });
+  assert.equal(by['p-o2-2'].status, 'PENDING_CREDIT');
+  assert.equal(by['p-o2-2'].availableOn, '2026-11-05');
+  assert.equal(by['p-o2-2'].payoutDate, null);
+  assert.equal(by['p-reemb'].type, 'REFUND');
+  assert.equal(by['p-avulso'].orderId, null);
+  assert.throws(() => parseFundsReport('"data","valor"\n"01/10/26","1,00"'), /Relatório de pagamentos/);
+});
+
+test('report with the imported funds file classifies sales without the Wix Payments API', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push(url);
+    return { ok: true, status: 200, json: async () => ({ orders: [order('o1'), order('o2', { priceSummary: { total: money('2000.00') }, balanceSummary: { paid: money('2000.00') } }), order('o3')], metadata: { hasNext: false } }) };
+  };
+  const report = await buildReport({
+    db: { getAll: async (...refs) => refs.map(ref => ({ id: ref.id, exists: false })), collection: () => ({ doc: id => ({ id }) }) },
+    env: { WIX_API_KEY: 'k' }, fetchImpl, start: '2026-10-01', end: '2026-10-31', fundsCsv: FUNDS_CSV,
+    now: () => new Date('2026-10-19T12:00:00Z'),
+  });
+  assert.deepEqual(calls.map(u => new URL(u).pathname), ['/ecom/v1/orders/search']);
+  assert.equal(report.paymentsEnabled, true);
+  assert.equal(report.paymentsSource, 'funds_report');
+  const by = Object.fromEntries(report.rows.map(r => [r.id, r]));
+  assert.equal(by.o1.situation, 'resgatado');
+  assert.equal(by.o1.payoutDate, '2026-10-09T09:00:00.000Z');
+  assert.equal(by.o2.situation, 'em_liberacao');
+  assert.equal(by.o2.availableOn, '2026-11-05');
+  assert.equal(by.o2.netCents, 192600);
+  assert.equal(by.o3.situation, 'fora_wix_payments');
+  // Parcela paga de o2 conta como paga; a outra como a liberar.
+  assert.equal(report.totals.withdrawnCents, 9600 + 96300);
+  assert.equal(report.totals.pendingReleaseCents, 96300);
+  assert.equal(report.totals.availableCents, 0);
+  assert.equal(report.totals.feesCents, 400 + 3700 + 3700 + 200);
+  assert.equal(report.totals.otherRecordsNetCents, 4800);
+  // Pagamentos da Wix no período, por dia; saldo a liberar hoje inclui a venda de setembro.
+  assert.deepEqual(report.payouts.map(p => [p.arrival, p.amountCents]), [['2026-10-06', 96300], ['2026-10-09', 9600], ['2026-10-20', 4800]]);
+  assert.equal(report.totals.payoutsSentCents, 96300 + 9600 + 4800);
+  assert.deepEqual(report.balance, { pendingCents: 96300 + 19200, availableCents: null });
+  assert.deepEqual(report.fundsReport, { payables: 6, latestPaymentDate: '2026-10-20T09:00:00.000Z' });
+});
+
+test('handler accepts the funds file by POST and rejects oversize or empty uploads', async () => {
+  const f = fixture({ env: { WIX_API_KEY: 'synthetic-key' } });
+  const post = body => ({ method: 'POST', body: JSON.stringify(body) });
+  const ok = await f.call('/api/wix-treasury/report', 'Bearer ok', post({ start: '2026-10-01', end: '2026-10-31', fundsCsv: FUNDS_CSV }));
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.paymentsSource, 'funds_report');
+  assert.equal(ok.body.rows[0].situation, 'resgatado');
+  assert.ok(f.calls.every(c => !/wixpay/.test(c.url)));
+  assert.equal((await f.call('/api/wix-treasury/report', 'Bearer ok', post({ start: '2026-10-01', end: '2026-10-31' }))).status, 400);
+  assert.equal((await f.call('/api/wix-treasury/report', 'Bearer ok', { method: 'POST', tooLarge: true })).status, 413);
+  assert.equal((await f.call('/api/wix-treasury/report', '', post({ fundsCsv: FUNDS_CSV }))).status, 401);
 });

@@ -11,6 +11,12 @@
 //   Saldo:       POST /wixpay-balances/v5/balance-records/query   (View settlement reports and payouts)
 //   Resgates:    GET  /wixpay-payouts/v4/payouts                  (View settlement reports and payouts)
 //
+// Conta Wix Pagamentos Brasil: o painel não expõe o accountId e as APIs de saldo
+// acima não cobrem a conta BR. Nesse caso o usuário importa o "Relatório de
+// pagamentos" (CSV exportado do painel Wix Pagamentos) e o confronto usa as
+// parcelas do arquivo no lugar do saldo/resgates da API. O arquivo só é lido
+// na requisição; nada é guardado.
+//
 // Variáveis do Cloud Run (sem elas o relatório diz o que falta e não chama a Wix):
 //   WIX_API_KEY               API key da conta Wix. Secret Manager, nunca no código.
 //   WIX_SITE_ID               ID do site SPcontabil (padrão: o mesmo da página de transferências).
@@ -260,12 +266,14 @@ function reconcile({ orders, records, payouts, inFinance = new Set(), paymentsEn
     const own = byOrder.get(order.id) || [];
     const state = situation(order, own, paymentsEnabled);
     const payout = own.find(r => r.payoutId);
+    // Com parcelas, a próxima liberação é a mais próxima.
+    const nextRelease = own.filter(r => r.status === 'PENDING_CREDIT' && r.availableOn).map(r => r.availableOn).sort()[0];
     return {
       ...order,
       situation: state,
       feeCents: own.length ? sum(own, 'feeCents') : null,
       netCents: own.length ? sum(own, 'netCents') : null,
-      availableOn: own.find(r => r.status === 'PENDING_CREDIT')?.availableOn || null,
+      availableOn: nextRelease || null,
       payoutId: payout?.payoutId || null,
       payoutDate: payout?.payoutDate || null,
       inFinance: inFinance.has(`wix-${order.id}`),
@@ -273,7 +281,9 @@ function reconcile({ orders, records, payouts, inFinance = new Set(), paymentsEn
   });
 
   const live = rows.filter(r => r.situation !== 'cancelado');
-  const net = state => sum(rows.filter(r => r.situation === state), 'netCents');
+  // Somado por registro, não por pedido: venda parcelada pode ter parcelas já pagas e outras em liberação.
+  const liveRecords = live.flatMap(r => byOrder.get(r.id) || []);
+  const net = (...statuses) => sum(liveRecords.filter(r => statuses.includes(r.status)), 'netCents');
   const others = records.filter(r => !matched.has(r));
   const sentPayouts = payouts.filter(p => p.status === 'SENT');
 
@@ -288,14 +298,119 @@ function reconcile({ orders, records, payouts, inFinance = new Set(), paymentsEn
       paidByCustomersCents: sum(live, 'paidCents'),
       awaitingCustomersCents: sum(live.filter(r => r.situation === 'aguardando_cliente'), 'totalCents'),
       feesCents: paymentsEnabled ? sum(records, 'feeCents') : null,
-      withdrawnCents: paymentsEnabled ? net('resgatado') : null,
-      pendingReleaseCents: paymentsEnabled ? net('em_liberacao') : null,
-      availableCents: paymentsEnabled ? net('disponivel') : null,
+      withdrawnCents: paymentsEnabled ? net('PAID_OUT') : null,
+      pendingReleaseCents: paymentsEnabled ? net('PENDING_CREDIT') : null,
+      availableCents: paymentsEnabled ? net('CREDITED', 'PAYOUT_REVERSED') : null,
       outsideWixPaymentsCents: paymentsEnabled ? sum(rows.filter(r => r.situation === 'fora_wix_payments'), 'paidCents') : null,
       otherRecordsNetCents: paymentsEnabled ? sum(others, 'netCents') : null,
       payoutsSentCents: paymentsEnabled ? sum(sentPayouts, 'amountCents') : null,
       payoutsFailed: payouts.filter(p => p.status === 'FAILED').length,
       notInFinance: live.filter(r => PAID.has(r.paymentStatus) && !r.inFinance).length,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Relatório de pagamentos do Wix Pagamentos Brasil (CSV do painel, uma linha por parcela).
+// Colunas: paymentDate, transactionCreationDate, payableType, amount, wixFee, netAmount,
+// payableStatus, installmentNumber, payableId, ..., transactionId, customerName, externalOrderId.
+// ---------------------------------------------------------------------------
+
+const FUNDS_COLUMNS = ['paymentDate', 'transactionCreationDate', 'payableType', 'amount', 'wixFee', 'netAmount', 'payableStatus', 'payableId', 'externalOrderId'];
+const FUNDS_TYPES = { 'crédito': 'CREDIT', credito: 'CREDIT', reembolsar: 'REFUND', reembolso: 'REFUND', chargeback: 'CHARGEBACK' };
+// "Pago" = parcela já paga pela Wix (depósito automático ou resgate); "Aguardando pagamento" = ainda em liberação.
+const FUNDS_STATUS = { pago: 'PAID_OUT', 'aguardando pagamento': 'PENDING_CREDIT' };
+
+function parseCsv(textValue) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  const src = String(textValue).replace(/^﻿/, '');
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (quoted) {
+      if (ch === '"' && src[i + 1] === '"') { cell += '"'; i += 1; } else if (ch === '"') quoted = false; else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i += 1;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+
+// "1.666,43" → 166643. Ausente ≠ zero.
+function brCents(value) {
+  const raw = String(value ?? '').trim().replace(/\./g, '').replace(',', '.');
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+// "05/01/27 06:00" (horário de Brasília) → { iso, day: '2027-01-05' }.
+function brDate(value) {
+  const m = String(value ?? '').trim().match(/^(\d{2})\/(\d{2})\/(\d{2}|\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+  if (!m) return null;
+  const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+  const day = `${year}-${m[2]}-${m[1]}`;
+  if (!isDate(day)) return null;
+  return { day, iso: new Date(Date.parse(`${day}T${m[4] || '00'}:${m[5] || '00'}:00-03:00`)).toISOString() };
+}
+
+/** CSV do painel → registros no mesmo formato de normalizeRecord. */
+function parseFundsReport(csvText) {
+  const [header, ...lines] = parseCsv(csvText);
+  const cols = (header || []).map(h => h.trim());
+  const missing = FUNDS_COLUMNS.filter(c => !cols.includes(c));
+  if (missing.length) {
+    throw new WixTreasuryError(`O arquivo não é o Relatório de pagamentos do Wix Pagamentos (faltam as colunas ${missing.join(', ')}).`);
+  }
+  return lines.map(line => {
+    const get = name => text(line[cols.indexOf(name)]);
+    const paid = brDate(get('paymentDate'));
+    const created = brDate(get('transactionCreationDate'));
+    const typeRaw = (get('payableType') || '').toLowerCase();
+    const status = FUNDS_STATUS[(get('payableStatus') || '').toLowerCase()] || 'UNKNOWN';
+    return {
+      id: get('payableId'),
+      type: FUNDS_TYPES[typeRaw] || (typeRaw ? typeRaw.toUpperCase() : 'UNKNOWN'),
+      status,
+      amountCents: brCents(get('amount')),
+      feeCents: brCents(get('wixFee')),
+      netCents: brCents(get('netAmount')),
+      appliedDate: created?.iso || null,
+      availableOn: status === 'PENDING_CREDIT' ? paid?.day || null : null,
+      payoutId: status === 'PAID_OUT' && paid ? `wix-br-${paid.day}` : null,
+      payoutDate: status === 'PAID_OUT' ? paid?.iso || null : null,
+      orderId: get('externalOrderId'),
+      displayOrderId: null,
+      customer: get('customerName'),
+      transactionCreated: created?.iso || null,
+      installment: get('installmentNumber'),
+    };
+  });
+}
+
+// Parcelas das vendas do período, pagamentos da Wix no período (agrupados por dia) e saldo a liberar hoje.
+function fundsReportView(records, range) {
+  const within = iso => Boolean(iso) && iso >= range.startIso && iso < range.endIso;
+  const byDay = new Map();
+  for (const r of records) {
+    if (r.status !== 'PAID_OUT' || !within(r.payoutDate)) continue;
+    const day = r.payoutId;
+    if (!byDay.has(day)) byDay.set(day, { id: day, createdDate: r.payoutDate, status: 'SENT', amountCents: 0, arrival: day.slice(-10), reference: null, failure: null });
+    byDay.get(day).amountCents += r.netCents || 0;
+  }
+  return {
+    records: records.filter(r => within(r.transactionCreated)),
+    payouts: [...byDay.values()].sort((a, b) => a.createdDate.localeCompare(b.createdDate)),
+    balance: { pendingCents: sum(records.filter(r => r.status === 'PENDING_CREDIT'), 'netCents'), availableCents: null },
+    summary: {
+      payables: records.length,
+      latestPaymentDate: records.map(r => r.payoutDate).filter(Boolean).sort().pop() || null,
     },
   };
 }
@@ -312,47 +427,54 @@ async function financeIds(db, orders) {
   return found;
 }
 
-async function buildReport({ db, env, fetchImpl, start, end, now = () => new Date() }) {
+async function buildReport({ db, env, fetchImpl, start, end, fundsCsv = null, now = () => new Date() }) {
   const cfg = config(env);
   const range = period(start, end);
   if (cfg.missing.length) {
     return { configured: false, missing: cfg.missing, paymentsMissing: cfg.paymentsMissing, period: { start, end } };
   }
-  const paymentsEnabled = cfg.paymentsMissing.length === 0;
+  // O relatório importado tem prioridade: é o único caminho para a conta Wix Pagamentos Brasil.
+  const funds = fundsCsv ? fundsReportView(parseFundsReport(fundsCsv), range) : null;
+  const apiPayments = !funds && cfg.paymentsMissing.length === 0;
+  const paymentsEnabled = Boolean(funds) || apiPayments;
   const [orderResult, recordResult, payouts, pending, available] = await Promise.all([
     searchOrders(cfg, fetchImpl, range),
-    paymentsEnabled ? queryBalanceRecords(cfg, fetchImpl, range) : { records: [], truncated: false },
-    paymentsEnabled ? listPayouts(cfg, fetchImpl, range) : [],
-    paymentsEnabled ? balanceByTag(cfg, fetchImpl, 'PENDING') : null,
-    paymentsEnabled ? balanceByTag(cfg, fetchImpl, 'AVAILABLE') : null,
+    apiPayments ? queryBalanceRecords(cfg, fetchImpl, range) : { records: [], truncated: false },
+    apiPayments ? listPayouts(cfg, fetchImpl, range) : [],
+    apiPayments ? balanceByTag(cfg, fetchImpl, 'PENDING') : null,
+    apiPayments ? balanceByTag(cfg, fetchImpl, 'AVAILABLE') : null,
   ]);
   const orders = orderResult.orders.map(normalizeOrder).filter(Boolean);
-  const records = recordResult.records.map(normalizeRecord);
+  const records = funds ? funds.records : recordResult.records.map(normalizeRecord);
   const result = reconcile({
     orders,
     records,
-    payouts: payouts.map(normalizePayout),
+    payouts: funds ? funds.payouts : payouts.map(normalizePayout),
     inFinance: await financeIds(db, orders),
     paymentsEnabled,
   });
   return {
     configured: true,
     paymentsEnabled,
+    paymentsSource: funds ? 'funds_report' : apiPayments ? 'api' : null,
     paymentsMissing: cfg.paymentsMissing,
+    fundsReport: funds ? funds.summary : undefined,
     period: { start, end },
     generatedAt: now().toISOString(),
     truncated: orderResult.truncated || recordResult.truncated,
-    balance: paymentsEnabled ? { pendingCents: pending, availableCents: available } : null,
+    balance: funds ? funds.balance : apiPayments ? { pendingCents: pending, availableCents: available } : null,
     ...result,
   };
 }
 
-function createWixTreasuryHandler({ getServices, sendJson, env = process.env, fetchImpl = fetch, now }) {
+// GET: só a API. POST { start, end, fundsCsv }: com o Relatório de pagamentos importado.
+function createWixTreasuryHandler({ getServices, sendJson, readBody, env = process.env, fetchImpl = fetch, now }) {
   return async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
     if (!url.pathname.startsWith('/api/wix-treasury/')) return false;
     try {
-      if (request.method !== 'GET' || url.pathname !== '/api/wix-treasury/report') throw new WixTreasuryError('Rota não encontrada.', 404);
+      const post = request.method === 'POST' && typeof readBody === 'function';
+      if ((request.method !== 'GET' && !post) || url.pathname !== '/api/wix-treasury/report') throw new WixTreasuryError('Rota não encontrada.', 404);
       const { adminAuth, adminDb: db } = getServices();
       const bearer = String(request.headers.authorization || '').match(/^Bearer (\S+)$/);
       if (!bearer) throw new WixTreasuryError('Entre novamente para consultar a Tesouraria Wix.', 401);
@@ -360,11 +482,16 @@ function createWixTreasuryHandler({ getServices, sendJson, env = process.env, fe
       try { uid = (await adminAuth.verifyIdToken(bearer[1], true)).uid; } catch { throw new WixTreasuryError('Sessão expirada. Entre novamente.', 401); }
       const profile = await db.collection('users').doc(uid).get();
       if (!profile.exists || !permitted(profile.data())) throw new WixTreasuryError('Sem permissão para a Tesouraria Wix.', 403);
-      const report = await buildReport({
-        db, env, fetchImpl, now,
-        start: url.searchParams.get('start'),
-        end: url.searchParams.get('end'),
-      });
+      let params = { start: url.searchParams.get('start'), end: url.searchParams.get('end'), fundsCsv: null };
+      if (post) {
+        let body;
+        try { body = JSON.parse((await readBody(request)).toString('utf8')); } catch (error) {
+          throw new WixTreasuryError(/too large/.test(error?.message) ? 'Arquivo grande demais. Exporte o relatório de pagamentos só do período.' : 'Envio inválido.', /too large/.test(error?.message) ? 413 : 400);
+        }
+        if (typeof body?.fundsCsv !== 'string' || !body.fundsCsv.trim()) throw new WixTreasuryError('Envie o Relatório de pagamentos (CSV).');
+        params = { start: body.start, end: body.end, fundsCsv: body.fundsCsv };
+      }
+      const report = await buildReport({ db, env, fetchImpl, now, ...params });
       sendJson(request, response, 200, report);
     } catch (error) {
       const status = error instanceof WixTreasuryError ? error.status : 500;
@@ -377,13 +504,18 @@ function createWixTreasuryHandler({ getServices, sendJson, env = process.env, fe
 
 module.exports = {
   WixTreasuryError,
+  brCents,
+  brDate,
   buildReport,
   cents,
   config,
   createWixTreasuryHandler,
+  fundsReportView,
   normalizeOrder,
   normalizePayout,
   normalizeRecord,
+  parseCsv,
+  parseFundsReport,
   period,
   reconcile,
 };

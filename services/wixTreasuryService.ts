@@ -75,7 +75,10 @@ export interface WixTreasuryReport {
   configured: boolean;
   missing?: string[];
   paymentsEnabled?: boolean;
+  /** 'api' = saldo/resgates da API Wix Payments; 'funds_report' = Relatório de pagamentos importado (conta BR). */
+  paymentsSource?: 'api' | 'funds_report' | null;
   paymentsMissing?: string[];
+  fundsReport?: { payables: number; latestPaymentDate: string | null };
   period: { start: string; end: string };
   generatedAt?: string;
   truncated?: boolean;
@@ -90,15 +93,29 @@ export class WixTreasuryRequestError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
-export async function fetchWixTreasuryReport(start: string, end: string): Promise<WixTreasuryReport> {
+// O backend aceita até 4 MB por requisição; o CSV completo do painel costuma ter menos de 1 MB.
+export const WIX_FUNDS_REPORT_MAX_BYTES = 3.5 * 1024 * 1024;
+
+/**
+ * Relatório de vendas. Com `fundsCsv` (Relatório de pagamentos exportado do painel Wix Pagamentos),
+ * o confronto usa as parcelas do arquivo; o arquivo não é guardado.
+ */
+export async function fetchWixTreasuryReport(start: string, end: string, fundsCsv?: string | null): Promise<WixTreasuryReport> {
   await auth.authStateReady();
   const user = auth.currentUser;
   if (!user) throw new WixTreasuryRequestError('Entre novamente para consultar a Tesouraria Wix.', 401);
-  const params = new URLSearchParams({ start, end });
-  const response = await fetch(`/api/wix-treasury/report?${params}`, {
-    cache: 'no-store',
-    headers: { Authorization: `Bearer ${await user.getIdToken()}` },
-  });
+  const authorization = `Bearer ${await user.getIdToken()}`;
+  const response = fundsCsv
+    ? await fetch('/api/wix-treasury/report', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { Authorization: authorization, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start, end, fundsCsv }),
+    })
+    : await fetch(`/api/wix-treasury/report?${new URLSearchParams({ start, end })}`, {
+      cache: 'no-store',
+      headers: { Authorization: authorization },
+    });
   if (!response.headers.get('content-type')?.includes('application/json')) {
     throw new WixTreasuryRequestError('Relatório Wix indisponível. Tente novamente mais tarde.', 503);
   }
@@ -117,6 +134,10 @@ export const WIX_SITUATION_LABELS: Record<WixSaleSituation, string> = {
   pago: 'Pago',
   conferir: 'Conferir na Wix',
 };
+
+// No Relatório de pagamentos (conta BR), "Pago" quer dizer pago pela Wix: depósito automático ou resgate.
+export const wixSituationLabel = (report: WixTreasuryReport, situation: WixSaleSituation) =>
+  report.paymentsSource === 'funds_report' && situation === 'resgatado' ? 'Pago pela Wix' : WIX_SITUATION_LABELS[situation];
 
 const csvCell = (value: unknown) => {
   const text = value === null || value === undefined ? '' : String(value);
@@ -137,7 +158,7 @@ export function wixReportToCsv(report: WixTreasuryReport): string {
     csvMoney(row.paidCents),
     csvMoney(row.feeCents),
     csvMoney(row.netCents),
-    WIX_SITUATION_LABELS[row.situation],
+    wixSituationLabel(report, row.situation),
     row.availableOn,
     (row.payoutDate || '').slice(0, 10),
     row.inFinance ? 'Sim' : 'Não',

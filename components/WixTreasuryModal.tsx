@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, Loader2, LockKeyhole, RefreshCw, Wallet, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, FileUp, Loader2, LockKeyhole, RefreshCw, Wallet, X } from 'lucide-react';
 import {
   fetchWixTreasuryReport,
-  WIX_SITUATION_LABELS,
+  WIX_FUNDS_REPORT_MAX_BYTES,
   wixReportToCsv,
+  wixSituationLabel,
   WixSaleSituation,
   WixTreasuryReport,
 } from '../services/wixTreasuryService';
@@ -51,24 +52,43 @@ const SummaryCard: React.FC<{ label: string; value: string; hint?: string }> = (
   </div>
 );
 
+// Painel Wix Pagamentos > Relatório de pagamentos > Exportar (conta SPcontabil).
+const WIX_FUNDS_REPORT_URL = WIX_SP_CONTABIL_TRANSFERS_URL.replace(/transfer-history$/, 'funds');
+
 const WixSalesReport: React.FC = () => {
   const [range, setRange] = useState(currentMonth);
   const [report, setReport] = useState<WixTreasuryReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // O CSV fica só na memória desta tela; vai junto em cada geração e não é guardado.
+  const [funds, setFunds] = useState<{ name: string; text: string } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  const generate = async () => {
+  const generate = async (fundsFile = funds) => {
     if (loading) return;
     setLoading(true);
     setError('');
     try {
-      setReport(await fetchWixTreasuryReport(range.start, range.end));
+      setReport(await fetchWixTreasuryReport(range.start, range.end, fundsFile?.text));
     } catch (err) {
       setReport(null);
       setError(err instanceof Error ? err.message : 'Não foi possível gerar o relatório Wix.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const importFunds = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > WIX_FUNDS_REPORT_MAX_BYTES) {
+      setError('Arquivo grande demais. No painel Wix Pagamentos, exporte o relatório de pagamentos só do período.');
+      return;
+    }
+    const next = { name: file.name, text: await file.text() };
+    setFunds(next);
+    await generate(next);
   };
 
   const exportCsv = () => {
@@ -97,10 +117,16 @@ const WixSalesReport: React.FC = () => {
           <input type="date" value={range.end} min={range.start} onChange={event => setRange(prev => ({ ...prev, end: event.target.value }))}
             className="mt-1 block min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
         </label>
-        <button type="button" onClick={generate} disabled={loading || !range.start || !range.end}
+        <button type="button" onClick={() => generate()} disabled={loading || !range.start || !range.end}
           className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
           {loading ? 'Consultando a Wix…' : 'Gerar relatório'}
+        </button>
+        <input ref={fileInput} type="file" accept=".csv,text/csv" className="hidden" onChange={importFunds} aria-hidden="true" tabIndex={-1} />
+        <button type="button" onClick={() => fileInput.current?.click()} disabled={loading || !range.start || !range.end}
+          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+          <FileUp className="h-4 w-4" aria-hidden="true" />
+          {funds ? 'Trocar relatório de pagamentos' : 'Importar relatório de pagamentos'}
         </button>
         {report?.configured && rows.length > 0 && (
           <button type="button" onClick={exportCsv}
@@ -110,6 +136,13 @@ const WixSalesReport: React.FC = () => {
           </button>
         )}
       </div>
+
+      {funds && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+          <span>Relatório de pagamentos: <strong>{funds.name}</strong>{report?.fundsReport ? ` · ${report.fundsReport.payables} parcela(s), último pagamento da Wix em ${formatDate(report.fundsReport.latestPaymentDate)}` : ''}</span>
+          <button type="button" onClick={() => { setFunds(null); setReport(null); }} className="font-semibold text-blue-700 hover:underline dark:text-blue-300">Remover</button>
+        </p>
+      )}
 
       {error && (
         <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
@@ -136,7 +169,11 @@ const WixSalesReport: React.FC = () => {
           {!report.paymentsEnabled && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-              <p>Mostrando só as vendas. Para confrontar com resgates e saldo, falta cadastrar <strong>{(report.paymentsMissing || []).join(', ')}</strong> no servidor.</p>
+              <p>
+                Mostrando só as vendas. Para confrontar com o que a Wix já pagou e o que falta liberar, exporte o <strong>Relatório de pagamentos</strong> no{' '}
+                <a href={WIX_FUNDS_REPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold underline">painel Wix Pagamentos</a>{' '}
+                e use <strong>Importar relatório de pagamentos</strong>.
+              </p>
             </div>
           )}
           {report.truncated && (
@@ -147,9 +184,11 @@ const WixSalesReport: React.FC = () => {
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard label="Vendido" value={formatCents(totals.soldCents)} hint={`${totals.orders} pedido(s)${totals.canceled ? `, ${totals.canceled} cancelado(s) fora da soma` : ''}`} />
-            <SummaryCard label="Resgatado" value={formatCents(totals.withdrawnCents)} hint="Líquido das vendas do período já transferido ao banco" />
+            {report.paymentsSource === 'funds_report'
+              ? <SummaryCard label="Pago pela Wix" value={formatCents(totals.withdrawnCents)} hint="Parcelas das vendas do período com status Pago no relatório importado" />
+              : <SummaryCard label="Resgatado" value={formatCents(totals.withdrawnCents)} hint="Líquido das vendas do período já transferido ao banco" />}
             <SummaryCard label="A receber da Wix" value={formatCents(totals.pendingReleaseCents === null || totals.availableCents === null ? null : totals.pendingReleaseCents + totals.availableCents)}
-              hint={`Em liberação ${formatCents(totals.pendingReleaseCents)} · Disponível ${formatCents(totals.availableCents)}`} />
+              hint={report.paymentsSource === 'funds_report' ? 'Parcelas das vendas do período aguardando pagamento' : `Em liberação ${formatCents(totals.pendingReleaseCents)} · Disponível ${formatCents(totals.availableCents)}`} />
             <SummaryCard label="A receber de clientes" value={formatCents(totals.awaitingCustomersCents)} hint="Pedidos ainda não pagos" />
             <SummaryCard label="Pago pelos clientes" value={formatCents(totals.paidByCustomersCents)} />
             <SummaryCard label="Taxas Wix Payments" value={formatCents(totals.feesCents)} />
@@ -157,7 +196,15 @@ const WixSalesReport: React.FC = () => {
             <SummaryCard label="Não lançados no Financeiro" value={String(totals.notInFinance)} hint="Pedidos pagos sem lançamento Wix" />
           </div>
 
-          {report.paymentsEnabled && (
+          {report.paymentsSource === 'funds_report' && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <SummaryCard label="A liberar pela Wix hoje" value={formatCents(report.balance?.pendingCents)} hint="Todas as parcelas aguardando pagamento, de qualquer período" />
+              <SummaryCard label="Pagamentos da Wix no período" value={formatCents(totals.payoutsSentCents)}
+                hint={`${(report.payouts || []).length} dia(s) com pagamento, incluindo parcelas de vendas anteriores`} />
+            </div>
+          )}
+
+          {report.paymentsSource === 'api' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <SummaryCard label="Saldo Wix em liberação hoje" value={formatCents(report.balance?.pendingCents)} />
               <SummaryCard label="Saldo disponível para resgate hoje" value={formatCents(report.balance?.availableCents)} />
@@ -195,9 +242,9 @@ const WixSalesReport: React.FC = () => {
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatCents(row.totalCents)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{formatCents(row.netCents)}</td>
                     <td className="px-3 py-2">
-                      <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${SITUATION_STYLES[row.situation]}`}>{WIX_SITUATION_LABELS[row.situation]}</span>
+                      <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${SITUATION_STYLES[row.situation]}`}>{wixSituationLabel(report, row.situation)}</span>
                       {row.situation === 'em_liberacao' && row.availableOn && <span className="block text-xs text-slate-500 dark:text-slate-400">Libera em {formatDate(row.availableOn)}</span>}
-                      {row.situation === 'resgatado' && row.payoutDate && <span className="block text-xs text-slate-500 dark:text-slate-400">Resgate em {formatDate(row.payoutDate)}</span>}
+                      {row.situation === 'resgatado' && row.payoutDate && <span className="block text-xs text-slate-500 dark:text-slate-400">{report.paymentsSource === 'funds_report' ? 'Pago em' : 'Resgate em'} {formatDate(row.payoutDate)}</span>}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2">{row.inFinance ? 'Lançado' : row.situation === 'cancelado' || row.situation === 'aguardando_cliente' ? '—' : 'Não lançado'}</td>
                   </tr>
@@ -208,10 +255,13 @@ const WixSalesReport: React.FC = () => {
 
           {(report.otherRecords || []).length > 0 && (
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Também entraram no saldo Wix Payments {report.otherRecords!.length} movimento(s) sem pedido da loja neste período (faturas Wix, estornos ou ajustes), somando {formatCents(totals.otherRecordsNetCents)} líquidos.
+              Também entraram no saldo Wix Payments {report.otherRecords!.length} movimento(s) sem pedido da loja neste período (links de pagamento, faturas Wix, estornos ou ajustes), somando {formatCents(totals.otherRecordsNetCents)} líquidos.
             </p>
           )}
-          <p className="text-xs text-slate-500 dark:text-slate-400">Consulta somente leitura à Wix em {formatDate(report.generatedAt)}. Nenhum valor ou lançamento é alterado.</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Consulta somente leitura à Wix em {formatDate(report.generatedAt)}. Nenhum valor ou lançamento é alterado.
+            {report.paymentsSource === 'funds_report' && ' O relatório de pagamentos importado é usado só nesta consulta e não é guardado.'}
+          </p>
         </>
       )}
     </div>
