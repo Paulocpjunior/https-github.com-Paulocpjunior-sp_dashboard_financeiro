@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, Loader2, LockKeyhole, RefreshCw, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, Loader2, LockKeyhole, Printer, RefreshCw, Wallet, X } from 'lucide-react';
 import {
   fetchWixTreasuryReport,
   WIX_SITUATION_LABELS,
@@ -8,6 +8,7 @@ import {
   WixTreasuryReport,
 } from '../services/wixTreasuryService';
 import { applyWixFunds } from '../services/wixFundsReport';
+import { wixReportToPrintHtml } from '../services/wixReportPrint';
 
 interface WixTreasuryModalProps {
   open: boolean;
@@ -87,6 +88,22 @@ const WixSalesReport: React.FC = () => {
     URL.revokeObjectURL(link.href);
   };
 
+  // Abre a versão para papel em outra janela: a janela da Tesouraria fica fora da impressão do painel.
+  const printReport = () => {
+    if (!report) return;
+    const win = window.open('', '_blank');
+    if (!win) {
+      setError('O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente de novo.');
+      return;
+    }
+    win.opener = null;
+    win.document.open();
+    win.document.write(wixReportToPrintHtml(report, fundsSummary));
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   const totals = report?.totals;
   const rows = report?.rows || [];
 
@@ -113,6 +130,13 @@ const WixSalesReport: React.FC = () => {
             className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
             <Download className="h-4 w-4" aria-hidden="true" />
             Exportar CSV
+          </button>
+        )}
+        {report?.configured && totals && (
+          <button type="button" onClick={printReport}
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Printer className="h-4 w-4" aria-hidden="true" />
+            Imprimir / PDF
           </button>
         )}
       </div>

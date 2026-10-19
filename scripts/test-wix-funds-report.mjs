@@ -101,6 +101,21 @@ try {
   assert.match(exported, /Já liberado;A liberar/);
   assert.match(exported, /Em liberação na Wix;2026-12-07/);
 
+  const { wixReportToPrintHtml } = await server.ssrLoadModule('/services/wixReportPrint.ts');
+  const printable = wixReportToPrintHtml({
+    ...merged, generatedAt: '2026-10-19T15:00:00Z',
+    rows: [...merged.rows, row('order-evil', { number: '9', buyer: '<script>alert(1)</script>', items: ['A & B'] })],
+  }, summary);
+  assert.match(printable, /size: A4 landscape/);
+  assert.match(printable, /Período de 01\/10\/2026 a 31\/10\/2026/);
+  assert.match(printable, /Liberado pela Wix/);
+  assert.match(printable, /próxima em 07\/12\/2026/);
+  assert.match(printable, /são previstas/);
+  assert.match(printable, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/, 'nome do cliente escapado');
+  assert.doesNotMatch(printable, /<script>/);
+  assert.match(printable, /A &amp; B/);
+  assert.match(wixReportToPrintHtml({ ...report, rows: [] }, null), /Nenhuma venda na loja Wix/);
+
   console.log('Relatório de pagamentos da Wix: confronto validado.');
 } finally {
   await server.close();
