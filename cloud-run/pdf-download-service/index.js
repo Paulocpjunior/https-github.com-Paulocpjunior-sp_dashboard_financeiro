@@ -5,6 +5,7 @@ const { createHistoryHandler } = require('./boleto-history');
 const http = require('node:http');
 const { createAIHandler } = require('./financial-ai');
 const { createStatementHandler } = require('./itau-statements');
+const { createWixTreasuryHandler } = require('./wix-treasury');
 const { randomUUID } = require('node:crypto');
 const { getApps, initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
@@ -82,6 +83,7 @@ function createServer() {
     if (await createBoletoHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
 
     if (await createStatementHandler({ getServices: getAdminServices, readBody: readRequestBody, sendJson })(request, response)) return;
+    if (await createWixTreasuryHandler({ getServices: getAdminServices, sendJson })(request, response)) return;
 
     if (request.method === 'POST' && request.url === '/api/boleto-cloud-csv') {
       sendJson(request, response, 410, { error: 'Exportação CSV encerrada. Use a emissão de boletos no app.' });
