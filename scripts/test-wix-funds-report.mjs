@@ -101,32 +101,46 @@ try {
   assert.match(exported, /Já liberado;A liberar/);
   assert.match(exported, /Em liberação na Wix;2026-12-07/);
 
-  const { wixReportToPrintHtml } = await server.ssrLoadModule('/services/wixReportPrint.ts');
-  const printable = wixReportToPrintHtml({
-    ...merged, generatedAt: '2026-10-19T15:00:00Z',
-    rows: [...merged.rows, row('order-evil', { number: '9', buyer: '<script>alert(1)</script>', items: ['A & B'] })],
-  }, summary);
-  assert.match(printable, /size: A4 landscape/);
-  assert.match(printable, /Período de 01\/10\/2026 a 31\/10\/2026/);
-  assert.match(printable, /Liberado pela Wix/);
-  assert.match(printable, /próxima em 07\/12\/2026/);
-  assert.match(printable, /são previstas/);
-  assert.match(printable, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/, 'nome do cliente escapado');
-  assert.doesNotMatch(printable, /<script>/);
-  assert.match(printable, /A &amp; B/);
-  const salesOnly = wixReportToPrintHtml({ ...report, rows: [], paymentsError: 'Wix fora do ar.' }, null);
+  const { buildWixReportPDF, wixReportPdfFileName } = await server.ssrLoadModule('/services/wixReportPdf.ts');
+  // Junta o texto escrito no PDF (cabeçalho, resumo, tabela e rodapé) para conferir o conteúdo.
+  const pdfText = (...args) => {
+    const doc = buildWixReportPDF(...args);
+    const written = [];
+    const pages = doc.getNumberOfPages();
+    for (let page = 1; page <= pages; page += 1) {
+      doc.setPage(page);
+      written.push(doc.internal.pages[page].join('\n'));
+    }
+    return { doc, text: written.join('\n').replace(/\\([()\\])/g, '$1') };
+  };
+  const user = { name: 'Paulo' };
+  const { doc: pdf, text: printed } = pdfText({ ...merged, rows: [...merged.rows, row('order-evil', { number: '9', buyer: 'Cliente (teste)', items: ['A & B'] })] }, summary, user, new Date('2026-10-19T15:00:00Z'));
+  assert.equal(pdf.internal.pageSize.getWidth() > pdf.internal.pageSize.getHeight(), true, 'A4 deitado como os relatórios do Financeiro');
+  assert.match(printed, /Relat.rio de Vendas Wix/);
+  assert.match(printed, /PER.ODO: 01\/10\/2026 a 31\/10\/2026/);
+  assert.match(printed, /EMITIDO POR: PAULO/);
+  assert.match(printed, /LIBERADO PELA WIX/);
+  assert.match(printed, /Pr.xima em 07\/12\/2026/);
+  assert.match(printed, /Pedidos da Loja Wix \(6\)/);
+  assert.match(printed, /Cliente \(teste\)/);
+  assert.match(printed, /P.gina 1 de 1/);
+  assert.equal(wixReportPdfFileName(merged), 'Relatorio_Vendas_Wix_2026-10-01_a_2026-10-31.pdf');
+
+  const salesOnly = pdfText({ ...report, rows: [], paymentsError: 'Wix fora do ar.' }, null, null).text;
   assert.match(salesOnly, /Nenhuma venda na loja Wix/);
-  assert.match(salesOnly, /Mostrando só as vendas.*Wix fora do ar\./);
+  assert.match(salesOnly, /Wix fora do ar\./);
+  assert.match(salesOnly, /EMITIDO POR: USU.RIO DO SISTEMA/);
   // Conta com accountId: saldo e resgates reais, sem parcelas previstas.
-  const live = wixReportToPrintHtml({
+  const live = pdfText({
     ...report, paymentsEnabled: true, balance: { pendingCents: 12345, availableCents: 6789 },
-    payouts: [{ id: 'p1' }], otherRecords: [{ id: 'r1' }], totals: { ...report.totals, payoutsSentCents: 50000, otherRecordsNetCents: -1000 },
-  }, null);
-  assert.doesNotMatch(live, /Mostrando só as vendas/);
-  assert.match(live, /consultados diretamente no Wix Payments/);
-  assert.match(live, /Saldo disponível para resgate hoje/);
-  assert.match(live, /1 transferência\(s\)/);
+    payouts: [{ id: 'p1', status: 'SENT' }, { id: 'p2', status: 'FAILED' }], otherRecords: [{ id: 'r1' }],
+    totals: { ...report.totals, payoutsSentCents: 50000, payoutsFailed: 1, otherRecordsNetCents: -1000 },
+  }, null, user).text;
+  assert.doesNotMatch(live, /Mostrando s. as vendas/);
+  assert.match(live, /RESGATADO/);
+  assert.match(live, /Dispon.vel para resgate hoje/);
   assert.match(live, /1 movimento\(s\) sem pedido/);
+  assert.match(live, /Resgates enviados: R\$.500,00 \(1\), 1 com falha/, 'conta só os enviados e mantém o aviso de falha');
 
   console.log('Relatório de pagamentos da Wix: confronto validado.');
 } finally {
