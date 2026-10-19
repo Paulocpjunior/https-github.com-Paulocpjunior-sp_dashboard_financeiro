@@ -10,6 +10,15 @@
 //   Vendas:      POST /ecom/v1/orders/search                      (Read Orders)
 //   Saldo:       POST /wixpay-balances/v5/balance-records/query   (View settlement reports and payouts)
 //   Resgates:    GET  /wixpay-payouts/v4/payouts                  (View settlement reports and payouts)
+//   Wix Pagamentos Brasil: GET /payments/v2/transactions (transações do caixa da Wix)
+//
+// A conta Wix Pagamentos Brasil não é coberta pelas APIs de saldo e resgates. Para ela,
+// as parcelas a liberar são calculadas a partir das transações com as regras da Wix Brasil,
+// conferidas no Relatório de pagamentos exportado do painel (2022–2026):
+//   cartão  3,7% + R$ 0,30 por venda; parcela k liberada ~30·k dias depois
+//   Pix     0,95%; liberado no mesmo dia
+//   boleto  R$ 2,99; liberado poucos dias depois do pagamento
+// Os valores e datas saem marcados como previstos (estimated: true).
 //
 // Variáveis do Cloud Run (sem elas o relatório diz o que falta e não chama a Wix):
 //   WIX_API_KEY               API key da conta Wix. Secret Manager, nunca no código.
@@ -23,6 +32,16 @@ const TIMEOUT_MS = 20000;
 const MAX_ORDERS = 5000;
 const MAX_RECORDS = 10000;
 const MAX_DAYS = 366;
+const ECOM_APP_ID = '1380b703-ce81-ff05-f115-39571d94dfcd';
+const WIX_PAY_PROVIDER = 'com.wix.wixpay';
+const MAX_TRANSACTIONS = 20000;
+// Parcelamento no cartão chega a 12x: busca transações até 13 meses antes do período.
+const LOOKBACK_DAYS = 400;
+const BR_RULES = {
+  creditCard: { rate: 0.037, fixedCents: 30, days: k => 30 * k + 1 },
+  pix: { rate: 0.0095, fixedCents: 0, days: () => 0 },
+  boleto: { rate: 0, fixedCents: 299, days: () => 5 },
+};
 
 class WixTreasuryError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
@@ -166,6 +185,103 @@ async function listPayouts(cfg, fetchImpl, range) {
     if (page.length < 100) break;
   }
   return payouts;
+}
+
+async function listTransactions(cfg, fetchImpl, fromIso, toIso) {
+  const transactions = [];
+  for (let offset = 0; ; offset += 1000) {
+    const params = new URLSearchParams({
+      from: fromIso, to: toIso, limit: '1000', offset: String(offset),
+      order: 'date:asc', includeRefunds: 'true', ignoreTotals: 'true',
+    });
+    const data = await wixRequest(cfg, fetchImpl, `/payments/v2/transactions?${params}`);
+    const page = data.transactions || [];
+    transactions.push(...page);
+    if (page.length < 1000) return { transactions, truncated: false };
+    if (transactions.length >= MAX_TRANSACTIONS) return { transactions, truncated: true };
+  }
+}
+
+const DAY_MS = 86400000;
+// Dia (AAAA-MM-DD) no horário de Brasília.
+const brDay = ms => new Date(ms - 3 * 3600000).toISOString().slice(0, 10);
+// Liberação cai em dia útil: sábado e domingo passam para segunda.
+function releaseDay(createdMs, days) {
+  const date = new Date(Date.parse(`${brDay(createdMs)}T12:00:00Z`) + days * DAY_MS);
+  const weekday = date.getUTCDay();
+  if (weekday === 6) date.setUTCDate(date.getUTCDate() + 2);
+  if (weekday === 0) date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+// Divide centavos em n partes iguais; a diferença de arredondamento fica na primeira (como a Wix faz).
+function split(total, n) {
+  const part = Math.round(total / n);
+  return Array.from({ length: n }, (_, i) => (i === 0 ? total - part * (n - 1) : part));
+}
+
+const APPROVED = new Set(['APPROVED', 'REFUNDED', 'PARTIALLY_REFUNDED']);
+// Só estorno concluído reduz o valor; pendente, com falha ou revertido não (ciclo de reembolso da Wix).
+const REFUND_DONE = new Set(['SUCCEEDED', 'COMPLETED', 'APPROVED']);
+const isChargeback = value => /CHARGEBACK/i.test(String(value || ''));
+
+/**
+ * Parcelas previstas (mesmo formato do Relatório de pagamentos da Wix) a partir das
+ * transações aprovadas do Wix Pagamentos Brasil. `today` decide liberado x aguardando.
+ */
+function estimatePayables(transactions, today) {
+  const payables = [];
+  for (const tx of transactions) {
+    if (tx?.provider !== WIX_PAY_PROVIDER) continue;
+    const createdMs = Date.parse(tx.createdAt);
+    const amountCents = Math.abs(cents(tx.amount) || 0);
+    if (Number.isNaN(createdMs) || !amountCents) continue;
+    const orderId = tx.appId === ECOM_APP_ID ? tx.order?.description?.wixAppOrderId || null : null;
+    // Chargeback desconta o valor inteiro na data em que a Wix registra a disputa.
+    if (isChargeback(tx.type) || isChargeback(tx.status)) {
+      payables.push({
+        paymentDate: brDay(createdMs), transactionDate: brDay(createdMs), type: 'Chargeback',
+        amountCents: -amountCents, feeCents: 0, netCents: -amountCents, status: 'liberado', installment: null,
+        transactionId: String(tx.transactionId || ''), orderId, method: tx.paymentMethod || null, estimated: true,
+      });
+      continue;
+    }
+    if (!APPROVED.has(tx.status) || tx.type !== 'SALE') continue;
+    const rule = BR_RULES[tx.paymentMethod];
+    const installments = rule === BR_RULES.creditCard ? Math.min(Math.max(Number(tx.paymentMethodData?.installments) || 1, 1), 12) : 1;
+    const feeCents = rule ? Math.round(amountCents * rule.rate) + rule.fixedCents : 0;
+    const amounts = split(amountCents, installments);
+    const nets = split(amountCents - feeCents, installments);
+    for (let k = 1; k <= installments; k += 1) {
+      const paymentDate = releaseDay(createdMs, rule ? rule.days(k) : 0);
+      payables.push({
+        paymentDate,
+        transactionDate: brDay(createdMs),
+        type: 'Crédito',
+        amountCents: amounts[k - 1],
+        feeCents: amounts[k - 1] - nets[k - 1],
+        netCents: nets[k - 1],
+        status: !rule ? 'outro' : paymentDate <= today ? 'liberado' : 'aguardando',
+        installment: installments > 1 ? k : null,
+        transactionId: String(tx.transactionId || ''),
+        orderId,
+        method: tx.paymentMethod || null,
+        estimated: true,
+      });
+    }
+    for (const refund of tx.refunds || []) {
+      if (refund.status && !REFUND_DONE.has(String(refund.status).toUpperCase())) continue;
+      const refundCents = cents(refund.amount);
+      const refundMs = Date.parse(refund.createdAt || refund.dateCreated || refund.createdDate || '');
+      if (!(refundCents > 0) || Number.isNaN(refundMs)) continue;
+      payables.push({
+        paymentDate: brDay(refundMs), transactionDate: brDay(createdMs), type: 'Reembolsar',
+        amountCents: -refundCents, feeCents: 0, netCents: -refundCents, status: 'liberado', installment: null,
+        transactionId: String(tx.transactionId || ''), orderId, method: tx.paymentMethod || null, estimated: true,
+      });
+    }
+  }
+  return payables;
 }
 
 function normalizeOrder(order) {
@@ -319,12 +435,18 @@ async function buildReport({ db, env, fetchImpl, start, end, now = () => new Dat
     return { configured: false, missing: cfg.missing, paymentsMissing: cfg.paymentsMissing, period: { start, end } };
   }
   const paymentsEnabled = cfg.paymentsMissing.length === 0;
-  const [orderResult, recordResult, payouts, pending, available] = await Promise.all([
+  const nowMs = now().getTime();
+  const [orderResult, recordResult, payouts, pending, available, txResult] = await Promise.all([
     searchOrders(cfg, fetchImpl, range),
     paymentsEnabled ? queryBalanceRecords(cfg, fetchImpl, range) : { records: [], truncated: false },
     paymentsEnabled ? listPayouts(cfg, fetchImpl, range) : [],
     paymentsEnabled ? balanceByTag(cfg, fetchImpl, 'PENDING') : null,
     paymentsEnabled ? balanceByTag(cfg, fetchImpl, 'AVAILABLE') : null,
+    paymentsEnabled ? null : listTransactions(cfg, fetchImpl,
+      new Date(Date.parse(range.startIso) - LOOKBACK_DAYS * DAY_MS).toISOString(),
+      new Date(Math.max(Date.parse(range.endIso), nowMs)).toISOString())
+      // Sem as transações, o relatório de vendas continua saindo e diz por quê.
+      .catch(error => ({ error: error instanceof WixTreasuryError ? error.message : 'A Wix não devolveu as transações.' })),
   ]);
   const orders = orderResult.orders.map(normalizeOrder).filter(Boolean);
   const records = recordResult.records.map(normalizeRecord);
@@ -341,9 +463,11 @@ async function buildReport({ db, env, fetchImpl, start, end, now = () => new Dat
     paymentsMissing: cfg.paymentsMissing,
     period: { start, end },
     generatedAt: now().toISOString(),
-    truncated: orderResult.truncated || recordResult.truncated,
+    truncated: orderResult.truncated || recordResult.truncated || Boolean(txResult?.truncated),
     balance: paymentsEnabled ? { pendingCents: pending, availableCents: available } : null,
     ...result,
+    ...(txResult?.transactions ? { payables: estimatePayables(txResult.transactions, brDay(nowMs)) } : {}),
+    ...(txResult?.error ? { paymentsError: txResult.error } : {}),
   };
 }
 
@@ -381,6 +505,7 @@ module.exports = {
   cents,
   config,
   createWixTreasuryHandler,
+  estimatePayables,
   normalizeOrder,
   normalizePayout,
   normalizeRecord,
