@@ -2,6 +2,7 @@ import { auth } from '../firebase';
 
 export type WixSaleSituation =
   | 'resgatado'
+  | 'liberado'
   | 'disponivel'
   | 'em_liberacao'
   | 'aguardando_cliente'
@@ -30,6 +31,10 @@ export interface WixSaleRow {
   payoutId: string | null;
   payoutDate: string | null;
   inFinance: boolean;
+  // Preenchidos ao importar o Relatório de pagamentos da Wix (conta Brasil).
+  releasedCents?: number;
+  pendingCents?: number;
+  installments?: number;
 }
 
 export interface WixPayoutRow {
@@ -109,6 +114,7 @@ export async function fetchWixTreasuryReport(start: string, end: string): Promis
 
 export const WIX_SITUATION_LABELS: Record<WixSaleSituation, string> = {
   resgatado: 'Resgatado',
+  liberado: 'Liberado pela Wix',
   disponivel: 'Disponível para resgate',
   em_liberacao: 'Em liberação na Wix',
   aguardando_cliente: 'Aguardando pagamento do cliente',
@@ -126,7 +132,7 @@ const csvMoney = (cents: number | null) => (cents === null ? '' : (cents / 100).
 
 // CSV separado por ponto e vírgula para abrir direto no Excel em português.
 export function wixReportToCsv(report: WixTreasuryReport): string {
-  const header = ['Pedido', 'Data', 'Cliente', 'E-mail', 'Itens', 'Vendido', 'Pago pelo cliente', 'Taxa Wix', 'Líquido Wix', 'Situação', 'Liberação prevista', 'Data do resgate', 'Lançado no Financeiro'];
+  const header = ['Pedido', 'Data', 'Cliente', 'E-mail', 'Itens', 'Vendido', 'Pago pelo cliente', 'Taxa Wix', 'Líquido Wix', 'Já liberado', 'A liberar', 'Situação', 'Próxima liberação', 'Liberado ou resgatado em', 'Lançado no Financeiro'];
   const lines = (report.rows || []).map(row => [
     row.number ? `#${row.number}` : row.id,
     (row.purchasedDate || row.createdDate || '').slice(0, 10),
@@ -137,8 +143,10 @@ export function wixReportToCsv(report: WixTreasuryReport): string {
     csvMoney(row.paidCents),
     csvMoney(row.feeCents),
     csvMoney(row.netCents),
+    csvMoney(row.releasedCents ?? null),
+    csvMoney(row.pendingCents ?? null),
     WIX_SITUATION_LABELS[row.situation],
-    row.availableOn,
+    (row.availableOn || '').slice(0, 10),
     (row.payoutDate || '').slice(0, 10),
     row.inFinance ? 'Sim' : 'Não',
   ]);
