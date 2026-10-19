@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, Loader2, LockKeyhole, Printer, RefreshCw, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, FileBarChart, Loader2, FileText, LockKeyhole, RefreshCw, Wallet, X } from 'lucide-react';
 import {
   fetchWixTreasuryReport,
   WIX_SITUATION_LABELS,
@@ -8,7 +8,8 @@ import {
   WixTreasuryReport,
 } from '../services/wixTreasuryService';
 import { applyWixFunds } from '../services/wixFundsReport';
-import { wixReportToPrintHtml } from '../services/wixReportPrint';
+import { WixReportPdfService } from '../services/wixReportPdf';
+import { AuthService } from '../services/authService';
 
 interface WixTreasuryModalProps {
   open: boolean;
@@ -59,6 +60,7 @@ const WixSalesReport: React.FC = () => {
   const [baseReport, setReport] = useState<WixTreasuryReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   // Conta Wix Pagamentos Brasil: o servidor devolve as parcelas previstas a partir das transações.
   const funded = useMemo(() => (baseReport?.payables ? applyWixFunds(baseReport, baseReport.payables, 'Wix Pagamentos') : null), [baseReport]);
   const report = funded?.report || baseReport;
@@ -88,20 +90,17 @@ const WixSalesReport: React.FC = () => {
     URL.revokeObjectURL(link.href);
   };
 
-  // Abre a versão para papel em outra janela: a janela da Tesouraria fica fora da impressão do painel.
-  const printReport = () => {
-    if (!report) return;
-    const win = window.open('', '_blank');
-    if (!win) {
-      setError('O navegador bloqueou a janela de impressão. Permita pop-ups para este site e tente de novo.');
-      return;
+  // PDF no mesmo layout dos relatórios do Financeiro.
+  const downloadPdf = async () => {
+    if (!report || downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      await WixReportPdfService.generatePDF(report, fundsSummary, AuthService.getCurrentUser());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível gerar o PDF.');
+    } finally {
+      setDownloadingPdf(false);
     }
-    win.opener = null;
-    win.document.open();
-    win.document.write(wixReportToPrintHtml(report, fundsSummary));
-    win.document.close();
-    win.focus();
-    win.print();
   };
 
   const totals = report?.totals;
@@ -133,10 +132,10 @@ const WixSalesReport: React.FC = () => {
           </button>
         )}
         {report?.configured && totals && (
-          <button type="button" onClick={printReport}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-            <Printer className="h-4 w-4" aria-hidden="true" />
-            Imprimir / PDF
+          <button type="button" onClick={downloadPdf} disabled={downloadingPdf}
+            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+            {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FileText className="h-4 w-4" aria-hidden="true" />}
+            {downloadingPdf ? 'Preparando…' : 'Baixar PDF'}
           </button>
         )}
       </div>

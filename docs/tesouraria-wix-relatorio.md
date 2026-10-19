@@ -10,7 +10,7 @@ Dentro do modal **Tesouraria Wix** (mesmo menu, mesma URL do app), a aba **Relat
 | Saldo hoje | Soma dos registros com etiqueta `PENDING` e `AVAILABLE` |
 | Lançado no Financeiro | Existe o documento `transactions/wix-{ID do pedido}` criado pelo `/sync-wix-orders` |
 
-Situações por pedido: **Resgatado**, **Disponível para resgate**, **Em liberação na Wix** (com a data prevista), **Aguardando pagamento do cliente**, **Pago fora do Wix Payments** (pagamento manual/offline — conferir no banco) e **Cancelado** (fica fora das somas). Movimentos do saldo sem pedido da loja (faturas Wix, estornos, ajustes) aparecem somados à parte. O relatório exporta CSV (ponto e vírgula, abre direto no Excel) e tem o botão **Imprimir / PDF**, que abre uma versão em A4 deitado com resumo e tabela de pedidos para imprimir ou salvar como PDF.
+Situações por pedido: **Resgatado**, **Disponível para resgate**, **Em liberação na Wix** (com a data prevista), **Aguardando pagamento do cliente**, **Pago fora do Wix Payments** (pagamento manual/offline — conferir no banco) e **Cancelado** (fica fora das somas). Movimentos do saldo sem pedido da loja (faturas Wix, estornos, ajustes) aparecem somados à parte. O relatório exporta CSV (ponto e vírgula, abre direto no Excel) e tem o botão **Baixar PDF**, no mesmo layout dos relatórios do Financeiro (faixa azul com emissor e data, resumo financeiro, tabela de pedidos e rodapé paginado).
 
 **Somente leitura.** Não grava nada na Wix nem em `transactions`; o resgate continua sendo feito na página oficial de transferências pelo botão **Abrir Tesouraria Wix**.
 
