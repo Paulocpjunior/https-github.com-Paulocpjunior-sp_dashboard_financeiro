@@ -118,6 +118,11 @@ export function parseWixFundsCsv(text: string): WixFundsPayable[] {
 
 const inPeriod = (date: string, period: { start: string; end: string }) => date >= period.start && date <= period.end;
 const sum = (items: WixFundsPayable[]) => items.reduce((total, item) => total + item.netCents, 0);
+// Data do pedido no horário de Brasília, como no arquivo da Wix.
+const brasiliaDay = (iso: string | null) => {
+  const ms = Date.parse(iso || '');
+  return Number.isNaN(ms) ? null : new Date(ms - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+};
 
 // Confronta cada pedido do relatório de vendas com as parcelas do arquivo da Wix.
 // "Pago" no arquivo é a parcela liberada pela Wix; "Aguardando pagamento" ainda vai ser liberada.
@@ -128,6 +133,11 @@ export function applyWixFunds(report: WixTreasuryReport, payables: WixFundsPayab
     byOrder.set(payable.orderId, [...(byOrder.get(payable.orderId) || []), payable]);
   }
 
+  const dates = payables.map(item => item.transactionDate).sort();
+  const fileStart = dates[0] || null;
+  const fileEnd = dates[dates.length - 1] || null;
+  let ordersAfterFile = 0;
+
   let releasedCents = 0;
   let pendingCents = 0;
   let feesCents = 0;
@@ -135,7 +145,13 @@ export function applyWixFunds(report: WixTreasuryReport, payables: WixFundsPayab
   const rows: WixSaleRow[] = (report.rows || []).map(row => {
     const own = byOrder.get(row.id);
     if (row.situation === 'cancelado' || row.situation === 'aguardando_cliente') return row;
-    if (!own) return { ...row, situation: 'fora_wix_payments', feeCents: null, netCents: null, availableOn: null, payoutDate: null };
+    if (!own) {
+      // Venda posterior à última parcela do arquivo: o arquivo é que está desatualizado.
+      const day = brasiliaDay(row.purchasedDate || row.createdDate);
+      const afterFile = Boolean(fileEnd && day && day > fileEnd);
+      if (afterFile) ordersAfterFile += 1;
+      return { ...row, situation: afterFile ? 'conferir' : 'fora_wix_payments', feeCents: null, netCents: null, availableOn: null, payoutDate: null };
+    }
     matchedOrders += 1;
     const released = own.filter(item => item.status === 'liberado');
     const pending = own.filter(item => item.status === 'aguardando').sort((a, b) => a.paymentDate.localeCompare(b.paymentDate));
@@ -148,7 +164,7 @@ export function applyWixFunds(report: WixTreasuryReport, payables: WixFundsPayab
       ...row,
       feeCents: fee,
       netCents: sum(own),
-      situation: pending.length ? 'em_liberacao' : 'liberado',
+      situation: own.some(item => item.status === 'outro') ? 'conferir' : pending.length ? 'em_liberacao' : 'liberado',
       availableOn: pending[0]?.paymentDate || null,
       payoutDate: pending.length ? null : lastRelease,
       releasedCents: sum(released),
@@ -162,10 +178,6 @@ export function applyWixFunds(report: WixTreasuryReport, payables: WixFundsPayab
   const nextDate = allPending[0]?.paymentDate;
   const noOrder = payables.filter(item => !item.orderId && item.netCents > 0 && inPeriod(item.transactionDate, period));
   const reversals = payables.filter(item => item.netCents < 0 && inPeriod(item.paymentDate, period));
-  const dates = payables.map(item => item.transactionDate).sort();
-  const fileStart = dates[0] || null;
-  const fileEnd = dates[dates.length - 1] || null;
-
   const totals = report.totals ? {
     ...report.totals,
     feesCents,
@@ -182,7 +194,7 @@ export function applyWixFunds(report: WixTreasuryReport, payables: WixFundsPayab
       payables: payables.length,
       fileStart,
       fileEnd,
-      coversPeriod: Boolean(fileStart && fileEnd && fileStart <= period.start && fileEnd >= period.start),
+      coversPeriod: Boolean(fileStart && fileStart <= period.start && ordersAfterFile === 0),
       matchedOrders,
       releasedCents,
       pendingCents,

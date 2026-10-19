@@ -86,6 +86,16 @@ try {
   assert.equal(merged.totals.soldCents, 40000, 'vendas não mudam com a importação');
   assert.equal(report.rows[0].situation, 'pago', 'relatório original não é alterado');
 
+  // Arquivo exportado antes de uma venda do período: a venda fica para conferir e o aviso aparece.
+  const later = applyWixFunds({ ...report, rows: [row('order-b'), row('order-new', { createdDate: '2026-10-20T15:00:00Z' })] }, payables.filter(item => item.transactionId !== 'tx-c'), 'antigo.csv');
+  assert.equal(later.report.rows[1].situation, 'conferir');
+  assert.equal(later.summary.coversPeriod, false);
+
+  // Status desconhecido da Wix não vira "liberado".
+  const odd = parseWixFundsCsv(csv.replace('"Pago",,"p-tx-b', '"Em análise",,"p-tx-b'));
+  assert.equal(odd[3].status, 'outro');
+  assert.equal(applyWixFunds(report, odd, 'f.csv').report.rows[1].situation, 'conferir');
+
   const { wixReportToCsv } = await server.ssrLoadModule('/services/wixTreasuryService.ts');
   const exported = wixReportToCsv(merged);
   assert.match(exported, /Já liberado;A liberar/);
