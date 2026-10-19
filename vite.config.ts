@@ -2,9 +2,22 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { execFileSync } from 'child_process';
+
+// Commit embutido no bundle: o aviso de atualização compara com o commit do version.json.
+const appCommit = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return '';
+  }
+})();
 
 export default defineConfig(() => {
     return {
+      define: {
+        __APP_COMMIT__: JSON.stringify(appCommit),
+      },
       server: {
         port: 3000,
         host: '0.0.0.0',
