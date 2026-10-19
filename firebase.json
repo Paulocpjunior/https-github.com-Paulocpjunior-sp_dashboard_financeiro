@@ -84,6 +84,13 @@
         }
       },
       {
+        "source": "/api/wix-treasury/**",
+        "run": {
+          "serviceId": "sp-pdf-download",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "/api/boleto-cloud-csv",
         "run": {
           "serviceId": "sp-pdf-download",
