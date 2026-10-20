@@ -75,3 +75,17 @@ test('bloqueia CNPJ inválido, documento ou número de outro cliente e documento
  await assert.rejects(h.save({identityKey:'doc-99999999999999'}),/Atualize a tela/);
  assert.equal(h.store.get('billingProfiles/doc-07147345000111').issueDay,20);
 });
+
+test('correção alcança identidades já corrigidas para o mesmo cadastro e os lançamentos nativos dele',async()=>{
+ const h=billing(),old={client:radio.client,cpfCnpj:'07147345000111',clientNumber:'170'};
+ h.store.set('financialSettings/customerDirectory',{revision:3,entries:{'name:wix:radio sb':old}});
+ h.store.set('transactions/w',{movement:'Entrada',source:'wix',client:'Radio SB'});
+ const customer={client:radio.client,cpfCnpj:'12.345.678/0001-95',clientNumber:'170'},reason='CNPJ conferido no cartão CNPJ';
+ await h.save({revision:3,customer,reason});
+ let entries=h.store.get('financialSettings/customerDirectory').entries;
+ assert.equal(entries['doc:07147345000111'].cpfCnpj,'12345678000195');assert.equal(entries['name:wix:radio sb'].cpfCnpj,'12345678000195');
+ const g=billing();g.store.set('financialSettings/customerDirectory',{revision:3,entries:{'name:wix:radio sb':old}});g.store.set('transactions/w',{movement:'Entrada',source:'wix',client:'Radio SB'});
+ await g.save({revision:3,sourceId:'w',customer,reason});
+ entries=g.store.get('financialSettings/customerDirectory').entries;
+ assert.equal(entries['doc:07147345000111'].cpfCnpj,'12345678000195');assert.equal(entries['name:wix:radio sb'].cpfCnpj,'12345678000195');
+});

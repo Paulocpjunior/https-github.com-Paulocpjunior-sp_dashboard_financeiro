@@ -130,6 +130,10 @@ async function saveBillingProfile({db,ref,user,uid,recheck,b}){
    if(state.revision!==b.revision)fail('Cadastro alterado por outra pessoa. Atualize a tela e revise.');
    if(reason.length<10)fail('Informe o motivo da correção de empresa, CPF/CNPJ ou N.Cliente (mínimo de 10 caracteres).',400);
    directory=change(state,source,null,{action:'edit',reason,profile:wanted},{identifiers:true});after=directory.entries[resolved.key];
+   // The row joins every raw identity shown under beforeKey (earlier corrections and native entries); correct all of them.
+   for(const [k,v] of Object.entries(directory.entries))if(k!==resolved.key&&!v.target&&billingKey(v)===beforeKey)directory.entries[k]={...after};
+   const raw=beforeKey.startsWith('doc-')?'doc:'+beforeKey.slice(4):beforeKey.startsWith('client-')?'number:'+beforeKey.slice(7):null;
+   if(raw&&raw!==resolved.key&&!directory.entries[raw])directory.entries[raw]={...after};
    await identifierConflicts(tx,db,state.entries||{},resolved.key,before,after);
   }
   const afterKey=billingKey(after),id=billingId(afterKey),oldRef=db.collection('billingProfiles').doc(b.profileId),newRef=db.collection('billingProfiles').doc(id);
