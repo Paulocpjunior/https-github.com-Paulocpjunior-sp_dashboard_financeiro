@@ -18,7 +18,7 @@ try {
 
   assert.deepEqual(
     FINANCIAL_PERMISSION_OPTIONS.map(option => option.value),
-    ['receivables.reverse','payables.amend','receivables.read','receivables.settle','payables.approve','payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','billing.boleto-cloud.history.read', 'wix.treasury.open', 'billing.boleto-cloud.issue', 'itau.openfinance.read', 'itau.statement.import'],
+    ['receivables.reverse','receivables.amend','payables.amend','receivables.read','receivables.settle','payables.approve','payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','billing.boleto-cloud.history.read', 'wix.treasury.open', 'billing.boleto-cloud.issue', 'itau.openfinance.read', 'itau.statement.import'],
   );
 
   assert.deepEqual(
