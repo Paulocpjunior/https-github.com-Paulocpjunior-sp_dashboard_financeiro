@@ -1,5 +1,5 @@
 // Legacy regression harness only: production has no environment bypass.
-require.cache[require.resolve('./integration-access')] = { exports: { JOTFORM_DISABLED: false, assertJotformAccess() {}, blockJotformIntegration(req, res, next) { next(); } } };
+require.cache[require.resolve('./integration-access')] = { exports: { JOTFORM_DISABLED: false, CHECKLIST_READ_ENABLED: true, assertJotformAccess() {}, assertChecklistAccess() {}, blockJotformIntegration(req, res, next) { next(); } } };
 const assert = require('node:assert/strict');
 const { mapChecklist, loadChecklist, installChecklistRoute, FORM_ID } = require('./checklist');
 const questions = { 1: { text: 'EMPRESA NOME ' }, 2: { text: 'Nosso Número' }, 3: { text: 'Honorários ' },

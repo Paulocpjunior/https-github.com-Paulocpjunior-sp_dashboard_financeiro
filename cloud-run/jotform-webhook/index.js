@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const multer = require('multer');
 const { assertExistingIdentity } = require('./identity-guard');
 
-const { JOTFORM_DISABLED, assertJotformAccess, blockJotformIntegration } = require('./integration-access');
+const { JOTFORM_DISABLED, CHECKLIST_READ_ENABLED, assertJotformAccess, blockJotformIntegration } = require('./integration-access');
 const app = express();
 app.use(blockJotformIntegration);
 const upload = multer();
@@ -12,7 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || 'gen-lang-client-0888019226';
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-const WEBHOOK_VERSION = '6.16-jotform-retired';
+const WEBHOOK_VERSION = '6.17-checklist-legal-read';
 const JOTFORM_FORM_ID = process.env.JOTFORM_FORM_ID || '210020525580845';
 require('./checklist').installChecklistRoute(app, google, PROJECT_ID);
 
@@ -1698,7 +1698,7 @@ app.post('/jotform-update-submission', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.json({ status: JOTFORM_DISABLED ? 'jotform integration disabled' : 'jotform-webhook online', jotformEnabled: !JOTFORM_DISABLED, version: WEBHOOK_VERSION }));
+app.get('/', (req, res) => res.json({ status: JOTFORM_DISABLED ? 'jotform integration disabled' : 'jotform-webhook online', jotformEnabled: !JOTFORM_DISABLED, checklistReadEnabled: CHECKLIST_READ_ENABLED, version: WEBHOOK_VERSION }));
 
 const PORT = process.env.PORT || 8080;
 if (require.main === module) {
