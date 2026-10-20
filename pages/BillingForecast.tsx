@@ -65,7 +65,8 @@ const formatMonth = (month: string) => {
 
 const BillingForecast: React.FC = () => {
   const user = AuthService.getCurrentUser();
-  const isAdmin = (user?.role || '').toLowerCase() === 'admin';
+  // Colaboradoras ativas editam regra e identificação; o servidor revalida e registra o histórico.
+  const canEdit = user?.active === true;
   const [referenceMonth, setReferenceMonth] = useState(currentMonth);
   const [targetMonth, setTargetMonth] = useState(addMonths(currentMonth, 1));
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -81,6 +82,10 @@ const BillingForecast: React.FC = () => {
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [preparedPDF, setPreparedPDF] = useState<Awaited<ReturnType<typeof BillingReportService.preparePDF>> | null>(null);
   const [editingProfile, setEditingProfile] = useState<BillingProfile | null>(null);
+  const [editingOriginal, setEditingOriginal] = useState<{ client: string; cpfCnpj: string; clientNumber: string; sourceId: string } | null>(null);
+  const [editReason, setEditReason] = useState('');
+  const [editRequestId, setEditRequestId] = useState('');
+  const [directoryRevision, setDirectoryRevision] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -101,6 +106,7 @@ const BillingForecast: React.FC = () => {
       });
       setTransactions(loadedTransactions);
       setProfiles(loadedProfiles);
+      setDirectoryRevision(directory.revision || 0);
     } catch (loadError: any) {
       logger.error('Erro ao carregar a base de faturamento:', loadError);
       setError(loadError?.message || 'Não foi possível carregar a base de faturamento.');
@@ -177,6 +183,9 @@ const BillingForecast: React.FC = () => {
   }), [rows]);
 
   const openEditor = (row: BillingForecastRow) => {
+    setEditingOriginal({ client: row.client, cpfCnpj: row.cpfCnpj, clientNumber: row.clientNumber, sourceId: row.sourceTransactionId || '' });
+    setEditReason('');
+    setEditRequestId(crypto.randomUUID());
     setEditingProfile({
       ...emptyProfile(),
       ...row.profile,
@@ -201,7 +210,16 @@ const BillingForecast: React.FC = () => {
 
   const updateEditing = (updates: Partial<BillingProfile>) => {
     setEditingProfile(current => current ? { ...current, ...updates } : current);
+    // Nova versão do formulário é nova tentativa; repetir o mesmo envio continua idempotente.
+    setEditRequestId(crypto.randomUUID());
   };
+
+  const onlyDigits = (value: unknown) => String(value || '').replace(/\D/g, '');
+  const identityChanged = Boolean(editingProfile && editingOriginal && (
+    editingProfile.client.trim() !== editingOriginal.client.trim()
+    || onlyDigits(editingProfile.cpfCnpj) !== onlyDigits(editingOriginal.cpfCnpj)
+    || String(editingProfile.clientNumber || '').trim() !== String(editingOriginal.clientNumber || '').trim()
+  ));
 
   const toggleChannel = (channel: BillingDeliveryChannel) => {
     if (!editingProfile) return;
@@ -215,40 +233,51 @@ const BillingForecast: React.FC = () => {
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
-    if (!editingProfile || !editingProfile.client.trim()) return;
+    if (!editingProfile || !editingOriginal || !editingProfile.client.trim()) return;
 
     setSaving(true);
     try {
-      const sourceRow = allRows.find(row => row.identityKey === editingProfile.identityKey);
-      if (!sourceRow) throw new Error('A empresa não está mais disponível na base de lançamentos do Firestore. Atualize a tela.');
-      const identityKey = sourceRow.identityKey;
-      const conflictingProfile = profiles.find(item => item.id !== editingProfile.id && item.active !== false && (item.identityKey || getBillingIdentityKey(item)) === identityKey);
-      if (conflictingProfile) {
-        throw new Error(`Já existe uma regra ativa para ${conflictingProfile.client}.`);
-      }
-      const profile: BillingProfile = {
-        ...editingProfile,
-        id: editingProfile.id || makeBillingProfileId(identityKey),
-        identityKey,
-        client: sourceRow.client,
-        cpfCnpj: sourceRow.cpfCnpj,
-        clientNumber: sourceRow.clientNumber,
-        groupName: editingProfile.groupName?.trim(),
-        billingMethod: editingProfile.billingMethod?.trim(),
-        billingEmail: editingProfile.billingEmail?.trim(),
-        whatsapp: editingProfile.whatsapp?.trim(),
-        printedDeliveryDetails: editingProfile.printedDeliveryDetails?.trim(),
-        billingInstructions: editingProfile.billingInstructions?.trim(),
-        updatedBy: user?.name || user?.username || '',
-        active: true,
-      };
-      const completenessErrors = getBillingProfileCompletenessErrors(profile);
+      if (!editingOriginal.sourceId) throw new Error('A empresa não está mais disponível na base de lançamentos do Firestore. Atualize a tela.');
+      const completenessErrors = getBillingProfileCompletenessErrors(editingProfile);
       if (completenessErrors.length > 0) {
         throw new Error(`Complete os campos obrigatórios: ${completenessErrors.join(', ')}.`);
       }
-      await FirebaseService.upsertBillingProfile(profile);
-      setProfiles(current => [...current.filter(item => item.id !== profile.id), profile]);
+      if (identityChanged && editReason.trim().length < 10) {
+        throw new Error('Informe o motivo da correção de empresa, CPF/CNPJ ou N.Cliente (mínimo de 10 caracteres).');
+      }
+      const result = await FirebaseService.saveBillingProfile({
+        requestId: editRequestId,
+        revision: directoryRevision,
+        sourceId: editingOriginal.sourceId,
+        profileId: editingProfile.id || makeBillingProfileId(editingProfile.identityKey),
+        identityKey: editingProfile.identityKey,
+        customer: {
+          client: editingProfile.client.trim(),
+          cpfCnpj: String(editingProfile.cpfCnpj || '').trim(),
+          clientNumber: String(editingProfile.clientNumber || '').trim(),
+        },
+        rule: {
+          groupName: editingProfile.groupName?.trim(),
+          billingMethod: editingProfile.billingMethod?.trim(),
+          issueDay: editingProfile.issueDay,
+          issueMonthOffset: editingProfile.issueMonthOffset ?? 0,
+          dueDay: editingProfile.dueDay,
+          deliveryChannels: editingProfile.deliveryChannels,
+          billingEmail: editingProfile.billingEmail?.trim(),
+          whatsapp: editingProfile.whatsapp?.trim(),
+          printedDeliveryDetails: editingProfile.printedDeliveryDetails?.trim(),
+          billingInstructions: editingProfile.billingInstructions?.trim(),
+        },
+        reason: editReason.trim(),
+      });
       setEditingProfile(null);
+      setEditingOriginal(null);
+      if (result.identityChanged) {
+        // A identificação vale para o histórico inteiro: recarrega lançamentos e regras.
+        await load();
+      } else {
+        setProfiles(current => [...current.filter(item => item.id !== result.profile.id), result.profile]);
+      }
     } catch (saveError: any) {
       logger.error('Erro ao salvar regra de faturamento:', saveError);
       alert(saveError?.message || 'Não foi possível salvar a regra de faturamento.');
@@ -411,7 +440,7 @@ const BillingForecast: React.FC = () => {
                           <td className="px-4 py-4">{row.deliveryChannels.length ? <span className="font-semibold text-slate-700 dark:text-slate-200">{formatDeliveryChannels(row.deliveryChannels)}</span> : <span className="text-amber-600">Não cadastrado</span>}</td>
                           <td className="px-4 py-4 text-xs text-slate-600 dark:text-slate-300"><p>{[row.billingEmail, row.whatsapp, row.printedDeliveryDetails].filter(Boolean).join(' • ') || '-'}</p>{row.billingInstructions && <p className="mt-1 text-slate-500">{row.billingInstructions}</p>}</td>
                           <td className="px-4 py-4">{row.missingFields.length === 0 ? <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-xs"><CheckCircle2 className="h-4 w-4" /> Pronto</span> : <div className="text-amber-700 dark:text-amber-400 text-xs"><span className="inline-flex items-center gap-1 font-bold"><AlertTriangle className="h-4 w-4" /> Pendente</span><p className="mt-1 max-w-48">{row.missingFields.join(', ')}</p></div>}</td>
-                          <td className="px-4 py-4 text-right">{isAdmin && <button type="button" onClick={() => openEditor(row)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30" title="Editar regra"><Pencil className="h-4 w-4" /></button>}</td>
+                          <td className="px-4 py-4 text-right">{canEdit && <button type="button" onClick={() => openEditor(row)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30" title="Editar regra"><Pencil className="h-4 w-4" /></button>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -429,9 +458,10 @@ const BillingForecast: React.FC = () => {
             <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between"><div><h2 className="font-black text-lg text-slate-900 dark:text-white">Regra de faturamento e envio</h2><p className="text-xs text-slate-500">Associe empresas do mesmo grupo usando exatamente o mesmo nome de grupo.</p></div><button type="button" onClick={() => setEditingProfile(null)} className="p-2 text-slate-400 hover:text-slate-700"><X className="h-5 w-5" /></button></div>
             <div className="p-6 overflow-y-auto space-y-5">
               <div className="grid sm:grid-cols-2 gap-4">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Empresa — base do Firestore<input readOnly value={editingProfile.client} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">CPF/CNPJ — Firestore<input readOnly value={editingProfile.cpfCnpj || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">N.Cliente — Firestore<input readOnly value={editingProfile.clientNumber || ''} className="mt-1.5 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-950 px-3 py-2.5 text-slate-500" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Empresa<input required minLength={3} maxLength={300} value={editingProfile.client} onChange={event => updateEditing({ client: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">CPF/CNPJ<input inputMode="numeric" maxLength={18} value={editingProfile.cpfCnpj || ''} onChange={event => updateEditing({ cpfCnpj: event.target.value })} placeholder="00.000.000/0000-00" className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">N.Cliente<input inputMode="numeric" pattern="\d*" maxLength={20} value={editingProfile.clientNumber || ''} onChange={event => updateEditing({ clientNumber: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
+                {identityChanged && <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Motivo da correção da identificação<textarea required minLength={10} maxLength={2000} rows={2} value={editReason} onChange={event => { setEditReason(event.target.value); setEditRequestId(crypto.randomUUID()); }} placeholder="Ex.: CNPJ conferido no cartão CNPJ e no Checklist do Legal." className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /><span className="mt-1 block text-xs font-normal text-slate-500">A correção vale para o histórico e para a Base de Faturamento, fica registrada com seu nome, data, antes e depois. Os lançamentos originais são preservados.</span></label>}
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 sm:col-span-2">Grupo econômico<input value={editingProfile.groupName || ''} onChange={event => updateEditing({ groupName: event.target.value })} placeholder="Ex.: Grupo Empresa Alfa" className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
