@@ -37,6 +37,9 @@ try {
   };
   assert.equal(hasFinancialPermission(operator, 'itau.openfinance.read'), true);
   assert.equal(hasFinancialPermission(operator, 'billing.boleto-cloud.issue'), false);
+  assert.deepEqual(sanitizeFinancialPermissions(['receivables.amend']), ['receivables.amend']);
+  assert.equal(hasFinancialPermission({ ...operator, financialPermissions: ['receivables.amend'] }, 'receivables.amend'), true);
+  assert.equal(hasFinancialPermission(operator, 'receivables.amend'), false);
   assert.equal(canOpenWixTreasury(operator), true);
   assert.equal(canOpenWixTreasury({ ...operator, active: false }), false);
   assert.equal(hasFinancialPermission({ ...operator, active: false }, 'itau.openfinance.read'), false);

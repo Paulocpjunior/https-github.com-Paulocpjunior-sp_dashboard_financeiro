@@ -262,3 +262,11 @@ test('bloqueia conta com recebimento, Wix, boleto emitido ou duplicidade no novo
  dup.store.get('transactions/other').isExcluded=true;assert.equal((await dup.call('due-date/preview',await dueBody(dup))).status,200);
  const wix=harness();wix.store.get('transactions/legacy').source='wix';assert.equal((await wix.call('items/legacy')).status,409);
 });
+test('após estornar todas as baixas o vencimento pode ser corrigido',async()=>{
+ const h=harness();await commit(h,await body(h,{amount:'100.00',interest:'0.00',discount:'0.00'}));
+ assert.equal((await h.call('due-date/preview',await dueBody(h))).status,409);
+ const d=await h.call('items/legacy'),b={id:'legacy',requestId:randomUUID(),version:d.body.version,reason:'Baixa registrada na conta errada'},p=await h.call('reversal/preview',b);
+ assert.equal((await h.call('reversal/commit',{...b,confirmHash:p.body.reviewHash})).status,200);
+ const due=await dueBody(h),pv=await h.call('due-date/preview',due);assert.equal(pv.status,200,JSON.stringify(pv.body));
+ assert.equal((await h.call('due-date/commit',{...due,confirmHash:pv.body.reviewHash})).status,200);assert.equal(h.store.get('transactions/legacy').dueDate,'2026-02-28');assert.equal(h.store.get('transactions/legacy').receivableReceipts.length,1);
+});

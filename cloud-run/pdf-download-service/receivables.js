@@ -49,7 +49,7 @@ function receiptPatch(row,input,catalog){
 // Due date only moves while the account is open, without receipts and without a bank title carrying the old date.
 function dueDateChange(row,input){
  receivable(row);const reason=blocked(row);if(reason)fail(reason);
- if(row.receivableSettlement||row.receivableReceipts?.length)fail('Conta com recebimento registrado. Estorne a baixa antes de corrigir o vencimento.');
+ if(row.receivableSettlement||(row.receivableReceipts||[]).some(r=>!(row.receivableReversals||[]).some(x=>x.receiptRequestId===r.requestId)))fail('Conta com recebimento registrado. Estorne a baixa antes de corrigir o vencimento.');
  const p=input||{}, valid=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d;
  if(!valid(p.dueDate)||p.dueDate<'2000-01-01'||p.dueDate>'2099-12-31')fail('Informe um vencimento válido.',400);
  if(p.dueDate===row.dueDate)fail('O novo vencimento é igual ao atual.',400);
