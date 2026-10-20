@@ -24,3 +24,16 @@ Em caso de falha, manter o corte já aplicado e corrigir a etapa restante; não 
 ## Pendência funcional
 
 A consulta do aplicativo lê clientRegistry e billingProfiles diretamente no Firestore, com o token do usuário e as regras existentes. A lista mensal mantém o histórico de transactions no Firestore. Campos operacionais não são convertidos em eventos ou valores contratuais: essas lacunas permanecem explícitas, sem impedir a consulta dos dados disponíveis. O antigo endpoint Jotform permanece bloqueado.
+
+## Checklist do Legal (20/10/2026)
+
+Paulo esclareceu que o Checklist é um formulário à parte, do departamento Legal (Jotform `210135417457653`, "Check List Atual 2026"), e que ele orienta todos os apps: entrada e saída de clientes, valores, tributação, serviços contratados, alterações contratuais e baixas. O desligamento acima vale para o formulário de caixa (`210020525580845`); a leitura do Checklist volta, só para consulta.
+
+- O servidor libera somente `POST /api/billing-checklist/review`, com sessão Firebase e perfil financeiro ativo. Webhook, reconciliação e alteração de respostas seguem em HTTP 410.
+- A chave fica no Secret Manager (`jotform-checklist-api-key`), exposta ao runtime como `JOTFORM_CHECKLIST_API_KEY`. Usar uma chave Jotform de leitura. `JOTFORM_API_KEY` e `JOTFORM_RECONCILE_KEY` continuam fora do runtime.
+- A tela mostra o Checklist do Legal e mantém a consulta aos cadastros do Firestore. A lista mensal escolhe a fonte; o padrão é o Checklist.
+
+Publicação, com o SHA completo aprovado em `FINANCEIRO_APPROVED_COMMIT`:
+
+1. `python3 scripts/enable-legal-checklist.py` (Cloud Shell ou Mac com gcloud). Na primeira vez pede a chave sem exibi-la e cria o segredo.
+2. Deploy oficial do Hosting pelo GitHub Actions com o mesmo SHA. A fixação da rota exige `checklistReadEnabled: true`, então o Hosting não publica a tela antes do servidor.

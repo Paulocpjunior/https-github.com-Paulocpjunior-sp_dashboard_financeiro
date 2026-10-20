@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BillingReviewService } from '../services/billingReviewService';
-import { fetchChecklistReview } from '../services/checklistReviewService';
+import { checklistLoaders, type ChecklistSource } from '../services/checklistReviewService';
 import { auth } from '../services/firebaseConfig';
 import { buildBillingObligations, obligationSituationLabels, type ObligationSituation } from '../utils/billingObligations';
 import { checklistEvent, checklistEventLabels } from '../utils/checklistStatus';
@@ -17,6 +17,10 @@ import { billingReviewStatus, billingReviewStatusLabels, matchesBillingReviewFil
 const currentMonth = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).format(new Date());
 const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const time = (value: string) => new Date(value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+const sourceCopy: Record<ChecklistSource, { heading: string; intro: string; label: string; unit: string; column: string; record: string }> = {
+  legal: { heading: 'Lista mensal — checklist e lançamentos', intro: 'Cruza os eventos do Checklist do Legal com o mês anterior e o mês escolhido, por CPF/CNPJ ou Nosso Número. Inclui eventos sem lançamento para revisão de novas entradas, saídas e alterações. As situações apontam o que conferir; valores exibidos são referências.', label: 'Checklist', unit: 'respostas', column: 'Checklist por STATUS', record: 'resposta' },
+  registry: { heading: 'Lista mensal — cadastros e lançamentos no Firestore', intro: 'Cruza os cadastros do Firestore com os lançamentos do mês anterior e do mês escolhido, por CPF/CNPJ ou número do cliente. Inclui cadastros sem lançamento para revisão. Datas, valores e eventos contratuais ausentes permanecem pendentes; os cadastros não comprovam vigência.', label: 'Cadastros', unit: 'registros', column: 'Cadastro e pendências', record: 'registro' },
+};
 type Loaded = { review: ReturnType<typeof buildBillingObligations>; financialReadAt: string; checklistReadAt: string; documentCount: number; terms: SavedMonthlyTerms[]; fingerprints: Record<string,string>; links:IdentityLink[] };
 
 export default function BillingObligationsReview() {
@@ -26,6 +30,8 @@ export default function BillingObligationsReview() {
   const [message,setMessage] = useState('');
   const [month, setMonth] = useState(currentMonth);
   const [field, setField] = useState<BillingPeriodField>('dueDate');
+  const [source, setSource] = useState<ChecklistSource>('legal');
+  const text = sourceCopy[source];
   const [data, setData] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -45,7 +51,7 @@ export default function BillingObligationsReview() {
     setLoading(true); setSelected(null); setData(null); setError(''); setPage(1);
     try {
       if (!user) throw new Error('Entre novamente para consultar as fontes.');
-      const [financial, checklist, persisted] = await Promise.all([BillingReviewService.fetch(), fetchChecklistReview(controller.signal), fetchSavedBillingReview(month)]);
+      const [financial, checklist, persisted] = await Promise.all([BillingReviewService.fetch(), checklistLoaders[source](controller.signal), fetchSavedBillingReview(month)]);
       if (version !== request.current) return;
       if (controller.signal.aborted) throw new Error('Leitura não concluída no prazo.');
       if (auth.currentUser !== user) throw new Error('Sessão alterada durante a consulta.');
@@ -67,18 +73,19 @@ export default function BillingObligationsReview() {
     row, termsByIdentity.get(row.identity), data.fingerprints[row.identity], {status:reviewStatus,situation,search},
   )) || [], [data, search, situation, reviewStatus, termsByIdentity]);
   return <section aria-labelledby="obligations-heading" className="rounded-xl border border-blue-300 dark:border-blue-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-    <h2 id="obligations-heading" className="text-lg font-bold">Lista mensal — cadastros e lançamentos no Firestore</h2>
-    <p className="text-sm">Cruza os cadastros do Firestore com os lançamentos do mês anterior e do mês escolhido, por CPF/CNPJ ou número do cliente. Inclui cadastros sem lançamento para revisão. Datas, valores e eventos contratuais ausentes permanecem pendentes; os cadastros não comprovam vigência.</p>
+    <h2 id="obligations-heading" className="text-lg font-bold">{text.heading}</h2>
+    <p className="text-sm">{text.intro}</p>
     <div className="flex flex-wrap items-end gap-3">
       <label className="text-sm">Mês a conferir<input type="month" value={month} onChange={e => { changePeriod(); setMonth(e.target.value); }} className="block border rounded p-2 dark:bg-slate-950" /></label>
+      <label className="text-sm">Fonte<select value={source} onChange={e => { changePeriod(); setSource(e.target.value as ChecklistSource); }} className="block border rounded p-2 dark:bg-slate-950"><option value="legal">Checklist do Legal</option><option value="registry">Cadastros no Firestore</option></select></label>
       <label className="text-sm">Critério do mês<select value={field} onChange={e => { changePeriod(); setField(e.target.value as BillingPeriodField); }} className="block border rounded p-2 dark:bg-slate-950"><option value="dueDate">Vencimento</option><option value="date">Emissão / lançamento</option></select></label>
       <button type="button" disabled={loading || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)} onClick={load} className="bg-blue-700 text-white rounded-lg px-4 py-2 disabled:opacity-50">{loading ? 'Cruzando fontes completas...' : 'Gerar lista mensal de conferência'}</button>
     </div>
     {message && <p role="status" className="text-green-700 dark:text-green-300">{message}</p>}
     {error && <p role="alert" className="text-red-700 dark:text-red-300">Lista indisponível: {error} Nenhuma lista parcial foi apresentada.</p>}
     {data && <>
-      <p className="text-xs text-slate-500">Comparação {data.review.previousMonth} → {data.review.targetMonth}. Financeiro: {data.documentCount.toLocaleString('pt-BR')} registros, leitura em {time(data.financialReadAt)}. Cadastros: {data.review.checklistRecords.toLocaleString('pt-BR')} registros, leitura em {time(data.checklistReadAt)} (Brasília). As duas fontes têm horários próprios; atualize após alterações.</p>
-      <p className="text-sm"><strong>{data.review.linkedChecklistRecords} / {data.review.checklistRecords}</strong> registros vinculados a itens com lançamento em algum dos dois meses. Esta métrica mede a associação das fontes, não a cobertura contratual.</p>
+      <p className="text-xs text-slate-500">Comparação {data.review.previousMonth} → {data.review.targetMonth}. Financeiro: {data.documentCount.toLocaleString('pt-BR')} registros, leitura em {time(data.financialReadAt)}. {text.label}: {data.review.checklistRecords.toLocaleString('pt-BR')} {text.unit}, leitura em {time(data.checklistReadAt)} (Brasília). As duas fontes têm horários próprios; atualize após alterações.</p>
+      <p className="text-sm"><strong>{data.review.linkedChecklistRecords} / {data.review.checklistRecords}</strong> {text.unit} vinculados a itens com lançamento em algum dos dois meses. Esta métrica mede a associação das fontes, não a cobertura contratual.</p>
       <details className="text-sm"><summary>Revisões sem item correspondente nesta leitura</summary>{data.terms.filter(term=>!data.fingerprints[term.identity]).map(term=><p key={term.identity}>{term.client} • {term.identity} • revisão {term.revision}. Decisão histórica: {term.decision==='charge'?'obrigação confirmada':'revisão pendente'}. Evidência: {term.evidence}. Revalidar identificação e vigência; este registro não foi descartado.</p>)}</details>
       <details className="text-sm"><summary>{data.links.length} vínculos comprovados registrados</summary>{data.links.map(link=><p key={link.sourceIdentity}>{link.sourceIdentity} → {link.targetIdentity} • revisão {link.revision}. {link.evidence} {isAdmin&&<button className="underline" onClick={()=>{setEditingLink(link);setSelected({identity:link.sourceIdentity,client:'Vínculo de identificação',previousAmount:0,currentAmount:0,previousIds:[],currentIds:[],checklist:[],issues:[],situation:'identificacao'});}}>Revisar vínculo</button>}</p>)}</details>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">{Object.entries(data.review.counts).map(([key,count]) => <p key={key}><strong>{count}</strong> {obligationSituationLabels[key as ObligationSituation]}</p>)}</div>
@@ -89,16 +96,16 @@ export default function BillingObligationsReview() {
       <div className="flex flex-wrap gap-3"><label className="text-sm">Buscar cliente ou identificação<input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="block border rounded p-2 dark:bg-slate-950" /></label><label className="text-sm">Situação<select value={situation} onChange={e => { setSituation(e.target.value as ObligationSituation | ''); setPage(1); }} className="block border rounded p-2 dark:bg-slate-950"><option value="">Todas</option>{Object.entries(obligationSituationLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label></div>
       <label className="block text-sm">Conferência<select value={reviewStatus} onChange={e => { setReviewStatus(e.target.value as BillingReviewStatus | ''); setPage(1); }} className="block border rounded p-2 dark:bg-slate-950"><option value="">Todas as conferências</option>{Object.entries(billingReviewStatusLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
       <p className="text-xs text-slate-500">Filtros afetam somente a lista abaixo. Os totais e as revisões sem item correspondente continuam abrangendo toda a competência.</p>
-      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead><tr><th className="p-2">Cliente</th><th className="p-2">Referência anterior</th><th className="p-2">Lançamentos atuais</th><th className="p-2">Cadastro e pendências</th><th className="p-2">Situação e conferência</th></tr></thead><tbody>{rows.slice((page-1)*20,page*20).map(row => <tr key={row.identity} className="border-t border-slate-200 dark:border-slate-700">
+      <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead><tr><th className="p-2">Cliente</th><th className="p-2">Referência anterior</th><th className="p-2">Lançamentos atuais</th><th className="p-2">{text.column}</th><th className="p-2">Situação e conferência</th></tr></thead><tbody>{rows.slice((page-1)*20,page*20).map(row => <tr key={row.identity} className="border-t border-slate-200 dark:border-slate-700">
         <td className="p-2">{row.client}<span className="block text-xs">{row.identity}</span></td>
         <td className="p-2">{money(row.previousAmount)}<span className="block text-xs">{row.previousIds.length} lançamento(s)</span></td>
         <td className="p-2">{money(row.currentAmount)}<span className="block text-xs">{row.currentIds.length} lançamento(s)</span></td>
-        <td className="p-2">{row.checklist.length ? row.checklist.map(record => <details key={record.submissionId} className="mb-2"><summary>{checklistEventLabels[checklistEvent(record.status)]} • registro {record.submissionId}</summary><p>STATUS: {record.status || 'Ausente'}</p><p>Honorários no campo: {record.amount == null ? 'Não confirmado' : money(record.amount)}</p><p>Cadastrada em: {record.sourceCreatedAt || 'Não informado'} — conferir vigência.</p><p className="whitespace-pre-wrap max-w-xl">{readableChecklistNotes(record.notes)}</p></details>) : 'Sem cadastro vinculado'}</td>
+        <td className="p-2">{row.checklist.length ? row.checklist.map(record => <details key={record.submissionId} className="mb-2"><summary>{checklistEventLabels[checklistEvent(record.status)]} • {text.record} {record.submissionId}</summary><p>STATUS: {record.status || 'Ausente'}</p><p>Honorários no campo: {record.amount == null ? 'Não confirmado' : money(record.amount)}</p><p>Cadastrada em: {record.sourceCreatedAt || 'Não informado'} — conferir vigência.</p><p className="whitespace-pre-wrap max-w-xl">{readableChecklistNotes(record.notes)}</p></details>) : 'Sem cadastro vinculado'}</td>
         <td className="p-2"><strong>{obligationSituationLabels[row.situation]}</strong><p>{billingReviewStatusLabels[billingReviewStatus(termsByIdentity.get(row.identity), data.fingerprints[row.identity])]}</p><button type="button" className="text-blue-700 dark:text-blue-300 underline" onClick={()=>{setEditingLink(undefined);setSelected(row);}}>{row.situation==='identificacao'?'Conferir identificação':'Registrar conferência'}</button><details><summary>O que conferir</summary><ul className="list-disc pl-4">{row.issues.map(issue => <li key={issue}>{issue}</li>)}</ul><p>IDs financeiros anteriores: {row.previousIds.join(', ') || 'Nenhum'}<br/>IDs financeiros atuais: {row.currentIds.join(', ') || 'Nenhum'}</p></details></td>
       </tr>)}</tbody></table></div>
       {!rows.length && <p className="text-sm">Nenhum item neste filtro. Isso não comprova ausência de obrigações.</p>}
       <div className="flex gap-3 text-sm"><button disabled={page <= 1} onClick={() => setPage(p => p-1)}>Anterior</button><span>{rows.length} item(ns) • página {page} de {Math.max(1,Math.ceil(rows.length/20))}</span><button disabled={page*20 >= rows.length} onClick={() => setPage(p => p+1)}>Próxima</button></div>
     </>}
-    {selected&&data&&<BillingConfirmationDialog key={selected.identity} row={selected} month={data.review.targetMonth} fingerprint={data.fingerprints[selected.identity]||''} saved={data.terms.find(t=>t.identity===selected.identity)} isAdmin={isAdmin} savedLink={editingLink} verifyCurrent={editingLink?undefined:async()=>{const [financial,checklist,persisted]=await Promise.all([BillingReviewService.fetch(),fetchChecklistReview(AbortSignal.timeout(180000)),fetchSavedBillingReview(data.review.targetMonth)]);const fresh=buildBillingObligations(financial.transactions,checklist.records,data.review.targetMonth,field,persisted.links).rows.find(row=>row.identity===selected.identity);if(!fresh||await fingerprintMonthlyRow(fresh,data.review.targetMonth,field)!==data.fingerprints[selected.identity])throw new Error('Fontes alteradas. Recarregue a lista antes de registrar a conferência.');}} onClose={()=>setSelected(null)} onSaved={()=>{setSelected(null);setMessage('Revisão registrada com responsável e histórico. Recarregando fontes.');void load();}}/>}
+    {selected&&data&&<BillingConfirmationDialog key={selected.identity} row={selected} month={data.review.targetMonth} fingerprint={data.fingerprints[selected.identity]||''} saved={data.terms.find(t=>t.identity===selected.identity)} isAdmin={isAdmin} savedLink={editingLink} verifyCurrent={editingLink?undefined:async()=>{const [financial,checklist,persisted]=await Promise.all([BillingReviewService.fetch(),checklistLoaders[source](AbortSignal.timeout(180000)),fetchSavedBillingReview(data.review.targetMonth)]);const fresh=buildBillingObligations(financial.transactions,checklist.records,data.review.targetMonth,field,persisted.links).rows.find(row=>row.identity===selected.identity);if(!fresh||await fingerprintMonthlyRow(fresh,data.review.targetMonth,field)!==data.fingerprints[selected.identity])throw new Error('Fontes alteradas. Recarregue a lista antes de registrar a conferência.');}} onClose={()=>setSelected(null)} onSaved={()=>{setSelected(null);setMessage('Revisão registrada com responsável e histórico. Recarregando fontes.');void load();}}/>}
   </section>;
 }

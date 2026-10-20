@@ -44,6 +44,7 @@ REVISION = target['revisionName']
 health = requests.get(target['url'], timeout=30)
 health.raise_for_status()
 assert health.json().get('jotformEnabled') is False, 'A revisão ainda permite acesso ao Jotform.'
+assert health.json().get('checklistReadEnabled') is True, 'Execute primeiro scripts/enable-legal-checklist.py.'
 
 channel = api('GET', 'sites/' + SITE + '/channels/live')
 source = channel['release']['version']['name']
@@ -75,4 +76,4 @@ assert final['config']['rewrites'] == config['rewrites']
 assert api('GET', 'sites/' + SITE + '/channels/live')['release']['version']['name'] == source, 'Outra publicação ocorreu durante a preparação.'
 api('POST', 'sites/' + SITE + '/releases?versionName=' + name,
     {'message': 'Checklist publicado no app principal; consulta fixada na revisão implantada ' + REVISION})
-print('Rota legada do checklist aponta para a integração Jotform desativada.')
+print('Rota do checklist aponta para a revisão com o caixa desligado e o Checklist do Legal em leitura.')

@@ -348,7 +348,8 @@ const BillingForecast: React.FC = () => {
 
         <BillingObligationsReview />
         <BillingCompletenessReview />
-        <ChecklistReview />
+        <ChecklistReview source="legal" />
+        <ChecklistReview source="registry" />
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col xl:flex-row gap-3 xl:items-center">
           <div className="relative flex-1">
