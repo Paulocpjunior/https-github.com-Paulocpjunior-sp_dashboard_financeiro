@@ -14,8 +14,7 @@ import {
   getDocsFromCache,
   getDocsFromServer,
   getCountFromServer,
-  QueryConstraint,
-  setDoc
+  QueryConstraint
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { BillingProfile, ClientRegistryEntry, Transaction, FilterState, KPIData } from '../types';
@@ -271,15 +270,20 @@ export const FirebaseService = {
     return mapBillingProfilesSnapshot(snapshot);
   },
 
-  upsertBillingProfile: async (profile: BillingProfile) => {
-    const now = new Date().toISOString();
-    const profileRef = doc(db, 'billingProfiles', profile.id);
-    return setDoc(profileRef, {
-      ...profile,
-      createdAt: profile.createdAt || now,
-      updatedAt: now,
-    }, { merge: true });
-  },
+  /**
+   * Salva a regra e, se mudou, a identificação do cliente (empresa, CPF/CNPJ, N.Cliente)
+   * pelo servidor, que valida duplicidade e grava o histórico na mesma transação.
+   */
+  saveBillingProfile: (input: {
+    requestId: string;
+    revision: number;
+    sourceId: string;
+    profileId: string;
+    identityKey: string;
+    customer: { client: string; cpfCnpj: string; clientNumber: string };
+    rule: Partial<BillingProfile>;
+    reason: string;
+  }): Promise<{ profile: BillingProfile; revision: number; identityChanged: boolean }> => customerApi('billing-profile', input),
 
   /**
    * Cria uma nova transação.

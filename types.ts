@@ -156,6 +156,8 @@ export interface BillingForecastRow {
   targetMonth: string;
   referenceField: 'date' | 'dueDate';
   profile?: BillingProfile;
+  /** Lançamento mais recente da empresa: âncora para corrigir a identificação no cadastro. */
+  sourceTransactionId?: string;
   hasReference: boolean;
   missingFields: string[];
   conflicts: string[];

@@ -220,6 +220,7 @@ export const buildBillingForecastRows = (
       targetMonth,
       referenceField,
       profile,
+      sourceTransactionId: latest?.id,
       hasReference: matchingTransactions.length > 0,
       missingFields,
       conflicts,

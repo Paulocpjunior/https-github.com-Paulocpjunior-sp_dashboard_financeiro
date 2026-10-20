@@ -22,7 +22,7 @@ test('permissões cadastrais não ampliam direitos financeiros',()=>{
 function fixture(){
  const store=new Map([['users/u',{active:true,role:'admin',name:'Teste'}],['transactions/a',source],['transactions/b',target]]);
  const doc=path=>({path,get:async()=>({data:()=>structuredClone(store.get(path))})});
- const db={collection:n=>({doc:id=>doc(n+'/'+id),where:(field,op,value)=>({limit:()=>({get:async()=>({docs:[...store.entries()].filter(([k,v])=>k.startsWith(n+'/')&&v[field]===value).map(([k,v])=>({data:()=>v}))})})})}),runTransaction:async fn=>{const writes=[];const result=await fn({get:ref=>ref.get(),set:(ref,v)=>writes.push([ref.path,v]),create:(ref,v)=>{assert.equal(store.has(ref.path),false);writes.push([ref.path,v]);}});writes.forEach(([p,v])=>store.set(p,structuredClone(v)));return result;}};
+ const db={collection:n=>({doc:id=>doc(n+'/'+id),where:(field,op,value)=>({limit:()=>({get:async()=>({docs:[...store.entries()].filter(([k,v])=>k.startsWith(n+'/')&&v[field]===value).map(([k,v])=>({id:k.slice(n.length+1),data:()=>v}))})})})}),runTransaction:async fn=>{const writes=[];const result=await fn({get:ref=>ref.get(),set:(ref,v)=>writes.push([ref.path,v]),create:(ref,v)=>{assert.equal(store.has(ref.path),false);writes.push([ref.path,v]);}});writes.forEach(([p,v])=>store.set(p,structuredClone(v)));return result;}};
  return {store,async call(path,body){let result;await handle({request:{method:body?'POST':'GET',body},url:new URL('https://example.test/api/financial-entries/customers/'+path),db,userRef:doc('users/u'),user:store.get('users/u'),uid:'u',readBody:async r=>Buffer.from(JSON.stringify(r.body)),reply:r=>{result=r;}});return result;}};
 }
 test('prévia sem gravação, confirmação idempotente, versão concorrente e revogação',async()=>{
@@ -38,4 +38,40 @@ test('unificação preserva regra de faturamento ativa',async()=>{
  const h=fixture();h.store.set('billingProfiles/source',{identityKey:'name-empresa-exemplo-contato-ana',active:true,issueDay:3});
  await assert.rejects(h.call('preview',{requestId:'33333333-3333-4333-8333-333333333333',revision:0,sourceId:'a',targetId:'b',action:'merge',reason}),/regra de faturamento ativa/);
  assert.equal(h.store.has('financialSettings/customerDirectory'),false);
+});
+
+const radio={movement:'Entrada',client:'RADIO SB FM LTDA',cpfCnpj:'07.147.345/0001-11',clientNumber:'170',totalCobranca:500,dueDate:'2026-10-05'};
+const rule={groupName:'',billingMethod:'Boleto Itaú',issueDay:24,issueMonthOffset:-1,dueDay:5,deliveryChannels:['email'],billingEmail:'marlene@example.test',whatsapp:'',printedDeliveryDetails:'',billingInstructions:''};
+function billing(){
+ const h=fixture();h.store.set('users/u',{active:true,role:'operacional',name:'Colaboradora'});h.store.set('transactions/r',radio);
+ h.store.set('billingProfiles/doc-07147345000111',{id:'doc-07147345000111',identityKey:'doc-07147345000111',client:radio.client,active:true,issueDay:20,createdAt:'2026-01-01T00:00:00.000Z'});
+ h.store.set('clientRegistry/x',{cpfCnpjDigits:'11222333000181',clientNumber:'414',clientNumberNormalized:'414',client:'Outra Empresa'});
+ let n=0;h.save=body=>h.call('billing-profile',{requestId:`44444444-4444-4444-8444-${String(++n).padStart(12,'0')}`,revision:0,sourceId:'r',profileId:'doc-07147345000111',identityKey:'doc-07147345000111',rule,customer:{client:radio.client,cpfCnpj:radio.cpfCnpj,clientNumber:'170'},reason:'',...body});
+ return h;
+}
+test('colaboradora corrige empresa, CNPJ e N.Cliente com motivo; regra acompanha e tudo fica auditado',async()=>{
+ const h=billing(),customer={client:'RÁDIO SB FM LTDA',cpfCnpj:'12.345.678/0001-95',clientNumber:'0171'};
+ await assert.rejects(h.save({customer}),/motivo/);
+ const r=await h.save({customer,reason:'CNPJ conferido no cartão CNPJ e no Checklist'});
+ assert.equal(r.identityChanged,true);assert.deepEqual(h.store.get('transactions/r'),radio);
+ assert.deepEqual(h.store.get('financialSettings/customerDirectory').entries['doc:07147345000111'],{client:'RÁDIO SB FM LTDA',cpfCnpj:'12345678000195',clientNumber:'0171'});
+ const moved=h.store.get('billingProfiles/doc-12345678000195');assert.equal(moved.active,true);assert.equal(moved.issueDay,24);assert.equal(moved.createdAt,'2026-01-01T00:00:00.000Z');assert.equal(moved.updatedBy,'Colaboradora');
+ assert.equal(h.store.get('billingProfiles/doc-07147345000111').active,false);assert.equal(h.store.get('billingProfiles/doc-07147345000111').movedTo,'doc-12345678000195');
+ const audit=[...h.store].find(([k])=>k.startsWith('billingProfileAudit/'))[1];
+ assert.equal(audit.actor,'Colaboradora');assert.equal(audit.before.customer.cpfCnpj,'07147345000111');assert.equal(audit.after.customer.cpfCnpj,'12345678000195');assert.match(audit.reason,/cartão CNPJ/);
+ assert.equal([...h.store.keys()].filter(k=>k.startsWith('customerAudit/')).length,1);
+});
+test('regra sem mudança de identificação dispensa motivo e mesmo assim gera histórico',async()=>{
+ const h=billing();await h.save({});
+ assert.equal(h.store.get('billingProfiles/doc-07147345000111').issueDay,24);assert.equal(h.store.has('financialSettings/customerDirectory'),false);
+ assert.equal([...h.store.keys()].filter(k=>k.startsWith('billingProfileAudit/')).length,1);
+});
+test('bloqueia CNPJ inválido, documento ou número de outro cliente e documento em branco',async()=>{
+ const h=billing(),reason='Correção conferida com o cliente';
+ await assert.rejects(h.save({reason,customer:{client:radio.client,cpfCnpj:'12.345.678/0001-90',clientNumber:'170'}}),/dígitos verificadores/);
+ await assert.rejects(h.save({reason,customer:{client:radio.client,cpfCnpj:'11.222.333/0001-81',clientNumber:'170'}}),/CPF\/CNPJ já pertence a Outra Empresa/);
+ await assert.rejects(h.save({reason,customer:{client:radio.client,cpfCnpj:radio.cpfCnpj,clientNumber:'00414'}}),/N.Cliente já pertence a Outra Empresa/);
+ await assert.rejects(h.save({reason,customer:{client:radio.client,cpfCnpj:'',clientNumber:'170'}}),/não pode ficar em branco/);
+ await assert.rejects(h.save({identityKey:'doc-99999999999999'}),/Atualize a tela/);
+ assert.equal(h.store.get('billingProfiles/doc-07147345000111').issueDay,20);
 });
