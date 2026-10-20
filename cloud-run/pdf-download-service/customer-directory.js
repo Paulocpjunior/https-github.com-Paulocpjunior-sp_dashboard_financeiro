@@ -13,6 +13,7 @@ function profile(r){return {client:String(r.client||'').trim(),cpfCnpj:digits(r.
 const billingKey=p=>digits(p.cpfCnpj)?'doc-'+digits(p.cpfCnpj):digits(p.clientNumber)?'client-'+digits(p.clientNumber):'name-'+(norm(p.client).replace(/ /g,'-')||'sem-identificacao');
 const billingId=k=>k.replace(/[^a-zA-Z0-9_-]/g,'-').slice(0,140);
 const number=x=>{const d=digits(x);return d?d.replace(/^0+(?=\d)/,''):'';};
+const limits=entries=>{if(Object.keys(entries).length>2000||Buffer.byteLength(JSON.stringify(entries))>300000)fail('Limite de cadastros atingido. Solicite revisão.');};
 function change(state,source,target,input,{identifiers=false}={}){
  if(!source||source.isExcluded||norm(source.movement)!=='entrada')fail('Selecione um lançamento de cliente disponível.');
  if(typeof input.reason!=='string'||input.reason.trim().length<10||input.reason.length>2000)fail('Informe a justificativa e a evidência (10 a 2000 caracteres).',400);
@@ -44,7 +45,7 @@ function change(state,source,target,input,{identifiers=false}={}){
   if(!entries[sourceKey]?.target)fail('Este registro não é um vínculo.');
   key=sourceKey;delete entries[key];
  }else fail('Ação inválida.',400);
- if(Object.keys(entries).length>2000||Buffer.byteLength(JSON.stringify(entries))>300000)fail('Limite de cadastros atingido. Solicite revisão.');
+ limits(entries);
  return {...state,revision:(state.revision||0)+1,entries};
 }
 async function handle({request,url,db,userRef,user,uid,reply,readBody}){
@@ -134,6 +135,7 @@ async function saveBillingProfile({db,ref,user,uid,recheck,b}){
    for(const [k,v] of Object.entries(directory.entries))if(k!==resolved.key&&!v.target&&billingKey(v)===beforeKey)directory.entries[k]={...after};
    const raw=beforeKey.startsWith('doc-')?'doc:'+beforeKey.slice(4):beforeKey.startsWith('client-')?'number:'+beforeKey.slice(7):null;
    if(raw&&raw!==resolved.key&&!directory.entries[raw])directory.entries[raw]={...after};
+   limits(directory.entries);
    await identifierConflicts(tx,db,state.entries||{},resolved.key,before,after);
   }
   const afterKey=billingKey(after),id=billingId(afterKey),oldRef=db.collection('billingProfiles').doc(b.profileId),newRef=db.collection('billingProfiles').doc(id);
