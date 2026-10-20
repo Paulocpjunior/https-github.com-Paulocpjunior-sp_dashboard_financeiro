@@ -302,3 +302,8 @@ test('bloqueia valor de conta com recebimento, histórico, boleto emitido ou dup
  const draft=nativeHarness();draft.store.set('boletoIssues/x',{transactionId:'legacy',state:'draft'});assert.equal((await draft.call('charge/preview',await chargeBody(draft))).status,200);
  const dup=nativeHarness();dup.store.set('transactions/other',{...nativeRow(),totalCobranca:150,valorOriginal:150});assert.equal((await dup.call('charge/preview',await chargeBody(dup))).status,409);
 });
+test('extra retirado do cadastro continua aceito no lançamento que já o tem',async()=>{
+ const h=nativeHarness();Object.assign(h.store.get('transactions/legacy'),{honorarios:100,extraItems:[{account:'Extra antigo',amount:20}],valorExtra:20,extras:20,totalCobranca:120,valorOriginal:120,cobrancaExtra:'Extra antigo'});
+ assert.equal((await h.call('charge/preview',await chargeBody(h,{honorarios:'110.00',extraItems:[{account:'Extra antigo',amount:'20.00'}]}))).status,200);
+ const other=nativeHarness();assert.equal((await other.call('charge/preview',await chargeBody(other,{extraItems:[{account:'Extra antigo',amount:'20.00'}]}))).status,400);
+});

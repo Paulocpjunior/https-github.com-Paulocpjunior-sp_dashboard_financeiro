@@ -83,8 +83,10 @@ function chargeChange(row,input,catalog){
  const cents=(v,label)=>{if(typeof v!=='string'||!/^\d{1,8}(\.\d{1,2})?$/.test(v))fail(`${label}: use um valor positivo com até duas casas decimais.`,400);return Math.round(Number(v)*100);};
  const honor=cents(p.honorarios,'Honorários');
  if(!Array.isArray(p.extraItems)||p.extraItems.length>30)fail('Informe no máximo 30 serviços extras.',400);
+ // Extras retired from the catalog stay valid on the entries that already carry them.
+ const known=new Set([...(catalog.extras||[]),...(Array.isArray(row.extraItems)?row.extraItems.map(i=>i?.account):[])]);
  const items=p.extraItems.map(item=>{
-  if(!item||typeof item!=='object'||!(catalog.extras||[]).includes(item.account))fail('Selecione um serviço extra da lista.',400);
+  if(!item||typeof item!=='object'||typeof item.account!=='string'||!known.has(item.account))fail('Selecione um serviço extra da lista.',400);
   const value=cents(item.amount,'Valor do serviço extra');if(value<=0)fail('Informe o valor de cada serviço extra.',400);
   return {account:item.account,amount:value/100};
  });
