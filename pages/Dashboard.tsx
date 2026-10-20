@@ -69,7 +69,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
   const currentUser = AuthService.getCurrentUser();
   const isAdmin = (currentUser?.role || '').toLowerCase().trim() === 'admin';
   const [receivableId, setReceivableId] = useState<string | null>(null);
-  const canManageReceivable = hasFinancialPermission(currentUser,'receivables.reverse') || hasFinancialPermission(currentUser,'receivables.amend') || hasFinancialPermission(currentUser,'receivables.read') || hasFinancialPermission(currentUser,'receivables.settle');
+  const canManageReceivable = hasFinancialPermission(currentUser,'receivables.reverse') || hasFinancialPermission(currentUser,'receivables.amend') || hasFinancialPermission(currentUser,'receivables.adjust') || hasFinancialPermission(currentUser,'receivables.read') || hasFinancialPermission(currentUser,'receivables.settle');
   const canManagePayable = (['payables.amend','payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'] as const).some(p => hasFinancialPermission(currentUser,p));
   const canManageRecurrences = hasFinancialPermission(currentUser,'payables.recurrence');
   const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');

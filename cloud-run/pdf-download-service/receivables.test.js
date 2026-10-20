@@ -270,3 +270,40 @@ test('após estornar todas as baixas o vencimento pode ser corrigido',async()=>{
  const due=await dueBody(h),pv=await h.call('due-date/preview',due);assert.equal(pv.status,200,JSON.stringify(pv.body));
  assert.equal((await h.call('due-date/commit',{...due,confirmHash:pv.body.reviewHash})).status,200);assert.equal(h.store.get('transactions/legacy').dueDate,'2026-02-28');assert.equal(h.store.get('transactions/legacy').receivableReceipts.length,1);
 });
+
+const nativeRow=()=>({...row(),source:'native-finance',submissionId:undefined,cpfCnpj:'47476379000174',nativeEntry:{version:1,kind:'receber'},honorarios:100,valorExtra:0,extras:0,totalCobranca:100,valorOriginal:100,cobrancaExtra:'',extraItems:[]});
+function nativeHarness(){const h=harness();h.store.set('transactions/legacy',nativeRow());return h;}
+async function chargeBody(h,overrides={}){const d=await h.call('items/legacy');assert.equal(d.status,200);return {id:'legacy',requestId:randomUUID(),version:d.body.version,charge:{honorarios:'100.00',extraItems:[{account:catalog.extras[0],amount:'50.00'}],reason:'Extra esquecido no lançamento',...overrides}};}
+test('adiciona extra com prévia, motivo e histórico',async()=>{
+ const h=nativeHarness(),d=await h.call('items/legacy');assert.deepEqual(d.body.catalog.extras,catalog.extras);assert.equal(d.body.canAdjust,true);
+ const b=await chargeBody(h),before=structuredClone([...h.store]);
+ const p=await h.call('charge/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));assert.equal(p.body.after.totalCobranca,150);assert.deepEqual([...h.store],before);
+ assert.equal((await h.call('charge/commit',b)).status,409);
+ const payload={...b,confirmHash:p.body.reviewHash},r=await h.call('charge/commit',payload);assert.equal(r.status,200,JSON.stringify(r.body));
+ const saved=h.store.get('transactions/legacy');
+ assert.deepEqual([saved.honorarios,saved.valorExtra,saved.extras,saved.totalCobranca,saved.valorOriginal,saved.cobrancaExtra,saved.status,saved.valuePaid],[100,50,50,150,150,catalog.extras[0],'Pendente',0]);
+ assert.deepEqual(saved.chargeAmendments.map(a=>[a.before.totalCents,a.after.totalCents,a.reason]),[[10000,15000,'Extra esquecido no lançamento']]);
+ const audit=[...h.store].find(([k,v])=>k.startsWith('receivableAudit/')&&v.action==='charge-amendment');assert.equal(audit[1].before.totalCobranca,100);assert.equal(audit[1].after.totalCobranca,150);
+ assert.equal((await h.call('charge/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').chargeAmendments.length,1);
+});
+test('correção de valores exige permissão própria',async()=>{
+ const h=nativeHarness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.amend']});
+ assert.equal((await h.call('charge/preview',await chargeBody(h))).status,403);
+ h.store.get('users/u').financialPermissions=['receivables.adjust'];const d=await h.call('items/legacy');assert.equal(d.body.canAdjust,true);assert.equal(d.body.canAmend,false);
+ assert.equal((await h.call('charge/preview',await chargeBody(h))).status,200);
+});
+test('valores inválidos, sem motivo ou iguais aos atuais não gravam',async()=>{
+ for(const o of [{honorarios:'-1'},{honorarios:'abc'},{extraItems:[{account:'Inexistente',amount:'10.00'}]},{extraItems:[{account:catalog.extras[0],amount:'0'}]},{honorarios:'0',extraItems:[]},{reason:'curto'},{extraItems:[]}]){const h=nativeHarness(),before=structuredClone([...h.store]);const r=await h.call('charge/preview',await chargeBody(h,o));assert.equal(r.status,400,JSON.stringify(o));assert.deepEqual([...h.store],before);}
+});
+test('bloqueia valor de conta com recebimento, histórico, boleto emitido ou duplicidade',async()=>{
+ const paid=nativeHarness();await commit(paid,await body(paid));assert.equal((await paid.call('charge/preview',await chargeBody(paid))).status,409);
+ const legacy=harness();assert.equal((await legacy.call('charge/preview',await chargeBody(legacy))).status,409);
+ const boleto=nativeHarness();boleto.store.set('boletoIssues/x',{transactionId:'legacy',state:'issued'});const br=await boleto.call('charge/preview',await chargeBody(boleto));assert.equal(br.status,409);assert.match(br.body.error,/novo lançamento só com o valor extra/);
+ const draft=nativeHarness();draft.store.set('boletoIssues/x',{transactionId:'legacy',state:'draft'});assert.equal((await draft.call('charge/preview',await chargeBody(draft))).status,200);
+ const dup=nativeHarness();dup.store.set('transactions/other',{...nativeRow(),totalCobranca:150,valorOriginal:150});assert.equal((await dup.call('charge/preview',await chargeBody(dup))).status,409);
+});
+test('extra retirado do cadastro continua aceito no lançamento que já o tem',async()=>{
+ const h=nativeHarness();Object.assign(h.store.get('transactions/legacy'),{honorarios:100,extraItems:[{account:'Extra antigo',amount:20}],valorExtra:20,extras:20,totalCobranca:120,valorOriginal:120,cobrancaExtra:'Extra antigo'});
+ assert.equal((await h.call('charge/preview',await chargeBody(h,{honorarios:'110.00',extraItems:[{account:'Extra antigo',amount:'20.00'}]}))).status,200);
+ const other=nativeHarness();assert.equal((await other.call('charge/preview',await chargeBody(other,{extraItems:[{account:'Extra antigo',amount:'20.00'}]}))).status,400);
+});
