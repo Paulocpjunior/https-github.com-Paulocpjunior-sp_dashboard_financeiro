@@ -9,6 +9,7 @@ export type FinancialPermission =
   | 'receivables.read'
   | 'receivables.settle'
   | 'receivables.reverse'
+  | 'receivables.amend'
   | 'payables.amend'
   | 'payables.read'
   | 'payables.settle'
@@ -45,6 +46,7 @@ export interface Transaction {
   paidBy: string;
   movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
   receivableReversals?: Array<{requestId:string;receiptRequestId:string;amountCents:number;reason:string;uid:string;actor:string;at:string}>;
+  dueDateAmendments?: Array<{requestId:string;before:string;after:string;reason:string;actor:string;at:string}>;
   invoiceAmendments?: Array<{requestId:string;beforeCents:number;afterCents:number;reason:string;actor:string;at:string}>;
   receivableBalance?: {version:1; receivedCents:number; interestCents:number; discountCents:number; remainingCents:number};
   receivableSettlement?: {requestId:string; uid:string; actor:string; date:string; at:string};

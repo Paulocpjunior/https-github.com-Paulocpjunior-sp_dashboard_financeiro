@@ -231,3 +231,42 @@ test('stale RET evidence, mismatching document, existing title claim and weak ex
  (h,b)=>{b.receipt.note='curto';}
  ]){const h=harness(),retReview=retFixture(h),b={...await body(h,{note:'PIX; comprovante bancario ABC 12345'}),retReview};mutate(h,b);const before=structuredClone(h.store.get('transactions/legacy'));const result=await h.call('receipt/preview',b);assert.ok(result.status>=400,JSON.stringify(result));assert.deepEqual(h.store.get('transactions/legacy'),before);}
 });
+
+async function dueBody(h,overrides={}){const d=await h.call('items/legacy');assert.equal(d.status,200);return {id:'legacy',requestId:randomUUID(),version:d.body.version,amendment:{dueDate:'2026-02-28',reason:'Vencimento lançado no mês errado',...overrides}};}
+test('corrige vencimento com prévia, motivo e histórico',async()=>{
+ const h=harness(),b=await dueBody(h),before=structuredClone([...h.store]);
+ const p=await h.call('due-date/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));assert.equal(p.body.after.dueDate,'2026-02-28');assert.deepEqual([...h.store],before);
+ assert.equal((await h.call('due-date/commit',b)).status,409);
+ const payload={...b,confirmHash:p.body.reviewHash},r=await h.call('due-date/commit',payload);assert.equal(r.status,200);
+ const row=h.store.get('transactions/legacy');assert.equal(row.dueDate,'2026-02-28');assert.equal(row.status,'Pendente');assert.equal(row.submissionId,'original');assert.equal(row.totalCobranca,100);
+ assert.deepEqual(row.dueDateAmendments.map(a=>[a.before,a.after,a.reason]),[['2026-01-31','2026-02-28','Vencimento lançado no mês errado']]);
+ const audit=[...h.store].find(([k,v])=>k.startsWith('receivableAudit/')&&v.action==='due-date-amendment');assert.equal(audit[1].before.dueDate,'2026-01-31');
+ assert.equal((await h.call('due-date/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').dueDateAmendments.length,1);
+});
+test('correção de vencimento exige permissão própria',async()=>{
+ const h=harness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.settle']});
+ assert.equal((await h.call('due-date/preview',await dueBody(h))).status,403);
+ h.store.get('users/u').financialPermissions=['receivables.amend'];const d=await h.call('items/legacy');assert.equal(d.status,200);assert.equal(d.body.canAmend,true);
+ assert.equal((await h.call('due-date/preview',await dueBody(h))).status,200);
+});
+test('vencimento inválido, sem motivo ou anterior ao lançamento não grava',async()=>{
+ for(const o of [{dueDate:'2026-02-30'},{dueDate:'2026-01-31'},{dueDate:'2025-12-31'},{dueDate:''},{reason:'curto'}]){const h=harness(),size=h.store.size;assert.equal((await h.call('due-date/preview',await dueBody(h,o))).status,400,JSON.stringify(o));assert.equal(h.store.size,size);}
+});
+test('bloqueia conta com recebimento, Wix, boleto emitido ou duplicidade no novo vencimento',async()=>{
+ const paid=harness();await commit(paid,await body(paid));assert.equal((await paid.call('due-date/preview',await dueBody(paid))).status,409);
+ const settled=harness();Object.assign(settled.store.get('transactions/legacy'),{status:'Pago',paymentDate:'2026-01-02'});assert.equal((await settled.call('due-date/preview',await dueBody(settled))).status,409);
+ const boleto=harness();boleto.store.set('boletoIssues/x',{transactionId:'legacy',state:'issued'});assert.equal((await boleto.call('due-date/preview',await dueBody(boleto))).status,409);
+ const draft=harness();draft.store.set('boletoIssues/x',{transactionId:'legacy',state:'draft'});assert.equal((await draft.call('due-date/preview',await dueBody(draft))).status,200);
+ const linked=harness();linked.store.set('boletoReconciliations/x',{transactionId:'legacy'});assert.equal((await linked.call('due-date/preview',await dueBody(linked))).status,409);
+ const dup=harness();dup.store.get('transactions/legacy').cpfCnpj='47.476.379/0001-74';dup.store.set('transactions/other',{...row(),cpfCnpj:'47476379000174',dueDate:'2026-02-28'});assert.equal((await dup.call('due-date/preview',await dueBody(dup))).status,409);
+ dup.store.get('transactions/other').isExcluded=true;assert.equal((await dup.call('due-date/preview',await dueBody(dup))).status,200);
+ const wix=harness();wix.store.get('transactions/legacy').source='wix';assert.equal((await wix.call('items/legacy')).status,409);
+});
+test('após estornar todas as baixas o vencimento pode ser corrigido',async()=>{
+ const h=harness();await commit(h,await body(h,{amount:'100.00',interest:'0.00',discount:'0.00'}));
+ assert.equal((await h.call('due-date/preview',await dueBody(h))).status,409);
+ const d=await h.call('items/legacy'),b={id:'legacy',requestId:randomUUID(),version:d.body.version,reason:'Baixa registrada na conta errada'},p=await h.call('reversal/preview',b);
+ assert.equal((await h.call('reversal/commit',{...b,confirmHash:p.body.reviewHash})).status,200);
+ const due=await dueBody(h),pv=await h.call('due-date/preview',due);assert.equal(pv.status,200,JSON.stringify(pv.body));
+ assert.equal((await h.call('due-date/commit',{...due,confirmHash:pv.body.reviewHash})).status,200);assert.equal(h.store.get('transactions/legacy').dueDate,'2026-02-28');assert.equal(h.store.get('transactions/legacy').receivableReceipts.length,1);
+});
