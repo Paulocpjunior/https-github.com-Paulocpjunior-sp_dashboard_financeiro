@@ -7,7 +7,7 @@ const evidenceHash=v=>hash(canonical(v));
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
 const permits=(user,action)=>user?.active===true&&!['blocked','deleted'].includes(user.status)&&(user.role==='admin'||user.financialPermissions?.includes(`receivables.${action}`));
 function routeAllowed(user,method,path){
- return method==='GET'&&/^items\/[^/]+$/.test(path)?['read','settle','reverse','amend'].some(a=>permits(user,a)):method==='POST'&&(['receipt/preview','receipt/commit'].includes(path)?permits(user,'settle'):['reversal/preview','reversal/commit'].includes(path)?permits(user,'reverse'):['due-date/preview','due-date/commit'].includes(path)&&permits(user,'amend'));
+ return method==='GET'&&/^items\/[^/]+$/.test(path)?['read','settle','reverse','amend','adjust'].some(a=>permits(user,a)):method==='POST'&&(['receipt/preview','receipt/commit'].includes(path)?permits(user,'settle'):['reversal/preview','reversal/commit'].includes(path)?permits(user,'reverse'):['due-date/preview','due-date/commit'].includes(path)?permits(user,'amend'):['charge/preview','charge/commit'].includes(path)&&permits(user,'adjust'));
 }
 function receivable(row){
  if(!row||row.isExcluded||row.deletedAt||norm(row.movement)!=='entrada'||/saida|pagar/.test(norm(row.type)))fail('Conta a receber indisponível.');
@@ -47,9 +47,12 @@ function receiptPatch(row,input,catalog){
  return {status:remaining===0?'Pago':'Pendente',pago:remaining===0?'Pago':'Não',valueReceived:next.receivedCents/100,valorPago:(next.receivedCents/100).toFixed(2),paymentDate:p.date,dataPagamento:p.date.split('-').reverse().join('/'),receivableBalance:next};
 }
 // Due date only moves while the account is open, without receipts and without a bank title carrying the old date.
-function dueDateChange(row,input){
+function openWithoutReceipts(row,action){
  receivable(row);const reason=blocked(row);if(reason)fail(reason);
- if(row.receivableSettlement||(row.receivableReceipts||[]).some(r=>!(row.receivableReversals||[]).some(x=>x.receiptRequestId===r.requestId)))fail('Conta com recebimento registrado. Estorne a baixa antes de corrigir o vencimento.');
+ if(row.receivableSettlement||(row.receivableReceipts||[]).some(r=>!(row.receivableReversals||[]).some(x=>x.receiptRequestId===r.requestId)))fail(`Conta com recebimento registrado. Estorne a baixa antes de corrigir ${action}.`);
+}
+function dueDateChange(row,input){
+ openWithoutReceipts(row,'o vencimento');
  const p=input||{}, valid=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d))&&new Date(d).toISOString().slice(0,10)===d;
  if(!valid(p.dueDate)||p.dueDate<'2000-01-01'||p.dueDate>'2099-12-31')fail('Informe um vencimento válido.',400);
  if(p.dueDate===row.dueDate)fail('O novo vencimento é igual ao atual.',400);
@@ -57,14 +60,44 @@ function dueDateChange(row,input){
  if(typeof p.reason!=='string'||p.reason.trim().length<10||p.reason.length>2000)fail('Informe o motivo da correção (10 a 2000 caracteres).',400);
  return {...row,dueDate:p.dueDate};
 }
-async function dueDateConflicts(tx,db,id,row,dueDate){
+async function boletoConflicts(tx,db,id,issuedMessage,linkedMessage){
  const issued=await tx.get(db.collection('boletoIssues').where('transactionId','==',id).limit(10));
- if(issued.docs.some(d=>!['draft','rejected'].includes(d.data().state)))fail('Boleto emitido para esta conta: o título no banco mantém o vencimento original. Trate a emissão no Boleto Cloud antes de corrigir o vencimento.');
- for(const c of ['boletoReconciliations','boletoManualResolutions'])if((await tx.get(db.collection(c).where('transactionId','==',id).limit(1))).docs.length)fail('Conta vinculada a boleto. Trate o vínculo antes de corrigir o vencimento.');
+ if(issued.docs.some(d=>!['draft','rejected'].includes(d.data().state)))fail(issuedMessage);
+ for(const c of ['boletoReconciliations','boletoManualResolutions'])if((await tx.get(db.collection(c).where('transactionId','==',id).limit(1))).docs.length)fail(linkedMessage);
+}
+async function duplicateConflicts(tx,db,id,row,dueDate,label){
  const peers=await tx.get(db.collection('transactions').where('dueDate','==',dueDate).limit(1001));
  if(peers.docs.length>1000)fail('Volume exige conferência manual de duplicidade.');
  const doc=v=>String(v||'').replace(/\D/g,''), cents=r=>{try{return Math.round(amount(r)*100);}catch{return null;}};
- if(peers.docs.some(d=>{const r=d.data();return d.id!==id&&!r.isExcluded&&norm(r.movement)==='entrada'&&doc(r.cpfCnpj)&&doc(r.cpfCnpj)===doc(row.cpfCnpj)&&cents(r)===cents(row);}))fail('Já existe conta com o mesmo CPF/CNPJ, valor e esse vencimento. Confira a possível duplicidade antes de corrigir.');
+ if(peers.docs.some(d=>{const r=d.data();return d.id!==id&&!r.isExcluded&&norm(r.movement)==='entrada'&&doc(r.cpfCnpj)&&doc(r.cpfCnpj)===doc(row.cpfCnpj)&&cents(r)===cents(row);}))fail(`Já existe conta com o mesmo CPF/CNPJ, valor e ${label}. Confira a possível duplicidade antes de corrigir.`);
+}
+async function dueDateConflicts(tx,db,id,row,dueDate){
+ await boletoConflicts(tx,db,id,'Boleto emitido para esta conta: o título no banco mantém o vencimento original. Trate a emissão no Boleto Cloud antes de corrigir o vencimento.','Conta vinculada a boleto. Trate o vínculo antes de corrigir o vencimento.');
+ await duplicateConflicts(tx,db,id,row,dueDate,'esse vencimento');
+}
+// Value changes keep native entries coherent: honorários + itemized extras = total. Bank titles keep the old value, so issued boletos are refused.
+function chargeChange(row,input,catalog){
+ openWithoutReceipts(row,'o valor');
+ if(row.source!=='native-finance'||row.nativeEntry?.kind!=='receber')fail('Só lançamentos feitos no Financeiro podem ter valores corrigidos aqui. Lançamentos do histórico precisam de revisão do administrador.');
+ const p=input||{};
+ const cents=(v,label)=>{if(typeof v!=='string'||!/^\d{1,8}(\.\d{1,2})?$/.test(v))fail(`${label}: use um valor positivo com até duas casas decimais.`,400);return Math.round(Number(v)*100);};
+ const honor=cents(p.honorarios,'Honorários');
+ if(!Array.isArray(p.extraItems)||p.extraItems.length>30)fail('Informe no máximo 30 serviços extras.',400);
+ const items=p.extraItems.map(item=>{
+  if(!item||typeof item!=='object'||!(catalog.extras||[]).includes(item.account))fail('Selecione um serviço extra da lista.',400);
+  const value=cents(item.amount,'Valor do serviço extra');if(value<=0)fail('Informe o valor de cada serviço extra.',400);
+  return {account:item.account,amount:value/100};
+ });
+ const extra=items.reduce((sum,item)=>sum+Math.round(item.amount*100),0), total=honor+extra;
+ if(total<=0||total>=10000000000)fail('Informe um valor maior que zero.',400);
+ if(typeof p.reason!=='string'||p.reason.trim().length<10||p.reason.length>2000)fail('Informe o motivo da correção (10 a 2000 caracteres).',400);
+ const beforeItems=Array.isArray(row.extraItems)?row.extraItems:[];
+ if(total===Math.round(amount(row)*100)&&honor===Math.round(money(row.honorarios)*100)&&evidenceHash(items)===evidenceHash(beforeItems))fail('Os valores informados são iguais aos atuais.',400);
+ return {...row,honorarios:honor/100,valorExtra:extra/100,extras:extra/100,totalCobranca:total/100,valorOriginal:total/100,cobrancaExtra:items.map(i=>i.account).join('; '),extraItems:items};
+}
+async function chargeConflicts(tx,db,id,record){
+ await boletoConflicts(tx,db,id,'Boleto emitido para esta conta com o valor anterior: o banco cobra o valor do título. Para cobrar o adicional, faça um novo lançamento só com o valor extra, ou cancele o boleto no Boleto Cloud antes de corrigir.','Conta vinculada a boleto. Trate o vínculo ou faça um novo lançamento só com o valor extra.');
+ await duplicateConflicts(tx,db,id,record,record.dueDate,'vencimento com o novo valor');
 }
 // Only restore fields owned by the last manual receipt; never erase history.
 function reversal(row,event,reason){
@@ -88,7 +121,7 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
  if(request.method==='GET'){
   const id=decodeURIComponent(path.slice(6));if(!/^[a-zA-Z0-9_-]{1,200}$/.test(id))fail('Identificador inválido.',400);
   const row=receivable((await db.collection('transactions').doc(id).get()).data());await recheck();
-  reply({transaction:{...row,id},version:hash(row),catalog:{banks:catalog.banks,receiptMethods:catalog.receiptMethods},canSettle:permits(user,'settle'),canReverse:permits(user,'reverse'),canAmend:permits(user,'amend'),blockedReason:blocked(row)});return;
+  reply({transaction:{...row,id},version:hash(row),catalog:{banks:catalog.banks,receiptMethods:catalog.receiptMethods,extras:catalog.extras||[]},canSettle:permits(user,'settle'),canReverse:permits(user,'reverse'),canAmend:permits(user,'amend'),canAdjust:permits(user,'adjust'),blockedReason:blocked(row)});return;
  }
  let b;try{b=JSON.parse((await readBody(request)).toString('utf8'));}catch{fail('Dados inválidos.',400);}
  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(b.id||'')||! /^[a-f0-9-]{36}$/.test(b.requestId||''))fail('Identificador inválido.',400);
@@ -119,6 +152,19 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
    record.updatedAt=at;
    const result={transaction:{...record,id:b.id}};
    tx.set(ref,record);tx.create(db.collection('receivableAudit').doc(key),{action:'due-date-amendment',transactionId:b.id,uid,at,before:current,after:record,amendment:entry});tx.create(op,{digest,result,at});return result;
+  }
+  if(path.startsWith('charge/')){
+   const record=chargeChange(current,b.charge,catalog);
+   await chargeConflicts(tx,db,b.id,record);
+   const reviewHash=hash([uid,user.name||uid,b.id,b.version,b.charge,catalogState.revision]);
+   if(path==='charge/preview')return {reviewHash,before:{...current,id:b.id},after:{...record,id:b.id}};
+   if(b.confirmHash!==reviewHash)fail('Revise a correção antes de confirmar.');
+   const at=new Date().toISOString(),snapshot=r=>({honorariosCents:Math.round(money(r.honorarios)*100),extraItems:Array.isArray(r.extraItems)?r.extraItems:[],totalCents:Math.round(amount(r)*100)});
+   const entry={requestId:b.requestId,before:snapshot(current),after:snapshot(record),reason:b.charge.reason.trim(),uid,actor:user.name||uid,at};
+   record.chargeAmendments=[...(current.chargeAmendments||[]),entry];if(record.chargeAmendments.length>50)fail('Limite de correções atingido. Solicite revisão.');
+   record.updatedAt=at;
+   const result={transaction:{...record,id:b.id}};
+   tx.set(ref,record);tx.create(db.collection('receivableAudit').doc(key),{action:'charge-amendment',transactionId:b.id,uid,at,before:current,after:record,amendment:entry});tx.create(op,{digest,result,at});return result;
   }
   if(path.startsWith('reversal/')){
    const last=current.receivableSettlement;
@@ -173,4 +219,4 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
   tx.create(op,{digest,result,at});return result;
  });reply(result);
 }
-module.exports={handleReceivables,routeAllowed,receiptPatch,balance,blocked,reversal,dueDateChange};
+module.exports={handleReceivables,routeAllowed,receiptPatch,balance,blocked,reversal,dueDateChange,chargeChange};

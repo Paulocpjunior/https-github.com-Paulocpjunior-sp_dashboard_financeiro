@@ -1,4 +1,5 @@
 import FinancialCorrection from './FinancialCorrection';
+import ChargeCorrection from './ChargeCorrection';
 import React, {useEffect, useRef, useState} from 'react';
 import '../design-system/tokens.css';
 import {auth} from '../services/firebaseConfig';
@@ -8,7 +9,7 @@ import {toLocalISODate} from '../utils/dateUtils';
 import {AccumulatedBalancesService} from '../services/accumulatedBalancesService';
 
 type Receipt = {date:string;amount:string;interest:string;fine:string;discount:string;bankAccount:string;method:string;note:string};
-type Details = {transaction:Transaction;version:string;catalog:{banks:string[];receiptMethods:string[]};canReverse?:boolean;canAmend?:boolean;canSettle:boolean;blockedReason:string|null};
+type Details = {transaction:Transaction;version:string;catalog:{banks:string[];receiptMethods:string[];extras?:string[]};canReverse?:boolean;canAmend?:boolean;canAdjust?:boolean;canSettle:boolean;blockedReason:string|null};
 type Review = {reviewHash:string;after:Transaction};
 async function defaultApi(path:string, body?:unknown) {
  if(!auth.currentUser) throw Error('Entre novamente.');
@@ -20,7 +21,7 @@ async function defaultApi(path:string, body?:unknown) {
 const brl=(n:number)=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 export default function ReceivablesModal({id,onClose,onSaved,api=defaultApi,retReview}:{retReview?:{eventId:string;evidenceVersion:string;number:string;reason:string};id:string;onClose:()=>void;onSaved:()=>void;api?:typeof defaultApi}) {
  const [data,setData]=useState<Details|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[review,setReview]=useState<Review|null>(null),[saved,setSaved]=useState(false),[uncertain,setUncertain]=useState(false);
- const [mode,setMode]=useState<'receipt'|'reversal'|'dueDate'>('receipt'),[correctionLocked,setCorrectionLocked]=useState(false);
+ const [mode,setMode]=useState<'receipt'|'reversal'|'dueDate'|'charge'>('receipt'),[correctionLocked,setCorrectionLocked]=useState(false);
  const [receipt,setReceipt]=useState<Receipt>({date:toLocalISODate(new Date()),amount:'',interest:'0.00',fine:'0.00',discount:'0.00',bankAccount:'',method:'',note:''});
  const [requestId]=useState(()=>crypto.randomUUID());
  const dialog=useRef<HTMLDivElement>(null), sending=useRef(false);
@@ -38,6 +39,11 @@ export default function ReceivablesModal({id,onClose,onSaved,api=defaultApi,retR
  };
  const field=(key:keyof Receipt,value:string)=>setReceipt(p=>({...p,[key]:value}));
  const row=data?.transaction;
+ const open=Boolean(data&&row&&!retReview&&!row.receivableSettlement&&!data.blockedReason);
+ const canReverseHere=Boolean(data?.canReverse&&row?.receivableSettlement);
+ const canDueDate=Boolean(data?.canAmend&&open), canCharge=Boolean(data?.canAdjust&&open&&row?.source==='native-finance');
+ // Explain why "Estornar baixa" is absent instead of silently hiding it.
+ const reversalNote=!row||canReverseHere||!(row.receivableSettlement||row.boletoSettlement||row.status==='Pago'||getPaidAmount(row)>0)?'':!data?.canReverse?'Seu acesso não inclui estornar baixa. Peça ao administrador a permissão "Estornar baixa manual de contas a receber".':row.boletoSettlement?'Estornar baixa indisponível: esta conta foi baixada automaticamente pelo retorno do banco (boleto pago). Se o pagamento não for desta conta, fale com o administrador.':'Estornar baixa indisponível: a baixa desta conta foi registrada fora do Financeiro (histórico importado), sem o registro necessário para o estorno. Fale com o administrador.';
  return <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3" role="presentation"><div ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="receivable-title" className="sp-ui w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl p-6" onKeyDown={e=>{
   if(e.key==='Escape'&&!busy&&!uncertain&&!correctionLocked)onClose();
   if(e.key==='Tab'){const controls=dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)');if(!controls?.length)return;const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&(document.activeElement===first||document.activeElement===dialog.current)){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
@@ -49,8 +55,9 @@ export default function ReceivablesModal({id,onClose,onSaved,api=defaultApi,retR
   {!data&&!error&&<p role="status">Consultando a conta…</p>}
   {row&&<>
    <section className="sp-card my-4"><h3 className="font-semibold">{row.client||row.description}</h3><p>Vencimento: {row.dueDate} · {row.status}</p><p>Valor original: {brl(getOriginalAmount(row))}</p><p>Recebido: {brl(getPaidAmount(row))} · Saldo: {brl(getOutstandingAmount(row))}</p></section>
-   {((data.canReverse&&row.receivableSettlement)||(data.canAmend&&!retReview&&!row.receivableSettlement&&!data.blockedReason))&&!saved&&<nav className="flex gap-2 my-3"><button className="sp-button" disabled={busy||uncertain||correctionLocked} onClick={()=>setMode('receipt')}>Registrar recebimento</button>{data.canReverse&&row.receivableSettlement&&<button className="sp-button" disabled={busy||uncertain||correctionLocked} onClick={()=>setMode('reversal')}>Estornar baixa manual</button>}{data.canAmend&&!retReview&&!row.receivableSettlement&&!data.blockedReason&&<button className="sp-button" disabled={busy||uncertain||correctionLocked} onClick={()=>setMode('dueDate')}>Corrigir vencimento</button>}</nav>}
-   {mode==='dueDate'?<FinancialCorrection kind="dueDate" id={id} version={data.version} row={row} api={api} onLock={setCorrectionLocked} onSaved={()=>{onSaved();onClose();}}/>:mode==='reversal'?<FinancialCorrection kind="reversal" id={id} version={data.version} row={row} api={api} onLock={setCorrectionLocked} onSaved={()=>{AccumulatedBalancesService.invalidate();onSaved();onClose();}}/>:saved?<p role="status" style={{color:'var(--sp-success)'}}>Recebimento registrado com histórico. {row.status==='Pago'?'Conta quitada.':'A conta permanece em aberto pelo saldo restante.'}</p>:data.blockedReason?<p role="status">{data.blockedReason}</p>:!data.canSettle?<p>Seu acesso permite consultar o histórico. Solicite ao administrador a permissão de registrar recebimentos.</p>:<form onSubmit={e=>{e.preventDefault();void submit();}}>
+   {(canReverseHere||canDueDate||canCharge)&&!saved&&<nav className="flex flex-wrap gap-2 my-3"><button className="sp-button" disabled={busy||uncertain||correctionLocked} onClick={()=>setMode('receipt')}>Registrar recebimento</button>{canReverseHere&&<button className="sp-button" disabled={busy||uncertain||correctionLocked} onClick={()=>setMode('reversal')}>Estornar baixa manual</button>}{canDueDate&&<button className="sp-button" disabled={busy||uncertain||correctionLocked} onClick={()=>setMode('dueDate')}>Corrigir vencimento</button>}{canCharge&&<button className="sp-button" disabled={busy||uncertain||correctionLocked} onClick={()=>setMode('charge')}>Corrigir valores / extras</button>}</nav>}
+   {reversalNote&&!saved&&<p className="sp-muted my-2" role="note">{reversalNote}</p>}
+   {mode==='charge'?<ChargeCorrection id={id} version={data.version} row={row} extras={data.catalog.extras||[]} api={api} onLock={setCorrectionLocked} onSaved={()=>{onSaved();onClose();}}/>:mode==='dueDate'?<FinancialCorrection kind="dueDate" id={id} version={data.version} row={row} api={api} onLock={setCorrectionLocked} onSaved={()=>{onSaved();onClose();}}/>:mode==='reversal'?<FinancialCorrection kind="reversal" id={id} version={data.version} row={row} api={api} onLock={setCorrectionLocked} onSaved={()=>{AccumulatedBalancesService.invalidate();onSaved();onClose();}}/>:saved?<p role="status" style={{color:'var(--sp-success)'}}>Recebimento registrado com histórico. {row.status==='Pago'?'Conta quitada.':'A conta permanece em aberto pelo saldo restante.'}</p>:data.blockedReason?<p role="status">{data.blockedReason}</p>:!data.canSettle?<p>Seu acesso permite consultar o histórico. Solicite ao administrador a permissão de registrar recebimentos.</p>:<form onSubmit={e=>{e.preventDefault();void submit();}}>
     {uncertain&&<p role="alert">A confirmação não chegou. Use o botão abaixo para consultar ou concluir a mesma tentativa, sem registrar outra baixa.</p>}
     <fieldset disabled={busy||Boolean(review)||uncertain} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
      <label>Data do recebimento<input className="sp-field" required type="date" max={toLocalISODate(new Date())} value={receipt.date} onChange={e=>field('date',e.target.value)}/></label>
@@ -67,6 +74,7 @@ export default function ReceivablesModal({id,onClose,onSaved,api=defaultApi,retR
    </form>}
    {Boolean(row.receivableReceipts?.length)&&<section className="mt-6"><h3 className="font-semibold">Histórico de recebimentos</h3><p className="sp-muted">Filtros por data consideram a última baixa. Cada recebimento aparece abaixo.</p>{row.receivableReceipts!.map(p=><article key={p.requestId} className="sp-card my-3"><p>{row.receivableReversals?.some(r=>r.receiptRequestId===p.requestId)?'ESTORNADO · ':''}{p.date} · Recebido {brl(p.amountCents/100)} · Saldo {brl(p.remainingCents/100)}</p><p>Juros {brl((p.interestCents-(p.fineCents||0))/100)} · Multa {brl((p.fineCents||0)/100)} · Desconto {brl(p.discountCents/100)}</p><p>{p.bankAccount} · {p.method}</p><p>Registrado por {p.actor} · {p.note}</p>{p.retEvidence&&<p className="text-sm break-all">Boleto {p.retEvidence.number} · Ocorrência RET: {p.retEvidence.eventId} · Arquivo: {p.retEvidence.fileId}</p>}</article>)}</section>}
    {!!row.dueDateAmendments?.length&&<section><h3>Histórico de vencimentos</h3>{row.dueDateAmendments.map(a=><p key={a.requestId}>{a.at} · {a.actor} · {a.before.split('-').reverse().join('/')} → {a.after.split('-').reverse().join('/')} · {a.reason}</p>)}</section>}
+   {!!row.chargeAmendments?.length&&<section><h3>Histórico de valores</h3>{row.chargeAmendments.map(a=><p key={a.requestId}>{a.at} · {a.actor} · {brl(a.before.totalCents/100)} → {brl(a.after.totalCents/100)}{a.after.extraItems.length?` (extras: ${a.after.extraItems.map(i=>`${i.account} ${brl(i.amount)}`).join('; ')})`:''} · {a.reason}</p>)}</section>}
    {!!row.receivableReversals?.length&&<section><h3>Histórico de estornos</h3>{row.receivableReversals.map(r=><p key={r.requestId}>{r.at} · {r.actor} · {brl(r.amountCents/100)} · {r.reason}</p>)}</section>}
   </>}
  </div></div>;

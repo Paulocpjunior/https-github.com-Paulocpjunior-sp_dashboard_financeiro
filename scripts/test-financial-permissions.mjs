@@ -18,7 +18,7 @@ try {
 
   assert.deepEqual(
     FINANCIAL_PERMISSION_OPTIONS.map(option => option.value),
-    ['receivables.reverse','receivables.amend','payables.amend','receivables.read','receivables.settle','payables.approve','payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','billing.boleto-cloud.history.read', 'wix.treasury.open', 'billing.boleto-cloud.issue', 'itau.openfinance.read', 'itau.statement.import'],
+    ['receivables.reverse','receivables.amend','receivables.adjust','payables.amend','receivables.read','receivables.settle','payables.approve','payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','billing.boleto-cloud.history.read', 'wix.treasury.open', 'billing.boleto-cloud.issue', 'itau.openfinance.read', 'itau.statement.import'],
   );
 
   assert.deepEqual(
@@ -40,6 +40,9 @@ try {
   assert.deepEqual(sanitizeFinancialPermissions(['receivables.amend']), ['receivables.amend']);
   assert.equal(hasFinancialPermission({ ...operator, financialPermissions: ['receivables.amend'] }, 'receivables.amend'), true);
   assert.equal(hasFinancialPermission(operator, 'receivables.amend'), false);
+  assert.deepEqual(sanitizeFinancialPermissions(['receivables.adjust']), ['receivables.adjust']);
+  assert.equal(hasFinancialPermission({ ...operator, financialPermissions: ['receivables.adjust'] }, 'receivables.adjust'), true);
+  assert.equal(hasFinancialPermission(operator, 'receivables.adjust'), false);
   assert.equal(canOpenWixTreasury(operator), true);
   assert.equal(canOpenWixTreasury({ ...operator, active: false }), false);
   assert.equal(hasFinancialPermission({ ...operator, active: false }, 'itau.openfinance.read'), false);
