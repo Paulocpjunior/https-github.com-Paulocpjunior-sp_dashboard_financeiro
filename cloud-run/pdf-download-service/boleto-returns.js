@@ -21,11 +21,14 @@ function evaluate(issueId, issue, row, body, cfg, at) {
       String(b.numero) !== String(issue.number) || digits(b.pagador?.cprf) !== digits(f['boleto.pagador.cprf']) ||
       cents(b.valor) !== cents(f['boleto.valor']) || b.vencimento !== f['boleto.vencimento'] || b.emissao !== f['boleto.emissao'])
     return review('Os dados retornados não correspondem à emissão original.');
-  if (!row || row.source !== 'native-finance' || row.nativeEntry?.kind !== 'receber' || row.movement !== 'Entrada' ||
+  // The app also issues boletos for older receivables (Jotform); the explicit issuance link is the same.
+  const native = row?.source === 'native-finance';
+  if (!row || (native && row.nativeEntry?.kind !== 'receber') || row.movement !== 'Entrada' || row.source === 'wix' ||
       row.isExcluded || row.deletedAt || row.wixInvoiceNumber || row.wixEntityId)
-    return review('Lançamento ausente, excluído ou fora do escopo nativo de contas a receber.');
-  if (row.bankAccount !== catalog.banks[0] || digits(row.cpfCnpj) !== digits(f['boleto.pagador.cprf']) ||
-      row.dueDate !== f['boleto.vencimento'] || cents(amount(row)) !== cents(f['boleto.valor']) || cents(row.valorOriginal) !== cents(f['boleto.valor']))
+    return review('Lançamento ausente, excluído ou fora de contas a receber.');
+  if ((native ? row.bankAccount !== catalog.banks[0] : row.bankAccount && row.bankAccount !== catalog.banks[0]) ||
+      digits(row.cpfCnpj) !== digits(f['boleto.pagador.cprf']) || row.dueDate !== f['boleto.vencimento'] ||
+      cents(amount(row)) !== cents(f['boleto.valor']) || (native && cents(row.valorOriginal) !== cents(f['boleto.valor'])))
     return review('Identidade, conta, vencimento ou valor do lançamento foram alterados.');
   if (row.receivableSettlement || row.receivableBalance) return review('Recebimento manual existente: confira o retorno sem duplicar a baixa.');
   if (b.situacao !== 'PAGO') {
