@@ -71,6 +71,7 @@ export interface EntryAPI {
   status(
     requestId: string,
   ): Promise<{ state: string; transaction?: Transaction }>;
+  deactivateClient?(input: { requestId: string; clientRegistryId: string; reason: string }): Promise<{ deactivated: string }>;
   registerClient?(input: ClientRegistration): Promise<{ client: EntryClient; created: boolean; existing: boolean; replaced?: string[] }>;
 }
 /** Cliente novo (Checklist do Legal ou manual) incluído no cadastro conferido, com histórico no servidor. */
@@ -113,6 +114,7 @@ export const nativeEntryAPI: EntryAPI = {
     request("commit", { requestId, entry, attachments, confirmHash, ...(wixOverride ? { wixOverride } : {}) }),
   status: (requestId) => request(`requests/${requestId}`),
   registerClient: (input) => request("clients/register", input),
+  deactivateClient: (input) => request("clients/deactivate", input),
 };
 
 export async function downloadEntryAttachment(id: string, sha256: string) {

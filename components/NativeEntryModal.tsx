@@ -452,6 +452,11 @@ export default function NativeEntryModal({
                       noMatches={Boolean(search.trim()) && matches.length === 0}
                       incomplete={selected && !/^(\d{11}|\d{14})$/.test(selected.cpfCnpj) ? selected : undefined}
                       register={api.registerClient}
+                      deactivate={api.deactivateClient}
+                      onDeactivated={(id) => {
+                        setConfig((c) => c && { ...c, clients: c.clients.filter((x) => x.id !== id) });
+                        change("clientRegistryId", "");
+                      }}
                       onRegistered={(client, _existing, replaced) => {
                         setConfig((c) =>
                           c && {
