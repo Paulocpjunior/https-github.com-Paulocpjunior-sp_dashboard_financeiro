@@ -7,7 +7,7 @@ const evidenceHash=v=>hash(canonical(v));
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
 const permits=(user,action)=>user?.active===true&&!['blocked','deleted'].includes(user.status)&&(user.role==='admin'||user.financialPermissions?.includes(`receivables.${action}`));
 function routeAllowed(user,method,path){
- return method==='GET'&&/^items\/[^/]+$/.test(path)?['read','settle','reverse','amend','adjust'].some(a=>permits(user,a)):method==='POST'&&(['receipt/preview','receipt/commit'].includes(path)?permits(user,'settle'):['reversal/preview','reversal/commit'].includes(path)?permits(user,'reverse'):['due-date/preview','due-date/commit'].includes(path)?permits(user,'amend'):['charge/preview','charge/commit'].includes(path)&&permits(user,'adjust'));
+ return method==='GET'&&/^items\/[^/]+$/.test(path)?['read','settle','reverse','amend','adjust'].some(a=>permits(user,a)):method==='POST'&&(['receipt/preview','receipt/commit'].includes(path)?permits(user,'settle'):['reversal/preview','reversal/commit','reopen/preview','reopen/commit'].includes(path)?permits(user,'reverse'):['due-date/preview','due-date/commit'].includes(path)?permits(user,'amend'):['charge/preview','charge/commit'].includes(path)&&permits(user,'adjust'));
 }
 function receivable(row){
  if(!row||row.isExcluded||row.deletedAt||norm(row.movement)!=='entrada'||/saida|pagar/.test(norm(row.type)))fail('Conta a receber indisponível.');
@@ -116,6 +116,27 @@ function reversal(row,event,reason){
  const reasonBlocked=blocked(restored);if(reasonBlocked)fail(reasonBlocked);
  return restored;
 }
+// Paid outside the receivables flow (import, old cash form, entry launched as paid): there is no receipt event to reverse,
+// so reopening restores the open state and keeps the previous payment fields in the log. Bank settlements stay out.
+const legacyPaymentKeys=['status','pago','paymentDate','dataPagamento','valueReceived','valorPago','valuePaid','valorOriginal'];
+// Same paid aliases the dashboard normalizes to Pago (utils/transactionAmounts.ts).
+const paidStatuses=['pago','paga','recebido','quitado','liquidado','sim','ok','s'];
+function legacyPaid(row){
+ receivable(row);
+ if(row.boletoSettlement||row.boletoReconciliation||row.receivableSettlement||row.receivableBalance)return false;
+ return paidStatuses.includes(norm(row.status))||(['pendente','agendado','vencida','vencido'].includes(norm(row.status))&&Boolean(blocked(row)));
+}
+function reopenLegacy(row,reason){
+ if(!legacyPaid(row))fail(row?.boletoSettlement||row?.boletoReconciliation?'Recebimento bancário: confira o retorno do boleto.':'Esta conta não tem baixa anterior para reabrir.');
+ if(typeof reason!=='string'||reason.trim().length<10||reason.length>2000)fail('Informe o motivo da reabertura (10 a 2000 caracteres).',400);
+ const nominal=amount(row), restored={...row,status:'Pendente',pago:'Não',paymentDate:'',dataPagamento:''};
+ for(const k of ['valueReceived','valuePaid'])if(Object.hasOwn(row,k))restored[k]=0;
+ if(Object.hasOwn(row,'valorPago'))restored.valorPago='0.00';
+ // Old rows may carry the amount only in valueReceived; keep it as the nominal value.
+ if(amount(restored)!==nominal)restored.valorOriginal=nominal;
+ const reasonBlocked=blocked(restored);if(reasonBlocked)fail(reasonBlocked);
+ return restored;
+}
 async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody,enabled,allowed,catalog,catalogRef,catalogState}){
  if(!enabled)fail('Lançamentos nativos não ativados.',503);
  const path=url.pathname.replace('/api/financial-entries/receivables/','');
@@ -123,7 +144,7 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
  if(request.method==='GET'){
   const id=decodeURIComponent(path.slice(6));if(!/^[a-zA-Z0-9_-]{1,200}$/.test(id))fail('Identificador inválido.',400);
   const row=receivable((await db.collection('transactions').doc(id).get()).data());await recheck();
-  reply({transaction:{...row,id},version:hash(row),catalog:{banks:catalog.banks,receiptMethods:catalog.receiptMethods,extras:catalog.extras||[]},canSettle:permits(user,'settle'),canReverse:permits(user,'reverse'),canAmend:permits(user,'amend'),canAdjust:permits(user,'adjust'),blockedReason:blocked(row)});return;
+  reply({transaction:{...row,id},version:hash(row),catalog:{banks:catalog.banks,receiptMethods:catalog.receiptMethods,extras:catalog.extras||[]},canSettle:permits(user,'settle'),canReverse:permits(user,'reverse'),canAmend:permits(user,'amend'),canAdjust:permits(user,'adjust'),reopenable:legacyPaid(row),blockedReason:blocked(row)});return;
  }
  let b;try{b=JSON.parse((await readBody(request)).toString('utf8'));}catch{fail('Dados inválidos.',400);}
  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(b.id||'')||! /^[a-f0-9-]{36}$/.test(b.requestId||''))fail('Identificador inválido.',400);
@@ -167,6 +188,17 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
    record.updatedAt=at;
    const result={transaction:{...record,id:b.id}};
    tx.set(ref,record);tx.create(db.collection('receivableAudit').doc(key),{action:'charge-amendment',transactionId:b.id,uid,at,before:current,after:record,amendment:entry});tx.create(op,{digest,result,at});return result;
+  }
+  if(path.startsWith('reopen/')){
+   const record=reopenLegacy(current,b.reason);
+   const reviewHash=hash([uid,user.name||uid,b.id,b.version,b.reason,'reopen']);
+   if(path==='reopen/preview')return {reviewHash,before:{...current,id:b.id},after:{...record,id:b.id}};
+   if(b.confirmHash!==reviewHash)fail('Revise a reabertura antes de confirmar.');
+   const at=new Date().toISOString(),entry={requestId:b.requestId,before:Object.fromEntries(legacyPaymentKeys.filter(k=>Object.hasOwn(current,k)).map(k=>[k,current[k]])),reason:b.reason.trim(),uid,actor:user.name||uid,at};
+   record.receivableReopenings=[...(current.receivableReopenings||[]),entry];if(record.receivableReopenings.length>50)fail('Limite de reaberturas atingido. Solicite revisão.');
+   record.updatedAt=at;
+   const result={transaction:{...record,id:b.id}};
+   tx.set(ref,record);tx.create(db.collection('receivableAudit').doc(key),{action:'legacy-reopen',transactionId:b.id,uid,at,before:current,after:record,reopening:entry});tx.create(op,{digest,result,at});return result;
   }
   if(path.startsWith('reversal/')){
    const last=current.receivableSettlement;
@@ -221,4 +253,4 @@ async function handleReceivables({request,url,db,userRef,user,uid,reply,readBody
   tx.create(op,{digest,result,at});return result;
  });reply(result);
 }
-module.exports={handleReceivables,routeAllowed,receiptPatch,balance,blocked,reversal,dueDateChange,chargeChange};
+module.exports={handleReceivables,routeAllowed,receiptPatch,balance,blocked,reversal,dueDateChange,chargeChange,legacyPaid,reopenLegacy};
