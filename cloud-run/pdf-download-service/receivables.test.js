@@ -307,3 +307,28 @@ test('extra retirado do cadastro continua aceito no lançamento que já o tem',a
  assert.equal((await h.call('charge/preview',await chargeBody(h,{honorarios:'110.00',extraItems:[{account:'Extra antigo',amount:'20.00'}]}))).status,200);
  const other=nativeHarness();assert.equal((await other.call('charge/preview',await chargeBody(other,{extraItems:[{account:'Extra antigo',amount:'20.00'}]}))).status,400);
 });
+const reopenBody=async(h,reason='Baixa lançada com data errada no histórico')=>{const d=await h.call('items/legacy');assert.equal(d.status,200);return {id:'legacy',requestId:randomUUID(),version:d.body.version,reason};};
+test('reabre conta quitada fora do fluxo com prévia, motivo e histórico, e aceita nova baixa',async()=>{
+ const h=harness();Object.assign(h.store.get('transactions/legacy'),{status:'Pago',pago:'Pago',paymentDate:'2026-01-02',dataPagamento:'02/01/2026',valueReceived:100,valorPago:'100.00'});
+ const d=await h.call('items/legacy');assert.equal(d.body.reopenable,true);assert.ok(d.body.blockedReason);
+ const b=await reopenBody(h),before=structuredClone([...h.store]);
+ const p=await h.call('reopen/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));assert.equal(p.body.after.status,'Pendente');assert.deepEqual([...h.store],before);
+ assert.equal((await h.call('reopen/commit',b)).status,409);
+ const payload={...b,confirmHash:p.body.reviewHash},r=await h.call('reopen/commit',payload);assert.equal(r.status,200);
+ const row=h.store.get('transactions/legacy');assert.equal(row.status,'Pendente');assert.equal(row.paymentDate,'');assert.equal(row.valueReceived,0);assert.equal(row.valorPago,'0.00');assert.equal(row.totalCobranca,100);
+ assert.deepEqual(row.receivableReopenings.map(x=>[x.before.status,x.before.paymentDate,x.before.valueReceived,x.reason]),[['Pago','2026-01-02',100,'Baixa lançada com data errada no histórico']]);
+ const audit=[...h.store].find(([k,v])=>k.startsWith('receivableAudit/')&&v.action==='legacy-reopen');assert.equal(audit[1].before.status,'Pago');
+ assert.equal((await h.call('reopen/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').receivableReopenings.length,1);
+ const again=await h.call('items/legacy');assert.equal(again.body.reopenable,false);assert.equal(again.body.blockedReason,null);
+ assert.equal((await commit(h,await body(h,{date:'2026-01-20',amount:'100.00',interest:'0',discount:'0'}))).status,200);assert.equal(h.store.get('transactions/legacy').status,'Pago');
+});
+test('reabertura exige permissão de estorno e motivo; não vale para baixa bancária, baixa do Financeiro ou conta aberta',async()=>{
+ const paid={status:'Pago',pago:'Pago',paymentDate:'2026-01-02',valueReceived:100};
+ let h=harness();Object.assign(h.store.get('transactions/legacy'),paid);h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.settle','receivables.amend','receivables.adjust']});
+ assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,403);
+ h.store.get('users/u').financialPermissions=['receivables.reverse'];assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,200);
+ assert.equal((await h.call('reopen/preview',await reopenBody(h,'curto'))).status,400);
+ for(const extra of [{boletoSettlement:{evidenceId:'bank'}},{boletoReconciliation:{boletoId:'x'}}]){h=harness();Object.assign(h.store.get('transactions/legacy'),paid,extra);assert.equal((await h.call('items/legacy')).body.reopenable,false);assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,409);}
+ h=harness();assert.equal((await h.call('items/legacy')).body.reopenable,false);assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,409);
+ h=harness();await commit(h,await body(h,{amount:'100.00',interest:'0',discount:'0'}));assert.equal((await h.call('items/legacy')).body.reopenable,false);assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,409);
+});

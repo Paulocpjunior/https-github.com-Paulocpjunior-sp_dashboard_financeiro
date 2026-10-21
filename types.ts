@@ -47,6 +47,7 @@ export interface Transaction {
   paidBy: string;
   movement: 'Entrada' | 'Saída'; // Calculado para lógica de sistema
   receivableReversals?: Array<{requestId:string;receiptRequestId:string;amountCents:number;reason:string;uid:string;actor:string;at:string}>;
+  receivableReopenings?: Array<{requestId:string;before:Record<string,unknown>;reason:string;uid:string;actor:string;at:string}>;
   boletoSettlement?: {evidenceId:string;paymentDate:string;paidCents:number;origin:string;appliedAt:string};
   chargeAmendments?: Array<{requestId:string;before:{honorariosCents:number;extraItems:Array<{account:string;amount:number}>;totalCents:number};after:{honorariosCents:number;extraItems:Array<{account:string;amount:number}>;totalCents:number};reason:string;actor:string;at:string}>;
   dueDateAmendments?: Array<{requestId:string;before:string;after:string;reason:string;actor:string;at:string}>;
