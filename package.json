@@ -48,6 +48,7 @@
     "test:data-loading": "node scripts/test-data-loading-concurrency.mjs",
     "test:dashboard-duplicates-sorting": "node scripts/test-dashboard-duplicates-sorting.mjs",
     "test:payment-method": "node scripts/test-payment-method.mjs",
+    "test:wix-receivables": "node scripts/test-wix-receivables.mjs",
     "test:wix-funds": "node scripts/test-wix-funds-report.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",
     "test:user-deletion": "node scripts/test-user-deletion.mjs",
@@ -80,7 +81,7 @@
     "test:billing-completeness": "node scripts/test-billing-completeness.mjs",
     "test:accumulated-balances": "node scripts/test-accumulated-balances.mjs",
     "test:payables": "node --test cloud-run/pdf-download-service/payables.test.js cloud-run/pdf-download-service/payable-ledger.test.js cloud-run/pdf-download-service/payable-provision-job.test.js",
-    "test:native-entries": "node --test cloud-run/pdf-download-service/native-entries.test.js && node scripts/test-native-entry-consumers.mjs",
+    "test:native-entries": "node --test cloud-run/pdf-download-service/native-entries.test.js cloud-run/pdf-download-service/wix-billing-lock.test.js && node scripts/test-native-entry-consumers.mjs",
     "backup:unas": "python3 scripts/replicate-financial-backup.py"
   },
   "dependencies": {

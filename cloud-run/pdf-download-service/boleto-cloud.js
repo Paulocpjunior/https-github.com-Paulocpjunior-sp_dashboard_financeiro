@@ -1,6 +1,7 @@
 const { InviteError, prepareInvite, sendInvite } = require('./boleto-invite');
 const { createHash, randomUUID } = require("node:crypto");
 const { permitted } = require("./itau-statements");
+const { assertNoWixInvoice } = require("./wix-billing-lock");
 const hash = (value) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const norm = (value) =>
@@ -370,7 +371,19 @@ function createBoletoHandler({
       } catch {
         throw new BoletoError("Requisição inválida.");
       }
+      // Empresa com Fatura Wix no mês de vencimento não recebe boleto (cobrança em dobro).
+      const wixLock = async (stage) => {
+        const row = (await source.get()).data();
+        if (!row || (stage === "issue" && existing?.state === "issued")) return;
+        try {
+          await assertNoWixInvoice(db, row, { channel: "boleto", uid, stage, transactionId: id });
+        } catch (error) {
+          if (!error.status) throw error;
+          throw new BoletoError(error.message, error.status);
+        }
+      };
       if (action === "preview") {
+        await wixLock("preview");
         const record = await db.runTransaction(async (tx) => {
           if (!allowed((await tx.get(userRef)).data()))
             throw new BoletoError("Acesso revogado.", 403);
@@ -402,6 +415,7 @@ function createBoletoHandler({
           "Emissão não habilitada ou credenciais ainda não configuradas.",
           503,
         );
+      if (action === "issue") await wixLock("issue");
       const attempt = randomUUID();
       const record = await db.runTransaction(async (tx) => {
         if (!allowed((await tx.get(userRef)).data()))

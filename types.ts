@@ -74,6 +74,8 @@ export interface Transaction {
   source?: string;
   wixInvoiceNumber?: string;
   wixEntityId?: string;
+  wixOrderNumber?: string | number;
+  wixTransactionId?: string;
   cpfCnpj?: string; // Campo vindo do Jotform/Firebase
   clientNumber?: number | string;
   observacaoAPagar?: string; // Observação do contas a pagar

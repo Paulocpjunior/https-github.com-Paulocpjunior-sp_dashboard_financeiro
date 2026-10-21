@@ -459,7 +459,11 @@ function createNativeEntryHandler({
       const lockRef = db.collection("nativeEntryLocks").doc(built.duplicateKey);
       if (!allowed((await userRef.get()).data()))
         throw new EntryError("Acesso revogado.", 403);
+      const wixLock = (stage) => input.kind === "receber"
+        ? require("./wix-billing-lock").assertNoWixInvoice(db, built.record, { channel: "native-entry", uid, actor: actor.name, stage })
+        : null;
       if (url.pathname.endsWith("/preview")) {
+        await wixLock("preview");
         reply({
           previewHash,
           transaction: { ...built.record, id },
@@ -496,6 +500,7 @@ function createNativeEntryHandler({
         reply({ transaction: { ...existing, id }, replayed: true });
         return true;
       }
+      await wixLock("commit");
       const attachments = [];
       for (const file of upload) {
         const path = `native-finance/${id}/${file.sha256}`;

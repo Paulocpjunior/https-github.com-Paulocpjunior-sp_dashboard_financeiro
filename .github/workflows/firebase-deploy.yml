@@ -71,6 +71,7 @@ jobs:
           npm run test:customer-directory
           npm run test:payment-method
           npm run test:wix-funds
+          npm run test:wix-receivables
 
       - name: Preparar Java para testes de regras isolados
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5, runtime Node 24

@@ -9,8 +9,9 @@ import { Transaction, KPIData, FilterState } from '../types';
 import { FileText, Download, Filter, Calendar, CheckSquare, Square, PieChart, RefreshCw, Landmark, Activity, ArrowDownCircle, ArrowUpCircle, Layers, AlertTriangle, Loader2, ArrowLeftRight, ArrowUpDown, ArrowUp, ArrowDown, Users, Search } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { formatISODateBR } from '../utils/dateUtils';
-import { getOriginalAmount, getOutstandingAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { getOriginalAmount, getOutstandingAmount, getPaidAmount, isEntradaTransaction, isPaidStatus, isSaidaTransaction, isWixEcommerceOrder, parseMoneyValue } from '../utils/transactionAmounts';
 import { formatExtraChargeDescription, hasExtraCharge } from '../utils/extraCharges';
+import { applyWixFilter, summarizeWixGroup, WIX_FILTER_LABELS, WixFilter } from '../utils/wixReceivables';
 
 type ReportMode = 'general' | 'payables' | 'receivables';
 type DateFilterType = 'date' | 'dueDate' | 'paymentDate';
@@ -109,7 +110,7 @@ const Reports: React.FC = () => {
   const [selectedMovement, setSelectedMovement] = useState<string>(''); 
   const [selectedClient, setSelectedClient] = useState<string>(''); // Novo estado para Cliente
   const [extraChargesOnly, setExtraChargesOnly] = useState(false);
-  const [wixInvoicesOnly, setWixInvoicesOnly] = useState(false);
+  const [wixFilter, setWixFilter] = useState<WixFilter>('');
   
   // Sort States
   const [sortField, setSortField] = useState<SortField>('date');
@@ -244,7 +245,7 @@ const Reports: React.FC = () => {
   const handleModeChange = (mode: ReportMode) => {
     setReportMode(mode);
     setExtraChargesOnly(false);
-    setWixInvoicesOnly(false);
+    setWixFilter('');
     
     // Reset filters before applying new mode specifics to avoid conflicts
     setSelectedStatus('');
@@ -310,6 +311,9 @@ const Reports: React.FC = () => {
       });
     }
 
+    // Pedidos do e-commerce Wix entram no Contas a Receber pelo Grupo WIX.
+    const dated = result;
+
     // 2. Movement Filtering (normalizado para tratar acentuação: Saída/Saida)
     if (selectedMovement) {
       const normalizeMovement = (m: string) => (m || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -334,26 +338,23 @@ const Reports: React.FC = () => {
     }
 
     // 5. Bank Filtering (★ FIX: case-insensitive e accent-insensitive)
-    if (selectedBank) {
-      const normalizeBank = (b: string) => (b || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-      const targetBank = normalizeBank(selectedBank);
-      result = result.filter(t => normalizeBank(t.bankAccount) === targetBank);
-    }
+    const normalizeBank = (b: string) => (b || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const matchesBank = (t: Transaction) => !selectedBank || normalizeBank(t.bankAccount) === normalizeBank(selectedBank);
+    result = result.filter(matchesBank);
 
     // 6. Client Filtering (NOVO)
-    if (selectedClient) {
-      const search = selectedClient.toLowerCase();
-      result = result.filter(t => (t.client || '').toLowerCase().includes(search));
-    }
+    const matchesClient = (t: Transaction) => !selectedClient || (t.client || '').toLowerCase().includes(selectedClient.toLowerCase());
+    result = result.filter(matchesClient);
 
     // 7. Cobranças extras (exclusivo do modo Contas a Receber)
     if (reportMode === 'receivables' && extraChargesOnly) {
       result = result.filter(hasExtraCharge);
     }
 
-    // 8. Faturas Wix (exclusivo do modo Contas a Receber)
-    if (reportMode === 'receivables' && wixInvoicesOnly) {
-      result = result.filter(isWixInvoice);
+    // 8. Grupo WIX: Faturas Wix + pedidos do e-commerce (exclusivo do modo Contas a Receber)
+    if (reportMode === 'receivables' && !extraChargesOnly) {
+      const ecommerceOrders = dated.filter(isWixEcommerceOrder).filter(matchesClient).filter(matchesBank);
+      result = applyWixFilter(result, ecommerceOrders, wixFilter);
     }
 
     // 9. Sorting
@@ -443,7 +444,7 @@ const Reports: React.FC = () => {
 
     setKpi(newKpi);
 
-  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient, reportMode, extraChargesOnly, wixInvoicesOnly]);
+  }, [allTransactions, startDate, endDate, selectedTypes, selectedStatus, selectedBank, dateFilterType, selectedMovement, sortField, sortDirection, selectedClient, reportMode, extraChargesOnly, wixFilter]);
 
   const toggleType = (type: string) => {
     setSelectedTypes(prev => 
@@ -451,7 +452,7 @@ const Reports: React.FC = () => {
     );
     setReportMode('general');
     setExtraChargesOnly(false);
-    setWixInvoicesOnly(false);
+    setWixFilter('');
   };
 
   const selectAllTypes = () => setSelectedTypes([...availableTypes]);
@@ -481,7 +482,8 @@ const Reports: React.FC = () => {
         sortField,
         sortDirection,
         extraChargesOnly: reportMode === 'receivables' && extraChargesOnly,
-        wixInvoicesOnly: reportMode === 'receivables' && wixInvoicesOnly
+        wixInvoicesOnly: reportMode === 'receivables' && wixFilter === 'invoices',
+        wixFilter: reportMode === 'receivables' ? wixFilter : ''
     };
 
     setTimeout(async () => {
@@ -541,6 +543,7 @@ const Reports: React.FC = () => {
   const isEntrada = selectedMovement === 'Entrada' || selectedTypes.includes('Entrada de Caixa / Contas a Receber');
   const isSaida = selectedMovement === 'Saída' || selectedTypes.includes('Saída de Caixa / Contas a Pagar');
   const extraChargesFilterActive = reportMode === 'receivables' && extraChargesOnly;
+  const wixGroup = useMemo(() => summarizeWixGroup(filteredData), [filteredData]);
 
   return (
     <Layout>
@@ -644,7 +647,7 @@ const Reports: React.FC = () => {
                         </div>
                         <div>
                              <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1"><ArrowLeftRight className="h-4 w-4" /> Movimentação</label>
-                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); setWixInvoicesOnly(false); }}>
+                             <select className="w-full form-select rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-blue-500 focus:border-blue-500" value={selectedMovement} onChange={(e) => { setSelectedMovement(e.target.value); setReportMode('general'); setExtraChargesOnly(false); setWixFilter(''); }}>
                                 <option value="">Todas</option>
                                 <option value="Entrada">Entradas / Receitas</option>
                                 <option value="Saída">Saídas / Despesas</option>
@@ -689,7 +692,7 @@ const Reports: React.FC = () => {
                                     checked={extraChargesOnly}
                                     onChange={(e) => {
                                       setExtraChargesOnly(e.target.checked);
-                                      if (e.target.checked) setWixInvoicesOnly(false);
+                                      if (e.target.checked) setWixFilter('');
                                     }}
                                     className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                 />
@@ -702,25 +705,25 @@ const Reports: React.FC = () => {
                                     </span>
                                 </span>
                             </label>
-                            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${wixInvoicesOnly ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={wixInvoicesOnly}
-                                    onChange={(e) => {
-                                      setWixInvoicesOnly(e.target.checked);
-                                      if (e.target.checked) setExtraChargesOnly(false);
-                                    }}
-                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span>
-                                    <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-                                        Somente Faturas Wix
-                                    </span>
-                                    <span className="block mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                                        Exibe apenas as faturas emitidas pelo Wix, preservando as datas originais de lançamento, vencimento e recebimento.
-                                    </span>
-                                </span>
-                            </label>
+                            <fieldset className="p-3 rounded-lg border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                <legend className="px-1 text-sm font-semibold text-slate-700 dark:text-slate-200">Grupo WIX</legend>
+                                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                                    O Contas a Receber inclui o Grupo WIX em duas partes: E-commerce (produtos e serviços vendidos na loja) e Faturas Wix (serviços contratados, honorários e acordos). Datas originais de lançamento, vencimento e recebimento são preservadas.
+                                </p>
+                                {([['', 'Relatório completo (Contas a Receber + Grupo WIX)'], ...Object.entries(WIX_FILTER_LABELS)] as Array<[WixFilter, string]>).map(([value, label]) => (
+                                    <label key={value || 'all'} className="flex items-center gap-2 py-1 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="wix-filter"
+                                            checked={wixFilter === value}
+                                            disabled={extraChargesOnly && value !== ''}
+                                            onChange={() => setWixFilter(value)}
+                                            className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        {label}
+                                    </label>
+                                ))}
+                            </fieldset>
                           </>
                         )}
                     </div>
@@ -809,6 +812,15 @@ const Reports: React.FC = () => {
                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Registros Encontrados</p>
                        <p className="text-3xl font-bold text-slate-800 dark:text-white">{filteredData.length}</p>
                     </div>
+
+                    {reportMode === 'receivables' && !extraChargesOnly && (
+                      <section aria-label="Grupo WIX" className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 p-3 text-xs space-y-2">
+                        <h4 className="font-bold text-slate-800 dark:text-slate-100">Grupo WIX · {wixGroup.total.count} registro{wixGroup.total.count === 1 ? '' : 's'}</h4>
+                        <div className="flex justify-between gap-2"><span>Faturas Wix ({wixGroup.invoices.count})</span><span className="text-right">{formatCurrency(wixGroup.invoices.total)} · aberto {formatCurrency(wixGroup.invoices.open)}</span></div>
+                        <div className="flex justify-between gap-2"><span>E-commerce Wix ({wixGroup.ecommerce.count})</span><span className="text-right">{formatCurrency(wixGroup.ecommerce.total)} vendidos</span></div>
+                        <p className="text-slate-500 dark:text-slate-400">Pedidos da loja entram pagos na venda; a liberação do dinheiro segue a Tesouraria Wix. Empresa com Fatura Wix no mês não recebe boleto nem cobrança pelo app.</p>
+                      </section>
+                    )}
 
                     <div className="space-y-4">
                        

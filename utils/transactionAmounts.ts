@@ -54,6 +54,20 @@ export const isWixInvoice = (transaction: Transaction): boolean => {
   );
 };
 
+// Grupo WIX do Contas a Receber: pedidos da loja (wix-{UUID}, /sync-wix-orders)
+// e Faturas Wix (wix-inv-*, serviços, honorários e acordos emitidos pelo Wix).
+export const isWixEcommerceOrder = (transaction: Transaction): boolean => {
+  const id = normalizeText(transaction.id);
+  return (
+    Boolean(transaction.wixOrderNumber || transaction.wixTransactionId) ||
+    normalizeText(transaction.type).includes('recebimento wix') ||
+    (normalizeText((transaction as any).source) === 'wix' && id.startsWith('wix-') && !id.startsWith('wix-inv-'))
+  );
+};
+
+export const isWixFatura = (transaction: Transaction): boolean =>
+  isWixInvoice(transaction) && !isWixEcommerceOrder(transaction);
+
 export const isEntradaTransaction = (transaction: Transaction): boolean => {
   if (isWixInvoice(transaction)) return true;
 
