@@ -1,6 +1,6 @@
 // Boleto Cloud's recognized CNAB occurrences. Never infer individual payments from bank totals.
 const { randomUUID } = require('node:crypto');
-const { config } = require('./boleto-cloud');
+const { config, amount, money } = require('./boleto-cloud');
 const { hash, processIssue } = require('./boleto-returns');
 const { idFor } = require('./boleto-history');
 const reconciliation = require('./boleto-reconciliation');
@@ -8,6 +8,25 @@ const canonical = v => Array.isArray(v) ? v.map(canonical) : v && typeof v === '
 const validDay = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
 const dayOffset = (v, n) => new Date(Date.parse(v + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const cents = v => typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) : NaN;
+const digits = v => String(v || '').replace(/\D/g, '');
+const AUTO_LINK_UID = 'system:ret-auto-link', AUTO_LINK_RULE = 'cpf-cnpj+valor+vencimento-unico';
+// The RET file and the individual query already prove the payment; only the receivable is located here.
+function recordFrom(event, body) {
+    const b = body?.boleto, record = { id: idFor(event.token), token: event.token, number: String(b?.numero ?? ''), payerDocument: digits(b?.pagador?.cprf),
+        amountCents: cents(b?.valor), dueDate: b?.vencimento, createdAt: b?.emissao, bank: '341', beneficiaryDocument: null };
+    return [11, 14].includes(record.payerDocument.length) && record.amountCents > 0 && validDay(record.dueDate) && validDay(record.createdAt) ? record : null;
+}
+// Exactly one active receivable with the same CPF/CNPJ, value and due date. Never by name or approximation.
+async function autoLinkCandidate(db, record) {
+    const docs = (await db.collection('transactions').where('dueDate', '==', record.dueDate).get()).docs.filter(d => {
+        const r = d.data();
+        return !r.isExcluded && !r.deletedAt && r.movement === 'Entrada' && digits(r.cpfCnpj) === record.payerDocument &&
+            Math.round(money(amount(r)) * 100) === record.amountCents;
+    });
+    if (docs.length > 1) return { reason: 'Mais de um lançamento com o mesmo CPF/CNPJ, valor e vencimento; conferir vínculo.' };
+    if (!docs.length) return { reason: 'Boleto sem vínculo individual confirmado com Contas a Receber.' };
+    return { id: docs[0].id, row: docs[0].data() };
+}
 async function get(cfg, path, fetchImpl) {
     const response = await fetchImpl(`${cfg.base}/${path}`, { method: 'GET', headers: { Authorization: `Basic ${Buffer.from(`${cfg.apiKey}:token`).toString('base64')}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(20000) });
     if (!response.ok)
@@ -99,6 +118,8 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
         return processIssue({ db, issueDoc: matches.docs[0], cfg, account: meta?.issuanceAccounts?.[cfg.accountFingerprint], fetchImpl: async () => ({ ok: true, json: async () => body }), at, dryRun, lease, leaseJob: 'cnab-production', returnEvidence: provenance, settlementEnabled: env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED === 'true' });
     }
     const linkRef = db.collection('boletoReconciliations').doc(idFor(event.token));
+    const autoLink = env.BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED === 'true', record = autoLink ? recordFrom(event, body) : null;
+    const candidate = record && !(await linkRef.get()).data() ? await autoLinkCandidate(db, record) : null;
     const perform = async (tx) => {
         if (!dryRun) {
             const owner = (await tx.get(jobRef)).data();
@@ -108,8 +129,10 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
         const manual = (await tx.get(db.collection('boletoManualResolutions').doc(idFor(event.token)))).data();
         if (manual) return {state:'review', reason:'Boleto com tratamento manual registrado. Confira o histórico; não reaplicar automaticamente.'};
         const link = (await tx.get(linkRef)).data();
+        if (!link && candidate?.id)
+            return linkAutomatically(tx);
         if (!link || link.record?.token !== event.token || link.accountFingerprint !== cfg.accountFingerprint)
-            return { state: 'review', reason: 'Boleto sem vínculo individual confirmado com Contas a Receber.' };
+            return { state: 'review', reason: candidate?.reason || 'Boleto sem vínculo individual confirmado com Contas a Receber.' };
         const rowRef = db.collection('transactions').doc(link.transactionId), row = (await tx.get(rowRef)).data();
         const native = (await tx.get(db.collection('boletoIssues').doc(hash(['production', link.transactionId])))).data();
         if (native)
@@ -133,6 +156,30 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
         if (!dryRun)
             await reconciliation.apply(tx, db, rowRef, row, linkRef, link, { ...decision, returnEvidence: provenance }, at, body);
         return { state: dryRun ? 'ready' : 'settled', reason: 'Liquidação individual conferida.' };
+    };
+    const linkAutomatically = async (tx) => {
+        const rowRef = db.collection('transactions').doc(candidate.id), row = (await tx.get(rowRef)).data();
+        if (!row || reconciliation.revision(row) !== reconciliation.revision(candidate.row))
+            return { state: 'review', reason: 'Lançamento alterado durante a conferência; nova tentativa no próximo ciclo.' };
+        if (row.boletoReconciliation)
+            return { state: 'review', reason: 'Lançamento já vinculado a outro boleto; conferir sem duplicar.' };
+        if ((await tx.get(db.collection('boletoIssues').doc(hash(['production', candidate.id])))).data())
+            return { state: 'review', reason: 'Emissão nativa vinculada ao lançamento; conferir antes de aplicar retorno.' };
+        const decision = reconciliation.evaluate(record, row, body, at, await reconciliation.manualEvidence(db, tx, candidate.id, row), true);
+        if (!['ready', 'already-paid'].includes(decision.state))
+            return { state: 'review', reason: decision.reason };
+        if (decision.state === 'ready' && env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED !== 'true')
+            return { state: 'review', reason: 'Liquidação confirmada; baixa automática desativada.' };
+        const link = { record, accountFingerprint: cfg.accountFingerprint, transactionId: candidate.id, uid: AUTO_LINK_UID, confirmedAt: at, checkedAt: at,
+            previewId: null, state: decision.state, reason: decision.reason, baseline: reconciliation.revision(row), autoLink: { rule: AUTO_LINK_RULE, eventId: provenance.eventId } };
+        if (!dryRun) {
+            await reconciliation.apply(tx, db, rowRef, row, linkRef, link, { ...decision, returnEvidence: provenance }, at, body);
+            tx.create(db.collection('boletoReconciliationAudit').doc(hash(['ret-auto-link', provenance.eventId])), {
+                action: 'auto-link', uid: AUTO_LINK_UID, rule: AUTO_LINK_RULE, boletoId: record.id, transactionId: candidate.id, at, decision, returnEvidence: provenance, original: row });
+        }
+        return { state: dryRun ? 'ready' : 'settled', transactionId: candidate.id, reason: decision.state === 'ready'
+            ? 'Baixa automática: lançamento único com o mesmo CPF/CNPJ, valor e vencimento, pagamento confirmado pelo banco.'
+            : 'Recebimento existente conferido com o RET por CPF/CNPJ, valor e vencimento; nenhuma nova baixa.' };
     };
     return dryRun ? perform({ get: r => r.get() }) : db.runTransaction(perform);
 }
@@ -236,7 +283,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                             const result = await settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, jobRef, at, dryRun });
                             counts.events++;
                             counts[result.state] = (counts[result.state] || 0) + 1;
-                            await write(eventRef, { ...provenance, number: event.number, boletoId: event.token ? idFor(event.token) : null, occurrence: event.occurrence, state: result.state, reason: result.reason, checkedAt: at });
+                            await write(eventRef, { ...provenance, number: event.number, boletoId: event.token ? idFor(event.token) : null, occurrence: event.occurrence, state: result.state, reason: result.reason, checkedAt: at, ...(result.transactionId ? { transactionId: result.transactionId } : {}) });
                             if (!['settled', 'informational'].includes(result.state))
                                 done = false;
                         }

@@ -84,3 +84,26 @@ Publicar serviço/hosting no SHA aprovado e atualizar **também** o Cloud Run Jo
 rotulada com o mesmo SHA e usa sua imagem imutável. Só publicar o frontend não
 atualiza o worker. Conferir a execução e o painel após a publicação. Não executar
 baixas fictícias em produção para testar.
+
+## Vínculo automático pelo RET — atualização de 21/10/2026
+
+Boletos emitidos fora do app chegavam pagos no RET e ficavam em conferência com
+"Boleto sem vínculo individual confirmado", porque só havia baixa para emissão
+nativa ou vínculo confirmado manualmente. Com `BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=true`
+(definido por `scripts/deploy-boleto-returns.py`), a liquidação do RET que já passou
+pela consulta individual (`paymentMatches`) procura o lançamento:
+
+- mesmo CPF/CNPJ (só dígitos), mesmo valor ao centavo e mesmo vencimento;
+- ativo, de entrada, sem vínculo de boleto, sem emissão nativa;
+- **exatamente um** lançamento. Zero ou mais de um continua em conferência, com o motivo.
+
+O lançamento encontrado passa pelas mesmas validações da conciliação manual
+(`boleto-reconciliation.evaluate`): pagamento bancário integral, sem juros, multa ou
+desconto, datas válidas, sem recebimento manual sem auditoria. A gravação usa a mesma
+transação (`apply`): `boletoReconciliations` com `uid=system:ret-auto-link` e
+`autoLink.rule`, `boletoReconciliationSettlements` com antes/depois, marcação
+`boletoSettlement` com a evidência do RET e `boletoReconciliationAudit` com
+`action=auto-link`. Conta já paga com valor e data iguais recebe só o vínculo.
+
+Para desligar apenas o vínculo automático: atualizar o job com
+`BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=false` pelo fluxo autorizado.
