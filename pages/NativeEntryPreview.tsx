@@ -59,6 +59,16 @@ const api: EntryAPI = {
     state: saved.has(id) ? "saved" : "not_confirmed",
     transaction: saved.get(id),
   }),
+  registerClient: async (input) => ({
+    client: {
+      id: `demo-${input.cpfCnpj.replace(/\D/g, "")}`,
+      client: input.client,
+      clientNumber: input.clientNumber,
+      cpfCnpj: input.cpfCnpj.replace(/\D/g, ""),
+    },
+    created: true,
+    existing: false,
+  }),
 };
 export default function NativeEntryPreview() {
   const [kind, setKind] = useState<EntryKind | null>(null);
