@@ -20,14 +20,17 @@ const empty = { client: "", cpfCnpj: "", clientNumber: "", reason: "", submissio
 export default function ChecklistClientRegistration({
   search,
   noMatches,
+  incomplete,
   register,
   onRegistered,
   loadChecklist = fetchChecklistReview,
 }: {
   search: string;
   noMatches: boolean;
-  register: (input: ClientRegistration) => Promise<{ client: EntryClient; existing: boolean }>;
-  onRegistered: (client: EntryClient, existing: boolean) => void;
+  /** Cadastro escolhido na lista que está sem CPF/CNPJ: não serve para lançar até ser completado. */
+  incomplete?: EntryClient;
+  register: (input: ClientRegistration) => Promise<{ client: EntryClient; existing: boolean; replaced?: string[] }>;
+  onRegistered: (client: EntryClient, existing: boolean, replaced: string[]) => void;
   loadChecklist?: (signal: AbortSignal) => Promise<ChecklistReview>;
 }) {
   const [open, setOpen] = useState(false),
@@ -38,7 +41,13 @@ export default function ChecklistClientRegistration({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const requestId = useRef(crypto.randomUUID());
-  const visible = open || noMatches;
+  const visible = open || noMatches || Boolean(incomplete);
+  useEffect(() => {
+    if (!incomplete) return;
+    setForm({ ...empty, client: incomplete.client, clientNumber: digits(incomplete.clientNumber) });
+    requestId.current = crypto.randomUUID();
+    setError("");
+  }, [incomplete?.id]);
   useEffect(() => {
     if (!visible || checklist || loading || checklistError) return;
     const controller = new AbortController();
@@ -66,6 +75,8 @@ export default function ChecklistClientRegistration({
   const pickRecord = (r: ChecklistRecord) =>
     update({ client: r.client || "", cpfCnpj: formatDocument(r.document || ""), clientNumber: digits(r.clientNumber), submissionId: r.submissionId, reason: "" });
   const fromChecklist = Boolean(form.submissionId);
+  // Completar um cadastro antigo substitui o registro sem documento: o servidor exige o motivo.
+  const reasonRequired = !fromChecklist || Boolean(incomplete);
   async function save() {
     setBusy(true);
     setError("");
@@ -79,7 +90,7 @@ export default function ChecklistClientRegistration({
         checklistSubmissionId: form.submissionId || undefined,
         reason: form.reason.trim(),
       });
-      onRegistered(result.client, result.existing);
+      onRegistered(result.client, result.existing, result.replaced || []);
       setForm(empty);
       setOpen(false);
       requestId.current = crypto.randomUUID();
@@ -94,9 +105,11 @@ export default function ChecklistClientRegistration({
       <div className="flex items-start gap-2">
         <ClipboardList className="h-5 w-5 shrink-0 text-blue-700 dark:text-blue-300" aria-hidden />
         <div>
-          <h4 className="font-semibold">{noMatches ? "Cliente não está no cadastro conferido" : "Cadastrar cliente novo"}</h4>
+          <h4 className="font-semibold">{incomplete ? "Este cadastro está sem CPF/CNPJ" : noMatches ? "Cliente não está no cadastro conferido" : "Cadastrar cliente novo"}</h4>
           <p className="text-xs text-slate-600 dark:text-slate-400">
-            Clientes que entraram pelo Checklist do Legal são incluídos aqui com nome, CPF/CNPJ e N.Cliente. O cadastro fica registrado com seu nome e data.
+            {incomplete
+              ? `Para lançar, informe o CPF/CNPJ de ${incomplete.client} (N.Cliente ${incomplete.clientNumber}) e o motivo. O cadastro antigo fica guardado como substituído; nada é apagado.`
+              : "Clientes que entraram pelo Checklist do Legal são incluídos aqui com nome, CPF/CNPJ e N.Cliente. O cadastro fica registrado com seu nome e data."}
           </p>
         </div>
       </div>
@@ -142,8 +155,8 @@ export default function ChecklistClientRegistration({
           <input className="sp-form-field" inputMode="numeric" value={form.clientNumber} onChange={(e) => update({ clientNumber: e.target.value })} />
         </label>
         <label className="block text-sm sm:col-span-3">
-          {fromChecklist ? "Observação (opcional)" : "Motivo e origem do cadastro manual *"}
-          <input className="sp-form-field" value={form.reason} placeholder={fromChecklist ? "" : "Ex.: contrato assinado em 20/10, ainda fora do Checklist"} onChange={(e) => update({ reason: e.target.value })} />
+          {!reasonRequired ? "Observação (opcional)" : incomplete ? "Motivo e origem do documento *" : "Motivo e origem do cadastro manual *"}
+          <input className="sp-form-field" value={form.reason} placeholder={!reasonRequired ? "" : incomplete ? "Ex.: CNPJ conferido no contrato / cartão CNPJ" : "Ex.: contrato assinado em 20/10, ainda fora do Checklist"} onChange={(e) => update({ reason: e.target.value })} />
         </label>
       </div>
       <p className="text-xs text-slate-500">
@@ -151,10 +164,10 @@ export default function ChecklistClientRegistration({
       </p>
       {error && <p className="text-sm text-red-700 dark:text-red-300" role="alert">{error}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={busy || !form.client.trim() || !form.cpfCnpj.trim() || !form.clientNumber.trim()} className="sp-form-primary rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50" onClick={save}>
-          {busy ? "Cadastrando…" : "Cadastrar e selecionar"}
+        <button type="button" disabled={busy || !form.client.trim() || !form.cpfCnpj.trim() || !form.clientNumber.trim() || (reasonRequired && form.reason.trim().length < 10)} className="sp-form-primary rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50" onClick={save}>
+          {busy ? "Cadastrando…" : incomplete ? "Completar e selecionar" : "Cadastrar e selecionar"}
         </button>
-        {open && !noMatches && (
+        {open && !noMatches && !incomplete && (
           <button type="button" className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm" onClick={() => { setOpen(false); setForm(empty); }}>
             Cancelar
           </button>

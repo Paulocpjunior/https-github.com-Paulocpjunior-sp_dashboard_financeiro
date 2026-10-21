@@ -96,7 +96,7 @@ async function identifierConflicts(tx,db,entries,key,before,after){
  if(num&&num!==number(before.clientNumber)){
   for(const [k,v] of Object.entries(entries))if(!v.target&&k!==key&&number(v.clientNumber)===num)others.set(k,v.client);
   for(const d of (await tx.get(db.collection('clientRegistry').where('clientNumberNormalized','==',num).limit(5))).docs){
-   const r=d.data(),registryKey=digits(r.cpfCnpjDigits)?resolve('doc:'+digits(r.cpfCnpjDigits),entries):null;
+   const r=d.data();if(r.status==='superseded')continue;const registryKey=digits(r.cpfCnpjDigits)?resolve('doc:'+digits(r.cpfCnpjDigits),entries):null;
    if(registryKey?.key===key)continue;
    // The other customer may already have been corrected to a different number.
    if(registryKey?.profile&&number(registryKey.profile.clientNumber)!==num)continue;

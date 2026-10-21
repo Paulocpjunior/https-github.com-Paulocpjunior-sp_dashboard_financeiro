@@ -34,14 +34,20 @@ async function registerClient({db,userRef,user,uid,allowed,body}){
   // Já conferido: usa o cadastro existente; corrigir nome ou N.Cliente é outro fluxo, com revisão própria.
   if(before?.status==='ready'){const result={client:option(id,before),created:false,existing:true};tx.create(op,{digest,result,at:new Date().toISOString()});return result;}
   const num=number(v.clientNumber);
-  const same=await tx.get(db.collection('clientRegistry').where('clientNumberNormalized','==',num).limit(5));
-  const other=same.docs.find(d=>d.id!==id&&d.data().status==='ready');
-  if(other)fail(`N.Cliente ${v.clientNumber} já pertence a ${other.data().client||'outro cliente'}. Confira o número no Checklist antes de cadastrar.`);
+  const same=await tx.get(db.collection('clientRegistry').where('clientNumberNormalized','==',num).limit(10));
+  const holders=same.docs.filter(d=>d.id!==id&&d.data().status==='ready');
+  const other=holders.find(d=>validDocument(digits(d.data().cpfCnpjDigits)));
+  if(other)fail(`N.Cliente ${v.clientNumber} já pertence a ${other.data().client||'outro cliente'} (CPF/CNPJ ${digits(other.data().cpfCnpjDigits)}). Confira o número no Checklist antes de cadastrar.`);
+  // Cadastro antigo com o mesmo N.Cliente, mas sem CPF/CNPJ, não serve para lançar: é completado pelo novo
+  // cadastro com documento e fica guardado como substituído (nada é apagado).
+  if(holders.length&&v.reason.length<10)fail(`O N.Cliente ${v.clientNumber} está em um cadastro antigo sem CPF/CNPJ (${holders.map(d=>d.data().client||d.id).join(', ')}). Informe o motivo (mínimo de 10 caracteres) para completar esse cadastro com o documento.`,400);
   const at=new Date().toISOString(),actor=user?.name||user?.username||uid;
   const after={...(before||{}),key:'doc:'+v.document,keyType:v.document.length===11?'cpf':'cnpj',cpfCnpjDigits:v.document,client:v.client,clientNormalized:norm(v.client),clientNumber:v.clientNumber,clientNumberNormalized:num,status:'ready',confidence:'high',source:before?.source||v.source,registeredFrom:v.source,checklistSubmissionId:v.submissionId||null,createdAt:before?.createdAt||at,updatedAt:at,updatedBy:actor,updatedByUid:uid};
+  if(holders.length)after.replacesRegistryIds=holders.map(d=>d.id);
   tx.set(ref,after);
-  tx.create(db.collection('clientRegistryAudit').doc(key),{uid,actor,at,action:before?'complete-registry':'register',clientRegistryId:id,source:v.source,checklistSubmissionId:v.submissionId||null,reason:v.reason,before,after});
-  const result={client:option(id,after),created:!before,existing:false};
+  const superseded=holders.map(d=>{const old=d.data(),next={...old,status:'superseded',supersededBy:id,supersededAt:at,updatedAt:at,updatedBy:actor,updatedByUid:uid};tx.set(db.collection('clientRegistry').doc(d.id),next);return {id:d.id,before:old,after:next};});
+  tx.create(db.collection('clientRegistryAudit').doc(key),{uid,actor,at,action:holders.length?'complete-identification':before?'complete-registry':'register',clientRegistryId:id,source:v.source,checklistSubmissionId:v.submissionId||null,reason:v.reason,before,after,superseded});
+  const result={client:option(id,after),created:!before,existing:false,replaced:holders.map(d=>d.id)};
   tx.create(op,{digest,result,at});return result;
  });
 }

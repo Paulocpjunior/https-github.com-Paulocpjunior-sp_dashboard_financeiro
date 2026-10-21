@@ -47,3 +47,16 @@ test('N.Cliente de outro cliente, documento inválido, cadastro manual sem motiv
  assert.equal(m.store.get(m.store.get(audits(m.store)[0]).after?'clientRegistry/doc-'+RADIO:'').registeredFrom,'manual');
  const r=fixture();r.store.set('users/u',{active:false,role:'admin'});await assert.rejects(r.call(body()),/Acesso revogado/);
 });
+test('cadastro antigo com o mesmo N.Cliente e sem CPF/CNPJ é completado com motivo e fica guardado como substituído',async()=>{
+ const legacy={status:'ready',client:'RADIO SB FM LTDA - ME',clientNumber:'170',clientNumberNormalized:'170',cpfCnpjDigits:''};
+ const other={status:'ready',client:'RADIO SB FM LTDA',clientNumber:'154',clientNumberNormalized:'154',cpfCnpjDigits:''};
+ const h=fixture([['clientRegistry/name-abc',legacy],['clientRegistry/name-def',other]]);
+ await assert.rejects(h.call(body({checklistSubmissionId:'',source:'manual',reason:'curto'})),/motivo/);
+ await assert.rejects(h.call(body({requestId:'22222222-2222-4222-8222-222222222222'})),/cadastro antigo sem CPF\/CNPJ \(RADIO SB FM LTDA - ME\)/);
+ const r=await h.call(body({requestId:'33333333-3333-4333-8333-333333333333',source:'manual',checklistSubmissionId:'',reason:'ativação do cliente, CNPJ conferido no contrato'}));
+ assert.deepEqual(r.replaced,['name-abc']);assert.equal(r.client.cpfCnpj,RADIO);
+ const old=h.store.get('clientRegistry/name-abc');assert.equal(old.status,'superseded');assert.equal(old.supersededBy,'doc-'+RADIO);assert.equal(old.client,legacy.client);
+ assert.deepEqual(h.store.get('clientRegistry/name-def'),other);
+ const a=h.store.get(audits(h.store)[0]);assert.equal(a.action,'complete-identification');assert.deepEqual(a.superseded[0].before,legacy);
+ assert.equal(h.store.get('clientRegistry/doc-'+RADIO).status,'ready');
+});
