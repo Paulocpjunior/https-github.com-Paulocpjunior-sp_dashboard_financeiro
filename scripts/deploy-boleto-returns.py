@@ -64,7 +64,7 @@ def main():
     gcloud('run', 'jobs', operation, JOB, '--region', REGION, '--image', image, '--service-account', account,
            '--command', 'launcher', '--args', 'node boleto-return-job.js', '--tasks', '1', '--parallelism', '1', '--max-retries', '0',
            '--task-timeout', '600s', '--memory', '512Mi', '--cpu', '1', '--set-secrets', ','.join(secrets),
-           '--set-env-vars', f'BOLETO_CLOUD_ENVIRONMENT=production,BOLETO_CLOUD_CUTOVER_DATE={cutover},BOLETO_CLOUD_RETURN_ENABLED=true,BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=true',
+           '--set-env-vars', f'BOLETO_CLOUD_ENVIRONMENT=production,BOLETO_CLOUD_CUTOVER_DATE={cutover},BOLETO_CLOUD_RETURN_ENABLED=true,BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=true,BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=true',
            '--update-labels' if operation == 'update' else '--labels', f'financeiro-commit={sha}')
     gcloud('run', 'jobs', 'add-iam-policy-binding', JOB, '--region', REGION, '--member', f'serviceAccount:{INVOKER}', '--role', 'roles/run.invoker')
     gcloud('scheduler', 'jobs', 'update' if existing else 'create', 'http', SCHEDULER, '--location', REGION,

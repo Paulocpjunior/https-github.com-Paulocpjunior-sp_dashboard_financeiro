@@ -176,3 +176,71 @@ test('ambiguous occurrences and incomplete legacy baselines remain blocked', asy
     events[0].occurrence.info.dataDeCredito = null;
     assert.throws(() => validateRevision(old, manifestFor(events)), /RETURN_EVIDENCE_CONFLICT/);
 });
+
+function autoLinkFixture(rows, envPatch = {}) {
+    const records = new Map(Object.entries(rows).map(([id, row]) => ['transactions/' + id, row]));
+    records.set('boletoReturnJobs/cnab-production', { lease: 'lease', leaseUntil: Date.now() + 60000 });
+    let transactionReads = 0;
+    const ref = p => ({ path: p, get: async () => { if (p.startsWith('transactions/')) transactionReads++; return { data: () => structuredClone(records.get(p)) }; } });
+    const db = {
+        collection: c => ({ doc: id => ref(c + '/' + id), where: (field, op, value) => ({
+            limit: () => ({ get: async () => ({ docs: [] }) }),
+            get: async () => { if (c === 'transactions') transactionReads++; return { docs: [...records.entries()].filter(([p, d]) => p.startsWith(c + '/') && d[field] === value).map(([p, d]) => ({ id: p.split('/')[1], data: () => structuredClone(d) })) }; } }) }),
+        runTransaction: async fn => { const writes = []; const tx = { get: r => r.get(),
+            set: (r, v) => writes.push(() => records.set(r.path, structuredClone(v))),
+            update: (r, v) => writes.push(() => records.set(r.path, { ...records.get(r.path), ...structuredClone(v) })),
+            create: (r, v) => writes.push(() => { if (records.has(r.path)) throw Error('exists'); records.set(r.path, structuredClone(v)); }) };
+            const result = await fn(tx); writes.forEach(w => w()); return result; },
+    };
+    const env = { BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED: 'true', BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED: 'true', ...envPatch };
+    const paidBody = { boleto: { token: 'boleto', numero: '001', emissao: '2026-10-01', vencimento: '2026-10-09', valor: 10, pagador: { cprf: '52998224725' }, situacao: 'PAGO',
+        pagamento: { origem: 'BANCO', situacao: 'PAGAMENTO_INFORMADO', marcadoComoPago: false, data: '2026-10-09', valor: 10, dataCredito: '2026-10-10' } } };
+    const run = () => settleEvent({ db, cfg: { ...cfg, accountFingerprint: 'fp', base: 'https://x', apiKey: 'k' }, env, fetchImpl: async () => ({ ok: true, json: async () => structuredClone(paidBody) }),
+        event: { token: 'boleto', number: '001', occurrence: structuredClone(occurrence) }, provenance: { provider: 'boleto-cloud', fileId: 'f', eventId: 'e'.repeat(64) },
+        lease: 'lease', jobRef: ref('boletoReturnJobs/cnab-production'), at: '2026-10-10T15:00:00Z', dryRun: false });
+    return { records, run, reads: () => transactionReads };
+}
+const openRow = (patch = {}) => ({ movement: 'Entrada', source: 'jotform', status: 'Pendente', pago: 'Não', cpfCnpj: '529.982.247-25', dueDate: '2026-10-09', totalCobranca: 10, valueReceived: 0, paymentMethod: 'Boleto', ...patch });
+test('RET payment links and settles the single receivable with the same CPF/CNPJ, value and due date, with audit', async () => {
+    const f = autoLinkFixture({ 'trx-1': openRow(), 'trx-other-doc': openRow({ cpfCnpj: '11.222.333/0001-81' }), 'trx-other-value': openRow({ totalCobranca: 11 }) });
+    const result = await f.run();
+    assert.equal(result.state, 'settled');
+    assert.equal(result.transactionId, 'trx-1');
+    const row = f.records.get('transactions/trx-1');
+    assert.equal(row.status, 'Pago');
+    assert.equal(row.paymentDate, '2026-10-09');
+    assert.equal(row.valueReceived, 10);
+    assert.equal(row.boletoSettlement.origin, 'BANCO');
+    assert.equal(row.boletoSettlement.returnEvidence.eventId, 'e'.repeat(64));
+    const link = [...f.records.entries()].find(([k]) => k.startsWith('boletoReconciliations/'))[1];
+    assert.equal(link.uid, 'system:ret-auto-link');
+    assert.equal(link.autoLink.rule, 'cpf-cnpj+valor+vencimento-unico');
+    assert.equal(link.state, 'settled');
+    const audit = [...f.records.entries()].find(([k]) => k.startsWith('boletoReconciliationAudit/'))[1];
+    assert.equal(audit.action, 'auto-link');
+    assert.equal(audit.original.status, 'Pendente');
+    assert.equal(f.records.get('transactions/trx-other-doc').status, 'Pendente');
+    assert.equal(f.records.get('transactions/trx-other-value').status, 'Pendente');
+    // A second pass finds the existing link and never settles twice.
+    const again = await f.run();
+    assert.equal(again.state, 'settled');
+    assert.match(again.reason, /Baixa existente preservada/);
+});
+test('automatic link stays in review when ambiguous, absent, disabled, native or already linked', async () => {
+    const two = autoLinkFixture({ a: openRow(), b: openRow() });
+    assert.match((await two.run()).reason, /Mais de um lançamento/);
+    assert.equal(two.records.get('transactions/a').status, 'Pendente');
+    const none = autoLinkFixture({ a: openRow({ dueDate: '2026-10-08' }) });
+    assert.match((await none.run()).reason, /sem vínculo individual/);
+    const off = autoLinkFixture({ a: openRow() }, { BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED: 'false' });
+    assert.equal((await off.run()).state, 'review');
+    assert.equal(off.reads(), 0);
+    const settlementOff = autoLinkFixture({ a: openRow() }, { BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED: 'false' });
+    assert.equal((await settlementOff.run()).state, 'review');
+    assert.equal(settlementOff.records.get('transactions/a').status, 'Pendente');
+    for (const patch of [{ boletoReconciliation: { boletoId: 'x' } }, { valueReceived: 5 }, { isExcluded: true }, { receivableSettlement: { origin: 'manual' } }]) {
+        const f = autoLinkFixture({ a: openRow(patch) });
+        assert.equal((await f.run()).state, 'review');
+        assert.equal([...f.records.keys()].some(k => k.startsWith('boletoReconciliations/')), false);
+    }
+});
