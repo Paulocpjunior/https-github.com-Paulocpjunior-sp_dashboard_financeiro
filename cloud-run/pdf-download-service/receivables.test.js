@@ -332,3 +332,10 @@ test('reabertura exige permissão de estorno e motivo; não vale para baixa banc
  h=harness();assert.equal((await h.call('items/legacy')).body.reopenable,false);assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,409);
  h=harness();await commit(h,await body(h,{amount:'100.00',interest:'0',discount:'0'}));assert.equal((await h.call('items/legacy')).body.reopenable,false);assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,409);
 });
+test('reabertura aceita apelidos de pago e preserva valor guardado só no recebido',async()=>{
+ for(const status of ['Paga','Quitado','Liquidado']){const h=harness();Object.assign(h.store.get('transactions/legacy'),{status});assert.equal((await h.call('items/legacy')).body.reopenable,true,status);}
+ const h=harness(),row=h.store.get('transactions/legacy');delete row.totalCobranca;delete row.valorOriginal;Object.assign(row,{status:'Pago',valueReceived:100,paymentDate:'2026-01-02'});
+ const b=await reopenBody(h),p=await h.call('reopen/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));
+ assert.equal((await h.call('reopen/commit',{...b,confirmHash:p.body.reviewHash})).status,200);
+ const after=h.store.get('transactions/legacy');assert.equal(after.valorOriginal,100);assert.equal(after.valueReceived,0);assert.equal((await h.call('items/legacy')).status,200);
+});

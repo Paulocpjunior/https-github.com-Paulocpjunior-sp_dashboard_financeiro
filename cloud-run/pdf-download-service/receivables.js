@@ -118,18 +118,22 @@ function reversal(row,event,reason){
 }
 // Paid outside the receivables flow (import, old cash form, entry launched as paid): there is no receipt event to reverse,
 // so reopening restores the open state and keeps the previous payment fields in the log. Bank settlements stay out.
-const legacyPaymentKeys=['status','pago','paymentDate','dataPagamento','valueReceived','valorPago','valuePaid'];
+const legacyPaymentKeys=['status','pago','paymentDate','dataPagamento','valueReceived','valorPago','valuePaid','valorOriginal'];
+// Same paid aliases the dashboard normalizes to Pago (utils/transactionAmounts.ts).
+const paidStatuses=['pago','paga','recebido','quitado','liquidado','sim','ok','s'];
 function legacyPaid(row){
  receivable(row);
  if(row.boletoSettlement||row.boletoReconciliation||row.receivableSettlement||row.receivableBalance)return false;
- return ['pago','recebido'].includes(norm(row.status))||(['pendente','agendado','vencida','vencido'].includes(norm(row.status))&&Boolean(blocked(row)));
+ return paidStatuses.includes(norm(row.status))||(['pendente','agendado','vencida','vencido'].includes(norm(row.status))&&Boolean(blocked(row)));
 }
 function reopenLegacy(row,reason){
  if(!legacyPaid(row))fail(row?.boletoSettlement||row?.boletoReconciliation?'Recebimento bancário: confira o retorno do boleto.':'Esta conta não tem baixa anterior para reabrir.');
  if(typeof reason!=='string'||reason.trim().length<10||reason.length>2000)fail('Informe o motivo da reabertura (10 a 2000 caracteres).',400);
- const restored={...row,status:'Pendente',pago:'Não',paymentDate:'',dataPagamento:''};
+ const nominal=amount(row), restored={...row,status:'Pendente',pago:'Não',paymentDate:'',dataPagamento:''};
  for(const k of ['valueReceived','valuePaid'])if(Object.hasOwn(row,k))restored[k]=0;
  if(Object.hasOwn(row,'valorPago'))restored.valorPago='0.00';
+ // Old rows may carry the amount only in valueReceived; keep it as the nominal value.
+ if(amount(restored)!==nominal)restored.valorOriginal=nominal;
  const reasonBlocked=blocked(restored);if(reasonBlocked)fail(reasonBlocked);
  return restored;
 }
