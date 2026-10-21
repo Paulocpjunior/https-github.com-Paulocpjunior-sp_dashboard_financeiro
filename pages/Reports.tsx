@@ -818,7 +818,7 @@ const Reports: React.FC = () => {
                         <h4 className="font-bold text-slate-800 dark:text-slate-100">Grupo WIX · {wixGroup.total.count} registro{wixGroup.total.count === 1 ? '' : 's'}</h4>
                         <div className="flex justify-between gap-2"><span>Faturas Wix ({wixGroup.invoices.count})</span><span className="text-right">{formatCurrency(wixGroup.invoices.total)} · aberto {formatCurrency(wixGroup.invoices.open)}</span></div>
                         <div className="flex justify-between gap-2"><span>E-commerce Wix ({wixGroup.ecommerce.count})</span><span className="text-right">{formatCurrency(wixGroup.ecommerce.total)} vendidos</span></div>
-                        <p className="text-slate-500 dark:text-slate-400">Pedidos da loja entram pagos na venda; a liberação do dinheiro segue a Tesouraria Wix. Empresa com Fatura Wix no mês não recebe boleto nem cobrança pelo app.</p>
+                        <p className="text-slate-500 dark:text-slate-400">Pedidos da loja entram pagos na venda; a liberação do dinheiro segue a Tesouraria Wix. Empresa com Fatura Wix em aberto (ou emitida no mês) não recebe boleto nem cobrança pelo app; exceção só pelo master.</p>
                       </section>
                     )}
 

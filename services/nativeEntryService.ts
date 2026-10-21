@@ -59,12 +59,14 @@ export interface EntryAPI {
     requestId: string,
     entry: EntryDraft,
     attachments: EntryAttachment[],
+    wixOverride?: { reason: string },
   ): Promise<EntryReview>;
   commit(
     requestId: string,
     entry: EntryDraft,
     attachments: EntryAttachment[],
     confirmHash: string,
+    wixOverride?: { reason: string },
   ): Promise<{ transaction: Transaction; replayed: boolean }>;
   status(
     requestId: string,
@@ -99,16 +101,16 @@ async function request(path: string, body?: unknown) {
   if (!response.ok)
     throw Object.assign(
       new Error(result.error || "Não foi possível concluir."),
-      { status: response.status },
+      { status: response.status, wixLock: result.wixLock },
     );
   return result;
 }
 export const nativeEntryAPI: EntryAPI = {
   config: () => request("config"),
-  preview: (requestId, entry, attachments) =>
-    request("preview", { requestId, entry, attachments }),
-  commit: (requestId, entry, attachments, confirmHash) =>
-    request("commit", { requestId, entry, attachments, confirmHash }),
+  preview: (requestId, entry, attachments, wixOverride) =>
+    request("preview", { requestId, entry, attachments, ...(wixOverride ? { wixOverride } : {}) }),
+  commit: (requestId, entry, attachments, confirmHash, wixOverride) =>
+    request("commit", { requestId, entry, attachments, confirmHash, ...(wixOverride ? { wixOverride } : {}) }),
   status: (requestId) => request(`requests/${requestId}`),
   registerClient: (input) => request("clients/register", input),
 };

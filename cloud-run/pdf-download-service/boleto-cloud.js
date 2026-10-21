@@ -372,18 +372,18 @@ function createBoletoHandler({
         throw new BoletoError("Requisição inválida.");
       }
       // Empresa com Fatura Wix no mês de vencimento não recebe boleto (cobrança em dobro).
-      const wixLock = async (stage) => {
+      const wixLock = async (stage, override) => {
         const row = (await source.get()).data();
         if (!row || (stage === "issue" && existing?.state === "issued")) return;
         try {
-          await assertNoWixInvoice(db, row, { channel: "boleto", uid, stage, transactionId: id });
+          await assertNoWixInvoice(db, row, { channel: "boleto", uid, stage, transactionId: id, profile: (await userRef.get()).data(), override: override || null });
         } catch (error) {
           if (!error.status) throw error;
-          throw new BoletoError(error.message, error.status);
+          throw Object.assign(new BoletoError(error.message, error.status), { wixInvoices: error.wixInvoices });
         }
       };
       if (action === "preview") {
-        await wixLock("preview");
+        await wixLock("preview", body.wixOverride);
         const record = await db.runTransaction(async (tx) => {
           if (!allowed((await tx.get(userRef)).data()))
             throw new BoletoError("Acesso revogado.", 403);
@@ -415,7 +415,7 @@ function createBoletoHandler({
           "Emissão não habilitada ou credenciais ainda não configuradas.",
           503,
         );
-      if (action === "issue") await wixLock("issue");
+      if (action === "issue") await wixLock("issue", body.wixOverride);
       const attempt = randomUUID();
       const record = await db.runTransaction(async (tx) => {
         if (!allowed((await tx.get(userRef)).data()))
@@ -633,6 +633,7 @@ function createBoletoHandler({
             (error instanceof BoletoError || error instanceof InviteError)
               ? error.message
               : "Operação não confirmada. Consulte a cobrança antes de tentar novamente.",
+          ...(error instanceof BoletoError && error.wixInvoices ? { wixLock: { invoices: error.wixInvoices } } : {}),
         },
       );
     }
