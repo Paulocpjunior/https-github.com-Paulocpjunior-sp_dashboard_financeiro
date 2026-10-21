@@ -2,8 +2,8 @@ import type { ChecklistRecord, ChecklistReview } from '../services/checklistRevi
 export interface RegistryDocument { collection: 'clientRegistry' | 'billingProfiles'; id: string; data: Record<string, unknown> }
 const text = (v: unknown) => typeof v === 'string' ? v.trim() : '';
 export async function mapFirestoreChecklist(documents: RegistryDocument[], readAt: string): Promise<ChecklistReview> {
-  // Cadastro substituído por outro com CPF/CNPJ (Nova cobrança) continua guardado, mas não entra na conferência.
-  const records: ChecklistRecord[] = documents.filter(({collection,data})=>!(collection==='clientRegistry'&&data.status==='superseded')).map(({collection,id,data:d}): ChecklistRecord => {
+  // Cadastro substituído por outro com CPF/CNPJ ou desativado (filial baixada) continua guardado, mas não entra na conferência.
+  const records: ChecklistRecord[] = documents.filter(({collection,data})=>!(collection==='clientRegistry'&&['superseded','inactive'].includes(String(data.status)))).map(({collection,id,data:d}): ChecklistRecord => {
     const document = text(d.cpfCnpjDigits || d.cpfCnpj).replace(/\D/g,'');
     const rawNumber = text(d.clientNumber);
     const clientNumber = /^\d+$/.test(rawNumber) ? rawNumber : '';

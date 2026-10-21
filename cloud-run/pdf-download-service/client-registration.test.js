@@ -60,3 +60,16 @@ test('cadastro antigo com o mesmo N.Cliente e sem CPF/CNPJ é completado com mot
  const a=h.store.get(audits(h.store)[0]);assert.equal(a.action,'complete-identification');assert.deepEqual(a.superseded[0].before,legacy);
  assert.equal(h.store.get('clientRegistry/doc-'+RADIO).status,'ready');
 });
+test('cadastro desativado (filial baixada) sai da Nova cobrança com motivo e histórico, sem ser apagado',async()=>{
+ const {deactivateClient}=require('./client-registration');
+ const branch={status:'ready',client:'RADIO SB FM LTDA',clientNumber:'154',clientNumberNormalized:'154',cpfCnpjDigits:''};
+ const h=fixture([['clientRegistry/name-def',branch]]);
+ const doc=path=>({path,get:async()=>({data:()=>structuredClone(h.store.get(path))})});
+ const call=b=>deactivateClient({db:{collection:n=>({doc:id=>doc(n+'/'+id)}),runTransaction:async fn=>{const writes=[];const r=await fn({get:ref=>ref.get(),set:(ref,v)=>writes.push([ref.path,v]),create:(ref,v)=>{assert.equal(h.store.has(ref.path),false);writes.push([ref.path,v]);}});writes.forEach(([p,v])=>h.store.set(p,structuredClone(v)));return r;}},userRef:doc('users/u'),user:h.store.get('users/u'),uid:'u',allowed,body:b});
+ const b={requestId:'44444444-4444-4444-8444-444444444444',clientRegistryId:'name-def',reason:'Filial baixada; o cliente correto é o N.Cliente 170.'};
+ await assert.rejects(call({...b,reason:'curto'}),/motivo/);
+ assert.deepEqual(await call(b),{deactivated:'name-def'});assert.deepEqual(await call(b),{deactivated:'name-def'});
+ const saved=h.store.get('clientRegistry/name-def');assert.equal(saved.status,'inactive');assert.equal(saved.client,branch.client);assert.equal(saved.inactiveBy,'Financeiro');
+ const a=h.store.get(audits(h.store)[0]);assert.equal(a.action,'deactivate');assert.deepEqual(a.before,branch);assert.equal(audits(h.store).length,1);
+ await assert.rejects(call({...b,requestId:'55555555-5555-4555-8555-555555555555'}),/não está mais disponível/);
+});

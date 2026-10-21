@@ -346,12 +346,14 @@ function createNativeEntryHandler({
       }
       if (
         request.method === "POST" &&
-        url.pathname === "/api/financial-entries/clients/register"
+        /^\/api\/financial-entries\/clients\/(register|deactivate)$/.test(url.pathname)
       ) {
         let body;
         try { body = JSON.parse((await readBody(request)).toString("utf8")); }
         catch { throw new EntryError("Dados inválidos."); }
-        reply(await require("./client-registration").registerClient({ db, userRef, user, uid, allowed, body }));
+        const registration = require("./client-registration");
+        const action = url.pathname.endsWith("/deactivate") ? registration.deactivateClient : registration.registerClient;
+        reply(await action({ db, userRef, user, uid, allowed, body }));
         return true;
       }
       const statementMatch = url.pathname.match(/^\/api\/financial-entries\/statement\/([a-zA-Z0-9_-]{1,200})$/);

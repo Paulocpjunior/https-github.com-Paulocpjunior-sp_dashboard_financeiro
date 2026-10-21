@@ -51,4 +51,24 @@ async function registerClient({db,userRef,user,uid,allowed,body}){
   tx.create(op,{digest,result,at});return result;
  });
 }
-module.exports={registerClient,validate};
+// Cadastro que não deve mais receber cobranças (ex.: filial baixada) sai da Nova cobrança.
+// Não é exclusão: o registro fica guardado como inativo, com motivo, e pode ser reativado pelo administrador.
+async function deactivateClient({db,userRef,user,uid,allowed,body}){
+ if(!body||typeof body!=='object'||!/^[a-f0-9-]{36}$/.test(body.requestId||'')||!/^[a-zA-Z0-9_-]{1,200}$/.test(body.clientRegistryId||''))fail('Identificador inválido.',400);
+ if(typeof body.reason!=='string'||body.reason.trim().length<10||body.reason.length>2000)fail('Informe o motivo (mínimo de 10 caracteres), por exemplo: filial baixada em 2025.',400);
+ const reason=body.reason.trim(),ref=db.collection('clientRegistry').doc(body.clientRegistryId);
+ const key=hash([uid,body.requestId]),op=db.collection('clientRegistryOperations').doc(key),digest=hash(['deactivate',body.clientRegistryId,reason]);
+ return db.runTransaction(async tx=>{
+  if(!allowed((await tx.get(userRef)).data()))fail('Acesso revogado.',403);
+  const previous=(await tx.get(op)).data();if(previous){if(previous.digest!==digest)fail('Tentativa já usada.');return previous.result;}
+  const before=(await tx.get(ref)).data();
+  if(!before||before.status!=='ready')fail('Cadastro não está mais disponível. Atualize a tela.');
+  const at=new Date().toISOString(),actor=user?.name||user?.username||uid;
+  const after={...before,status:'inactive',inactiveReason:reason,inactiveAt:at,inactiveBy:actor,inactiveByUid:uid,updatedAt:at,updatedBy:actor,updatedByUid:uid};
+  tx.set(ref,after);
+  tx.create(db.collection('clientRegistryAudit').doc(key),{uid,actor,at,action:'deactivate',clientRegistryId:body.clientRegistryId,reason,before,after});
+  const result={deactivated:body.clientRegistryId};
+  tx.create(op,{digest,result,at});return result;
+ });
+}
+module.exports={registerClient,deactivateClient,validate};

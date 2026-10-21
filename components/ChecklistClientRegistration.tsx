@@ -23,6 +23,8 @@ export default function ChecklistClientRegistration({
   incomplete,
   register,
   onRegistered,
+  deactivate,
+  onDeactivated,
   loadChecklist = fetchChecklistReview,
 }: {
   search: string;
@@ -31,6 +33,9 @@ export default function ChecklistClientRegistration({
   incomplete?: EntryClient;
   register: (input: ClientRegistration) => Promise<{ client: EntryClient; existing: boolean; replaced?: string[] }>;
   onRegistered: (client: EntryClient, existing: boolean, replaced: string[]) => void;
+  /** Tira da Nova cobrança um cadastro que não deve mais ser cobrado (ex.: filial baixada); o servidor guarda o registro e o motivo. */
+  deactivate?: (input: { requestId: string; clientRegistryId: string; reason: string }) => Promise<{ deactivated: string }>;
+  onDeactivated?: (id: string) => void;
   loadChecklist?: (signal: AbortSignal) => Promise<ChecklistReview>;
 }) {
   const [open, setOpen] = useState(false),
@@ -100,6 +105,21 @@ export default function ChecklistClientRegistration({
       setBusy(false);
     }
   }
+  async function retire() {
+    if (!incomplete || !deactivate) return;
+    setBusy(true);
+    setError("");
+    try {
+      await deactivate({ requestId: requestId.current, clientRegistryId: incomplete.id, reason: form.reason.trim() });
+      onDeactivated?.(incomplete.id);
+      setForm(empty);
+      requestId.current = crypto.randomUUID();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/20 p-4 space-y-3" aria-label="Cadastrar cliente novo do Checklist">
       <div className="flex items-start gap-2">
@@ -108,7 +128,7 @@ export default function ChecklistClientRegistration({
           <h4 className="font-semibold">{incomplete ? "Este cadastro está sem CPF/CNPJ" : noMatches ? "Cliente não está no cadastro conferido" : "Cadastrar cliente novo"}</h4>
           <p className="text-xs text-slate-600 dark:text-slate-400">
             {incomplete
-              ? `Para lançar, informe o CPF/CNPJ de ${incomplete.client} (N.Cliente ${incomplete.clientNumber}) e o motivo. O cadastro antigo fica guardado como substituído; nada é apagado.`
+              ? `Para lançar, informe o CPF/CNPJ de ${incomplete.client} (N.Cliente ${incomplete.clientNumber}) e o motivo. O cadastro antigo fica guardado como substituído; nada é apagado. Se for filial baixada ou cliente encerrado, informe o motivo e use “Não usar mais este cadastro”.`
               : "Clientes que entraram pelo Checklist do Legal são incluídos aqui com nome, CPF/CNPJ e N.Cliente. O cadastro fica registrado com seu nome e data."}
           </p>
         </div>
@@ -155,7 +175,7 @@ export default function ChecklistClientRegistration({
           <input className="sp-form-field" inputMode="numeric" value={form.clientNumber} onChange={(e) => update({ clientNumber: e.target.value })} />
         </label>
         <label className="block text-sm sm:col-span-3">
-          {!reasonRequired ? "Observação (opcional)" : incomplete ? "Motivo e origem do documento *" : "Motivo e origem do cadastro manual *"}
+          {!reasonRequired ? "Observação (opcional)" : incomplete ? "Motivo (origem do documento, ou por que não usar mais) *" : "Motivo e origem do cadastro manual *"}
           <input className="sp-form-field" value={form.reason} placeholder={!reasonRequired ? "" : incomplete ? "Ex.: CNPJ conferido no contrato / cartão CNPJ" : "Ex.: contrato assinado em 20/10, ainda fora do Checklist"} onChange={(e) => update({ reason: e.target.value })} />
         </label>
       </div>
@@ -167,6 +187,11 @@ export default function ChecklistClientRegistration({
         <button type="button" disabled={busy || !form.client.trim() || !form.cpfCnpj.trim() || !form.clientNumber.trim() || (reasonRequired && form.reason.trim().length < 10)} className="sp-form-primary rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50" onClick={save}>
           {busy ? "Cadastrando…" : incomplete ? "Completar e selecionar" : "Cadastrar e selecionar"}
         </button>
+        {incomplete && deactivate && (
+          <button type="button" disabled={busy || form.reason.trim().length < 10} className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm disabled:opacity-50" onClick={retire} title="Para filial baixada ou cliente encerrado: o cadastro sai da Nova cobrança e fica guardado com o motivo.">
+            Não usar mais este cadastro
+          </button>
+        )}
         {open && !noMatches && !incomplete && (
           <button type="button" className="rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm" onClick={() => { setOpen(false); setForm(empty); }}>
             Cancelar
