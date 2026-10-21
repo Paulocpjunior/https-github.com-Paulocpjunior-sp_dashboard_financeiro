@@ -69,6 +69,17 @@ export interface EntryAPI {
   status(
     requestId: string,
   ): Promise<{ state: string; transaction?: Transaction }>;
+  registerClient?(input: ClientRegistration): Promise<{ client: EntryClient; created: boolean; existing: boolean }>;
+}
+/** Cliente novo (Checklist do Legal ou manual) incluído no cadastro conferido, com histórico no servidor. */
+export interface ClientRegistration {
+  requestId: string;
+  client: string;
+  cpfCnpj: string;
+  clientNumber: string;
+  source: "checklist" | "manual";
+  checklistSubmissionId?: string;
+  reason: string;
 }
 async function request(path: string, body?: unknown) {
   if (!auth.currentUser) throw new Error("Entre novamente para continuar.");
@@ -99,6 +110,7 @@ export const nativeEntryAPI: EntryAPI = {
   commit: (requestId, entry, attachments, confirmHash) =>
     request("commit", { requestId, entry, attachments, confirmHash }),
   status: (requestId) => request(`requests/${requestId}`),
+  registerClient: (input) => request("clients/register", input),
 };
 
 export async function downloadEntryAttachment(id: string, sha256: string) {

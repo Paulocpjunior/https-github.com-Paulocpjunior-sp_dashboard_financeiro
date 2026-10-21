@@ -1,4 +1,7 @@
 import {applyCustomerDirectory} from '../services/customerDirectory';
+import { ChecklistRecord, fetchChecklistReview } from '../services/checklistReviewService';
+import { matchesClientSearch } from '../utils/clientSearch';
+import { Link } from 'react-router-dom';
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import BillingCompletenessReview from '../components/BillingCompletenessReview';
@@ -129,14 +132,9 @@ const BillingForecast: React.FC = () => {
   );
 
   const rows = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
     const filtered = allRows.filter(row => {
       if (onlyPending && row.missingFields.length === 0) return false;
-      if (!normalizedSearch) return true;
-      return [row.groupName, row.client, row.cpfCnpj, row.clientNumber, row.billingMethod]
-        .join(' ')
-        .toLocaleLowerCase('pt-BR')
-        .includes(normalizedSearch);
+      return matchesClientSearch([row.groupName, row.client, row.cpfCnpj, row.clientNumber, row.billingMethod], search);
     });
 
     return sortBillingForecastRows(filtered, sortField, sortDirection);
@@ -164,6 +162,22 @@ const BillingForecast: React.FC = () => {
       preparedResult?.dispose?.();
     };
   }, [loading, rows, user?.username]);
+
+  // Empresa sem lançamento no mês não entra na base: consulta o Checklist do Legal para orientar a primeira cobrança.
+  const [checklistRecords, setChecklistRecords] = useState<ChecklistRecord[] | null>(null);
+  const [checklistLookupError, setChecklistLookupError] = useState('');
+  const searchMissing = !loading && Boolean(search.trim()) && rows.length === 0;
+  useEffect(() => {
+    if (!searchMissing || checklistRecords || checklistLookupError) return;
+    const controller = new AbortController();
+    fetchChecklistReview(controller.signal)
+      .then(review => setChecklistRecords(review.records))
+      .catch(lookupError => { if (!controller.signal.aborted) setChecklistLookupError(lookupError?.message || 'Checklist indisponível.'); });
+    return () => controller.abort();
+  }, [searchMissing]);
+  const checklistMatches = useMemo(() => searchMissing && checklistRecords
+    ? checklistRecords.filter(record => record.client && matchesClientSearch([record.client, record.document, record.clientNumber], search)).slice(0, 5)
+    : [], [checklistRecords, search, searchMissing]);
 
   const groupedRows = useMemo(() => {
     const groups = new Map<string, BillingForecastRow[]>();
@@ -416,7 +430,24 @@ const BillingForecast: React.FC = () => {
         ) : loading ? (
           <div className="py-20 flex items-center justify-center text-slate-500"><RefreshCw className="h-7 w-7 animate-spin mr-3" /> Carregando base...</div>
         ) : groupedRows.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-12 text-center text-slate-500">Nenhuma empresa encontrada para os filtros selecionados.</div>
+          <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-12 text-center text-slate-500 space-y-3">
+            <p>Nenhuma empresa encontrada para os filtros selecionados.</p>
+            {searchMissing && (
+              <div className="mx-auto max-w-2xl text-left text-sm text-slate-600 dark:text-slate-300 space-y-2">
+                {checklistMatches.map(record => (
+                  <p key={record.submissionId} className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-950/20 px-3 py-2">
+                    <strong>{record.client}</strong> consta no Checklist do Legal (Nº {record.clientNumber || '—'}{record.entryDate ? `, entrada ${formatISODateBR(record.entryDate)}` : ''}), mas ainda não tem lançamento em {formatMonth(referenceMonth)}.
+                  </p>
+                ))}
+                {!checklistRecords && !checklistLookupError && <p role="status">Consultando o Checklist do Legal…</p>}
+                <p>
+                  A base lista empresas com lançamento no mês escolhido. Para um cliente novo, lance a primeira cobrança em{' '}
+                  <Link to="/lancamentos" className="font-semibold text-blue-700 dark:text-blue-300 underline">Lançamentos › Nova cobrança</Link>
+                  {' '}(se ele não estiver no cadastro, use “Cadastrar” com os dados do Checklist). Depois disso ele aparece aqui em “Sem grupo” e o grupo pode ser definido pelo lápis.
+                </p>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="space-y-5">
             {groupedRows.map(([groupName, groupRows]) => (

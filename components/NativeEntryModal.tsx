@@ -16,6 +16,8 @@ import {
 import { Transaction } from "../types";
 import { auth } from "../services/firebaseConfig";
 import { toLocalISODate } from "../utils/dateUtils";
+import { matchesClientSearch } from "../utils/clientSearch";
+import ChecklistClientRegistration from "./ChecklistClientRegistration";
 const empty = (kind: EntryKind): EntryDraft => ({
   kind,
   clientRegistryId: "",
@@ -121,9 +123,7 @@ export default function NativeEntryModal({
   const matches =
     config?.clients
       .filter((c) =>
-        `${c.clientNumber} ${c.client} ${c.cpfCnpj}`
-          .toLocaleLowerCase()
-          .includes(search.toLocaleLowerCase()),
+        matchesClientSearch([c.clientNumber, c.client, c.cpfCnpj], search),
       )
       .slice(0, 30) || [];
   function reset() {
@@ -433,6 +433,26 @@ export default function NativeEntryModal({
                     Mostrando até 30 resultados. Nome e documento vêm do
                     cadastro conferido; não são alterados por este lançamento.
                   </p>
+                  {api.registerClient && config && (
+                    <ChecklistClientRegistration
+                      search={search}
+                      noMatches={Boolean(search.trim()) && matches.length === 0}
+                      register={api.registerClient}
+                      onRegistered={(client) => {
+                        setConfig((c) =>
+                          c && {
+                            ...c,
+                            clients: [
+                              ...c.clients.filter((x) => x.id !== client.id),
+                              client,
+                            ],
+                          },
+                        );
+                        setSearch(client.client);
+                        change("clientRegistryId", client.id);
+                      }}
+                    />
+                  )}
                   {field("description", "Descrição da cobrança", "text", true)}
                   <div className="grid sm:grid-cols-2 gap-4">
                     {field("honorarios", "Honorários (R$)", "number", true)}
