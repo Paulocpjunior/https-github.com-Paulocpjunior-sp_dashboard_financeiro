@@ -71,7 +71,7 @@ export interface EntryAPI {
   status(
     requestId: string,
   ): Promise<{ state: string; transaction?: Transaction }>;
-  registerClient?(input: ClientRegistration): Promise<{ client: EntryClient; created: boolean; existing: boolean }>;
+  registerClient?(input: ClientRegistration): Promise<{ client: EntryClient; created: boolean; existing: boolean; replaced?: string[] }>;
 }
 /** Cliente novo (Checklist do Legal ou manual) incluído no cadastro conferido, com histórico no servidor. */
 export interface ClientRegistration {

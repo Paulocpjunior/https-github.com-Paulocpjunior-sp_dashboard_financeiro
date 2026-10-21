@@ -437,7 +437,7 @@ export default function NativeEntryModal({
                         )}
                       {matches.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.clientNumber} — {c.client} — {c.cpfCnpj}
+                          {c.clientNumber} — {c.client} — {c.cpfCnpj || "sem CPF/CNPJ (completar para lançar)"}
                         </option>
                       ))}
                     </select>
@@ -450,13 +450,14 @@ export default function NativeEntryModal({
                     <ChecklistClientRegistration
                       search={search}
                       noMatches={Boolean(search.trim()) && matches.length === 0}
+                      incomplete={selected && !/^(\d{11}|\d{14})$/.test(selected.cpfCnpj) ? selected : undefined}
                       register={api.registerClient}
-                      onRegistered={(client) => {
+                      onRegistered={(client, _existing, replaced) => {
                         setConfig((c) =>
                           c && {
                             ...c,
                             clients: [
-                              ...c.clients.filter((x) => x.id !== client.id),
+                              ...c.clients.filter((x) => x.id !== client.id && !replaced.includes(x.id)),
                               client,
                             ],
                           },

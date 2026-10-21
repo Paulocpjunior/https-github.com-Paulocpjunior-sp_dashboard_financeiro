@@ -30,7 +30,7 @@ export async function fetchChecklistReview(signal: AbortSignal): Promise<Checkli
   if (auth.currentUser !== user) throw new Error('Sessão alterada durante a consulta.');
   const data = await response.json().catch(() => null);
   if (auth.currentUser !== user) throw new Error('Sessão alterada durante a consulta.');
-  if (!response.ok) throw new Error(data?.error || 'Leitura do checklist indisponível.');
+  if (!response.ok) throw new Error(`${data?.error || 'Leitura do checklist indisponível.'}${data?.code ? ` [${data.code}]` : ` [HTTP ${response.status}]`}`);
   assertChecklistResponse(data);
   return data;
 }
