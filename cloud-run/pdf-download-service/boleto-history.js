@@ -150,7 +150,7 @@ function createHistoryHandler({getServices, sendJson, env=process.env, fetchImpl
         const retJob=(await db.collection('boletoReturnJobs').doc('cnab-production').get()).data();
         const retPending=retJob?await db.collection('boletoReturnEvents').where('state','==','review').limit(31).get():{docs:[]};
         const returnsAutomation=retJob?{state:retJob.state,lastSuccessAt:retJob.lastSuccessAt||null,
-          counts:retJob.counts||{},more:retJob.more===true,backfillDate:retJob.backfillDate||null,
+          counts:retJob.counts||{},more:retJob.more===true,settlementEnabled:retJob.settlementEnabled===true,autoLinkEnabled:retJob.autoLinkEnabled===true,backfillDate:retJob.backfillDate||null,
           stale:!retJob.startedAt||Date.now()-Date.parse(retJob.startedAt)>45*60*1000,
           attentionMore:retPending.docs.length>30,
           attention:retPending.docs.slice(0,30).map(d=>{const r=d.data();return {number:r.number||'Sem número',reason:r.reason,checkedAt:r.checkedAt};})}:null;

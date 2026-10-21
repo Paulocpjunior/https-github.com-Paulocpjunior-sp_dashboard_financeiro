@@ -315,7 +315,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
             if (date === backfill)
                 backfillDone = dateDone;
         }
-        await write(jobRef, { leaseUntil: 0, state: counts.errors ? 'error' : more ? 'partial' : 'complete', counts, more, pendingCursor: pending[0]?.id || '', backfillDate: backfillDone ? (backfill >= today ? cutover : dayOffset(backfill, 1)) : backfill, finishedAt: new Date().toISOString(), ...(!counts.errors && !more ? { lastSuccessAt: new Date().toISOString() } : {}) });
+        await write(jobRef, { leaseUntil: 0, state: counts.errors ? 'error' : more ? 'partial' : 'complete', counts, more, settlementEnabled: env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED === 'true', autoLinkEnabled: env.BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED === 'true', pendingCursor: pending[0]?.id || '', backfillDate: backfillDone ? (backfill >= today ? cutover : dayOffset(backfill, 1)) : backfill, finishedAt: new Date().toISOString(), ...(!counts.errors && !more ? { lastSuccessAt: new Date().toISOString() } : {}) });
         return { dryRun, ...counts, more };
     }
     catch (e) {

@@ -28,12 +28,18 @@ test('only exact linked native bank payments can settle', () => {
     f => delete f.body.boleto.pagamento.marcadoComoPago, f => f.body.boleto.pagamento.marcadoComoPago = true,
     f => f.body.boleto.pagamento.valor = 9, f => f.body.boleto.pagamento.valor = 11, f => f.body.boleto.pagamento.juros = 1,
     f => f.body.boleto.pagamento.data = '2026-02-30', f => f.body.boleto.pagamento.data = '2026-10-10',
-    f => f.body.boleto.pagamento.dataCredito = '2026-10-08', f => f.row.source = 'jotform', f => f.row.nativeEntry.kind = 'pagar',
+    f => f.body.boleto.pagamento.dataCredito = '2026-10-08', f => f.row.source = 'wix', f => f.row.wixInvoiceNumber = '1', f => f.row.movement = 'Saída', f => f.row.nativeEntry.kind = 'pagar',
     f => f.row.isExcluded = true, f => f.row.status = 'Pago', f => f.row.valueReceived = 1, f => f.row.paymentDate = '2026-10-09',
     f => f.row.bankAccount = 'other', f => f.row.totalCobranca = 20, f => f.row.cpfCnpj = 'other', f => f.row.dueDate = '2026-11-01',
     f => f.issue.accountFingerprint = 'other', f => f.issue.transactionId = 'other',
   ];
   for (const mutate of mutations) { const v = make(); mutate(v); assert.equal(evaluate(id, v.issue, v.row, v.body, cfg, at).state, 'review', mutate.toString()); }
+});
+test('boletos issued by the app for older (Jotform) receivables settle with the same explicit link', () => {
+  const legacy = () => { const f = make(); f.row = { ...f.row, source: 'jotform', bankAccount: '', valorOriginal: undefined }; delete f.row.nativeEntry; return f; };
+  const f = legacy(); assert.equal(evaluate(id, f.issue, f.row, f.body, cfg, at).state, 'ready');
+  for (const mutate of [f => f.row.bankAccount = 'other', f => f.row.totalCobranca = 20, f => f.row.cpfCnpj = 'other', f => f.row.dueDate = '2026-11-01', f => f.row.isExcluded = true])
+  { const v = legacy(); mutate(v); assert.equal(evaluate(id, v.issue, v.row, v.body, cfg, at).state, 'review', mutate.toString()); }
 });
 function fixture() {
   const { issue, row, body } = make();
