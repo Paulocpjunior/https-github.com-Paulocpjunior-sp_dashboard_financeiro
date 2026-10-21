@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import WixLockOverride, { WixLockInvoice } from "./WixLockOverride";
+import { AuthService } from "../services/authService";
+import { isMasterAccount } from "../utils/masterAccount";
 import { X, Loader2 } from "lucide-react";
 import { auth } from "../firebase";
 import { Transaction } from "../types";
@@ -52,6 +55,9 @@ export default function BoletoIssueModal({
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [wixLock, setWixLock] = useState<WixLockInvoice[] | null>(null);
+  const [wixReason, setWixReason] = useState("");
+  const canOverrideWix = isMasterAccount(AuthService.getCurrentUser());
   const generation = useRef(0);
   const row = rows.find((r) => r.id === id);
   async function request(action = "", body?: unknown) {
@@ -70,6 +76,7 @@ export default function BoletoIssueModal({
     );
     if (!response.ok) {
       const result = await response.json();
+      if (result.wixLock?.invoices) setWixLock(result.wixLock.invoices);
       throw new Error(result.error || "Não foi possível concluir.");
     }
     return response;
@@ -80,6 +87,8 @@ export default function BoletoIssueModal({
     setError("");
     setChecked(false);
     setAddress({});
+    setWixLock(null);
+    setWixReason("");
     if (!id) return;
     setBusy(true);
     request()
@@ -111,11 +120,12 @@ export default function BoletoIssueModal({
     setBusy(true);
     setError("");
     try {
+      const wixOverride = wixLock && canOverrideWix && wixReason.trim() ? { wixOverride: { reason: wixReason.trim() } } : {};
       const body =
         action === "preview"
-          ? { address }
+          ? { address, ...wixOverride }
           : ["issue", "recover"].includes(action)
-            ? { previewHash: record?.previewHash, legacyChecked: checked }
+            ? { previewHash: record?.previewHash, legacyChecked: checked, ...wixOverride }
             : undefined;
       const response = await request(action, body);
       if (["pdf", "invite", "invite-email"].includes(action)) {
@@ -195,6 +205,9 @@ export default function BoletoIssueModal({
           <p role="alert" className="bg-red-50 text-red-800 p-3 rounded">
             {error}
           </p>
+        )}
+        {wixLock && (
+          <WixLockOverride invoices={wixLock} canOverride={canOverrideWix} reason={wixReason} onReason={setWixReason} disabled={busy} />
         )}
         {row && record && (
           <>

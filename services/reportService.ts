@@ -4,7 +4,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Transaction, User } from '../types';
 import { logger } from '../utils/logger';
-import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { getOriginalAmount, getPaidAmount, getOutstandingAmount, isPaidStatus, isWixEcommerceOrder, isWixFatura, isWixInvoice, parseMoneyValue } from '../utils/transactionAmounts';
+import { summarizeWixGroup, WIX_FILTER_LABELS, WixFilter } from '../utils/wixReceivables';
 import { formatExtraChargeDescription } from '../utils/extraCharges';
 import { getPaymentMethod } from '../utils/paymentMethod';
 import { savePDF } from '../utils/pdfDownload';
@@ -27,6 +28,7 @@ export const ReportService = {
         client?: string; // Novo Campo: Cliente
         extraChargesOnly?: boolean;
         wixInvoicesOnly?: boolean;
+        wixFilter?: WixFilter;
     },
     currentUser: User | null
   ) => {
@@ -140,6 +142,8 @@ export const ReportService = {
       const safeTransactions = Array.isArray(transactions) ? transactions : [];
       const shouldSeparateWix = !isSaidaHeader;
       const wixTransactions = shouldSeparateWix ? safeTransactions.filter(isWixInvoice) : [];
+      const wixInvoices = wixTransactions.filter(isWixFatura);
+      const wixOrders = wixTransactions.filter(isWixEcommerceOrder);
       const detailTransactions = shouldSeparateWix ? safeTransactions.filter(t => !isWixInvoice(t)) : safeTransactions;
       const compactTableHeadFontSize = 6.6;
       const compactTableBodyFontSize = 6.3;
@@ -165,7 +169,9 @@ export const ReportService = {
       if(filters.client) {
           infoText += ` | Filtro: ${filters.client}`;
       }
-      if (filters.wixInvoicesOnly) {
+      if (filters.wixFilter) {
+          infoText += `${infoText ? ' | ' : ''}Filtro: ${WIX_FILTER_LABELS[filters.wixFilter]}`;
+      } else if (filters.wixInvoicesOnly) {
           infoText += `${infoText ? ' | ' : ''}Filtro: somente Faturas Wix`;
       }
 
@@ -207,13 +213,13 @@ export const ReportService = {
           titleY = 18;
         }
 
-        if (highlightedTitle) {
-          doc.setFillColor(254, 240, 138);
-          doc.rect(14, titleY - 3.6, 34, 5.2, 'F');
-        }
-
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
+        if (highlightedTitle) {
+          doc.setFillColor(254, 240, 138);
+          doc.rect(14, titleY - 3.6, Math.max(34, doc.getTextWidth(title) + 3), 5.2, 'F');
+        }
+
         doc.setTextColor(30, 64, 175);
         doc.text(title, 14, titleY);
 
@@ -295,20 +301,49 @@ export const ReportService = {
         });
       };
 
+      // Grupo WIX: Faturas Wix (serviços, honorários, acordos) e E-commerce Wix (pedidos da loja).
+      const renderWixGroup = (startY: number) => {
+        if (wixTransactions.length === 0) return;
+        let groupY = startY;
+        if (groupY > pageHeight - 36) {
+          doc.addPage();
+          groupY = 18;
+        }
+        const summary = summarizeWixGroup(wixTransactions);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(30, 64, 175);
+        doc.text(`Grupo WIX (${wixTransactions.length})`, 14, groupY);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(80, 80, 80);
+        doc.text(
+          `Faturas Wix: ${summary.invoices.count} · Total ${fmtNumber(summary.invoices.total)} · Recebido ${fmtNumber(summary.invoices.received)} · Em aberto ${fmtNumber(summary.invoices.open)}   |   E-commerce Wix: ${summary.ecommerce.count} pedido(s) · Vendido ${fmtNumber(summary.ecommerce.total)}`,
+          14,
+          groupY + 4.5,
+        );
+        let nextY = groupY + 11;
+        if (wixInvoices.length > 0) {
+          renderCompactReceivablesTable(`Faturas Wix (${wixInvoices.length})`, wixInvoices, nextY, true);
+          nextY = ((doc as any).lastAutoTable?.finalY || nextY) + 8;
+        }
+        if (wixOrders.length > 0) {
+          renderCompactReceivablesTable(`E-commerce Wix (${wixOrders.length})`, wixOrders, nextY, true);
+        }
+      };
+
       if (isEntradaHeader) {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(120, 120, 120);
         doc.text(infoText, pageWidth - 14, yPos, { align: 'right' });
 
-        if (!filters.wixInvoicesOnly) {
+        const wixOnly = Boolean(filters.wixFilter || filters.wixInvoicesOnly);
+        if (!wixOnly) {
           renderCompactReceivablesTable(`Contas a Receber (${detailTransactions.length})`, detailTransactions, yPos, false);
         }
 
-        if (wixTransactions.length > 0) {
-          const wixStartY = filters.wixInvoicesOnly ? yPos : ((doc as any).lastAutoTable?.finalY || yPos) + 8;
-          renderCompactReceivablesTable(`Faturas Wix (${wixTransactions.length})`, wixTransactions, wixStartY, true);
-        }
+        renderWixGroup(wixOnly ? yPos + 6 : ((doc as any).lastAutoTable?.finalY || yPos) + 10);
       } else {
         const sectionTitle = isSaidaHeader
           ? `Contas a Pagar (${detailTransactions.length})`
@@ -405,10 +440,7 @@ export const ReportService = {
           }
         });
 
-        if (wixTransactions.length > 0) {
-          const wixStartY = ((doc as any).lastAutoTable?.finalY || yPos) + 8;
-          renderCompactReceivablesTable(`Faturas Wix (${wixTransactions.length})`, wixTransactions, wixStartY, true);
-        }
+        renderWixGroup(((doc as any).lastAutoTable?.finalY || yPos) + 10);
       }
 
       const pageCount = (doc.internal as any).getNumberOfPages();

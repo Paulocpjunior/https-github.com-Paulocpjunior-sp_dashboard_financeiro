@@ -56,16 +56,31 @@ function fixture(fetchImpl, environment = env) {
   });
   const collection = (path) => ({
     doc: (id) => doc(`${path}/${id || `event-${++seq}`}`),
-    where: (field, op, value) => ({
-      path,
-      field,
-      value,
-      limit(n) {
-        this.max = n;
-        return this;
-      },
-    }),
+    where: (field, op, value) => query(path, [[field, op, value]]),
   });
+  const query = (path, filters) => ({
+    path,
+    filters,
+    where: (field, op, value) => query(path, [...filters, [field, op, value]]),
+    limit(n) {
+      this.max = n;
+      return this;
+    },
+    get: async () => ({ docs: matching({ path, filters, max: 10000 }) }),
+  });
+  const matching = (ref) =>
+    [...data.keys()]
+      .filter(
+        (k) =>
+          k.startsWith(`${ref.path}/`) &&
+          k.split("/").length === ref.path.split("/").length + 1 &&
+          ref.filters.every(([field, op, value]) => {
+            const x = data.get(k)[field];
+            return op === ">=" ? x >= value : op === "<=" ? x <= value : op === "in" ? value.includes(x) : x === value;
+          }),
+      )
+      .slice(0, ref.max)
+      .map(snap);
   const db = {
     collection,
     runTransaction: (fn) => {
@@ -73,20 +88,7 @@ function fixture(fetchImpl, environment = env) {
         const writes = [];
         const tx = {
           get: async (ref) =>
-            ref.field
-              ? {
-                  docs: [...data.keys()]
-                    .filter(
-                      (k) =>
-                        k.startsWith(`${ref.path}/`) &&
-                        k.split("/").length ===
-                          ref.path.split("/").length + 1 &&
-                        data.get(k)[ref.field] === ref.value,
-                    )
-                    .slice(0, ref.max)
-                    .map(snap),
-                }
-              : snap(ref.path),
+            ref.filters ? { docs: matching(ref) } : snap(ref.path),
           set: (ref, value) => writes.push([ref.path, structuredClone(value)]),
           create: (ref, value) =>
             writes.push([ref.path, structuredClone(value)]),
@@ -101,7 +103,7 @@ function fixture(fetchImpl, environment = env) {
   };
   const handler = createBoletoHandler({
     getServices: () => ({
-      adminAuth: { verifyIdToken: async () => ({ uid: "user" }) },
+      adminAuth: { verifyIdToken: async (token) => ({ uid: token === "valid" ? "user" : token }) },
       adminDb: db,
     }),
     readBody: async (req) => Buffer.from(JSON.stringify(req.body)),
@@ -112,7 +114,7 @@ function fixture(fetchImpl, environment = env) {
     env: environment,
     fetchImpl,
   });
-  const call = async (action = "", body, id = "a", authorized = true) => {
+  const call = async (action = "", body, id = "a", authorized = true, token = "valid") => {
     const res = {
       writeHead(status, headers) {
         this.status = status;
@@ -126,7 +128,7 @@ function fixture(fetchImpl, environment = env) {
       {
         url: `/api/boleto-cloud/items/${id}${action ? `/${action}` : ""}`,
         method: body === undefined ? "GET" : "POST",
-        headers: authorized ? { authorization: "Bearer valid" } : {},
+        headers: authorized ? { authorization: `Bearer ${token}` } : {},
         body,
       },
       res,
@@ -423,4 +425,60 @@ test("production uses its existing account without Sandbox credentials", async (
 test('native entry must use the configured Itaú account, without changing legacy issuance', () => {
   assert.throws(() => payload({...row(), source:'native-finance', bankAccount:'BB Física'}, address), /conta Itaú/);
   assert.equal(payload({...row(), source:'native-finance', bankAccount:require('./native-entry-catalog.json').banks[0]}, address)['boleto.valor'], '1250.00');
+});
+test("Fatura Wix da mesma empresa no mês bloqueia preview e emissão, com log", async () => {
+  let calls = 0;
+  const f = fixture(() => {
+    calls++;
+    return success();
+  });
+  const wix = { source: "wix", movement: "Entrada", type: "Entrada de Caixa / Contas a Receber", client: "EMPRESA TESTE LTDA", status: "Pendente", dueDate: "2099-11-25", wixInvoiceNumber: "0004200", valorOriginal: 1250 };
+  f.data.set("transactions/wix-inv-0004200", wix);
+  const blocked = await f.preview();
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.body.error, /Fatura Wix/);
+  assert.match(blocked.body.error, /#0004200/);
+  assert.equal(f.stored(), undefined);
+  const logs = [...f.data.entries()].filter(([k]) => k.startsWith("wixBillingLockAudit/"));
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0][1].channel, "boleto");
+  assert.equal(logs[0][1].uid, "user");
+  assert.deepEqual(logs[0][1].invoices, ["wix-inv-0004200"]);
+  // Fatura cancelada, paga em outro mês ou pedido do e-commerce não travam.
+  f.data.set("transactions/wix-inv-0004200", { ...wix, status: "Cancelada" });
+  f.data.set("transactions/wix-inv-0004201", { ...wix, status: "Paga", dueDate: "2099-12-10" });
+  f.data.set("transactions/wix-order", { ...wix, wixInvoiceNumber: undefined, wixOrderNumber: "10050", type: "Recebimento Wix / Cartao", status: "Pago" });
+  const p = await f.preview();
+  assert.equal(p.body.state, "draft");
+  // Fatura emitida entre a revisão e a emissão: bloqueia antes de chamar o emissor.
+  f.data.set("transactions/wix-inv-0004202", { ...wix, wixInvoiceNumber: "0004202", client: "Empresa Teste" });
+  const issued = await f.call("issue", { previewHash: p.body.previewHash, legacyChecked: true });
+  assert.equal(issued.status, 409);
+  assert.equal(calls, 0);
+  assert.equal([...f.data.keys()].filter((k) => k.startsWith("wixBillingLockAudit/")).length, 2);
+});
+test("Fatura Wix em aberto de outro mês também bloqueia; exceção só pelo master, com motivo e log", async () => {
+  let calls = 0;
+  const f = fixture((...args) => {
+    calls++;
+    return success(...args);
+  });
+  f.data.set("transactions/wix-inv-0004300", { source: "wix", client: "Empresa Teste", status: "Vencida", dueDate: "2099-01-10", wixInvoiceNumber: "0004300" });
+  assert.equal((await f.preview()).status, 409);
+  const refused = await f.call("preview", { address, wixOverride: { reason: "Acordo separado do boleto mensal" } });
+  assert.equal(refused.status, 403);
+  assert.ok(refused.body.wixLock.invoices.length);
+  const master = "hpdsWehGGAYE3uKCar4pBiRVxFJ3";
+  f.data.set(`users/${master}`, { active: true, role: "admin" });
+  const asMaster = (action, body) => f.call(action, body, "a", true, master);
+  assert.equal((await asMaster("preview", { address, wixOverride: { reason: "curto" } })).status, 400);
+  const p = await asMaster("preview", { address, wixOverride: { reason: "Acordo separado do boleto mensal" } });
+  assert.equal(p.body.state, "draft");
+  assert.equal((await asMaster("issue", { previewHash: p.body.previewHash, legacyChecked: true })).status, 409);
+  const issued = await asMaster("issue", { previewHash: p.body.previewHash, legacyChecked: true, wixOverride: { reason: "Acordo separado do boleto mensal" } });
+  assert.equal(issued.body.state, "issued");
+  assert.equal(calls, 1);
+  const logs = [...f.data.values()].filter((v) => v && v.channel === "boleto" && v.action);
+  assert.deepEqual(logs.map((l) => l.action).sort(), ["blocked", "blocked", "blocked", "blocked", "override", "override"]);
+  assert.ok(logs.filter((l) => l.action === "override").every((l) => l.uid === master && l.reason));
 });

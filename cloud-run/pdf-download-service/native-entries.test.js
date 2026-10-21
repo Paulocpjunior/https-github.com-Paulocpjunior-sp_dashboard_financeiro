@@ -110,9 +110,10 @@ function harness({
   enabled = true,
   profile = { active: true, role: "admin", name: "Administrador de Teste" },
   bucket = true,
+  uid = "u",
 } = {}) {
   const store = new Map([
-    ["users/u", profile],
+    [`users/${uid}`, profile],
     ["clientRegistry/c", client],
   ]);
   let queue = Promise.resolve();
@@ -125,7 +126,7 @@ function harness({
   const doc = (path) => ({ path, get: async () => snap({ path }) });
   const query = (path, filters = [], limit = 10000) => ({
     query: true,
-    where: (k, op, v) => query(path, [...filters, [k, v]], limit),
+    where: (k, op, v) => query(path, [...filters, [k, op, v]], limit),
     limit: (n) => query(path, filters, n),
     get: async () => ({
       docs: [...store.keys()]
@@ -133,7 +134,10 @@ function harness({
           (k) =>
             k.startsWith(path + "/") &&
             !k.slice(path.length + 1).includes("/") &&
-            filters.every(([f, v]) => store.get(k)[f] === v),
+            filters.every(([f, op, v]) => {
+              const x = store.get(k)[f];
+              return op === ">=" ? x >= v : op === "<=" ? x <= v : op === "in" ? v.includes(x) : x === v;
+            }),
         )
         .slice(0, limit)
         .map((k) => snap({ path: k })),
@@ -169,7 +173,7 @@ function harness({
       adminAuth: {
         verifyIdToken: async (t) => {
           if (t !== "good") throw Error();
-          return { uid: "u" };
+          return { uid };
         },
       },
     }),
@@ -371,4 +375,55 @@ test('communication workflow routes reject unauthenticated and non-admin callers
   assert.equal((await harness().call(route,{},'',method)).status,401);
   assert.equal((await harness({profile:{active:true,role:'operacional'}}).call(route,{},'good',method)).status,403);
  }
+});
+test("Fatura Wix da mesma empresa no mês bloqueia a Nova cobrança e registra log", async () => {
+  const h = harness();
+  h.store.set("transactions/wix-inv-0004300", { source: "wix", movement: "Entrada", client: "Cliente Ficticio", status: "Paga", dueDate: "2026-11-05", wixInvoiceNumber: "0004300", valorOriginal: 300 });
+  const body = { requestId: randomUUID(), entry: input() };
+  const p = await h.call("preview", body);
+  assert.equal(p.status, 409);
+  assert.match(p.body.error, /Fatura Wix/);
+  const logs = [...h.store.entries()].filter(([k]) => k.startsWith("wixBillingLockAudit/"));
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0][1].channel, "native-entry");
+  assert.equal(logs[0][1].stage, "preview");
+  assert.equal(logs[0][1].cpfCnpj, "52998224725");
+  // Commit também é bloqueado mesmo que o cliente pule a revisão.
+  h.store.delete("transactions/wix-inv-0004300");
+  const ok = await h.call("preview", body);
+  assert.equal(ok.status, 200);
+  h.store.set("transactions/wix-inv-0004300", { source: "wix", client: "CLIENTE FICTÍCIO LTDA", status: "Pendente", dueDate: "2026-11-30", wixInvoiceNumber: "0004300" });
+  const commit = await h.call("commit", { ...body, confirmHash: ok.body.previewHash });
+  assert.equal(commit.status, 409);
+  assert.equal([...h.store.keys()].filter((k) => k.startsWith("transactions/native-")).length, 0);
+  // Contas a pagar não passam pela trava.
+  const pay = await h.call("preview", { requestId: randomUUID(), entry: payable() });
+  assert.equal(pay.status, 200);
+});
+test("Fatura Wix em aberto de qualquer mês bloqueia; exceção só pelo master, com motivo, log e registro no lançamento", async () => {
+  const open = { source: "wix", client: "Cliente Ficticio", status: "Vencida", dueDate: "2026-03-10", wixInvoiceNumber: "0004400" };
+  const reason = "Acordo do Wix é de outro serviço";
+  const h = harness();
+  h.store.set("transactions/wix-inv-0004400", open);
+  const body = { requestId: randomUUID(), entry: input(), wixOverride: { reason } };
+  const refused = await h.call("preview", body);
+  assert.equal(refused.status, 403);
+  assert.deepEqual(refused.body.wixLock.invoices.map((i) => i.id), ["wix-inv-0004400"]);
+  // Fatura paga de outro mês não trava.
+  h.store.set("transactions/wix-inv-0004400", { ...open, status: "Paga" });
+  assert.equal((await h.call("preview", { requestId: randomUUID(), entry: input() })).status, 200);
+
+  const master = "hpdsWehGGAYE3uKCar4pBiRVxFJ3";
+  const m = harness({ uid: master });
+  m.store.set("transactions/wix-inv-0004400", open);
+  assert.equal((await m.call("preview", { ...body, wixOverride: { reason: "curto" } })).status, 400);
+  const p = await m.call("preview", body);
+  assert.equal(p.status, 200);
+  assert.equal((await m.call("commit", { requestId: body.requestId, entry: input(), confirmHash: p.body.previewHash })).status, 409);
+  const saved = await m.call("commit", { ...body, confirmHash: p.body.previewHash });
+  assert.equal(saved.status, 201);
+  assert.equal(saved.body.transaction.wixLockOverride.reason, reason);
+  assert.deepEqual(saved.body.transaction.wixLockOverride.invoices, ["wix-inv-0004400"]);
+  const logs = [...m.store.entries()].filter(([k]) => k.startsWith("wixBillingLockAudit/")).map(([, v]) => v.action).sort();
+  assert.deepEqual(logs, ["blocked", "blocked", "override", "override"]);
 });

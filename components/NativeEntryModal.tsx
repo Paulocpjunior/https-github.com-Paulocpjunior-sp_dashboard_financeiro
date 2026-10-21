@@ -18,6 +18,9 @@ import { auth } from "../services/firebaseConfig";
 import { toLocalISODate } from "../utils/dateUtils";
 import { matchesClientSearch } from "../utils/clientSearch";
 import ChecklistClientRegistration from "./ChecklistClientRegistration";
+import WixLockOverride, { WixLockInvoice } from "./WixLockOverride";
+import { AuthService } from "../services/authService";
+import { isMasterAccount } from "../utils/masterAccount";
 const empty = (kind: EntryKind): EntryDraft => ({
   kind,
   clientRegistryId: "",
@@ -74,6 +77,11 @@ export default function NativeEntryModal({
     [error, setError] = useState(""),
     [uncertain, setUncertain] = useState(false),
     [checked, setChecked] = useState(false);
+  const [wixLock, setWixLock] = useState<WixLockInvoice[] | null>(null),
+    [wixReason, setWixReason] = useState("");
+  const canOverrideWix = isMasterAccount(AuthService.getCurrentUser());
+  useEffect(() => { setWixLock(null); setWixReason(""); }, [draft.clientRegistryId, draft.dueDate]);
+  const wixOverride = wixLock && canOverrideWix && wixReason.trim() ? { reason: wixReason.trim() } : undefined;
   const requestId = useRef<string>(crypto.randomUUID());
   const gate = useRef(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -164,7 +172,7 @@ export default function NativeEntryModal({
     setError("");
     try {
       if (!review) {
-        setReview(await api.preview(requestId.current, draft, attachments));
+        setReview(await api.preview(requestId.current, draft, attachments, wixOverride));
         setChecked(false);
       } else {
         sessionStorage.setItem(storageKey, requestId.current);
@@ -174,6 +182,7 @@ export default function NativeEntryModal({
           draft,
           attachments,
           review.previewHash,
+          wixOverride,
         );
         setSaved(result.transaction);
         setUncertain(false);
@@ -182,6 +191,7 @@ export default function NativeEntryModal({
       }
     } catch (e) {
       setError((e as Error).message);
+      if ((e as any).wixLock?.invoices) setWixLock((e as any).wixLock.invoices);
       if ([400, 403, 409].includes((e as any).status)) {
         setUncertain(false);
         sessionStorage.removeItem(storageKey);
@@ -310,6 +320,9 @@ export default function NativeEntryModal({
           <p role="alert" className="rounded-lg bg-red-50 text-red-800 p-3">
             {error}
           </p>
+        )}
+        {wixLock && !saved && (
+          <WixLockOverride invoices={wixLock} canOverride={canOverrideWix} reason={wixReason} onReason={setWixReason} disabled={busy} />
         )}
         {uncertain && (
           <div className="bg-amber-50 text-amber-900 p-3 rounded-lg">
