@@ -344,6 +344,16 @@ function createNativeEntryHandler({
         });
         return true;
       }
+      if (
+        request.method === "POST" &&
+        url.pathname === "/api/financial-entries/clients/register"
+      ) {
+        let body;
+        try { body = JSON.parse((await readBody(request)).toString("utf8")); }
+        catch { throw new EntryError("Dados inválidos."); }
+        reply(await require("./client-registration").registerClient({ db, userRef, user, uid, allowed, body }));
+        return true;
+      }
       const statementMatch = url.pathname.match(/^\/api\/financial-entries\/statement\/([a-zA-Z0-9_-]{1,200})$/);
       if (request.method === "GET" && statementMatch) {
         const ref = db.collection("transactions").doc(statementMatch[1]);
