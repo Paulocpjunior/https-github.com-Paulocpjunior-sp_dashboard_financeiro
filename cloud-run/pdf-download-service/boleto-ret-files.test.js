@@ -300,3 +300,25 @@ test('only the automatic quarantine marker of the superseded version is ignored;
         assert.equal(f.records.get('transactions/a').status, 'Pendente');
     }
 });
+test('RET late payment with juros auto-links and settles the full paid value with interest recorded, only when enabled', async () => {
+    const lateEvent = { token: 'boleto', number: '001', occurrence: { situacao: 'LIQUIDACAO', codigo: '06', info: { situacao: 'LIQUIDACAO', valorPago: 10.5, jurosMora: 0.5, dataDePagamento: '2026-10-10', dataDeCredito: '2026-10-10' } } };
+    const lateBody = { boleto: { token: 'boleto', numero: '001', emissao: '2026-10-01', vencimento: '2026-10-09', valor: 10, pagador: { cprf: '52998224725' }, situacao: 'PAGO',
+        pagamento: { origem: 'BANCO', situacao: 'PAGAMENTO_INFORMADO', marcadoComoPago: false, data: '2026-10-10', valor: 10.5, dataCredito: '2026-10-10' } } };
+    const extra = { event: lateEvent, fetchImpl: async () => ({ ok: true, json: async () => structuredClone(lateBody) }) };
+    const on = autoLinkFixture({ a: openRow() }, { BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED: 'true' });
+    const result = await on.run(extra);
+    assert.equal(result.state, 'settled');
+    const row = on.records.get('transactions/a');
+    assert.equal(row.status, 'Pago'); assert.equal(row.valueReceived, 10.5); assert.equal(row.paymentDate, '2026-10-10');
+    assert.equal(row.boletoSettlement.paidCents, 1050); assert.equal(row.boletoSettlement.interestCents, 50);
+    assert.equal([...on.records.values()].find(r => r.action === 'auto-link').decision.payment.interestCents, 50);
+    const off = autoLinkFixture({ a: openRow() });
+    const resent = structuredClone(lateEvent); resent.occurrence.info.jurosMora = 0; // re-sent version passes paymentMatches
+    assert.match((await off.run({ ...extra, event: resent })).reason, /juros/);
+    assert.equal(off.records.get('transactions/a').status, 'Pendente');
+    const short = autoLinkFixture({ a: openRow() }, { BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED: 'true' });
+    const shortBody = structuredClone(lateBody); shortBody.boleto.pagamento.valor = 9.5;
+    const shortEvent = structuredClone(lateEvent); shortEvent.occurrence.info.valorPago = 9.5;
+    assert.equal((await short.run({ event: shortEvent, fetchImpl: async () => ({ ok: true, json: async () => structuredClone(shortBody) }) })).state, 'review');
+    assert.equal(short.records.get('transactions/a').status, 'Pendente');
+});

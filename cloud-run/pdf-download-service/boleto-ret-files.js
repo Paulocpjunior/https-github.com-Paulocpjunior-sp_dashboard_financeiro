@@ -115,12 +115,12 @@ function revisionConflicts(previous, current, priorEvents, events = []) {
     return blocked;
 }
 const errorCode = e => /^RETURN_[A-Z_]+$/.test(e?.message || '') ? e.message : 'RETURN_PROCESSING_FAILED';
-function paymentMatches(event, body) {
+function paymentMatches(event, body, lateInterest = false) {
     const info = event.occurrence?.info, p = body?.boleto?.pagamento;
     return event.occurrence?.situacao === 'LIQUIDACAO' && info?.situacao === 'LIQUIDACAO' &&
         body?.boleto?.token === event.token && String(body.boleto.numero) === event.number &&
         validDay(info.dataDePagamento) && p?.data === info.dataDePagamento &&
-        cents(info.valorPago) > 0 && cents(p?.valor) === cents(info.valorPago) && cents(info.jurosMora ?? 0) === 0 &&
+        cents(info.valorPago) > 0 && cents(p?.valor) === cents(info.valorPago) && (lateInterest ? cents(info.jurosMora ?? 0) >= 0 : cents(info.jurosMora ?? 0) === 0) &&
         (!info.dataDeCredito || (validDay(info.dataDeCredito) && p.dataCredito === info.dataDeCredito));
 }
 async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, jobRef, at, dryRun, supersedes = [] }) {
@@ -129,7 +129,8 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
     if (!event.token)
         return { state: 'review', reason: 'Retorno sem boleto identificado no emissor; conferir vínculo.' };
     const body = await get(cfg, `boletos/${encodeURIComponent(event.token)}/situacao`, fetchImpl);
-    if (!paymentMatches(event, body))
+    const lateInterest = env?.BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED === 'true';
+    if (!paymentMatches(event, body, lateInterest))
         return { state: 'review', reason: 'Liquidação do arquivo diverge da situação individual do boleto.' };
     // The quarantine marker of a re-sent liquidation is not a human decision; any other marker is.
     const quarantineOnly = manual => manual?.reason === 'RETURN_EVIDENCE_CONFLICT' && !manual.transactionId && supersedes.includes(manual.eventId);
@@ -139,7 +140,7 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
     if (matches.docs.length === 1) {
         const pointer = (await db.collection('boletoHistory').doc('production').get()).data();
         const meta = pointer?.snapshot ? (await db.collection('boletoHistorySnapshots').doc(pointer.snapshot).get()).data() : null;
-        return processIssue({ db, issueDoc: matches.docs[0], cfg, account: meta?.issuanceAccounts?.[cfg.accountFingerprint], fetchImpl: async () => ({ ok: true, json: async () => body }), at, dryRun, lease, leaseJob: 'cnab-production', returnEvidence: provenance, settlementEnabled: env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED === 'true', ignoreManual: quarantineOnly });
+        return processIssue({ db, issueDoc: matches.docs[0], cfg, account: meta?.issuanceAccounts?.[cfg.accountFingerprint], fetchImpl: async () => ({ ok: true, json: async () => body }), at, dryRun, lease, leaseJob: 'cnab-production', returnEvidence: provenance, settlementEnabled: env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED === 'true', ignoreManual: quarantineOnly, lateInterest });
     }
     const linkRef = db.collection('boletoReconciliations').doc(idFor(event.token));
     const autoLink = env.BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED === 'true', record = autoLink ? recordFrom(event, body) : null;
@@ -165,14 +166,14 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
             return row.status === 'Pago' && row.paymentDate === body.boleto.pagamento.data && cents(row.valueReceived) === cents(body.boleto.pagamento.valor) ? { state: 'settled', reason: 'Baixa existente preservada; nenhuma nova baixa.' } : { state: 'review', reason: 'Baixa existente diverge do retorno; conferir sem reaplicar.' };
         if (link.state === 'already-paid' && row?.boletoReconciliation?.boletoId === idFor(event.token) && reconciliation.revision(row) === link.baseline) {
             const audited = await reconciliation.manualEvidence(db, tx, link.transactionId, row);
-            const checked = reconciliation.evaluate(link.record, row, body, at, audited);
+            const checked = reconciliation.evaluate(link.record, row, body, at, audited, false, { lateInterest });
             return checked.state === 'already-paid'
                 ? { state: 'settled', reason: 'Recebimento existente conferido com o RET; nenhuma nova baixa.' }
                 : { state: 'review', reason: checked.reason };
         }
         if (link.state !== 'waiting' || !row || reconciliation.revision(row) !== link.baseline)
             return { state: 'review', reason: 'Vínculo ou lançamento alterado, ou recebimento manual existente. Conferir sem duplicar.' };
-        const decision = reconciliation.evaluate(link.record, row, body, at);
+        const decision = reconciliation.evaluate(link.record, row, body, at, false, false, { lateInterest });
         if (decision.state !== 'ready')
             return { ...decision, state: decision.state === 'already-paid' ? 'review' : decision.state };
         if (env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED !== 'true')
@@ -189,7 +190,7 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
             return { state: 'review', reason: 'Lançamento já vinculado a outro boleto; conferir sem duplicar.' };
         if ((await tx.get(db.collection('boletoIssues').doc(hash(['production', candidate.id])))).data())
             return { state: 'review', reason: 'Emissão nativa vinculada ao lançamento; conferir antes de aplicar retorno.' };
-        const decision = reconciliation.evaluate(record, row, body, at, await reconciliation.manualEvidence(db, tx, candidate.id, row), true);
+        const decision = reconciliation.evaluate(record, row, body, at, await reconciliation.manualEvidence(db, tx, candidate.id, row), true, { lateInterest });
         if (!['ready', 'already-paid'].includes(decision.state))
             return { state: 'review', reason: decision.reason };
         if (decision.state === 'ready' && env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED !== 'true')
@@ -282,7 +283,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                     }
                     for (const ids of conflicts.superseded.values())
                         for (const id of ids)
-                            if (priorEvents.find(e => e.storedId === id)?.state !== 'superseded')
+                            if (!['superseded', 'settled'].includes(priorEvents.find(e => e.storedId === id)?.state))
                                 await write(db.collection('boletoReturnEvents').doc(id), { state: 'superseded', reason: 'Mesma liquidação reenviada pelo emissor com juros zerados ou data de crédito; vale a nova versão, conferida com a consulta individual.', checkedAt: new Date().toISOString() });
                     const previousByCore = new Map(priorEvents.map(event => [eventCore(event), event]));
                     if (old.digest && old.digest !== digest)

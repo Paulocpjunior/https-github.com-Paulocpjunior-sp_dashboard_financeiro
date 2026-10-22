@@ -115,3 +115,16 @@ O Boleto Cloud passou a reenviar liquidações já recebidas com `jurosMora` zer
 Agora, quando a única diferença é essa (juros que passam a zero e data de crédito que passa de vazia a uma data válida, ou permanece igual), a versão antiga fica como `superseded` e a nova segue o fluxo normal: confirmação pela consulta individual (`/situacao`), vínculo e baixa com as mesmas conferências. O marcador automático de quarentena (`boletoManualResolutions` com `RETURN_EVIDENCE_CONFLICT`, sem `transactionId`) da versão substituída deixa de bloquear; qualquer marcação humana continua bloqueando.
 
 Continuam em conferência: valor pago, data de pagamento ou códigos diferentes, juros que permanecem acima de zero, data de crédito trocada, título removido do arquivo, e títulos com resolução manual registrada. Pagamento com juros reais (valor pago diferente do valor do boleto) continua indo para conferência.
+
+## Boleto pago com atraso e juros — atualização de 22/10/2026
+
+Decisão do Paulo (22/10/2026): boleto pago com atraso e com juros é baixado sozinho, com os juros registrados.
+
+Condições, todas obrigatórias, além das conferências de sempre (consulta individual confirmando pagamento pelo banco, lançamento único por vínculo de emissão, vínculo manual ou CPF/CNPJ + valor + vencimento):
+- valor pago maior que o valor do boleto;
+- data de pagamento depois do vencimento;
+- sem desconto, e juros/multa informados (se houver) não negativos.
+
+O lançamento fica como Pago com o valor recebido real (`valueReceived`), e a diferença vai em `boletoSettlement.interestCents` (e em `decision.payment.interestCents` na auditoria do vínculo automático; em `boletoSettlementAudit` para boleto emitido pelo app). Pagamento menor que o boleto, com desconto ou antes do vencimento continua em conferência.
+
+Chave: `BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED=true` no deploy do job (`scripts/deploy-boleto-returns.py`). Com a chave desligada, a regra antiga (só valor exato) vale. A conciliação manual pela tela não usa essa regra.
