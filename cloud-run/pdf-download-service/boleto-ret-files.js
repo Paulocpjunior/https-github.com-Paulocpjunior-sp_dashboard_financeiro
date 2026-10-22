@@ -129,10 +129,10 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
     if (!event.token)
         return { state: 'review', reason: 'Retorno sem boleto identificado no emissor; conferir vínculo.' };
     const body = await get(cfg, `boletos/${encodeURIComponent(event.token)}/situacao`, fetchImpl);
-    if (!paymentMatches(event, body, env?.BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED === 'true'))
+    const lateInterest = env?.BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED === 'true';
+    if (!paymentMatches(event, body, lateInterest))
         return { state: 'review', reason: 'Liquidação do arquivo diverge da situação individual do boleto.' };
     // The quarantine marker of a re-sent liquidation is not a human decision; any other marker is.
-    const lateInterest = env.BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED === 'true';
     const quarantineOnly = manual => manual?.reason === 'RETURN_EVIDENCE_CONFLICT' && !manual.transactionId && supersedes.includes(manual.eventId);
     const matches = await db.collection('boletoIssues').where('token', '==', event.token).limit(2).get();
     if (matches.docs.length > 1)
