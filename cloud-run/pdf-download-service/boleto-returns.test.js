@@ -142,3 +142,17 @@ test('manual treatment or RET hold blocks automatic settlement without changing 
  assert.deepEqual(f.data.get('transactions/native-test'),before);
  assert.equal([...f.data.keys()].filter(k=>k.startsWith('boletoSettlementAudit/')).length,0);
 });
+test('RET re-send releases a native boleto only from its own automatic quarantine marker', async()=>{
+ const {settleEvent}=require('./boleto-ret-files'),{idFor}=require('./boleto-history');
+ for(const [patch,supersedes,expected] of [[{},['old'],'settled'],[{},[],'review'],[{transactionId:'native-test'},['old'],'review'],[{reason:'MANUAL'},['old'],'review']]) {
+  const f=fixture(),base=f.db.collection;
+  f.db.collection=name=>{const c=base(name);return name==='boletoIssues'?{...c,where:()=>({limit:()=>({get:()=>c.get()})})}:c;};
+  const jobRef=f.db.collection('boletoReturnJobs').doc('cnab-production');
+  f.data.set(jobRef.path,{lease:'ret',leaseUntil:Date.now()+60000});
+  f.data.set('boletoManualResolutions/'+idFor(f.body.boleto.token),{reason:'RETURN_EVIDENCE_CONFLICT',eventId:'old',requiresManualReview:true,...patch});
+  const event={token:f.body.boleto.token,number:'001',occurrence:{situacao:'LIQUIDACAO',info:{situacao:'LIQUIDACAO',valorPago:10,dataDePagamento:'2026-10-09'}}};
+  const result=await settleEvent({db:f.db,cfg:{...cfg,base:'https://example.invalid',apiKey:'fake'},env,fetchImpl:f.fetchImpl,event,provenance:{fileId:'file',eventId:'event'},lease:'ret',jobRef,at:new Date().toISOString(),dryRun:false,supersedes});
+  assert.equal(result.state,expected,JSON.stringify(patch)+supersedes);
+  assert.equal(f.data.get('transactions/native-test').status,expected==='settled'?'Pago':'Pendente');
+ }
+});

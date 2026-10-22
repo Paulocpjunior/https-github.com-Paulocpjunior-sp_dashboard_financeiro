@@ -195,9 +195,9 @@ function autoLinkFixture(rows, envPatch = {}) {
     const env = { BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED: 'true', BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED: 'true', ...envPatch };
     const paidBody = { boleto: { token: 'boleto', numero: '001', emissao: '2026-10-01', vencimento: '2026-10-09', valor: 10, pagador: { cprf: '52998224725' }, situacao: 'PAGO',
         pagamento: { origem: 'BANCO', situacao: 'PAGAMENTO_INFORMADO', marcadoComoPago: false, data: '2026-10-09', valor: 10, dataCredito: '2026-10-10' } } };
-    const run = () => settleEvent({ db, cfg: { ...cfg, accountFingerprint: 'fp', base: 'https://x', apiKey: 'k' }, env, fetchImpl: async () => ({ ok: true, json: async () => structuredClone(paidBody) }),
+    const run = (extra = {}) => settleEvent({ db, cfg: { ...cfg, accountFingerprint: 'fp', base: 'https://x', apiKey: 'k' }, env, fetchImpl: async () => ({ ok: true, json: async () => structuredClone(paidBody) }),
         event: { token: 'boleto', number: '001', occurrence: structuredClone(occurrence) }, provenance: { provider: 'boleto-cloud', fileId: 'f', eventId: 'e'.repeat(64) },
-        lease: 'lease', jobRef: ref('boletoReturnJobs/cnab-production'), at: '2026-10-10T15:00:00Z', dryRun: false });
+        lease: 'lease', jobRef: ref('boletoReturnJobs/cnab-production'), at: '2026-10-10T15:00:00Z', dryRun: false, ...extra });
     return { records, run, reads: () => transactionReads };
 }
 const openRow = (patch = {}) => ({ movement: 'Entrada', source: 'jotform', status: 'Pendente', pago: 'Não', cpfCnpj: '529.982.247-25', dueDate: '2026-10-09', totalCobranca: 10, valueReceived: 0, paymentMethod: 'Boleto', ...patch });
@@ -242,5 +242,61 @@ test('automatic link stays in review when ambiguous, absent, disabled, native or
         const f = autoLinkFixture({ a: openRow(patch) });
         assert.equal((await f.run()).state, 'review');
         assert.equal([...f.records.keys()].some(k => k.startsWith('boletoReconciliations/')), false);
+    }
+});
+
+test('liquidation re-sent with juros zeroed and credit date filled supersedes the old version, never a conflict', async () => {
+    const f = evolvingFixture();
+    Object.assign(f.response.arquivo.titulos[0].ocorrencias[0].info, { jurosMora: 1.5, dataDeCredito: null });
+    await runRetFiles(f);
+    Object.assign(f.response.arquivo.titulos[0].ocorrencias[0].info, { jurosMora: 0, dataDeCredito: '2026-10-10' });
+    const result = await runRetFiles(f);
+    assert.equal(result.errors, 0);
+    const events = [...f.records.entries()].filter(([k]) => k.startsWith('boletoReturnEvents/')).map(([, e]) => e);
+    assert.equal(events.length, 2);
+    assert.equal(events.filter(e => e.state === 'superseded').length, 1);
+    assert.equal(events.some(e => e.evidenceConflict), false);
+    assert.equal(events.find(e => e.state !== 'superseded').occurrence.info.jurosMora, 0);
+    assert.equal([...f.records.keys()].some(k => k.startsWith('boletoManualResolutions/')), false);
+    assert.equal((await runRetFiles(f)).events, 1); // only the new version is retried; the superseded one is history
+});
+test('titles quarantined by the old rule are released only for the juros/credit re-send', async () => {
+    const quarantine = async (mutate, patchOriginal = {}, recorded = null, juros = 1.5) => {
+        const f = evolvingFixture();
+        Object.assign(f.response.arquivo.titulos[0].ocorrencias[0].info, { jurosMora: juros, dataDeCredito: null });
+        await runRetFiles(f);
+        const [key, original] = [...f.records.entries()].find(([k]) => k.startsWith('boletoReturnEvents/'));
+        const resent = structuredClone(original.occurrence);
+        Object.assign(resent.info, { jurosMora: 0, dataDeCredito: '2026-10-10' });
+        Object.assign(original, { state: 'review', evidenceConflict: { original: structuredClone(original.occurrence), incoming: [{ number: original.number, occurrence: resent }], code: 'RETURN_EVIDENCE_CONFLICT' }, ...patchOriginal });
+        if (recorded) original.evidenceConflict.incoming = recorded(resent);
+        mutate(f.response.arquivo.titulos[0].ocorrencias[0].info, f.response);
+        await runRetFiles(f);
+        return f.records.get(key).state;
+    };
+    assert.equal(await quarantine(i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10' })), 'superseded');
+    assert.equal(await quarantine(i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10', valorPago: 11 })), 'review');
+    assert.equal(await quarantine(i => Object.assign(i, { jurosMora: 0.5, dataDeCredito: '2026-10-10' })), 'review');
+    assert.equal(await quarantine(i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10', dataDePagamento: '2026-10-08' })), 'review');
+    assert.equal(await quarantine((i, r) => { r.arquivo.titulos = []; }), 'review');
+    assert.notEqual(await quarantine(i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10' }), { manualResolution: { evidenceVersion: 'x', remainingCents: 10 } }), 'superseded');
+    const resend = i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10' });
+    // No interest in the original: nothing was zeroed, so a later identical version is a revert, not a re-send.
+    assert.equal(await quarantine(resend, {}, null, 0), 'review');
+    // The version that caused the quarantine was something else (or a removal): returning to the original stays blocked.
+    assert.equal(await quarantine(resend, {}, r => [{ number: '001', occurrence: { ...r, info: { ...r.info, valorPago: 11 } } }]), 'review');
+    assert.equal(await quarantine(resend, {}, () => []), 'review');
+});
+test('only the automatic quarantine marker of the superseded version is ignored; human markers still stop the baixa', async () => {
+    const { idFor } = require('./boleto-history');
+    const marker = (patch = {}) => ({ ['boletoManualResolutions/' + idFor('boleto')]: { reason: 'RETURN_EVIDENCE_CONFLICT', eventId: 'old', requiresManualReview: true, ...patch } });
+    const seed = (f, patch) => Object.entries(marker(patch)).forEach(([k, v]) => f.records.set(k, v));
+    const released = autoLinkFixture({ a: openRow() }); seed(released);
+    assert.equal((await released.run({ supersedes: ['old'] })).state, 'settled');
+    assert.equal(released.records.get('transactions/a').status, 'Pago');
+    for (const [patch, supersedes] of [[{}, []], [{}, ['other']], [{ transactionId: 'a' }, ['old']], [{ reason: 'MANUAL' }, ['old']]]) {
+        const f = autoLinkFixture({ a: openRow() }); seed(f, patch);
+        assert.match((await f.run({ supersedes })).reason, /tratamento manual/);
+        assert.equal(f.records.get('transactions/a').status, 'Pendente');
     }
 });
