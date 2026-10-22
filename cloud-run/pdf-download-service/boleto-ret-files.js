@@ -80,16 +80,35 @@ function validateRevision(previous, current) {
 }
 // Quarantine the individual title, preserving the original evidence. Unrelated titles continue.
 const titleKey = event => hash([event.boletoId ?? (event.token ? idFor(event.token) : null), event.number]);
-function revisionConflicts(previous, current, priorEvents) {
-    const blocked = new Set();
+// The provider re-sends some liquidations with jurosMora zeroed and the credit date filled in.
+// Same payment (value, date, codes); the individual query still has to confirm it before any baixa.
+function sameLiquidation(original, incoming) {
+    const o = structuredClone(original), n = structuredClone(incoming);
+    if (o?.situacao !== 'LIQUIDACAO' || !o.info || !n?.info || cents(n.info.jurosMora ?? 0) !== 0) return false;
+    const credit = n.info.dataDeCredito ?? null;
+    if (o.info.dataDeCredito ? credit !== o.info.dataDeCredito : credit !== null && !validDay(credit)) return false;
+    for (const x of [o, n]) { delete x.info.jurosMora; delete x.info.dataDeCredito; }
+    return JSON.stringify(canonical(o)) === JSON.stringify(canonical(n));
+}
+function revisionConflicts(previous, current, priorEvents, events = []) {
+    const blocked = new Set(), superseded = new Map();
+    const harmless = original => {
+        const incoming = events.filter(e => titleKey(e) === titleKey(original));
+        return !original.manualResolution && original.state !== 'manual-resolved' && incoming.length === 1 &&
+            sameLiquidation(original.evidenceConflict?.original || original.occurrence, incoming[0].occurrence);
+    };
+    const mark = original => superseded.set(titleKey(original), [...(superseded.get(titleKey(original)) || []), original.storedId]);
     for (const [key, credit] of Object.entries(previous)) {
         if (Object.hasOwn(current, key) && (!credit || current[key] === credit)) continue;
         const original = priorEvents.find(e => eventCore(e) === key);
         if (!original) throw Error('RETURN_BASELINE_INCOMPLETE');
+        if (harmless(original)) { if (!original.evidenceConflict) mark(original); continue; }
         blocked.add(titleKey(original));
     }
     // A previously quarantined title cannot become automatic just because the provider changes back.
-    for (const event of priorEvents) if (event.evidenceConflict) blocked.add(titleKey(event));
+    for (const event of priorEvents) if (event.evidenceConflict) (harmless(event) ? mark(event) : blocked.add(titleKey(event)));
+    for (const key of blocked) superseded.delete(key);
+    blocked.superseded = superseded;
     return blocked;
 }
 const errorCode = e => /^RETURN_[A-Z_]+$/.test(e?.message || '') ? e.message : 'RETURN_PROCESSING_FAILED';
@@ -101,7 +120,7 @@ function paymentMatches(event, body) {
         cents(info.valorPago) > 0 && cents(p?.valor) === cents(info.valorPago) && cents(info.jurosMora ?? 0) === 0 &&
         (!info.dataDeCredito || (validDay(info.dataDeCredito) && p.dataCredito === info.dataDeCredito));
 }
-async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, jobRef, at, dryRun }) {
+async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, jobRef, at, dryRun, supersedes = [] }) {
     if (event.occurrence.situacao !== 'LIQUIDACAO')
         return { state: 'informational', reason: 'Ocorrência sem liquidação; nenhuma baixa.' };
     if (!event.token)
@@ -127,7 +146,9 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
                 throw Error('LEASE_LOST');
         }
         const manual = (await tx.get(db.collection('boletoManualResolutions').doc(idFor(event.token)))).data();
-        if (manual) return {state:'review', reason:'Boleto com tratamento manual registrado. Confira o histórico; não reaplicar automaticamente.'};
+        // The quarantine marker of a re-sent liquidation is not a human decision; any other marker is.
+        const quarantineOnly = manual?.reason === 'RETURN_EVIDENCE_CONFLICT' && !manual.transactionId && supersedes.includes(manual.eventId);
+        if (manual && !quarantineOnly) return {state:'review', reason:'Boleto com tratamento manual registrado. Confira o histórico; não reaplicar automaticamente.'};
         const link = (await tx.get(linkRef)).data();
         if (!link && candidate?.id)
             return linkAutomatically(tx);
@@ -240,7 +261,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                     if (old.digest && !old.manifest && old.digest !== digest && priorEvents.length !== old.eventCount)
                         throw Error('RETURN_BASELINE_INCOMPLETE');
                     const previousManifest = old.manifest || manifestFor(priorEvents);
-                    const conflicts = revisionConflicts(previousManifest, manifest, priorEvents);
+                    const conflicts = revisionConflicts(previousManifest, manifest, priorEvents, parsed.events);
                     let unresolved = 0;
                     for (const original of priorEvents.filter(e => conflicts.has(titleKey(e)))) {
                         const incoming = parsed.events.filter(e => titleKey(e) === titleKey(original)).map(e => ({number:e.number, occurrence:e.occurrence}));
@@ -256,6 +277,10 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                         if (original.boletoId) await write(db.collection('boletoManualResolutions').doc(original.boletoId), {reason:'RETURN_EVIDENCE_CONFLICT', eventId:original.storedId, requiresManualReview:true});
                         counts.review += resolved ? 0 : 1;
                     }
+                    for (const ids of conflicts.superseded.values())
+                        for (const id of ids)
+                            if (priorEvents.find(e => e.storedId === id)?.state !== 'superseded')
+                                await write(db.collection('boletoReturnEvents').doc(id), { state: 'superseded', reason: 'Mesma liquidação reenviada pelo emissor com juros zerados ou data de crédito; vale a nova versão, conferida com a consulta individual.', checkedAt: new Date().toISOString() });
                     const previousByCore = new Map(priorEvents.map(event => [eventCore(event), event]));
                     if (old.digest && old.digest !== digest)
                         await write(db.collection('boletoReturnFileVersions').doc(hash([fileId, old.digest])), { fileId, digest: old.digest, manifest: previousManifest, eventCount: old.eventCount, capturedAt: old.checkedAt || null });
@@ -280,7 +305,7 @@ async function runRetFiles({ db, env = process.env, fetchImpl = fetch, dryRun = 
                         }
                         const at = new Date().toISOString(), provenance = { provider: 'boleto-cloud', fileId, eventId, fileDigest: digest, occurrenceCode: event.occurrence.codigo || null };
                         try {
-                            const result = await settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, jobRef, at, dryRun });
+                            const result = await settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, jobRef, at, dryRun, supersedes: conflicts.superseded.get(titleKey(event)) || [] });
                             counts.events++;
                             counts[result.state] = (counts[result.state] || 0) + 1;
                             await write(eventRef, { ...provenance, number: event.number, boletoId: event.token ? idFor(event.token) : null, occurrence: event.occurrence, state: result.state, reason: result.reason, checkedAt: at, ...(result.transactionId ? { transactionId: result.transactionId } : {}) });

@@ -107,3 +107,11 @@ transação (`apply`): `boletoReconciliations` com `uid=system:ret-auto-link` e
 
 Para desligar apenas o vínculo automático: atualizar o job com
 `BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=false` pelo fluxo autorizado.
+
+## Liquidação reenviada com juros zerados — atualização de 22/10/2026
+
+O Boleto Cloud passou a reenviar liquidações já recebidas com `jurosMora` zerado e `dataDeCredito` preenchida, mantendo valor pago, data de pagamento e códigos. A regra antiga tratava isso como "retorno alterado pelo emissor" e mandava o boleto para conferência manual para sempre.
+
+Agora, quando a única diferença é essa (juros que passam a zero e data de crédito que passa de vazia a uma data válida, ou permanece igual), a versão antiga fica como `superseded` e a nova segue o fluxo normal: confirmação pela consulta individual (`/situacao`), vínculo e baixa com as mesmas conferências. O marcador automático de quarentena (`boletoManualResolutions` com `RETURN_EVIDENCE_CONFLICT`, sem `transactionId`) da versão substituída deixa de bloquear; qualquer marcação humana continua bloqueando.
+
+Continuam em conferência: valor pago, data de pagamento ou códigos diferentes, juros que permanecem acima de zero, data de crédito trocada, título removido do arquivo, e títulos com resolução manual registrada. Pagamento com juros reais (valor pago diferente do valor do boleto) continua indo para conferência.
