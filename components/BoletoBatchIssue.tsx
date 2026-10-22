@@ -6,6 +6,7 @@ import { getOriginalAmount } from '../utils/transactionAmounts';
 import { PossibleDuplicateScan } from '../utils/transactionTable';
 import { BoletoIssueStatusMap, boletoRequest, boletoStatusLabel } from '../services/boletoIssueStatus';
 import BillingAddressFields from './BillingAddressFields';
+import BoletoDeliveryStatus from './BoletoDeliveryStatus';
 import { BillingAddress, emptyBillingAddress, isAddressComplete, saveBillingAddress } from '../services/billingAddressService';
 
 const BATCH_LIMIT = 100;
@@ -20,7 +21,7 @@ type PreviewItem = {
   error: string;
 };
 type Preview = { batchId: string; environment: string; enabled: boolean; totalCents: number; items: PreviewItem[] };
-type Outcome = { state: string; number?: string; error?: string };
+type Outcome = { state: string; number?: string; error?: string; issuedNow?: boolean };
 
 const digits = (value: unknown) => String(value ?? '').replace(/\D/g, '');
 const clientKey = (value: unknown) => digits(value).replace(/^0+(?=\d)/, '');
@@ -55,6 +56,7 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
   const [fixing, setFixing] = useState<{ id: string; address: BillingAddress; saving: boolean; error: string } | null>(null);
   const stop = useRef(false);
   const running = useRef(false);
+  const issuedOrder = useRef(new Map<string, number>());
 
   const reasonFor = (row: Transaction): string => {
     const s = status[row.id];
@@ -122,7 +124,9 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
         setProgress({ ...progress, ...outcomes });
         try {
           const record = await (await boletoRequest(`items/${encodeURIComponent(item.id)}/issue`, { previewHash: item.previewHash, legacyChecked: true, batchId: preview.batchId })).json();
-          outcomes[item.id] = { state: record.state, number: record.number, error: record.error };
+          // Emitido agora: o envio ao cliente começa sozinho, um por vez em sequência.
+          if (record.state === 'issued') issuedOrder.current.set(item.id, issuedOrder.current.size);
+          outcomes[item.id] = { state: record.state, number: record.number, error: record.error, issuedNow: record.state === 'issued' };
         } catch (e) {
           outcomes[item.id] = { state: 'error', error: e instanceof Error ? e.message : 'Resultado não confirmado.' };
         }
@@ -333,10 +337,13 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
                         ) : outcome.state === 'issuing' ? (
                           <span className="inline-flex items-center gap-1"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Emitindo…</span>
                         ) : outcome.state === 'issued' ? (
-                          <span className="inline-flex items-center gap-2" style={{ color: 'var(--sp-success)' }}>
-                            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />Emitido{outcome.number ? ` nº ${outcome.number}` : ''}
-                            <button type="button" className="sp-button" onClick={() => downloadPdf(item.id, outcome.number)}><FileDown className="h-4 w-4" aria-hidden="true" />PDF</button>
-                          </span>
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-2" style={{ color: 'var(--sp-success)' }}>
+                              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />Emitido{outcome.number ? ` nº ${outcome.number}` : ''}
+                              <button type="button" className="sp-button" onClick={() => downloadPdf(item.id, outcome.number)}><FileDown className="h-4 w-4" aria-hidden="true" />PDF</button>
+                            </span>
+                            <BoletoDeliveryStatus id={item.id} auto={outcome.issuedNow === true} compact startDelay={(issuedOrder.current.get(item.id) || 0) * 3000} />
+                          </div>
                         ) : (
                           <span style={{ color: 'var(--sp-danger)' }}>
                             {outcome.state === 'rejected' ? 'Recusado' : outcome.state === 'unknown' || outcome.state === 'issuing' ? 'Não confirmado' : 'Não emitido'}: {outcome.error}
@@ -369,6 +376,7 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
           {(finished || (!busy && ready.length === 0)) && (
             <div className="space-y-2">
               {finished && <p className="font-semibold" role="status">{issuedCount} de {ready.length} emitido(s). Emitir não marca a cobrança como paga.</p>}
+              {finished && issuedCount > 0 && <p className="text-sm">O envio ao cliente (e-mail e WhatsApp da Regra de faturamento) acontece depois que o banco confirma o registro. Mantenha esta janela aberta até ver a situação de cada envio; o que ficar pendente pode ser enviado depois pela emissão individual.</p>}
               <button type="button" className="sp-button" onClick={() => { setPreview(null); setSelected(new Set()); setProgress({}); setChecked(false); }}>Nova seleção</button>
             </div>
           )}
