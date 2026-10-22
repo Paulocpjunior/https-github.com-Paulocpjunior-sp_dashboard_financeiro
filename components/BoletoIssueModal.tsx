@@ -10,6 +10,7 @@ import { PossibleDuplicateScan } from "../utils/transactionTable";
 import BoletoBatchIssue from "./BoletoBatchIssue";
 import { boletoStatusLabel, useBoletoIssueStatus } from "../services/boletoIssueStatus";
 import { BillingAddress, saveBillingAddress } from "../services/billingAddressService";
+import BoletoDeliveryStatus from "./BoletoDeliveryStatus";
 
 const OPEN_STATUSES = ["Pendente", "Agendado", "Vencida"];
 
@@ -70,6 +71,7 @@ export default function BoletoIssueModal({
   const [error, setError] = useState("");
   const [wixLock, setWixLock] = useState<WixLockInvoice[] | null>(null);
   const [wixReason, setWixReason] = useState("");
+  const [justIssued, setJustIssued] = useState("");
   const canOverrideWix = isMasterAccount(AuthService.getCurrentUser());
   const generation = useRef(0);
   const row = rows.find((r) => r.id === id);
@@ -152,7 +154,10 @@ export default function BoletoIssueModal({
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } else {
-        setRecord(await response.json());
+        const next = await response.json();
+        setRecord(next);
+        // Emitido agora: envia ao cliente pelos meios da Regra de faturamento.
+        if (["issue", "recover"].includes(action) && next.state === "issued") setJustIssued(id);
         setChecked(false);
         // Endereço digitado na revisão vai para o cadastro do cliente, com log, para os próximos boletos e o lote.
         const changed = Object.keys(addressFields).some((k) => (address[k] || "").trim() !== (suggested[k] || "").trim());
@@ -407,11 +412,15 @@ export default function BoletoIssueModal({
                     Consultar registro no Itaú
                   </button>
                 </div>
+                <div className="sp-ui space-y-2" style={{ background: "transparent" }}>
+                  <p className="font-semibold">Envio ao cliente (INVITE com o PDF do boleto)</p>
+                  <BoletoDeliveryStatus id={id} auto={justIssued === id} />
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button className={button} disabled={busy} onClick={() => perform("invite")}>Baixar INVITE com PDF (.ics)</button>
                   <button className={button} disabled={busy} onClick={() => perform("invite-email")}>Preparar e-mail com INVITE e PDF</button>
                 </div>
-                <p className="text-sm">O cliente precisa importar o convite na agenda. Inclui o vencimento e lembrete na véspera; o calendário controla os avisos. O PDF fica dentro do convite e separado no e-mail preparado. Alguns calendários não exibem anexos. O e-mail é um rascunho (.eml): escolha o destinatário e envie no seu aplicativo de e-mail. Nenhum envio é automático. Após pagamento ou cancelamento, remova o evento da agenda.</p>
+                <p className="text-sm">O cliente precisa importar o convite na agenda. Inclui o vencimento e lembrete na véspera; o calendário controla os avisos. O PDF fica dentro do convite e separado no e-mail preparado. Alguns calendários não exibem anexos. O envio ao cliente usa o e-mail e o WhatsApp da Regra de faturamento e acontece uma vez por canal, depois que o banco confirma o registro; reenviar pede motivo. O rascunho (.eml) continua disponível para envio manual. Após pagamento ou cancelamento, remova o evento da agenda.</p>
                 <p>
                   {!record.registration
                     ? "Registro bancário ainda não consultado."

@@ -11,13 +11,13 @@ const DEFAULT_PROJECT_ID = 'gen-lang-client-0888019226';
 const DEFAULT_DATABASE = '(default)';
 export const CHILD_COLLECTIONS = {
   billingMonthlyReviews: ['revisions'], billingIdentityLinks: ['revisions'], billingFollowUps: ['revisions'],
-  boletoIssues: ['events'], boletoIssueBatches: ['events'], boletoHistorySnapshots: ['chunks'], bankStatements: ['entries', 'imports'],
+  boletoIssues: ['events'], boletoIssueBatches: ['events'], boletoDeliveries: ['events'], boletoHistorySnapshots: ['chunks'], bankStatements: ['entries', 'imports'],
 };
 export const DEFAULT_COLLECTIONS = [
   'financialSettings', 'financialSettingsAudit',
   'users', 'loginIndex', 'transactions', 'clientRegistry', 'billingProfiles', 'jotformEvents',
   'billingMonthlyReviews', 'billingIdentityLinks', 'billingFollowUps',
-  'boletoIssues', 'boletoIssueLocks', 'boletoIssueBatches', 'billingAddresses', 'billingAddressAudit', 'boletoHistory', 'boletoHistorySnapshots', 'boletoHistoryUpdates',
+  'boletoIssues', 'boletoIssueLocks', 'boletoIssueBatches', 'boletoDeliveries', 'billingAddresses', 'billingAddressAudit', 'boletoHistory', 'boletoHistorySnapshots', 'boletoHistoryUpdates',
   'boletoHistoryAudit', 'boletoReturnJobs', 'boletoReturnFiles', 'boletoReturnEvents', 'boletoManualResolutions', 'boletoSettlementAudit', 'boletoReconciliations',
   'boletoReconciliationPreviews', 'boletoReconciliationAudit', 'boletoReconciliationSettlements',
   'receivableAudit', 'receivableOperations', 'boletoReturnFileVersions',

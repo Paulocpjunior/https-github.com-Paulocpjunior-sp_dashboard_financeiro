@@ -2,6 +2,7 @@ const { InviteError, prepareInvite, sendInvite } = require('./boleto-invite');
 const { createHash, randomUUID } = require("node:crypto");
 const { permitted } = require("./itau-statements");
 const { assertNoWixInvoice } = require("./wix-billing-lock");
+const delivery = require("./boleto-delivery");
 const hash = (value) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const norm = (value) =>
@@ -536,7 +537,7 @@ function createBoletoHandler({
         return true;
       }
       const match = url.pathname.match(
-        /^\/api\/boleto-cloud\/items\/([^/]+)(?:\/(preview|issue|recover|pdf|registration|invite|invite-email))?$/,
+        /^\/api\/boleto-cloud\/items\/([^/]+)(?:\/(preview|issue|recover|pdf|registration|invite|invite-email|delivery|delivery-result))?$/,
       );
       if (!match) throw new BoletoError("Rota não encontrada.", 404);
       const id = decodeURIComponent(match[1]),
@@ -561,6 +562,103 @@ function createBoletoHandler({
         const row = !existing || ["draft", "rejected"].includes(existing.state) ? (await source.get()).data() : null;
         const suggestedAddress = row ? await suggestAddress(row, existing, issuedAddress) : null;
         sendJson(request, response, 200, { ...publicRecord(existing, cfg), ...(suggestedAddress ? { suggestedAddress } : {}) });
+        return true;
+      }
+      if (action === "delivery" && request.method === "GET") {
+        const row = (await source.get()).data();
+        const contacts = row ? await delivery.contactsFor(db, row) : null;
+        const deliveries = {};
+        for (const channel of delivery.CHANNELS)
+          deliveries[channel] = existing?.token
+            ? delivery.publicDelivery((await delivery.deliveryRef(db, cfg.environment, id, existing.token, channel).get()).data())
+            : { state: "none" };
+        sendJson(request, response, 200, {
+          available: cfg.environment === "production",
+          emailEnabled: delivery.emailEnabled(env),
+          issued: existing?.state === "issued" && Boolean(existing.token),
+          contacts,
+          problems: Object.fromEntries(delivery.CHANNELS.map((c) => [c, delivery.contactError(contacts, c)])),
+          deliveries,
+        });
+        return true;
+      }
+      if (["delivery", "delivery-result"].includes(action) && request.method === "POST") {
+        let body;
+        try {
+          body = JSON.parse((await readBody(request)).toString("utf8"));
+        } catch {
+          throw new BoletoError("Requisição inválida.");
+        }
+        const channel = body?.channel;
+        if (!delivery.CHANNELS.includes(channel)) throw new BoletoError("Canal inválido.");
+        // Boleto de teste (sandbox) nunca vai para cliente.
+        if (cfg.environment !== "production")
+          throw new BoletoError("Envio ao cliente disponível somente para boletos de produção.", 409);
+        if (!existing?.token || existing.state !== "issued" || existing.accountFingerprint !== cfg.accountFingerprint)
+          throw new BoletoError("Boleto emitido não encontrado nesta conta.", 409);
+        const ref = (token) => delivery.deliveryRef(db, cfg.environment, id, token, channel);
+        if (action === "delivery-result") {
+          if (channel !== "whatsapp" || typeof body.attemptId !== "string") throw new BoletoError("Resultado inválido.");
+          let state = body.ok === true ? "sent" : body.indeterminado === true ? "unknown" : "failed";
+          const messageId = typeof body.messageId === "string" ? body.messageId : "";
+          if (state === "sent" && !messageId) state = "unknown";
+          const saved = await delivery.finish(db, ref(existing.token), { uid, attemptId: body.attemptId, state, error: typeof body.error === "string" ? body.error : "", providerId: messageId });
+          sendJson(request, response, 200, { channel, delivery: delivery.publicDelivery(saved) });
+          return true;
+        }
+        const row = (await source.get()).data();
+        if (!row || !eligible(row) || money(row.valueReceived) > 0)
+          throw new BoletoError("Cobrança paga, excluída ou indisponível para envio.", 409);
+        const contacts = await delivery.contactsFor(db, row);
+        const problem = delivery.contactError(contacts, channel);
+        if (problem) throw Object.assign(new BoletoError(problem, 409), { needsContact: true });
+        if (channel === "email" && !delivery.emailEnabled(env))
+          throw Object.assign(new BoletoError("Envio por e-mail ainda não habilitado: faltam as credenciais do Microsoft 365 da caixa financeiro@.", 503), { notConfigured: true });
+        if (!cfg.apiKey || !cfg.accountToken) throw new BoletoError("Credenciais indisponíveis.", 503);
+        // Confere no emissor: em aberto, registro confirmado, mesmo valor, vencimento e pagador.
+        let artifact;
+        try {
+          // Demonstrativo só quando a composição confere com o valor do boleto.
+          const entry = Math.round(Number(row.valorOriginal) * 100) === Math.round(amount(row) * 100) ? row : null;
+          artifact = await prepareInvite({token:existing.token,base:cfg.base,apiKey:cfg.apiKey,fetchImpl,entry,
+            expected:{token:existing.token,number:existing.number,amountCents:Math.round(amount(row)*100),dueDate:row.dueDate,payerDocument:digits(row.cpfCnpj)}});
+        } catch (error) {
+          if (error instanceof InviteError) throw Object.assign(new BoletoError(error.message, error.status), { pending: Boolean(error.pending) });
+          throw error;
+        }
+        const to = channel === "email" ? contacts.email.join(", ") : contacts.whatsapp;
+        const target = ref(existing.token);
+        const attemptId = await delivery.claim(db, target, {
+          uid, channel, to, resendReason: body.resendReason,
+          base: { transactionId: id, environment: cfg.environment, number: existing.number || "", profileId: contacts.profileId },
+          allowed: async (tx) => { if (!allowed((await tx.get(userRef)).data())) throw new BoletoError("Acesso revogado.", 403); },
+        });
+        const value = amount(row).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        if (channel === "email") {
+          const message = delivery.emailMessage(artifact, { to: contacts.email, idempotencyKey: delivery.deliveryKey(cfg.environment, id, existing.token, channel), value, dueDate: row.dueDate });
+          const result = await delivery.sendEmail({ env, fetchImpl, message });
+          const saved = await delivery.finish(db, target, { uid, attemptId, ...result });
+          sendJson(request, response, 200, { channel, delivery: delivery.publicDelivery(saved) });
+          return true;
+        }
+        // WhatsApp: a tela envia pelo SP Connect com a sessão do usuário e
+        // devolve o resultado em delivery-result.
+        sendJson(request, response, 200, {
+          channel,
+          attemptId,
+          para: contacts.whatsapp,
+          nomeArquivo: `boleto-${artifact.number}.pdf`,
+          pdfBase64: artifact.pdf.toString("base64"),
+          referencia: `financeiro:boleto ${artifact.number}`,
+          variaveis: {
+            cliente: String(row.client || "").trim(),
+            nome: String(row.client || "").trim(),
+            valor: value,
+            vencimento: row.dueDate.split("-").reverse().join("/"),
+            numero: artifact.number,
+            boleto: artifact.number,
+          },
+        });
         return true;
       }
       if (["invite", "invite-email"].includes(action) && request.method === "GET") {
@@ -896,14 +994,15 @@ function createBoletoHandler({
       sendJson(
         request,
         response,
-        (error instanceof BoletoError || error instanceof InviteError) ? error.status : 500,
+        (error instanceof BoletoError || error instanceof InviteError || error instanceof delivery.DeliveryError) ? error.status : 500,
         {
           error:
-            (error instanceof BoletoError || error instanceof InviteError)
+            (error instanceof BoletoError || error instanceof InviteError || error instanceof delivery.DeliveryError)
               ? error.message
               : "Operação não confirmada. Consulte a cobrança antes de tentar novamente.",
           ...(error instanceof BoletoError && error.wixInvoices ? { wixLock: { invoices: error.wixInvoices } } : {}),
           ...(error instanceof BoletoError && error.alreadyIssued ? { alreadyIssued: true } : {}),
+          ...Object.fromEntries(["pending", "alreadySent", "notConfigured", "needsContact"].filter((k) => error?.[k] === true).map((k) => [k, true])),
         },
       );
     }

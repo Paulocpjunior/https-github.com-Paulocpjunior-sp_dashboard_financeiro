@@ -652,3 +652,119 @@ test("revisar de novo um item mantém os demais no lote para a emissão", async 
     assert.equal((await f.call("issue", { previewHash: hashValue, legacyChecked: true, batchId }, id)).body.state, "issued");
   assert.equal(calls, 2);
 });
+
+// Envio ao cliente: contatos da Regra de faturamento, registro confirmado e
+// uma vez por canal. Tudo simulado: nenhuma chamada real ao Microsoft 365.
+const graph = {
+  FINANCEIRO_COMMUNICATION_SEND_ENABLED: "true",
+  FINANCEIRO_GRAPH_TENANT_ID: "00000000-0000-0000-0000-000000000001",
+  FINANCEIRO_GRAPH_CLIENT_ID: "00000000-0000-0000-0000-000000000002",
+  FINANCEIRO_GRAPH_CLIENT_SECRET: "synthetic-secret",
+};
+function deliveryFixture({ environment = { ...production, ...graph }, registered = true, mail = 202 } = {}) {
+  const calls = [];
+  let number = "";
+  const state = { registered, mail };
+  const fetchImpl = async (url, options = {}) => {
+    calls.push(String(url));
+    if (options.method === "POST" && String(url).includes("boletocloud")) return success(url, options);
+    if (String(url).endsWith("/situacao"))
+      return new Response(JSON.stringify({ boleto: { token: "provider-token", numero: number || "12345-6", valor: 1250, vencimento: "2099-11-10", situacao: "EM_ABERTO",
+        registro: state.registered ? { situacao: "REGISTRO_CONFIRMADO" } : { situacao: "AGUARDANDO" }, pagador: { nome: "Empresa Teste", cprf: "11222333000181" } } }));
+    if (String(url).includes("/atualizado/vencimento/")) return new Response("%PDF-1.4 boleto sintético");
+    if (String(url).includes("login.microsoftonline.com")) return new Response(JSON.stringify({ access_token: "synthetic-token" }));
+    if (String(url).includes("/sendMail")) { calls.mail = JSON.parse(options.body); return new Response(null, { status: state.mail }); }
+    throw new Error("Chamada inesperada: " + url);
+  };
+  const f = fixture(fetchImpl, environment, []);
+  f.data.set("transactions/a", { ...row(), valueReceived: 0 });
+  f.data.set("billingProfiles/doc-11222333000181", { identityKey: "doc-11222333000181", deliveryChannels: ["email", "whatsapp"], billingEmail: "Cliente@Exemplo.com.br; financeiro@exemplo.com.br", whatsapp: "(11) 98765-4321" });
+  const issued = async () => {
+    const r = await f.issue();
+    assert.equal(r.body.state, "issued");
+    number = f.stored()[1].number || "";
+  };
+  return { ...f, calls, state, issued };
+}
+const deliveries = (f) => [...f.data.entries()].filter(([k]) => k.startsWith("boletoDeliveries/"));
+
+test("e-mail vai uma vez, com PDF e convite com o PDF dentro, para o e-mail da Regra de faturamento", async () => {
+  const f = deliveryFixture({ registered: false });
+  await f.issued();
+  const before = await f.call("delivery");
+  assert.deepEqual(before.body.contacts.email, ["cliente@exemplo.com.br", "financeiro@exemplo.com.br"]);
+  assert.equal(before.body.contacts.whatsapp, "5511987654321");
+  assert.equal(before.body.emailEnabled, true);
+  // Recém-emitido: aguarda o registro do banco, nada é enviado nem reservado.
+  const pending = await f.call("delivery", { channel: "email" });
+  assert.equal(pending.status, 409);
+  assert.equal(pending.body.pending, true);
+  assert.equal(deliveries(f).length, 0);
+  assert.equal(f.calls.filter((u) => u.includes("sendMail")).length, 0);
+  f.state.registered = true;
+  const sent = await f.call("delivery", { channel: "email" });
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.delivery.state, "sent", sent.body.delivery.error);
+  const mail = f.calls.mail.message;
+  assert.deepEqual(mail.toRecipients.map((r) => r.emailAddress.address), ["cliente@exemplo.com.br", "financeiro@exemplo.com.br"]);
+  const names = mail.attachments.map((a) => a.name);
+  assert.ok(names.some((n) => /^boleto-.*\.pdf$/.test(n)) && names.some((n) => /^vencimento-.*\.ics$/.test(n)));
+  const ics = Buffer.from(mail.attachments.find((a) => a.name.endsWith(".ics")).contentBytes, "base64").toString();
+  assert.match(ics.replace(/\r\n /g, ""), new RegExp("ATTACH;FMTTYPE=application/pdf;ENCODING=BASE64;VALUE=BINARY:" + Buffer.from("%PDF-1.4 boleto sintético").toString("base64")));
+  // Segundo envio bloqueado; reenvio só com motivo, auditado.
+  const again = await f.call("delivery", { channel: "email" });
+  assert.equal(again.status, 409);
+  assert.equal(again.body.alreadySent, true);
+  assert.equal((await f.call("delivery", { channel: "email", resendReason: "curto" })).status, 400);
+  const resent = await f.call("delivery", { channel: "email", resendReason: "Cliente pediu de novo por telefone" });
+  assert.equal(resent.body.delivery.resends, 1);
+  assert.equal(f.calls.filter((u) => u.includes("sendMail")).length, 2);
+  const events = [...f.data.entries()].filter(([k, v]) => k.startsWith("boletoDeliveries/") && k.includes("/events/")).map(([, v]) => v);
+  assert.deepEqual(events.map((e) => e.action), ["send", "result", "resend", "result"]);
+  assert.equal(events[2].reason, "Cliente pediu de novo por telefone");
+});
+
+test("e-mail sem credenciais, sem cadastro ou em sandbox não envia", async () => {
+  const off = deliveryFixture({ environment: production });
+  await off.issued();
+  const disabled = await off.call("delivery", { channel: "email" });
+  assert.equal(disabled.status, 503);
+  assert.equal(disabled.body.notConfigured, true);
+  off.data.set("billingProfiles/doc-11222333000181", { identityKey: "doc-11222333000181", deliveryChannels: ["printed"], billingEmail: "" });
+  const missing = await off.call("delivery", { channel: "whatsapp" });
+  assert.equal(missing.body.needsContact, true);
+  const sandbox = deliveryFixture({ environment: { ...env, ...graph } });
+  await sandbox.issued();
+  assert.equal((await sandbox.call("delivery", { channel: "email" })).status, 409);
+  for (const f of [off, sandbox]) assert.equal(f.calls.filter((u) => u.includes("sendMail") || u.includes("microsoftonline")).length, 0);
+});
+
+test("sem confirmação do Microsoft 365 o envio fica incerto e não repete sem motivo", async () => {
+  const f = deliveryFixture({ mail: 500 });
+  await f.issued();
+  const first = await f.call("delivery", { channel: "email" });
+  assert.equal(first.body.delivery.state, "unknown");
+  assert.equal((await f.call("delivery", { channel: "email" })).body.alreadySent, true);
+});
+
+test("WhatsApp: tela recebe o PDF e o número do cadastro, resultado fica registrado", async () => {
+  const f = deliveryFixture();
+  await f.issued();
+  const prepared = await f.call("delivery", { channel: "whatsapp" });
+  assert.equal(prepared.status, 200, JSON.stringify(prepared.body));
+  assert.equal(prepared.body.para, "5511987654321");
+  assert.equal(Buffer.from(prepared.body.pdfBase64, "base64").toString(), "%PDF-1.4 boleto sintético");
+  assert.match(prepared.body.variaveis.valor, /^R\$\s1\.250,00$/);
+  assert.equal((await f.call("delivery", { channel: "whatsapp" })).status, 409, "em andamento");
+  assert.equal((await f.call("delivery-result", { channel: "whatsapp", attemptId: "outro", ok: true, messageId: "x" })).status, 409);
+  const done = await f.call("delivery-result", { channel: "whatsapp", attemptId: prepared.body.attemptId, ok: true, messageId: "wamid.1" });
+  assert.equal(done.body.delivery.state, "sent");
+  assert.equal((await f.call("delivery")).body.deliveries.whatsapp.state, "sent");
+  assert.equal((await f.call("delivery", { channel: "whatsapp" })).body.alreadySent, true);
+  // Falha comprovada pode tentar de novo sem motivo.
+  const g = deliveryFixture();
+  await g.issued();
+  const p = await g.call("delivery", { channel: "whatsapp" });
+  await g.call("delivery-result", { channel: "whatsapp", attemptId: p.body.attemptId, ok: false, error: "Modelo não aprovado" });
+  assert.equal((await g.call("delivery", { channel: "whatsapp" })).status, 200);
+});
