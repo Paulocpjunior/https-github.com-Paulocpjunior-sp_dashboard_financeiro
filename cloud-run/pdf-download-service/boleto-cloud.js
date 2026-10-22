@@ -145,6 +145,16 @@ function payload(row, address, emission = today()) {
   };
   if (!fields["boleto.pagador.nome"])
     throw new BoletoError("Nome do pagador ausente.");
+  const clean = normalizeAddress(address);
+  for (const [key, value] of Object.entries(clean))
+    fields[`boleto.pagador.endereco.${key}`] = value;
+  fields["boleto.pagador.endereco.cep"] = clean.cep.replace(/^(\d{5})(\d{3})$/, "$1-$2");
+  return fields;
+}
+// Endereço do pagador como o emissor aceita: CEP com 8 dígitos, UF válida e
+// todos os campos preenchidos, menos o complemento.
+function normalizeAddress(address) {
+  const clean = {};
   for (const key of [
     "cep",
     "uf",
@@ -163,17 +173,29 @@ function payload(row, address, emission = today()) {
       /[\r\n]/.test(value)
     )
       throw new BoletoError(`Confira o endereço: ${key}.`);
-    fields[`boleto.pagador.endereco.${key}`] = value;
+    clean[key] = value;
   }
   if (
-    !/^\d{8}$/.test(fields["boleto.pagador.endereco.cep"]) ||
+    !/^\d{8}$/.test(clean.cep) ||
     !"AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO"
       .split(" ")
-      .includes(fields["boleto.pagador.endereco.uf"])
+      .includes(clean.uf)
   )
     throw new BoletoError("CEP ou UF inválido.");
-  fields["boleto.pagador.endereco.cep"] = fields["boleto.pagador.endereco.cep"].replace(/^(\d{5})(\d{3})$/, "$1-$2");
-  return fields;
+  return clean;
+}
+// Mesmo identificador de customer-directory.js billingKey/billingId.
+const billingAddressIds = (row) =>
+  [
+    digits(row.cpfCnpj) && `doc-${digits(row.cpfCnpj)}`,
+    digits(row.clientNumber) && `client-${digits(row.clientNumber)}`,
+  ].filter(Boolean);
+async function savedAddress(db, row) {
+  for (const id of billingAddressIds(row)) {
+    const saved = (await db.collection("billingAddresses").doc(id).get()).data();
+    if (fullAddress(saved?.address)) return saved.address;
+  }
+  return null;
 }
 async function validationError(result, cfg) {
   const fallback = "Dados recusados pelo Boleto Cloud. Revise os dados antes de tentar novamente.";
@@ -340,6 +362,29 @@ function createBoletoHandler({
           throw Object.assign(new BoletoError(error.message, error.status), { wixInvoices: error.wixInvoices });
         }
       };
+      // Ordem: endereço corrigido no cadastro (Regra de faturamento), lançamento
+      // nativo, revisão anterior e último boleto emitido para o mesmo CPF/CNPJ.
+      const suggestAddress = async (row, record, resolveAddress) =>
+        fullAddress(await savedAddress(db, row)) ||
+        fullAddress(row.nativeEntry?.address) ||
+        fullAddress(addressFromFields(record?.fields)) ||
+        (await resolveAddress(digits(row.cpfCnpj)));
+      let addresses;
+      const issuedAddress = async (payer) => {
+        if (!addresses) {
+          addresses = new Map();
+          const issued = await db.collection("boletoIssues").where("environment", "==", cfg.environment).get();
+          const docs = issued.docs
+            .map((d) => d.data())
+            .filter((r) => r.state === "issued" && r.fields)
+            .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+          for (const r of docs) {
+            const key = r.fields["boleto.pagador.cprf"];
+            if (key && !addresses.has(key)) addresses.set(key, addressFromFields(r.fields));
+          }
+        }
+        return fullAddress(addresses.get(payer)) || null;
+      };
       const previewItem = async (itemId, { address, wixOverride, batchId, resolveAddress }) => {
         const target = issueRef(itemId),
           origin = db.collection("transactions").doc(itemId);
@@ -350,11 +395,7 @@ function createBoletoHandler({
         if (!before || ["draft", "rejected"].includes(before.state)) {
           firstIssueGuard(await historyRows(), itemId, current, before);
           await wixLockFor(itemId, current, "preview", wixOverride);
-          if (resolveAddress)
-            chosen =
-              fullAddress(addressFromFields(before?.fields)) ||
-              fullAddress(current.nativeEntry?.address) ||
-              (await resolveAddress(digits(current.cpfCnpj)));
+          if (resolveAddress) chosen = await suggestAddress(current, before, resolveAddress);
         }
         return db.runTransaction(async (tx) => {
           if (!allowed((await tx.get(userRef)).data()))
@@ -441,29 +482,16 @@ function createBoletoHandler({
           if (prior && (prior.uid !== uid || prior.environment !== cfg.environment))
             throw new BoletoError("Lote pertence a outra sessão. Monte uma nova seleção.", 409);
           const at = new Date().toISOString();
-          tx.set(batchRef, { uid, environment: cfg.environment, createdAt: prior?.createdAt || at, updatedAt: at, ids, filters });
+          // Revisar de novo um item (ex.: endereço corrigido) mantém os demais itens do lote.
+          const all = [...new Set([...(prior?.ids || []), ...ids])];
+          if (all.length > BATCH_LIMIT * 2) throw new BoletoError("Lote muito grande. Monte uma nova seleção.");
+          tx.set(batchRef, { uid, environment: cfg.environment, createdAt: prior?.createdAt || at, updatedAt: at, ids: all, filters: prior?.filters || filters });
           eventFor(tx, batchRef, "select", { count: ids.length, filters });
         });
-        let addresses;
-        const resolveAddress = async (payer) => {
-          if (!addresses) {
-            addresses = new Map();
-            const issued = await db.collection("boletoIssues").where("environment", "==", cfg.environment).get();
-            const docs = issued.docs
-              .map((d) => d.data())
-              .filter((r) => r.state === "issued" && r.fields)
-              .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-            for (const r of docs) {
-              const key = r.fields["boleto.pagador.cprf"];
-              if (key && !addresses.has(key)) addresses.set(key, addressFromFields(r.fields));
-            }
-          }
-          return fullAddress(addresses.get(payer)) || null;
-        };
         const items = [];
         for (const itemId of ids) {
           try {
-            const record = await previewItem(itemId, { batchId, resolveAddress });
+            const record = await previewItem(itemId, { batchId, resolveAddress: issuedAddress });
             const ready = record.state === "draft";
             items.push({
               id: itemId,
@@ -530,7 +558,9 @@ function createBoletoHandler({
           ...extra,
         });
       if (!action && request.method === "GET") {
-        reply(existing);
+        const row = !existing || ["draft", "rejected"].includes(existing.state) ? (await source.get()).data() : null;
+        const suggestedAddress = row ? await suggestAddress(row, existing, issuedAddress) : null;
+        sendJson(request, response, 200, { ...publicRecord(existing, cfg), ...(suggestedAddress ? { suggestedAddress } : {}) });
         return true;
       }
       if (["invite", "invite-email"].includes(action) && request.method === "GET") {
@@ -890,4 +920,5 @@ module.exports = {
   config,
   publicRecord,
   priorBoletos,
+  normalizeAddress,
 };

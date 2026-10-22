@@ -89,3 +89,20 @@ test('correção alcança identidades já corrigidas para o mesmo cadastro e os 
  entries=g.store.get('financialSettings/customerDirectory').entries;
  assert.equal(entries['doc:07147345000111'].cpfCnpj,'12345678000195');assert.equal(entries['name:wix:radio sb'].cpfCnpj,'12345678000195');
 });
+
+test('colaboradora corrige endereço de cobrança: validado, idempotente e com log de antes e depois',async()=>{
+ const h=billing(),address={cep:'04538-133',uf:'sp',localidade:'São Paulo',bairro:'Itaim Bibi',logradouro:'Av. Brigadeiro Faria Lima',numero:'3477',complemento:''};
+ const call=(body)=>h.call('billing-address',{requestId:'55555555-5555-4555-8555-555555555555',sourceId:'r',address,origin:'lote',...body});
+ await assert.rejects(call({address:{...address,cep:'123'}}),/CEP|endereço/);
+ const saved=await call();
+ assert.equal(saved.identityKey,'doc-07147345000111');assert.equal(saved.address.cep,'04538133');assert.equal(saved.address.uf,'SP');
+ await call();
+ const doc=h.store.get('billingAddresses/doc-07147345000111');assert.equal(doc.address.logradouro,'Av. Brigadeiro Faria Lima');assert.equal(doc.updatedBy,'Colaboradora');
+ const audits=[...h.store].filter(([k])=>k.startsWith('billingAddressAudit/'));assert.equal(audits.length,1);assert.equal(audits[0][1].before,null);assert.equal(audits[0][1].after.numero,'3477');assert.equal(audits[0][1].origin,'lote');
+ await assert.rejects(call({address:{...address,numero:'1'}}),/Tentativa/);
+ await h.call('billing-address',{requestId:'66666666-6666-4666-8666-666666666666',sourceId:'r',address:{...address,numero:'100'}});
+ const second=[...h.store].filter(([k])=>k.startsWith('billingAddressAudit/')).map(([,v])=>v).find(v=>v.after.numero==='100');assert.equal(second.before.numero,'3477');
+ assert.deepEqual(h.store.get('transactions/r'),radio);
+ const read=await h.call('billing-address?sourceId=r');assert.equal(read.address.numero,'100');
+ h.store.set('users/u',{active:false});await assert.rejects(h.call('billing-address',{requestId:'77777777-7777-4777-8777-777777777777',sourceId:'r',address}),/revogado/);
+});

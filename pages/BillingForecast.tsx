@@ -7,6 +7,8 @@ import Layout from '../components/Layout';
 import BillingCompletenessReview from '../components/BillingCompletenessReview';
 import ChecklistReview from '../components/ChecklistReview';
 import BillingObligationsReview from '../components/BillingObligationsReview';
+import BillingAddressFields from '../components/BillingAddressFields';
+import { BillingAddress, emptyBillingAddress, fetchBillingAddress, isAddressComplete, isAddressEmpty, saveBillingAddress } from '../services/billingAddressService';
 import { AuthService } from '../services/authService';
 import { BillingReportService } from '../services/billingReportService';
 import { FirebaseService } from '../services/firebaseService';
@@ -87,6 +89,9 @@ const BillingForecast: React.FC = () => {
   const [editingProfile, setEditingProfile] = useState<BillingProfile | null>(null);
   const [editingOriginal, setEditingOriginal] = useState<{ client: string; cpfCnpj: string; clientNumber: string; sourceId: string } | null>(null);
   const [editReason, setEditReason] = useState('');
+  // Endereço de cobrança do boleto: salvo à parte da regra, com log próprio.
+  const [address, setAddress] = useState<BillingAddress>(emptyBillingAddress());
+  const [addressState, setAddressState] = useState<{ loading: boolean; dirty: boolean; saving: boolean; message: string; updated: string }>({ loading: false, dirty: false, saving: false, message: '', updated: '' });
   const [editRequestId, setEditRequestId] = useState('');
   const [directoryRevision, setDirectoryRevision] = useState(0);
 
@@ -200,6 +205,16 @@ const BillingForecast: React.FC = () => {
     setEditingOriginal({ client: row.client, cpfCnpj: row.cpfCnpj, clientNumber: row.clientNumber, sourceId: row.sourceTransactionId || '' });
     setEditReason('');
     setEditRequestId(crypto.randomUUID());
+    setAddress(emptyBillingAddress());
+    setAddressState({ loading: Boolean(row.sourceTransactionId), dirty: false, saving: false, message: '', updated: '' });
+    if (row.sourceTransactionId) {
+      fetchBillingAddress(row.sourceTransactionId)
+        .then((result) => {
+          if (result.address) setAddress({ ...emptyBillingAddress(), ...result.address });
+          setAddressState((s) => ({ ...s, loading: false, updated: result.updatedAt ? `Atualizado por ${result.updatedBy || 'colaborador'} em ${new Date(result.updatedAt).toLocaleString('pt-BR')}` : '' }));
+        })
+        .catch((e) => setAddressState((s) => ({ ...s, loading: false, message: e?.message || 'Endereço indisponível.' })));
+    }
     setEditingProfile({
       ...emptyProfile(),
       ...row.profile,
@@ -245,6 +260,24 @@ const BillingForecast: React.FC = () => {
     });
   };
 
+  const persistAddress = async (): Promise<boolean> => {
+    if (!addressState.dirty || !editingOriginal?.sourceId) return true;
+    if (!isAddressComplete(address)) {
+      setAddressState((s) => ({ ...s, message: isAddressEmpty(address) ? 'Preencha o endereço de cobrança.' : 'Complete CEP, UF, cidade, bairro, logradouro e número do endereço de cobrança.' }));
+      return false;
+    }
+    setAddressState((s) => ({ ...s, saving: true, message: '' }));
+    try {
+      const result = await saveBillingAddress(editingOriginal.sourceId, address, 'regra-faturamento');
+      setAddress({ ...emptyBillingAddress(), ...result.address });
+      setAddressState((s) => ({ ...s, saving: false, dirty: false, message: 'Endereço de cobrança salvo. A emissão de boletos já usa este endereço.' }));
+      return true;
+    } catch (e: any) {
+      setAddressState((s) => ({ ...s, saving: false, message: e?.message || 'Não foi possível salvar o endereço.' }));
+      return false;
+    }
+  };
+
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
     if (!editingProfile || !editingOriginal || !editingProfile.client.trim()) return;
@@ -252,6 +285,7 @@ const BillingForecast: React.FC = () => {
     setSaving(true);
     try {
       if (!editingOriginal.sourceId) throw new Error('A empresa não está mais disponível na base de lançamentos do Firestore. Atualize a tela.');
+      if (!(await persistAddress())) throw new Error('Confira o endereço de cobrança antes de salvar a regra.');
       const completenessErrors = getBillingProfileCompletenessErrors(editingProfile);
       if (completenessErrors.length > 0) {
         throw new Error(`Complete os campos obrigatórios: ${completenessErrors.join(', ')}.`);
@@ -501,6 +535,18 @@ const BillingForecast: React.FC = () => {
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Mês de emissão<select value={editingProfile.issueMonthOffset ?? 0} onChange={event => updateEditing({ issueMonthOffset: Number(event.target.value) as -1 | 0 })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5"><option value={0}>Mesmo mês do vencimento</option><option value={-1}>Mês anterior ao vencimento</option></select></label>
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Dia do vencimento<input type="number" min="1" max="31" value={editingProfile.dueDay || ''} onChange={event => updateEditing({ dueDay: event.target.value ? Number(event.target.value) : undefined })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>
               </div>
+              <fieldset className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                <legend className="px-1 text-sm font-bold text-slate-700 dark:text-slate-200">Endereço de cobrança (boleto)</legend>
+                <p className="text-xs text-slate-500">Usado na emissão de boletos, inclusive em lote. Digite o CEP para preencher a rua, o bairro e a cidade.</p>
+                {addressState.loading ? <p role="status" className="text-sm text-slate-500">Carregando endereço…</p> : (
+                  <BillingAddressFields idPrefix="billing-address" value={address} disabled={addressState.saving} onChange={(next) => { setAddress(next); setAddressState((s) => ({ ...s, dirty: true, message: '' })); }} />
+                )}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" disabled={!addressState.dirty || addressState.saving || addressState.loading} onClick={() => { void persistAddress(); }} className="px-4 py-2 rounded-lg border border-blue-600 text-blue-700 dark:text-blue-300 font-semibold disabled:opacity-50">{addressState.saving ? 'Salvando…' : 'Salvar endereço'}</button>
+                  {addressState.message && <span role="status" className="text-xs text-slate-600 dark:text-slate-300">{addressState.message}</span>}
+                  {!addressState.message && addressState.updated && <span className="text-xs text-slate-500">{addressState.updated}</span>}
+                </div>
+              </fieldset>
               <fieldset><legend className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Meio de envio</legend><div className="grid sm:grid-cols-3 gap-3">{([{ value: 'email', label: 'E-mail', icon: Mail }, { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle }, { value: 'printed', label: 'Físico impresso', icon: Printer }] as const).map(item => { const Icon = item.icon; const selected = editingProfile.deliveryChannels.includes(item.value); return <button key={item.value} type="button" onClick={() => toggleChannel(item.value)} className={`p-3 rounded-lg border flex items-center gap-2 font-semibold ${selected ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-400 text-blue-700 dark:text-blue-300' : 'border-slate-300 dark:border-slate-700 text-slate-500'}`}><Icon className="h-4 w-4" />{item.label}</button>; })}</div></fieldset>
               <div className="grid sm:grid-cols-2 gap-4">
                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">E-mail de faturamento<input type="email" value={editingProfile.billingEmail || ''} onChange={event => updateEditing({ billingEmail: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5" /></label>

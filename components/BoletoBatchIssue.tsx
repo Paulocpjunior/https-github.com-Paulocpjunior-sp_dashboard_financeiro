@@ -5,6 +5,8 @@ import { Transaction } from '../types';
 import { getOriginalAmount } from '../utils/transactionAmounts';
 import { PossibleDuplicateScan } from '../utils/transactionTable';
 import { BoletoIssueStatusMap, boletoRequest, boletoStatusLabel } from '../services/boletoIssueStatus';
+import BillingAddressFields from './BillingAddressFields';
+import { BillingAddress, emptyBillingAddress, isAddressComplete, saveBillingAddress } from '../services/billingAddressService';
 
 const BATCH_LIMIT = 100;
 type PreviewItem = {
@@ -50,6 +52,7 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<Record<string, Outcome>>({});
+  const [fixing, setFixing] = useState<{ id: string; address: BillingAddress; saving: boolean; error: string } | null>(null);
   const stop = useRef(false);
   const running = useRef(false);
 
@@ -132,6 +135,27 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
     }
   }
 
+  // Colaborador corrige o endereço no cadastro do cliente (com log) e a cobrança é revisada de novo no mesmo lote.
+  async function fixAddress() {
+    if (!preview || !fixing || fixing.saving) return;
+    if (!isAddressComplete(fixing.address)) {
+      setFixing({ ...fixing, error: 'Complete CEP, UF, cidade, bairro, logradouro e número.' });
+      return;
+    }
+    setFixing({ ...fixing, saving: true, error: '' });
+    try {
+      await saveBillingAddress(fixing.id, fixing.address, 'lote');
+      const result = await (await boletoRequest('batch/preview', { batchId: preview.batchId, ids: [fixing.id], filters })).json();
+      const updated = result.items[0] as PreviewItem;
+      const items = preview.items.map((i) => (i.id === updated.id ? updated : i));
+      const totalCents = items.filter((i) => i.ready).reduce((n, i) => n + Math.round(Number(i.fields?.['boleto.valor'] || 0) * 100), 0);
+      setPreview({ ...preview, items, totalCents });
+      setFixing(updated.ready ? null : { ...fixing, saving: false, error: updated.error });
+    } catch (e) {
+      setFixing({ ...fixing, saving: false, error: e instanceof Error ? e.message : 'Não foi possível salvar o endereço.' });
+    }
+  }
+
   async function downloadPdf(id: string, number?: string) {
     try {
       const response = await boletoRequest(`items/${encodeURIComponent(id)}/pdf`);
@@ -153,6 +177,8 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
   const blocked = preview?.items.filter((i) => !i.ready) || [];
   const done = Object.values(progress).filter((o) => o.state !== 'issuing').length;
   const issuedCount = Object.values(progress).filter((o) => o.state === 'issued').length;
+  const pending = ready.filter((i) => progress[i.id]?.state !== 'issued');
+  const pendingTotal = pending.reduce((n, i) => n + Number(i.fields?.['boleto.valor'] || 0), 0);
   const finished = preview && ready.length > 0 && done === ready.length && !busy;
 
   return (
@@ -280,11 +306,28 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
                       <td className="p-2 text-right tabular-nums">{currency(item.fields ? Number(item.fields['boleto.valor']) : row ? getOriginalAmount(row) : 0)}</td>
                       <td className="p-2">
                         {!item.ready ? (
-                          <span style={{ color: item.block === 'issued' ? 'var(--sp-success)' : 'var(--sp-warning)' }}>
-                            {blockLabels[item.block] || 'Bloqueado'}: {item.error}
-                            {item.block === 'invalid' && /endere/i.test(item.error) ? ' Preencha o endereço na emissão individual.' : ''}
-                            {item.block === 'wix' ? ' Exceção só pelo master, na emissão individual.' : ''}
-                          </span>
+                          <div className="space-y-2">
+                            <span style={{ color: item.block === 'issued' ? 'var(--sp-success)' : 'var(--sp-warning)' }}>
+                              {blockLabels[item.block] || 'Bloqueado'}: {item.error}
+                              {item.block === 'wix' ? ' Exceção só pelo master, na emissão individual.' : ''}
+                            </span>
+                            {item.block === 'invalid' && /endere|CEP/i.test(item.error) && fixing?.id !== item.id && (
+                              <button type="button" className="sp-button" disabled={busy || Boolean(fixing?.saving)} onClick={() => setFixing({ id: item.id, address: emptyBillingAddress(), saving: false, error: '' })}>Corrigir endereço</button>
+                            )}
+                            {fixing?.id === item.id && (
+                              <div className="sp-card space-y-3" style={{ padding: 'var(--sp-space-4)' }}>
+                                <p className="text-sm">O endereço fica salvo no cadastro do cliente (Regra de faturamento) e vale para as próximas emissões.</p>
+                                <BillingAddressFields idPrefix={`fix-${item.id}`} value={fixing.address} disabled={fixing.saving} onChange={(address) => setFixing({ ...fixing, address, error: '' })} />
+                                {fixing.error && <p role="alert" className="text-sm" style={{ color: 'var(--sp-danger)' }}>{fixing.error}</p>}
+                                <div className="flex flex-wrap gap-2">
+                                  <button type="button" className="sp-button sp-button-primary" disabled={fixing.saving} onClick={fixAddress}>
+                                    {fixing.saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}Salvar e revisar
+                                  </button>
+                                  <button type="button" className="sp-button" disabled={fixing.saving} onClick={() => setFixing(null)}>Cancelar</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         ) : !outcome ? (
                           <span className="sp-muted">Pronto</span>
                         ) : outcome.state === 'issuing' ? (
@@ -311,12 +354,12 @@ export default function BoletoBatchIssue({ rows, status, duplicates, onChanged }
             <div className="space-y-3">
               <label className="flex gap-2 text-sm">
                 <input type="checkbox" checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} />
-                Conferi no Boleto Cloud que estas {ready.length} cobranças não foram emitidas anteriormente pelo painel ou por importação CSV.
+                Conferi no Boleto Cloud que estas {pending.length} cobranças não foram emitidas anteriormente pelo painel ou por importação CSV.
               </label>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="sp-button sp-button-primary" disabled={busy || !checked || !preview.enabled} onClick={issueAll}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-                  {preview.environment === 'production' ? `Confirmar emissão real de ${ready.length} boleto(s) · ${currency(preview.totalCents / 100)}` : `Emitir ${ready.length} no Sandbox`}
+                  {preview.environment === 'production' ? `Confirmar emissão real de ${pending.length} boleto(s) · ${currency(pendingTotal)}` : `Emitir ${pending.length} no Sandbox`}
                 </button>
                 {busy && <button type="button" className="sp-button" onClick={() => { stop.current = true; }}>Parar após o atual</button>}
               </div>

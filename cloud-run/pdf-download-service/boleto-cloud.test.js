@@ -617,3 +617,38 @@ test("lote: emissão por item com log do lote; repetir nunca emite de novo; item
   f.data.set("users/other", { active: true, role: "admin" });
   assert.equal((await f.post("batch/preview", { batchId, ids: ["z"] }, "other")).status, 409);
 });
+
+test("endereço corrigido no cadastro libera o lote e é sugerido na emissão individual", async () => {
+  const f = fixture(success, env);
+  f.data.set("transactions/z", { ...row(), cpfCnpj: "08821338000116", clientNumber: 79, dueDate: "2099-10-28", totalCobranca: 1450 });
+  const blocked = await f.post("batch/preview", { batchId, ids: ["z"] });
+  assert.match(blocked.body.items[0].error, /endereço/);
+  f.data.set("billingAddresses/doc-08821338000116", { address: { ...address, logradouro: "Rua Corrigida" } });
+  const get = await f.call("", undefined, "z");
+  assert.equal(get.body.suggestedAddress.logradouro, "Rua Corrigida");
+  const ready = await f.post("batch/preview", { batchId, ids: ["z"] });
+  assert.equal(ready.body.items[0].ready, true);
+  assert.equal(ready.body.items[0].fields["boleto.pagador.endereco.logradouro"], "Rua Corrigida");
+  // Cadastro pelo N.Cliente também vale; endereço incompleto é ignorado.
+  f.data.delete("billingAddresses/doc-08821338000116");
+  f.data.set("billingAddresses/client-79", { address: { ...address, numero: "" } });
+  const draftFromBefore = await f.post("batch/preview", { batchId, ids: ["z"] });
+  assert.equal(draftFromBefore.body.items[0].fields["boleto.pagador.endereco.logradouro"], "Rua Corrigida");
+});
+
+test("revisar de novo um item mantém os demais no lote para a emissão", async () => {
+  let calls = 0;
+  const f = fixture((...args) => { calls++; return success(...args); }, env);
+  f.data.set("transactions/b", { ...row(), dueDate: "2099-12-10", totalCobranca: 300, nativeEntry: { address } });
+  f.data.set("transactions/c", { ...row(), cpfCnpj: "52998224725", dueDate: "2099-12-10", totalCobranca: 200 });
+  const first = await f.post("batch/preview", { batchId, ids: ["b", "c"] });
+  assert.equal(first.body.items.find((i) => i.id === "c").ready, false);
+  f.data.set("billingAddresses/doc-52998224725", { address });
+  const again = await f.post("batch/preview", { batchId, ids: ["c"] });
+  assert.equal(again.body.items[0].ready, true);
+  assert.deepEqual(f.data.get(`boletoIssueBatches/${batchId}`).ids, ["b", "c"]);
+  const b = first.body.items.find((i) => i.id === "b");
+  for (const [id, hashValue] of [["b", b.previewHash], ["c", again.body.items[0].previewHash]])
+    assert.equal((await f.call("issue", { previewHash: hashValue, legacyChecked: true, batchId }, id)).body.state, "issued");
+  assert.equal(calls, 2);
+});
