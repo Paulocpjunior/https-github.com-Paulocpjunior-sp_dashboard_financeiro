@@ -156,3 +156,14 @@ test('RET re-send releases a native boleto only from its own automatic quarantin
   assert.equal(f.data.get('transactions/native-test').status,expected==='settled'?'Pago':'Pendente');
  }
 });
+test('late payment with charges settles in full only when the RET job enables it, interest recorded', () => {
+  const late = (patch = p => p) => { const f = make(); f.issue.fields['boleto.vencimento'] = f.body.boleto.vencimento = f.row.dueDate = '2026-10-08';
+    Object.assign(f.body.boleto.pagamento, { valor: 10.5, juros: 0.5 }); patch(f); return f; };
+  const ok = late(), result = evaluate(id, ok.issue, ok.row, ok.body, cfg, at, { lateInterest: true });
+  assert.equal(result.state, 'ready'); assert.equal(result.evidence.paidCents, 1050); assert.equal(result.evidence.interestCents, 50);
+  assert.equal(evaluate(id, ok.issue, ok.row, ok.body, cfg, at).state, 'review');
+  for (const mutate of [f => f.body.boleto.pagamento.valor = 9.5, f => f.body.boleto.pagamento.desconto = 0.1, f => f.body.boleto.pagamento.juros = -1,
+    f => { f.issue.fields['boleto.vencimento'] = f.body.boleto.vencimento = f.row.dueDate = '2026-10-09'; }]) {
+    const v = late(mutate); assert.equal(evaluate(id, v.issue, v.row, v.body, cfg, at, { lateInterest: true }).state, 'review', mutate.toString());
+  }
+});

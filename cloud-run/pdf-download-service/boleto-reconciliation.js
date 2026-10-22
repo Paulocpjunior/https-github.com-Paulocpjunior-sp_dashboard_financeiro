@@ -89,7 +89,16 @@ function differences(record, row, confirmedRet = false) {
     errors.push("Lançamento com vínculo nativo ou baixa bancária existente.");
   return errors;
 }
-function evaluate(record, row, body, at, auditedManual = false, confirmedRet = false) {
+function charges(p, record, lateInterest) {
+  const paid = cents(p.valor), extra = paid - record.amountCents;
+  if (p.desconto != null && p.desconto !== 0) return false;
+  if (extra === 0) return ["multa", "juros"].every((k) => p[k] == null || p[k] === 0);
+  return lateInterest && extra > 0 && p.data > record.dueDate &&
+    ["multa", "juros"].every((k) => p[k] == null || (typeof p[k] === "number" && p[k] >= 0));
+}
+// lateInterest: a bank-confirmed payment after the due date, above the boleto value and without discount, is a
+// full payment with charges; the difference is recorded as interest. Only the RET job enables it.
+function evaluate(record, row, body, at, auditedManual = false, confirmedRet = false, { lateInterest = false } = {}) {
   const errors = differences(record, row, confirmedRet),
     b = body?.boleto;
   if (
@@ -152,8 +161,7 @@ function evaluate(record, row, body, at, auditedManual = false, confirmedRet = f
     (p.dataCredito != null &&
       (!validDate(p.dataCredito) || p.dataCredito < p.data)) ||
     typeof p.valor !== "number" ||
-    cents(p.valor) !== record.amountCents ||
-    ["multa", "juros", "desconto"].some((k) => p[k] != null && p[k] !== 0)
+    !charges(p, record, lateInterest)
   )
     return {
       state: "review",
@@ -163,6 +171,7 @@ function evaluate(record, row, body, at, auditedManual = false, confirmedRet = f
     date: p.data,
     cents: cents(p.valor),
     creditedAt: p.dataCredito || null,
+    interestCents: cents(p.valor) - record.amountCents,
   };
   if (paid) {
     if (
@@ -483,6 +492,7 @@ async function apply(tx, db, rowRef, row, linkRef, link, decision, at, body) {
         origin: "BANCO",
         paymentDate: payment.date,
         paidCents: payment.cents,
+        interestCents: payment.interestCents || 0,
         creditedAt: payment.creditedAt,
         appliedAt: at,
         kind: "confirmed-historical-link",

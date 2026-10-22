@@ -11,7 +11,7 @@ const LEASE_MS = 15 * 60 * 1000;
 const PAGE_SIZE = 20;
 
 // Only explicit links created during issuance are eligible. Never match by name or amount.
-function evaluate(issueId, issue, row, body, cfg, at) {
+function evaluate(issueId, issue, row, body, cfg, at, { lateInterest = false } = {}) {
   const review = reason => ({ state: 'review', reason });
   const f = issue?.fields || {}, b = body?.boleto;
   if (!issue || issue.environment !== 'production' || issue.state !== 'issued' || !issue.transactionId ||
@@ -44,11 +44,16 @@ function evaluate(issueId, issue, row, body, cfg, at) {
   if (!dateValid(p.data) || p.data < f['boleto.emissao'] || p.data > localDay(at) ||
       (p.dataCredito != null && (!dateValid(p.dataCredito) || p.dataCredito < p.data)))
     return review('Data de pagamento ou de crédito inválida.');
-  if (typeof p.valor !== 'number' || cents(p.valor) !== cents(f['boleto.valor']) || p.valor <= 0 ||
-      ['multa', 'juros', 'desconto'].some(k => p[k] != null && p[k] !== 0))
+  // Paid late with charges (lateInterest, RET job only): full payment above the boleto value, difference as interest.
+  const extra = cents(p.valor) - cents(f['boleto.valor']);
+  const charged = ['multa', 'juros'].some(k => p[k] != null && p[k] !== 0);
+  const late = lateInterest && extra > 0 && p.data > f['boleto.vencimento'] &&
+    ['multa', 'juros'].every(k => p[k] == null || (typeof p[k] === 'number' && p[k] >= 0));
+  if (typeof p.valor !== 'number' || p.valor <= 0 || (p.desconto != null && p.desconto !== 0) ||
+      (extra !== 0 || charged) && !late)
     return review('Valor pago, encargos ou desconto exigem conferência.');
   const evidence = { issueId, boletoId: idFor(issue.token), number: String(b.numero), paymentDate: p.data,
-    paidCents: cents(p.valor), origin: 'BANCO' };
+    paidCents: cents(p.valor), origin: 'BANCO', ...(late ? { interestCents: extra } : {}) };
   const evidenceId = hash(evidence);
   if (row.boletoSettlement) {
     if (row.boletoSettlement.evidenceId === evidenceId && row.status === 'Pago' && row.paymentDate === p.data && cents(row.valueReceived) === cents(p.valor))
@@ -70,7 +75,7 @@ function historyRow(issue, account) {
     paidAt: null, paidCents: null, creditedAt: null, cancelledAt: null };
 }
 
-async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun, lease, settlementEnabled, leaseJob = 'production', returnEvidence = null, ignoreManual = () => false }) {
+async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun, lease, settlementEnabled, leaseJob = 'production', returnEvidence = null, ignoreManual = () => false, lateInterest = false }) {
   const issue = issueDoc.data();
   if (issue.state !== 'issued' || !issue.token) return { state: 'skipped' };
   const response = await fetchImpl(`${cfg.base}/boletos/${encodeURIComponent(issue.token)}/situacao`, {
@@ -83,7 +88,7 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
   if (dryRun) {
     const marked = (await db.collection('boletoManualResolutions').doc(idFor(issue.token)).get()).data();
     if (marked && !ignoreManual(marked)) return {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
-    return evaluate(issueDoc.id, issue, (await rowRef.get()).data(), body, cfg, at);
+    return evaluate(issueDoc.id, issue, (await rowRef.get()).data(), body, cfg, at, { lateInterest });
   }
   return db.runTransaction(async tx => {
     const leaseRef = db.collection('boletoReturnJobs').doc(leaseJob);
@@ -92,7 +97,7 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
     const current = (await tx.get(issueDoc.ref)).data();
     if (hash(current) !== hash(issue)) throw new Error('ISSUE_CHANGED');
     const row = (await tx.get(rowRef)).data();
-    let result = evaluate(issueDoc.id, current, row, body, cfg, at);
+    let result = evaluate(issueDoc.id, current, row, body, cfg, at, { lateInterest });
     const manual = (await tx.get(db.collection('boletoManualResolutions').doc(idFor(issue.token)))).data();
     if (manual && !ignoreManual(manual) && result.state === 'ready') result = {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
     const updateRef = db.collection('boletoHistoryUpdates').doc(idFor(issue.token));
