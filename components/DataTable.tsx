@@ -2,6 +2,7 @@ import './FinancialConsultation.css';
 import '../design-system/tokens.css';
 import NativeEntryDetails from './NativeEntryDetails';
 import BoletoIssueModal from './BoletoIssueModal';
+import { boletoStatusLabel, useBoletoIssueStatus } from '../services/boletoIssueStatus';
 
 import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
@@ -220,6 +221,27 @@ const DataTable: React.FC<DataTableProps> = ({
   );
 
   const boletoEligibleCount = pendingReceivablesData.length;
+
+  // Marca na lista as cobranças cuja 1ª via de boleto já foi emitida (app, painel/CSV ou vínculo).
+  const pageBoletoIds = useMemo(() => {
+    const pending = new Set(pendingReceivablesData.map(row => row.id));
+    return data.filter(row => pending.has(row.id)).map(row => row.id);
+  }, [data, pendingReceivablesData]);
+  const boletoStatus = useBoletoIssueStatus(pageBoletoIds, !readOnly && isContasAReceber && canExportBoletoCloud && pageBoletoIds.length > 0, showBoletoModal ? 1 : 0);
+
+  const renderBoletoIssuedBadge = (row: Transaction) => {
+    const status = boletoStatus.items[row.id];
+    if (!status || status.status === 'none') return null;
+    const issued = status.status === 'issued';
+    return (
+      <span
+        className={`ml-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-bold ${issued ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'}`}
+        title={`${boletoStatusLabel(status)}. A emissão de outro boleto para esta cobrança está bloqueada.`}
+      >
+        {issued ? '1ª VIA EMITIDA' : 'EMISSÃO EM ANDAMENTO'}
+      </span>
+    );
+  };
 
   // Derivar estado do botão "Selecionar Todos" com base na busca atual
 
@@ -549,6 +571,7 @@ const DataTable: React.FC<DataTableProps> = ({
                             <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">
                               {getPaymentMethod(row) || '-'}
                             </span>
+                            {renderBoletoIssuedBadge(row)}
                           </td>
                           <td className="px-2 py-2 whitespace-nowrap text-center">
                             {row.source === 'native-finance' && <button className="text-blue-600 text-xs underline mr-2" onClick={() => setNativeDetails(row)}>Detalhes</button>}
