@@ -1,5 +1,5 @@
 const {createHash}=require('node:crypto');
-const {validDocument}=require('./boleto-cloud');
+const {validDocument,normalizeAddress}=require('./boleto-cloud');
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const digits=x=>String(x||'').replace(/\D/g,'');
@@ -54,6 +54,13 @@ async function handle({request,url,db,userRef,user,uid,reply,readBody}){
  if(request.method==='GET'){
   const state=(await ref.get()).data()||{revision:0,entries:{}};await recheck();
   if(path==='mappings'){reply(state);return;}
+  if(path==='billing-address'){
+   const sourceId=url.searchParams.get('sourceId')||'';if(!/^[a-zA-Z0-9_-]{1,200}$/.test(sourceId))fail('Identificador inválido.',400);
+   const source=(await db.collection('transactions').doc(sourceId).get()).data();if(!source)fail('Lançamento não encontrado.',404);
+   const p=resolve(identity(source),state.entries||{}).profile||profile(source),key=billingKey(p);
+   const saved=(await db.collection('billingAddresses').doc(billingId(key)).get()).data();
+   await recheck();reply({identityKey:key,address:saved?.address||null,updatedAt:saved?.updatedAt||null,updatedBy:saved?.updatedBy||null});return;
+  }
   if(path!=='list')fail('Acesso restrito ao administrador.',403);
   const month=url.searchParams.get('month');if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month||''))fail('Competência inválida.',400);
   const rows=await db.collection('transactions').where('dueDate','>=',month+'-01').where('dueDate','<=',month+'-31').limit(5001).get();
@@ -61,9 +68,10 @@ async function handle({request,url,db,userRef,user,uid,reply,readBody}){
   const groups=new Map();for(const d of rows.docs){const r=d.data();if(r.isExcluded||norm(r.movement)!=='entrada')continue;const key=identity(r),canonical=resolve(key,state.entries);const found=groups.get(key);if(found){found.count++;continue;}groups.set(key,{key,transactionId:d.id,source:profile(r),sourceSystem:r.source||'histórico',canonicalKey:canonical.key,profile:canonical.profile||profile(r),linked:Boolean(state.entries[key]?.target),count:1});}
   await recheck();reply({revision:state.revision,customers:[...groups.values()].sort((a,b)=>a.profile.client.localeCompare(b.profile.client,'pt-BR'))});return;
  }
- if(request.method!=='POST'||!['preview','commit','billing-profile'].includes(path))fail('Rota não encontrada.',404);
+ if(request.method!=='POST'||!['preview','commit','billing-profile','billing-address'].includes(path))fail('Rota não encontrada.',404);
  let b;try{b=JSON.parse((await readBody(request)).toString('utf8'));}catch{fail('Dados inválidos.',400);}
  if(path==='billing-profile'){reply(await saveBillingProfile({db,ref,user,uid,recheck,b}));return;}
+ if(path==='billing-address'){reply(await saveBillingAddress({db,ref,user,uid,recheck,b}));return;}
  if(!/^[a-f0-9-]{36}$/.test(b.requestId||'')||![b.sourceId,...(b.targetId?[b.targetId]:[])].every(id=>/^[a-zA-Z0-9_-]{1,200}$/.test(id||'')))fail('Identificador inválido.',400);
  const key=hash([uid,b.requestId]),op=db.collection('customerOperations').doc(key),digest=hash([path,b]);
  const result=await db.runTransaction(async tx=>{
@@ -153,6 +161,26 @@ async function saveBillingProfile({db,ref,user,uid,recheck,b}){
   const result={profile:saved,revision:directory.revision,identityChanged};
   tx.create(db.collection('billingProfileAudit').doc(key),{uid,actor,at,action:identityChanged?'billing-profile-identity':'billing-profile',sourceId:b.sourceId,reason,before:{customer:before,rule:oldRule},after:{customer:after,rule:saved},...(identityChanged?{directoryRevisionBefore:state.revision||0,directoryRevisionAfter:directory.revision}:{})});
   if(identityChanged)tx.create(db.collection('customerAudit').doc(key),{uid,actor,at,action:'edit-identifiers',sourceId:b.sourceId,targetId:null,reason,before:state,after:directory});
+  tx.create(op,{digest,result,at});return result;
+ });
+}
+// Endereço de cobrança do cliente (boleto). Qualquer colaborador ativo corrige; cada alteração gera log com antes e depois.
+async function saveBillingAddress({db,ref,user,uid,recheck,b}){
+ if(!/^[a-f0-9-]{36}$/.test(b.requestId||'')||!/^[a-zA-Z0-9_-]{1,200}$/.test(b.sourceId||''))fail('Identificador inválido.',400);
+ let address;try{address=normalizeAddress(b.address);}catch(e){fail(e.message,400);}
+ const key=hash([uid,b.requestId]),op=db.collection('customerOperations').doc(key),digest=hash(['billing-address',b]);
+ return db.runTransaction(async tx=>{
+  await recheck(tx);const previous=(await tx.get(op)).data();if(previous){if(previous.digest!==digest)fail('Tentativa já usada.');return previous.result;}
+  const state=(await tx.get(ref)).data()||{revision:0,entries:{}},source=(await tx.get(db.collection('transactions').doc(b.sourceId))).data();
+  if(!source||source.isExcluded||norm(source.movement)!=='entrada')fail('A empresa não está mais disponível na base de lançamentos. Atualize a tela.');
+  const p=resolve(identity(source),state.entries||{}).profile||profile(source),identityKey=billingKey(p);
+  if(identityKey.startsWith('name-'))fail('Informe o CPF/CNPJ ou o N.Cliente da empresa antes de salvar o endereço.',400);
+  const addrRef=db.collection('billingAddresses').doc(billingId(identityKey)),before=(await tx.get(addrRef)).data()||null;
+  const at=new Date().toISOString(),actor=user.name||user.username||uid;
+  const saved={identityKey,client:p.client,cpfCnpj:p.cpfCnpj,clientNumber:p.clientNumber,address,createdAt:before?.createdAt||at,updatedAt:at,updatedBy:actor,updatedByUid:uid};
+  tx.set(addrRef,saved);
+  const result={identityKey,address,updatedAt:at,updatedBy:actor};
+  tx.create(db.collection('billingAddressAudit').doc(key),{uid,actor,at,action:'billing-address',sourceId:b.sourceId,identityKey,origin:String(b.origin||'').slice(0,40),before:before?.address||null,after:address});
   tx.create(op,{digest,result,at});return result;
  });
 }

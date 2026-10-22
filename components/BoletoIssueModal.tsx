@@ -9,6 +9,7 @@ import { getOriginalAmount } from "../utils/transactionAmounts";
 import { PossibleDuplicateScan } from "../utils/transactionTable";
 import BoletoBatchIssue from "./BoletoBatchIssue";
 import { boletoStatusLabel, useBoletoIssueStatus } from "../services/boletoIssueStatus";
+import { BillingAddress, saveBillingAddress } from "../services/billingAddressService";
 
 const OPEN_STATUSES = ["Pendente", "Agendado", "Vencida"];
 
@@ -21,6 +22,7 @@ type RecordState = {
   number?: string;
   error?: string;
   canRecover?: boolean;
+  suggestedAddress?: Record<string, string>;
   registration?: {
     registeredAt: string | null;
     rejected: boolean;
@@ -60,6 +62,9 @@ export default function BoletoIssueModal({
   const [id, setId] = useState("");
   const [record, setRecord] = useState<RecordState | null>(null);
   const [address, setAddress] = useState<Record<string, string>>({});
+  const [suggested, setSuggested] = useState<Record<string, string>>({});
+  const [saveAddress, setSaveAddress] = useState(true);
+  const [addressNote, setAddressNote] = useState("");
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -97,6 +102,7 @@ export default function BoletoIssueModal({
     setAddress({});
     setWixLock(null);
     setWixReason("");
+    setAddressNote("");
     if (!id) return;
     setBusy(true);
     request()
@@ -104,14 +110,14 @@ export default function BoletoIssueModal({
       .then((value) => {
         if (current !== generation.current) return;
         setRecord(value);
-        setAddress(
-          Object.fromEntries(
-            Object.keys(addressFields).map((k) => [
-              k,
-              value.fields?.[`boleto.pagador.endereco.${k}`] || row?.nativeEntry?.address?.[k] || "",
-            ]),
-          ),
+        const initial = Object.fromEntries(
+          Object.keys(addressFields).map((k) => [
+            k,
+            value.fields?.[`boleto.pagador.endereco.${k}`] || value.suggestedAddress?.[k] || row?.nativeEntry?.address?.[k] || "",
+          ]),
         );
+        setAddress(initial);
+        setSuggested(initial);
       })
       .catch((e) => {
         if (current === generation.current) setError(e.message);
@@ -148,6 +154,13 @@ export default function BoletoIssueModal({
       } else {
         setRecord(await response.json());
         setChecked(false);
+        // Endereço digitado na revisão vai para o cadastro do cliente, com log, para os próximos boletos e o lote.
+        const changed = Object.keys(addressFields).some((k) => (address[k] || "").trim() !== (suggested[k] || "").trim());
+        if (action === "preview" && saveAddress && changed) {
+          saveBillingAddress(id, address as BillingAddress, "emissao-individual")
+            .then(() => { setSuggested(address); setAddressNote("Endereço salvo no cadastro do cliente."); })
+            .catch((e) => setAddressNote(`Endereço não salvo no cadastro: ${e instanceof Error ? e.message : "erro"}`));
+        }
         if (["issue", "recover"].includes(action)) setRefresh((n) => n + 1);
       }
     } catch (e) {
@@ -310,6 +323,10 @@ export default function BoletoIssueModal({
                     </label>
                   ))}
                 </div>
+                <label className="flex gap-2 text-sm">
+                  <input type="checkbox" checked={saveAddress} disabled={busy} onChange={(e) => setSaveAddress(e.target.checked)} />
+                  Salvar este endereço no cadastro do cliente (vale para o lote e os próximos boletos)
+                </label>
                 <button
                   className={button}
                   disabled={busy || Boolean(duplicate)}
@@ -317,6 +334,7 @@ export default function BoletoIssueModal({
                 >
                   Revisar cobrança
                 </button>
+                {addressNote && <p role="status" className="text-sm">{addressNote}</p>}
               </>
             )}
             {record.state === "draft" && (

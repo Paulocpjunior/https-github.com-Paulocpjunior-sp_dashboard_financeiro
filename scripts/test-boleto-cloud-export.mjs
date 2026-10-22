@@ -37,3 +37,9 @@ assert.doesNotMatch(batch, /api-key_|BOLETO_CLOUD_API_KEY|BOLETO_CLOUD_ACCOUNT_T
 assert.match(table, /renderBoletoIssuedBadge\(row\)/);
 assert.match(modal, /<BoletoBatchIssue/);
 console.log("Emissão em lote: revisão, confirmação explícita, lote auditado e selo de 1ª via verificados.");
+const forecast = readFileSync("pages/BillingForecast.tsx", "utf8");
+assert.match(forecast, /Endereço de cobrança \(boleto\)/);
+assert.match(forecast, /saveBillingAddress\(editingOriginal\.sourceId, address, 'regra-faturamento'\)/);
+assert.match(batch, /saveBillingAddress\(fixing\.id, fixing\.address, 'lote'\)/);
+assert.match(modal, /saveBillingAddress\(id, address as BillingAddress, "emissao-individual"\)/);
+console.log("Endereço de cobrança: edição na regra, correção no lote e na emissão individual verificadas.");
