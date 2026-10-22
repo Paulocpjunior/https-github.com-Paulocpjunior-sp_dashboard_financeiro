@@ -70,7 +70,7 @@ function historyRow(issue, account) {
     paidAt: null, paidCents: null, creditedAt: null, cancelledAt: null };
 }
 
-async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun, lease, settlementEnabled, leaseJob = 'production', returnEvidence = null }) {
+async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun, lease, settlementEnabled, leaseJob = 'production', returnEvidence = null, ignoreManual = () => false }) {
   const issue = issueDoc.data();
   if (issue.state !== 'issued' || !issue.token) return { state: 'skipped' };
   const response = await fetchImpl(`${cfg.base}/boletos/${encodeURIComponent(issue.token)}/situacao`, {
@@ -81,7 +81,8 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
   const body = await response.json();
   const rowRef = db.collection('transactions').doc(issue.transactionId);
   if (dryRun) {
-    if ((await db.collection('boletoManualResolutions').doc(idFor(issue.token)).get()).data()) return {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
+    const marked = (await db.collection('boletoManualResolutions').doc(idFor(issue.token)).get()).data();
+    if (marked && !ignoreManual(marked)) return {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
     return evaluate(issueDoc.id, issue, (await rowRef.get()).data(), body, cfg, at);
   }
   return db.runTransaction(async tx => {
@@ -93,7 +94,7 @@ async function processIssue({ db, issueDoc, cfg, account, fetchImpl, at, dryRun,
     const row = (await tx.get(rowRef)).data();
     let result = evaluate(issueDoc.id, current, row, body, cfg, at);
     const manual = (await tx.get(db.collection('boletoManualResolutions').doc(idFor(issue.token)))).data();
-    if (manual && result.state === 'ready') result = {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
+    if (manual && !ignoreManual(manual) && result.state === 'ready') result = {state:'review',reason:'Boleto com tratamento manual registrado; confira o histórico.'};
     const updateRef = db.collection('boletoHistoryUpdates').doc(idFor(issue.token));
     const previous = (await tx.get(updateRef)).data();
     if (previous?.syncedAt > at || current.returnSync?.checkedAt > at) throw new Error('STALE_RESPONSE');

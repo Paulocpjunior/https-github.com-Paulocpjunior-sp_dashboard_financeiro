@@ -80,11 +80,11 @@ function validateRevision(previous, current) {
 }
 // Quarantine the individual title, preserving the original evidence. Unrelated titles continue.
 const titleKey = event => hash([event.boletoId ?? (event.token ? idFor(event.token) : null), event.number]);
-// The provider re-sends some liquidations with jurosMora zeroed and the credit date filled in.
+// The provider re-sends some liquidations with a nonzero jurosMora zeroed and the credit date filled in.
 // Same payment (value, date, codes); the individual query still has to confirm it before any baixa.
 function sameLiquidation(original, incoming) {
     const o = structuredClone(original), n = structuredClone(incoming);
-    if (o?.situacao !== 'LIQUIDACAO' || !o.info || !n?.info || cents(n.info.jurosMora ?? 0) !== 0) return false;
+    if (o?.situacao !== 'LIQUIDACAO' || !o.info || !n?.info || !(cents(o.info.jurosMora ?? 0) > 0) || cents(n.info.jurosMora ?? 0) !== 0) return false;
     const credit = n.info.dataDeCredito ?? null;
     if (o.info.dataDeCredito ? credit !== o.info.dataDeCredito : credit !== null && !validDay(credit)) return false;
     for (const x of [o, n]) { delete x.info.jurosMora; delete x.info.dataDeCredito; }
@@ -94,8 +94,11 @@ function revisionConflicts(previous, current, priorEvents, events = []) {
     const blocked = new Set(), superseded = new Map();
     const harmless = original => {
         const incoming = events.filter(e => titleKey(e) === titleKey(original));
+        const first = original.evidenceConflict?.original || original.occurrence;
+        // The version that triggered the quarantine must be this same re-send, so a revert never qualifies.
+        const seen = original.evidenceConflict ? original.evidenceConflict.incoming || [] : [];
         return !original.manualResolution && original.state !== 'manual-resolved' && incoming.length === 1 &&
-            sameLiquidation(original.evidenceConflict?.original || original.occurrence, incoming[0].occurrence);
+            (!original.evidenceConflict || seen.length > 0) && [incoming[0], ...seen].every(e => sameLiquidation(first, e.occurrence));
     };
     const mark = original => superseded.set(titleKey(original), [...(superseded.get(titleKey(original)) || []), original.storedId]);
     for (const [key, credit] of Object.entries(previous)) {
@@ -128,13 +131,15 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
     const body = await get(cfg, `boletos/${encodeURIComponent(event.token)}/situacao`, fetchImpl);
     if (!paymentMatches(event, body))
         return { state: 'review', reason: 'Liquidação do arquivo diverge da situação individual do boleto.' };
+    // The quarantine marker of a re-sent liquidation is not a human decision; any other marker is.
+    const quarantineOnly = manual => manual?.reason === 'RETURN_EVIDENCE_CONFLICT' && !manual.transactionId && supersedes.includes(manual.eventId);
     const matches = await db.collection('boletoIssues').where('token', '==', event.token).limit(2).get();
     if (matches.docs.length > 1)
         return { state: 'review', reason: 'Mais de um vínculo de emissão para o boleto.' };
     if (matches.docs.length === 1) {
         const pointer = (await db.collection('boletoHistory').doc('production').get()).data();
         const meta = pointer?.snapshot ? (await db.collection('boletoHistorySnapshots').doc(pointer.snapshot).get()).data() : null;
-        return processIssue({ db, issueDoc: matches.docs[0], cfg, account: meta?.issuanceAccounts?.[cfg.accountFingerprint], fetchImpl: async () => ({ ok: true, json: async () => body }), at, dryRun, lease, leaseJob: 'cnab-production', returnEvidence: provenance, settlementEnabled: env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED === 'true' });
+        return processIssue({ db, issueDoc: matches.docs[0], cfg, account: meta?.issuanceAccounts?.[cfg.accountFingerprint], fetchImpl: async () => ({ ok: true, json: async () => body }), at, dryRun, lease, leaseJob: 'cnab-production', returnEvidence: provenance, settlementEnabled: env.BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED === 'true', ignoreManual: quarantineOnly });
     }
     const linkRef = db.collection('boletoReconciliations').doc(idFor(event.token));
     const autoLink = env.BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED === 'true', record = autoLink ? recordFrom(event, body) : null;
@@ -146,9 +151,7 @@ async function settleEvent({ db, cfg, env, fetchImpl, event, provenance, lease, 
                 throw Error('LEASE_LOST');
         }
         const manual = (await tx.get(db.collection('boletoManualResolutions').doc(idFor(event.token)))).data();
-        // The quarantine marker of a re-sent liquidation is not a human decision; any other marker is.
-        const quarantineOnly = manual?.reason === 'RETURN_EVIDENCE_CONFLICT' && !manual.transactionId && supersedes.includes(manual.eventId);
-        if (manual && !quarantineOnly) return {state:'review', reason:'Boleto com tratamento manual registrado. Confira o histórico; não reaplicar automaticamente.'};
+        if (manual && !quarantineOnly(manual)) return {state:'review', reason:'Boleto com tratamento manual registrado. Confira o histórico; não reaplicar automaticamente.'};
         const link = (await tx.get(linkRef)).data();
         if (!link && candidate?.id)
             return linkAutomatically(tx);

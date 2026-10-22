@@ -261,12 +261,15 @@ test('liquidation re-sent with juros zeroed and credit date filled supersedes th
     assert.equal((await runRetFiles(f)).events, 1); // only the new version is retried; the superseded one is history
 });
 test('titles quarantined by the old rule are released only for the juros/credit re-send', async () => {
-    const quarantine = async (mutate, patchOriginal = {}) => {
+    const quarantine = async (mutate, patchOriginal = {}, recorded = null, juros = 1.5) => {
         const f = evolvingFixture();
-        Object.assign(f.response.arquivo.titulos[0].ocorrencias[0].info, { jurosMora: 1.5, dataDeCredito: null });
+        Object.assign(f.response.arquivo.titulos[0].ocorrencias[0].info, { jurosMora: juros, dataDeCredito: null });
         await runRetFiles(f);
         const [key, original] = [...f.records.entries()].find(([k]) => k.startsWith('boletoReturnEvents/'));
-        Object.assign(original, { state: 'review', evidenceConflict: { original: structuredClone(original.occurrence), incoming: [], code: 'RETURN_EVIDENCE_CONFLICT' }, ...patchOriginal });
+        const resent = structuredClone(original.occurrence);
+        Object.assign(resent.info, { jurosMora: 0, dataDeCredito: '2026-10-10' });
+        Object.assign(original, { state: 'review', evidenceConflict: { original: structuredClone(original.occurrence), incoming: [{ number: original.number, occurrence: resent }], code: 'RETURN_EVIDENCE_CONFLICT' }, ...patchOriginal });
+        if (recorded) original.evidenceConflict.incoming = recorded(resent);
         mutate(f.response.arquivo.titulos[0].ocorrencias[0].info, f.response);
         await runRetFiles(f);
         return f.records.get(key).state;
@@ -277,6 +280,12 @@ test('titles quarantined by the old rule are released only for the juros/credit 
     assert.equal(await quarantine(i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10', dataDePagamento: '2026-10-08' })), 'review');
     assert.equal(await quarantine((i, r) => { r.arquivo.titulos = []; }), 'review');
     assert.notEqual(await quarantine(i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10' }), { manualResolution: { evidenceVersion: 'x', remainingCents: 10 } }), 'superseded');
+    const resend = i => Object.assign(i, { jurosMora: 0, dataDeCredito: '2026-10-10' });
+    // No interest in the original: nothing was zeroed, so a later identical version is a revert, not a re-send.
+    assert.equal(await quarantine(resend, {}, null, 0), 'review');
+    // The version that caused the quarantine was something else (or a removal): returning to the original stays blocked.
+    assert.equal(await quarantine(resend, {}, r => [{ number: '001', occurrence: { ...r, info: { ...r.info, valorPago: 11 } } }]), 'review');
+    assert.equal(await quarantine(resend, {}, () => []), 'review');
 });
 test('only the automatic quarantine marker of the superseded version is ignored; human markers still stop the baixa', async () => {
     const { idFor } = require('./boleto-history');
