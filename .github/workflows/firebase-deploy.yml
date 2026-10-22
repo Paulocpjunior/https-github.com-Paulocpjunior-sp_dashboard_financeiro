@@ -128,6 +128,9 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           channelId: live
           projectId: gen-lang-client-0888019226
+          # 15.34.1 (21/10/2026) passou a exigir serviceusage.services.get da conta de deploy.
+          # Fixado na última versão que publicou com as permissões atuais.
+          firebaseToolsVersion: 15.34.0
 
       - name: Fixar a consulta do checklist na revisão implantada
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
