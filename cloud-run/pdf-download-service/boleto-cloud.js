@@ -227,12 +227,45 @@ function publicRecord(record, cfg) {
       Date.now() - record.attemptAt > 60000,
   };
 }
+// Boletos já emitidos para a cobrança fora desta emissão: painel, CSV ou outro
+// lançamento com o mesmo pagador, vencimento e valor. Cancelados (baixados) não contam.
+function priorBoletos(rows, id, row, ownToken = "") {
+  const payer = digits(row.cpfCnpj),
+    cents = Math.round(amount(row) * 100);
+  return rows.filter(
+    (r) =>
+      !r.cancelledAt &&
+      (!ownToken || r.token !== ownToken) &&
+      (r.transactionId === id ||
+        (payer &&
+          r.payerDocument === payer &&
+          r.dueDate === row.dueDate &&
+          r.amountCents === cents)),
+  );
+}
+const ADDRESS_KEYS = ["cep", "uf", "localidade", "bairro", "logradouro", "numero"];
+const fullAddress = (a) =>
+  a && ADDRESS_KEYS.every((k) => String(a[k] || "").trim()) ? a : null;
+const addressFromFields = (fields) =>
+  fields &&
+  Object.fromEntries(
+    [...ADDRESS_KEYS, "complemento"].map((k) => [
+      k,
+      fields[`boleto.pagador.endereco.${k}`] || "",
+    ]),
+  );
+const BATCH_LIMIT = 100,
+  STATUS_LIMIT = 1000;
+let sharedHistory;
+const defaultHistory = () =>
+  (sharedHistory ||= require("./boleto-history").createHistoryReader());
 function createBoletoHandler({
   getServices,
   readBody,
   sendJson,
   env = process.env,
   fetchImpl = fetch,
+  historyReader = null,
 }) {
   return async (request, response) => {
     const url = new URL(request.url, "http://localhost");
@@ -256,6 +289,224 @@ function createBoletoHandler({
       if (!allowed((await userRef.get()).data()))
         throw new BoletoError("Sem permissão para emitir boletos.", 403);
       const cfg = config(env);
+      const history = historyReader || defaultHistory();
+      const issueRef = (itemId) =>
+        db.collection("boletoIssues").doc(hash([cfg.environment, itemId]));
+      const eventFor = (tx, target, action, extra = {}) =>
+        tx.create(target.collection("events").doc(), {
+          action,
+          uid,
+          at: new Date().toISOString(),
+          ...extra,
+        });
+      // O histórico Boleto Cloud (painel, CSV e app) só existe em produção.
+      const historyRows = async () => {
+        if (cfg.environment !== "production") return [];
+        try {
+          return (await history.load(db)).rows;
+        } catch {
+          throw new BoletoError(
+            "Histórico Boleto Cloud indisponível. Não é possível confirmar que a 1ª via ainda não foi emitida; tente novamente em instantes.",
+            503,
+          );
+        }
+      };
+      // Trava de 1ª via: nunca emitir de novo para a mesma cobrança.
+      const firstIssueGuard = (rows, itemId, row, record) => {
+        if (row.boletoReconciliation)
+          throw Object.assign(
+            new BoletoError(
+              "1ª via já emitida: este lançamento está vinculado a um boleto. Use o histórico Boleto Cloud para a 2ª via.",
+              409,
+            ),
+            { alreadyIssued: true },
+          );
+        const prior = priorBoletos(rows, itemId, row, record?.token);
+        if (prior.length)
+          throw Object.assign(
+            new BoletoError(
+              `1ª via já emitida para esta cobrança (boleto nº ${prior[0].number || "sem número"}, vencimento ${prior[0].dueDate}). Não emita de novo; use o histórico Boleto Cloud para a 2ª via.`,
+              409,
+            ),
+            { alreadyIssued: true },
+          );
+      };
+      // Empresa com Fatura Wix não recebe boleto (cobrança em dobro).
+      const wixLockFor = async (itemId, row, stage, override) => {
+        try {
+          await assertNoWixInvoice(db, row, { channel: "boleto", uid, stage, transactionId: itemId, profile: (await userRef.get()).data(), override: override || null });
+        } catch (error) {
+          if (!error.status) throw error;
+          throw Object.assign(new BoletoError(error.message, error.status), { wixInvoices: error.wixInvoices });
+        }
+      };
+      const previewItem = async (itemId, { address, wixOverride, batchId, resolveAddress }) => {
+        const target = issueRef(itemId),
+          origin = db.collection("transactions").doc(itemId);
+        const before = (await target.get()).data();
+        const current = (await origin.get()).data();
+        if (!current) throw new BoletoError("Cobrança não encontrada.", 404);
+        let chosen = address;
+        if (!before || ["draft", "rejected"].includes(before.state)) {
+          firstIssueGuard(await historyRows(), itemId, current, before);
+          await wixLockFor(itemId, current, "preview", wixOverride);
+          if (resolveAddress)
+            chosen =
+              fullAddress(addressFromFields(before?.fields)) ||
+              fullAddress(current.nativeEntry?.address) ||
+              (await resolveAddress(digits(current.cpfCnpj)));
+        }
+        return db.runTransaction(async (tx) => {
+          if (!allowed((await tx.get(userRef)).data()))
+            throw new BoletoError("Acesso revogado.", 403);
+          const old = (await tx.get(target)).data();
+          if (old && !["draft", "rejected"].includes(old.state)) return old;
+          const row = (await tx.get(origin)).data();
+          if (!row) throw new BoletoError("Cobrança não encontrada.", 404);
+          const fields = payload(row, chosen);
+          const record = {
+            transactionId: itemId,
+            environment: cfg.environment,
+            accountFingerprint: cfg.accountFingerprint,
+            fields,
+            sourceHash: hash(row),
+            state: "draft",
+            updatedAt: new Date().toISOString(),
+            previewHash: hash([fields, hash(row), cfg.accountFingerprint]),
+            control: `sp-${hash([cfg.environment, itemId]).slice(0, 40)}`,
+          };
+          tx.set(target, record);
+          eventFor(tx, target, "preview", batchId ? { batchId } : {});
+          return record;
+        });
+      };
+      const batchMatch = url.pathname.match(/^\/api\/boleto-cloud\/batch\/(status|preview)$/);
+      if (batchMatch) {
+        if (request.method !== "POST")
+          throw new BoletoError("Rota não encontrada.", 404);
+        let input;
+        try {
+          input = JSON.parse((await readBody(request)).toString("utf8"));
+        } catch {
+          throw new BoletoError("Requisição inválida.");
+        }
+        const ids = Array.isArray(input?.ids) ? [...new Set(input.ids)] : [];
+        const limit = batchMatch[1] === "status" ? STATUS_LIMIT : BATCH_LIMIT;
+        if (!ids.length || ids.length > limit || ids.some((i) => typeof i !== "string" || !i || i.includes("/") || i.length > 500))
+          throw new BoletoError(`Selecione de 1 a ${limit} cobranças.`);
+        if (batchMatch[1] === "status") {
+          let rows = [],
+            historyAvailable = true;
+          try {
+            rows = await historyRows();
+          } catch {
+            historyAvailable = false;
+          }
+          const items = {};
+          for (let i = 0; i < ids.length; i += 50) {
+            await Promise.all(
+              ids.slice(i, i + 50).map(async (itemId) => {
+                const [record, row] = await Promise.all([
+                  issueRef(itemId).get().then((d) => d.data()),
+                  db.collection("transactions").doc(itemId).get().then((d) => d.data()),
+                ]);
+                const prior = row ? priorBoletos(rows, itemId, row, record?.token) : [];
+                items[itemId] =
+                  record?.state === "issued"
+                    ? { status: "issued", origin: "app", number: record.number || "" }
+                    : ["issuing", "unknown"].includes(record?.state)
+                      ? { status: "in-progress", origin: "app", number: "" }
+                      : row?.boletoReconciliation
+                        ? { status: "issued", origin: "linked", number: String(row.boletoReconciliation.number || "") }
+                        : prior.length
+                          ? { status: "issued", origin: prior[0].detailsSource === "app" ? "app" : "panel", number: String(prior[0].number || "") }
+                          : { status: "none", origin: "", number: "" };
+              }),
+            );
+          }
+          if (!allowed((await userRef.get()).data()))
+            throw new BoletoError("Acesso revogado.", 403);
+          sendJson(request, response, 200, { environment: cfg.environment, historyAvailable, items });
+          return true;
+        }
+        const batchId = String(input.batchId || "");
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(batchId))
+          throw new BoletoError("Lote inválido.");
+        const batchRef = db.collection("boletoIssueBatches").doc(batchId);
+        const filters = Object.fromEntries(
+          ["dueFrom", "dueTo", "clientNumber", "cpfCnpj", "client"].map((k) => [k, String(input.filters?.[k] || "").slice(0, 100)]),
+        );
+        await db.runTransaction(async (tx) => {
+          const prior = (await tx.get(batchRef)).data();
+          if (prior && (prior.uid !== uid || prior.environment !== cfg.environment))
+            throw new BoletoError("Lote pertence a outra sessão. Monte uma nova seleção.", 409);
+          const at = new Date().toISOString();
+          tx.set(batchRef, { uid, environment: cfg.environment, createdAt: prior?.createdAt || at, updatedAt: at, ids, filters });
+          eventFor(tx, batchRef, "select", { count: ids.length, filters });
+        });
+        let addresses;
+        const resolveAddress = async (payer) => {
+          if (!addresses) {
+            addresses = new Map();
+            const issued = await db.collection("boletoIssues").where("environment", "==", cfg.environment).get();
+            const docs = issued.docs
+              .map((d) => d.data())
+              .filter((r) => r.state === "issued" && r.fields)
+              .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+            for (const r of docs) {
+              const key = r.fields["boleto.pagador.cprf"];
+              if (key && !addresses.has(key)) addresses.set(key, addressFromFields(r.fields));
+            }
+          }
+          return fullAddress(addresses.get(payer)) || null;
+        };
+        const items = [];
+        for (const itemId of ids) {
+          try {
+            const record = await previewItem(itemId, { batchId, resolveAddress });
+            const ready = record.state === "draft";
+            items.push({
+              id: itemId,
+              ready,
+              state: record.state,
+              block: ready ? "" : record.state === "issued" ? "issued" : "in-progress",
+              previewHash: ready ? record.previewHash : "",
+              fields: record.fields,
+              number: record.number || "",
+              error: ready ? "" : record.state === "issued" ? "1ª via já emitida pelo app." : "Emissão anterior aguardando confirmação. Use Recuperar tentativa na emissão individual.",
+            });
+          } catch (error) {
+            if (!(error instanceof BoletoError)) throw error;
+            if (error.status === 401 || (error.status === 403 && !error.wixInvoices)) throw error;
+            items.push({
+              id: itemId,
+              ready: false,
+              state: "blocked",
+              block: error.alreadyIssued ? "issued" : error.wixInvoices ? "wix" : "invalid",
+              error: error.message,
+              ...(error.wixInvoices ? { wixInvoices: error.wixInvoices } : {}),
+            });
+          }
+        }
+        const ready = items.filter((i) => i.ready);
+        const totalCents = ready.reduce((n, i) => n + Math.round(Number(i.fields["boleto.valor"]) * 100), 0);
+        await db.runTransaction(async (tx) => {
+          eventFor(tx, batchRef, "preview", {
+            ready: ready.length,
+            blocked: items.length - ready.length,
+            totalCents,
+            blocks: items.filter((i) => !i.ready).map((i) => ({ id: i.id, block: i.block })),
+          });
+        });
+        sendJson(request, response, 200, {
+          batchId,
+          environment: cfg.environment,
+          enabled: cfg.enabled && Boolean(cfg.apiKey && cfg.accountToken),
+          totalCents,
+          items,
+        });
+        return true;
+      }
       const match = url.pathname.match(
         /^\/api\/boleto-cloud\/items\/([^/]+)(?:\/(preview|issue|recover|pdf|registration|invite|invite-email))?$/,
       );
@@ -371,43 +622,13 @@ function createBoletoHandler({
       } catch {
         throw new BoletoError("Requisição inválida.");
       }
-      // Empresa com Fatura Wix no mês de vencimento não recebe boleto (cobrança em dobro).
       const wixLock = async (stage, override) => {
         const row = (await source.get()).data();
         if (!row || (stage === "issue" && existing?.state === "issued")) return;
-        try {
-          await assertNoWixInvoice(db, row, { channel: "boleto", uid, stage, transactionId: id, profile: (await userRef.get()).data(), override: override || null });
-        } catch (error) {
-          if (!error.status) throw error;
-          throw Object.assign(new BoletoError(error.message, error.status), { wixInvoices: error.wixInvoices });
-        }
+        await wixLockFor(id, row, stage, override);
       };
       if (action === "preview") {
-        await wixLock("preview", body.wixOverride);
-        const record = await db.runTransaction(async (tx) => {
-          if (!allowed((await tx.get(userRef)).data()))
-            throw new BoletoError("Acesso revogado.", 403);
-          const old = (await tx.get(ref)).data();
-          if (old && !["draft", "rejected"].includes(old.state)) return old;
-          const row = (await tx.get(source)).data();
-          if (!row) throw new BoletoError("Cobrança não encontrada.", 404);
-          const fields = payload(row, body.address);
-          const record = {
-            transactionId: id,
-            environment: cfg.environment,
-            accountFingerprint: cfg.accountFingerprint,
-            fields,
-            sourceHash: hash(row),
-            state: "draft",
-            updatedAt: new Date().toISOString(),
-            previewHash: hash([fields, hash(row), cfg.accountFingerprint]),
-            control: `sp-${hash([cfg.environment, id]).slice(0, 40)}`,
-          };
-          tx.set(ref, record);
-          audit(tx, "preview");
-          return record;
-        });
-        reply(record);
+        reply(await previewItem(id, { address: body.address, wixOverride: body.wixOverride }));
         return true;
       }
       if (!cfg.enabled || !cfg.apiKey || !cfg.accountToken)
@@ -416,6 +637,19 @@ function createBoletoHandler({
           503,
         );
       if (action === "issue") await wixLock("issue", body.wixOverride);
+      let batchId = null;
+      if (action === "issue" && body.batchId !== undefined) {
+        batchId = String(body.batchId);
+        const batch = /^[0-9a-f-]{36}$/.test(batchId)
+          ? (await db.collection("boletoIssueBatches").doc(batchId).get()).data()
+          : null;
+        if (!batch || batch.uid !== uid || batch.environment !== cfg.environment || !batch.ids?.includes(id))
+          throw new BoletoError("Cobrança fora do lote revisado. Refaça a seleção.", 409);
+      }
+      if (action === "issue" && existing?.state !== "issued") {
+        const row = (await source.get()).data();
+        if (row) firstIssueGuard(await historyRows(), id, row, existing);
+      }
       const attempt = randomUUID();
       const record = await db.runTransaction(async (tx) => {
         if (!allowed((await tx.get(userRef)).data()))
@@ -509,9 +743,12 @@ function createBoletoHandler({
           attemptAt: Date.now(),
           updatedAt: new Date().toISOString(),
           error: "",
+          batchId: action === "recover" ? old.batchId || null : batchId,
         };
         tx.set(ref, next);
-        audit(tx, action, { attempt, legacyChecked: action === "issue" });
+        audit(tx, action, { attempt, legacyChecked: action === "issue", ...(batchId ? { batchId } : {}) });
+        if (batchId)
+          eventFor(tx, db.collection("boletoIssueBatches").doc(batchId), "issue", { transactionId: id, attempt });
         return next;
       });
       if (record.state === "issued") {
@@ -619,7 +856,9 @@ function createBoletoHandler({
           updatedAt: new Date().toISOString(),
         };
         tx.set(ref, next);
-        audit(tx, "result", { attempt, state: outcome.state });
+        audit(tx, "result", { attempt, state: outcome.state, ...(current.batchId ? { batchId: current.batchId } : {}) });
+        if (current.batchId)
+          eventFor(tx, db.collection("boletoIssueBatches").doc(current.batchId), "result", { transactionId: id, attempt, state: outcome.state, number: outcome.number || "" });
         return next;
       });
       reply(final);
@@ -634,6 +873,7 @@ function createBoletoHandler({
               ? error.message
               : "Operação não confirmada. Consulte a cobrança antes de tentar novamente.",
           ...(error instanceof BoletoError && error.wixInvoices ? { wixLock: { invoices: error.wixInvoices } } : {}),
+          ...(error instanceof BoletoError && error.alreadyIssued ? { alreadyIssued: true } : {}),
         },
       );
     }
@@ -649,4 +889,5 @@ module.exports = {
   validDocument,
   config,
   publicRecord,
+  priorBoletos,
 };

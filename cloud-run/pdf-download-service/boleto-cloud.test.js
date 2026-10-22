@@ -36,7 +36,7 @@ const env = {
   BOLETO_CLOUD_ISSUANCE_ENABLED: "true",
 };
 // Transactional in-memory store: models atomic commits and serializes concurrent callers.
-function fixture(fetchImpl, environment = env) {
+function fixture(fetchImpl, environment = env, historyRows = []) {
   const data = new Map([
     ["users/user", { active: true, role: "admin" }],
     ["transactions/a", row()],
@@ -113,7 +113,13 @@ function fixture(fetchImpl, environment = env) {
     },
     env: environment,
     fetchImpl,
+    historyReader: { load: async () => { if (historyRows === null) throw new Error("offline"); return { rows: historyRows }; } },
   });
+  const post = async (path, body, token = "valid") => {
+    const res = {};
+    await handler({ url: `/api/boleto-cloud/${path}`, method: "POST", headers: { authorization: `Bearer ${token}` }, body }, res);
+    return res;
+  };
   const call = async (action = "", body, id = "a", authorized = true, token = "valid") => {
     const res = {
       writeHead(status, headers) {
@@ -147,7 +153,7 @@ function fixture(fetchImpl, environment = env) {
     [...data.entries()].find(
       ([key]) => key.startsWith("boletoIssues/") && key.split("/").length === 2,
     );
-  return { data, call, preview, issue, stored };
+  return { data, call, post, preview, issue, stored };
 }
 const success = (url, options) => {
   const control = new URLSearchParams(options.body).get(
@@ -481,4 +487,133 @@ test("Fatura Wix em aberto de outro mês também bloqueia; exceção só pelo ma
   const logs = [...f.data.values()].filter((v) => v && v.channel === "boleto" && v.action);
   assert.deepEqual(logs.map((l) => l.action).sort(), ["blocked", "blocked", "blocked", "blocked", "override", "override"]);
   assert.ok(logs.filter((l) => l.action === "override").every((l) => l.uid === master && l.reason));
+});
+
+const production = {
+  BOLETO_CLOUD_ENVIRONMENT: "production",
+  BOLETO_CLOUD_API_KEY: "synthetic-production-key",
+  BOLETO_CLOUD_ACCOUNT_TOKEN: "synthetic-existing-account",
+  BOLETO_CLOUD_CUTOVER_DATE: "2026-10-09",
+  BOLETO_CLOUD_ISSUANCE_ENABLED: "true",
+};
+const panelBoleto = (patch = {}) => ({
+  id: "h1", token: "panel-token-0001", number: "00025099-1", payerDocument: "11222333000181",
+  dueDate: "2099-11-10", amountCents: 125000, cancelledAt: null, detailsSource: "csv", ...patch,
+});
+const batchId = "11111111-2222-4333-8444-555555555555";
+const noProvider = () => { throw new Error("No provider call allowed"); };
+
+test("1ª via emitida no painel/CSV bloqueia revisão e emissão; cancelado não bloqueia", async () => {
+  const history = [panelBoleto()];
+  const f = fixture(noProvider, production, history);
+  const blocked = await f.preview();
+  assert.equal(blocked.status, 409);
+  assert.equal(blocked.body.alreadyIssued, true);
+  assert.match(blocked.body.error, /1ª via já emitida.*00025099-1/);
+  assert.equal(f.stored(), undefined);
+  // Revisão feita antes da importação do painel: a emissão ainda é barrada antes do emissor.
+  history.length = 0;
+  const p = await f.preview();
+  assert.equal(p.body.state, "draft");
+  history.push(panelBoleto({ transactionId: "a", payerDocument: "99999999999999" }));
+  const issued = await f.call("issue", { previewHash: p.body.previewHash, legacyChecked: true });
+  assert.equal(issued.status, 409);
+  assert.equal(issued.body.alreadyIssued, true);
+  history.length = 0;
+  history.push(panelBoleto({ cancelledAt: "2099-10-01" }), panelBoleto({ amountCents: 99900 }));
+  assert.equal((await f.preview()).body.state, "draft");
+});
+
+test("lançamento vinculado a boleto e histórico indisponível bloqueiam em produção", async () => {
+  const f = fixture(noProvider, production, null);
+  const offline = await f.preview();
+  assert.equal(offline.status, 503);
+  assert.match(offline.body.error, /Histórico Boleto Cloud indisponível/);
+  const linked = fixture(noProvider, production, []);
+  linked.data.set("transactions/a", { ...row(), boletoReconciliation: { number: "00024000-1" } });
+  const res = await linked.preview();
+  assert.equal(res.status, 409);
+  assert.equal(res.body.alreadyIssued, true);
+});
+
+test("situação em lote marca 1ª via do app, do painel, vínculo e em andamento", async () => {
+  const f = fixture(success, production, [panelBoleto({ payerDocument: "52998224725", dueDate: "2099-12-10", amountCents: 50000, number: "777" })]);
+  f.data.set("transactions/b", { ...row(), cpfCnpj: "52998224725", dueDate: "2099-12-10", totalCobranca: 500 });
+  f.data.set("transactions/c", { ...row(), cpfCnpj: "52998224725", boletoReconciliation: { number: "888" } });
+  f.data.set("transactions/d", { ...row(), cpfCnpj: "52998224725", dueDate: "2099-12-11", totalCobranca: 500 });
+  assert.equal((await f.issue()).body.state, "issued");
+  const res = await f.post("batch/status", { ids: ["a", "b", "c", "d", "missing"] });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.historyAvailable, true);
+  assert.deepEqual(res.body.items.a, { status: "issued", origin: "app", number: "" });
+  assert.deepEqual(res.body.items.b, { status: "issued", origin: "panel", number: "777" });
+  assert.deepEqual(res.body.items.c, { status: "issued", origin: "linked", number: "888" });
+  assert.equal(res.body.items.d.status, "none");
+  assert.equal(res.body.items.missing.status, "none");
+  assert.equal((await f.post("batch/status", { ids: [] })).status, 400);
+  assert.equal((await f.post("batch/status", { ids: ["x"] }, "intruder")).status, 403);
+});
+
+test("lote: revisão com total e motivos por item, endereço reaproveitado, sem chamar o emissor", async () => {
+  let calls = 0;
+  const f = fixture((...args) => { calls++; return success(...args); }, env);
+  // Endereço do boleto anterior do mesmo CPF/CNPJ é reaproveitado.
+  assert.equal((await f.issue()).body.state, "issued");
+  calls = 0;
+  f.data.set("transactions/b", { ...row(), dueDate: "2099-12-10", totalCobranca: 300 });
+  f.data.set("transactions/c", { ...row(), cpfCnpj: "52998224725", dueDate: "2099-12-10", totalCobranca: 200, nativeEntry: { address } });
+  f.data.set("transactions/d", { ...row(), cpfCnpj: "123", dueDate: "2099-12-10" });
+  f.data.set("transactions/e", { ...row(), cpfCnpj: "11444777000161", dueDate: "2099-12-10" });
+  f.data.set("transactions/wix-inv-1", { source: "wix", client: "Empresa Wix", cpfCnpj: "", status: "Pendente", dueDate: "2099-12-01", wixInvoiceNumber: "1" });
+  f.data.set("transactions/w", { ...row(), client: "Empresa Wix", cpfCnpj: "11444777000161", dueDate: "2099-12-15" });
+  const res = await f.post("batch/preview", { batchId, ids: ["a", "b", "c", "d", "e", "w"], filters: { dueFrom: "2099-12-10" } });
+  assert.equal(res.status, 200);
+  const by = Object.fromEntries(res.body.items.map((i) => [i.id, i]));
+  assert.equal(by.a.block, "issued");
+  assert.equal(by.b.ready, true);
+  assert.equal(by.b.fields["boleto.pagador.endereco.logradouro"], "Avenida Paulista");
+  assert.equal(by.c.ready, true);
+  assert.equal(by.d.block, "invalid");
+  assert.match(by.d.error, /CPF\/CNPJ/);
+  assert.equal(by.e.block, "invalid");
+  assert.match(by.e.error, /endereço/);
+  assert.equal(by.w.block, "wix");
+  assert.equal(res.body.totalCents, 50000);
+  assert.equal(calls, 0);
+  const batch = f.data.get(`boletoIssueBatches/${batchId}`);
+  assert.equal(batch.uid, "user");
+  assert.deepEqual(batch.ids, ["a", "b", "c", "d", "e", "w"]);
+  const events = [...f.data.entries()].filter(([k]) => k.startsWith(`boletoIssueBatches/${batchId}/events/`)).map(([, v]) => v.action);
+  assert.deepEqual(events, ["select", "preview"]);
+  assert.equal((await f.post("batch/preview", { batchId: "nope", ids: ["b"] })).status, 400);
+  assert.equal((await f.post("batch/preview", { batchId, ids: Array.from({ length: 101 }, (_, i) => `x${i}`) })).status, 400);
+});
+
+test("lote: emissão por item com log do lote; repetir nunca emite de novo; item fora do lote é recusado", async () => {
+  let calls = 0;
+  const f = fixture((...args) => { calls++; return success(...args); }, env);
+  f.data.set("transactions/b", { ...row(), dueDate: "2099-12-10", totalCobranca: 300, nativeEntry: { address } });
+  f.data.set("transactions/z", { ...row(), dueDate: "2099-12-20", totalCobranca: 300, nativeEntry: { address } });
+  const preview = await f.post("batch/preview", { batchId, ids: ["b"] });
+  const item = preview.body.items[0];
+  const issue = (id, hashValue) => f.call("issue", { previewHash: hashValue, legacyChecked: true, batchId }, id);
+  const [first, second] = await Promise.all([issue("b", item.previewHash), issue("b", item.previewHash)]);
+  assert.ok([first, second].some((r) => r.body.state === "issued"));
+  assert.ok([first, second].every((r) => r.body.state === "issued" || r.status === 409));
+  assert.equal(calls, 1);
+  assert.equal((await issue("b", item.previewHash)).body.state, "issued");
+  assert.equal(calls, 1);
+  const again = await f.post("batch/preview", { batchId, ids: ["b"] });
+  assert.equal(again.body.items[0].block, "issued");
+  const outside = await f.call("preview", { address }, "z");
+  assert.equal((await issue("z", outside.body.previewHash)).status, 409);
+  assert.equal(calls, 1);
+  const actions = [...f.data.entries()].filter(([k]) => k.startsWith(`boletoIssueBatches/${batchId}/events/`)).map(([, v]) => v.action);
+  assert.deepEqual(actions.filter((a) => ["issue", "result"].includes(a)), ["issue", "result"]);
+  const itemEvents = [...f.data.values()].filter((v) => v && v.batchId === batchId && ["issue", "result"].includes(v.action));
+  assert.equal(itemEvents.length, 2);
+  assert.ok(itemEvents.every((e) => e.uid === "user"));
+  // Outro usuário não reaproveita o lote.
+  f.data.set("users/other", { active: true, role: "admin" });
+  assert.equal((await f.post("batch/preview", { batchId, ids: ["z"] }, "other")).status, 409);
 });

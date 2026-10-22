@@ -28,3 +28,12 @@ assert.match(modal, /URL.revokeObjectURL/);
 console.log(
   "Emissão direta: permissão, rota, confirmação e ausência de exportação CSV verificadas.",
 );
+const batch = readFileSync("components/BoletoBatchIssue.tsx", "utf8");
+assert.match(batch, /batch\/preview/);
+assert.match(batch, /legacyChecked: true, batchId: preview\.batchId/);
+assert.match(batch, /disabled=\{busy \|\| !checked \|\| !preview\.enabled\}/);
+assert.match(batch, /if \(!preview \|\| running\.current \|\| !checked\) return;/);
+assert.doesNotMatch(batch, /api-key_|BOLETO_CLOUD_API_KEY|BOLETO_CLOUD_ACCOUNT_TOKEN/);
+assert.match(table, /renderBoletoIssuedBadge\(row\)/);
+assert.match(modal, /<BoletoBatchIssue/);
+console.log("Emissão em lote: revisão, confirmação explícita, lote auditado e selo de 1ª via verificados.");

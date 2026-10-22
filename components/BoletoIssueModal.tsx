@@ -7,6 +7,10 @@ import { auth } from "../firebase";
 import { Transaction } from "../types";
 import { getOriginalAmount } from "../utils/transactionAmounts";
 import { PossibleDuplicateScan } from "../utils/transactionTable";
+import BoletoBatchIssue from "./BoletoBatchIssue";
+import { boletoStatusLabel, useBoletoIssueStatus } from "../services/boletoIssueStatus";
+
+const OPEN_STATUSES = ["Pendente", "Agendado", "Vencida"];
 
 type RecordState = {
   environment: string;
@@ -49,6 +53,10 @@ export default function BoletoIssueModal({
   duplicates?: PossibleDuplicateScan;
   onClose: () => void;
 }) {
+  const [mode, setMode] = useState<"single" | "batch">("single");
+  const [refresh, setRefresh] = useState(0);
+  const openRows = rows.filter((r) => !r.isExcluded && OPEN_STATUSES.includes(r.status));
+  const issueStatus = useBoletoIssueStatus(openRows.map((r) => r.id), openRows.length > 0, refresh);
   const [id, setId] = useState("");
   const [record, setRecord] = useState<RecordState | null>(null);
   const [address, setAddress] = useState<Record<string, string>>({});
@@ -140,6 +148,7 @@ export default function BoletoIssueModal({
       } else {
         setRecord(await response.json());
         setChecked(false);
+        if (["issue", "recover"].includes(action)) setRefresh((n) => n + 1);
       }
     } catch (e) {
       setError(
@@ -176,8 +185,35 @@ export default function BoletoIssueModal({
         </div>
         <p className="text-sm">
           Conta Itaú — agência 3145, conta 99791-6. Selecione uma cobrança para
-          revisar ou consultar a emissão.
+          revisar ou consultar a emissão, ou emita várias em lote pelos filtros.
         </p>
+        <div role="tablist" aria-label="Modo de emissão" className="flex gap-2">
+          {([["single", "Uma cobrança"], ["batch", "Em lote"]] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              disabled={busy}
+              className={`px-4 py-2 rounded-lg border ${mode === value ? "bg-emerald-700 text-white border-emerald-700" : "border-slate-300 dark:border-slate-600"}`}
+              onClick={() => setMode(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {issueStatus.loading && (
+          <p role="status" className="text-sm flex gap-2"><Loader2 className="animate-spin h-4 w-4" />Conferindo boletos já emitidos…</p>
+        )}
+        {issueStatus.error && (
+          <p role="alert" className="text-sm bg-amber-50 text-amber-800 p-2 rounded">Situação da 1ª via indisponível: {issueStatus.error} A trava no servidor continua valendo.</p>
+        )}
+        {!issueStatus.historyAvailable && (
+          <p role="alert" className="text-sm bg-amber-50 text-amber-800 p-2 rounded">Histórico do painel Boleto Cloud indisponível: só as emissões feitas pelo app estão marcadas. A emissão fica bloqueada até o histórico voltar.</p>
+        )}
+        {mode === "batch" ? (
+          <BoletoBatchIssue rows={openRows} status={issueStatus.items} duplicates={duplicates} onChanged={() => setRefresh((n) => n + 1)} />
+        ) : (<>
         <label className="block">
           Cobrança
           <select
@@ -187,12 +223,16 @@ export default function BoletoIssueModal({
             onChange={(e) => setId(e.target.value)}
           >
             <option value="">Selecione</option>
-            {rows.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.client} — {r.dueDate} — {currency(getOriginalAmount(r))} —{" "}
-                {r.id}
-              </option>
-            ))}
+            {rows.map((r) => {
+              const issued = boletoStatusLabel(issueStatus.items[r.id]);
+              return (
+                <option key={r.id} value={r.id}>
+                  {issued ? `[${issued.toUpperCase()}] ` : ""}
+                  {r.client} — {r.dueDate} — {currency(getOriginalAmount(r))} —{" "}
+                  {r.id}
+                </option>
+              );
+            })}
           </select>
         </label>
         {busy && (
@@ -227,6 +267,11 @@ export default function BoletoIssueModal({
               {record.number && ` · Nosso número: ${record.number}`}
             </p>
             {record.error && <p role="alert">{record.error}</p>}
+            {record.state !== "issued" && issueStatus.items[row.id]?.status === "issued" && (
+              <p className="text-red-700 font-semibold">
+                {boletoStatusLabel(issueStatus.items[row.id])}. Não emita de novo; use o histórico Boleto Cloud para a 2ª via.
+              </p>
+            )}
             {duplicate && (
               <p className="text-red-700">
                 Há indício de duplicidade neste lançamento. Revise antes de
@@ -366,6 +411,7 @@ export default function BoletoIssueModal({
             )}
           </>
         )}
+        </>)}
       </section>
     </div>
   );
