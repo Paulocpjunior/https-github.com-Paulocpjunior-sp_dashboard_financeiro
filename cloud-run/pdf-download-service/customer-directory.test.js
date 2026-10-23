@@ -106,3 +106,10 @@ test('colaboradora corrige endereço de cobrança: validado, idempotente e com l
  const read=await h.call('billing-address?sourceId=r');assert.equal(read.address.numero,'100');
  h.store.set('users/u',{active:false});await assert.rejects(h.call('billing-address',{requestId:'77777777-7777-4777-8777-777777777777',sourceId:'r',address}),/revogado/);
 });
+test('e-mail de faturamento aceita vários endereços separados por ";" e recusa endereço inválido',async()=>{
+ const h=billing();
+ await h.save({rule:{...rule,billingEmail:'Enilda@SNTBSB.com.br;  jjunior@sntbsb.com.br, enilda@sntbsb.com.br'}});
+ assert.equal(h.store.get('billingProfiles/doc-07147345000111').billingEmail,'enilda@sntbsb.com.br; jjunior@sntbsb.com.br');
+ await assert.rejects(h.save({rule:{...rule,billingEmail:'enilda@sntbsb.com.br; jjunior@'}}),/inválido: jjunior@/);
+ await assert.rejects(h.save({rule:{...rule,billingEmail:Array.from({length:11},(_,i)=>`a${i}@x.com.br`).join(';')}}),/no máximo 10/);
+});

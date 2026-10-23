@@ -1,5 +1,6 @@
 const {createHash}=require('node:crypto');
 const {validDocument,normalizeAddress}=require('./boleto-cloud');
+const {recipients}=require('./communication-recipients');
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const digits=x=>String(x||'').replace(/\D/g,'');
@@ -116,8 +117,15 @@ async function identifierConflicts(tx,db,entries,key,before,after){
 const channels=['email','whatsapp','printed'],methods=['Boleto Itaú','Fatura Wix','Boleto Itaú + Fatura Wix','Outro'];
 const day=x=>Number.isInteger(x)&&x>=1&&x<=31;
 const text=(x,max)=>{if(x!=null&&typeof x!=='string')fail('Dados inválidos.',400);const t=String(x||'').trim();if(t.length>max)fail('Texto muito longo.',400);return t;};
+// Vários e-mails, separados por ";" (também vírgula ou espaço). Guarda na ordem digitada, sem repetir.
+function billingEmails(value){
+ const list=[...new Set(value.split(/[;,\s]+/).filter(Boolean).map(e=>e.toLowerCase()))];
+ if(list.length>10)fail('Informe no máximo 10 e-mails de faturamento.',400);
+ for(const e of list){try{recipients(e);}catch{fail(`E-mail de faturamento inválido: ${e.slice(0,80)}. Separe os e-mails com ";".`,400);}}
+ return list.join('; ');
+}
 function rule(input){
- const r={groupName:text(input.groupName,200),billingMethod:text(input.billingMethod,60),issueDay:input.issueDay,issueMonthOffset:input.issueMonthOffset??0,dueDay:input.dueDay,deliveryChannels:input.deliveryChannels,billingEmail:text(input.billingEmail,300),whatsapp:text(input.whatsapp,60),printedDeliveryDetails:text(input.printedDeliveryDetails,1000),billingInstructions:text(input.billingInstructions,2000)};
+ const r={groupName:text(input.groupName,200),billingMethod:text(input.billingMethod,60),issueDay:input.issueDay,issueMonthOffset:input.issueMonthOffset??0,dueDay:input.dueDay,deliveryChannels:input.deliveryChannels,billingEmail:billingEmails(text(input.billingEmail,1000)),whatsapp:text(input.whatsapp,60),printedDeliveryDetails:text(input.printedDeliveryDetails,1000),billingInstructions:text(input.billingInstructions,2000)};
  if(!methods.includes(r.billingMethod)||!day(r.issueDay)||!day(r.dueDay)||![-1,0].includes(r.issueMonthOffset)||!Array.isArray(r.deliveryChannels)||!r.deliveryChannels.length||r.deliveryChannels.some(c=>!channels.includes(c))||new Set(r.deliveryChannels).size!==r.deliveryChannels.length)fail('Complete os campos obrigatórios da regra de faturamento.',400);
  if(r.deliveryChannels.includes('email')&&!r.billingEmail||r.deliveryChannels.includes('whatsapp')&&!r.whatsapp||r.deliveryChannels.includes('printed')&&!r.printedDeliveryDetails)fail('Complete o contato do meio de envio escolhido.',400);
  return r;

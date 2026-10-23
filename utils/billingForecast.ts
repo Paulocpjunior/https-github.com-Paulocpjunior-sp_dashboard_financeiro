@@ -47,6 +47,20 @@ export const dateForMonthDay = (month: string, day: number | undefined): string 
   return `${month}-${String(safeDay).padStart(2, '0')}`;
 };
 
+// E-mail de faturamento aceita vários endereços, separados por ";" (também
+// vírgula ou espaço). Devolve os endereços na ordem digitada, sem repetir, e os
+// que não parecem e-mail, para a tela apontar qual corrigir.
+const EMAIL_PATTERN = /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/;
+export const parseBillingEmails = (value: string | undefined): { emails: string[]; invalid: string[] } => {
+  const emails: string[] = [];
+  const invalid: string[] = [];
+  for (const part of String(value || '').split(/[;,\s]+/).filter(Boolean)) {
+    if (!EMAIL_PATTERN.test(part)) invalid.push(part);
+    else if (!emails.includes(part.toLowerCase())) emails.push(part.toLowerCase());
+  }
+  return { emails, invalid };
+};
+
 export const formatDeliveryChannels = (channels: BillingDeliveryChannel[]): string => {
   const labels: Record<BillingDeliveryChannel, string> = {
     email: 'E-mail',
@@ -100,6 +114,9 @@ export const getBillingProfileCompletenessErrors = (profile: Pick<BillingProfile
   if ((profile.issueMonthOffset ?? 0) === 0 && profile.issueDay && profile.dueDay && profile.issueDay > profile.dueDay) errors.push('emissão posterior ao vencimento: confira o mês de emissão');
   if (!profile.deliveryChannels?.length) errors.push('meio de envio');
   if (profile.deliveryChannels?.includes('email') && !String(profile.billingEmail || '').trim()) errors.push('e-mail de faturamento');
+  const billingEmails = parseBillingEmails(profile.billingEmail);
+  if (billingEmails.invalid.length) errors.push(`e-mail de faturamento inválido (${billingEmails.invalid.join(', ')})`);
+  if (billingEmails.emails.length > 10) errors.push('no máximo 10 e-mails de faturamento');
   if (profile.deliveryChannels?.includes('whatsapp') && !String(profile.whatsapp || '').trim()) errors.push('WhatsApp');
   if (profile.deliveryChannels?.includes('printed') && !String(profile.printedDeliveryDetails || '').trim()) errors.push('detalhes da entrega física');
   return errors;

@@ -14,6 +14,7 @@ try {
     addMonths,
   buildBillingForecastRows,
   getBillingProfileCompletenessErrors,
+  parseBillingEmails,
     dateForMonthDay,
     getBillingIdentityKey,
     sortBillingForecastRows,
@@ -126,6 +127,10 @@ assert.deepEqual(getBillingProfileCompletenessErrors({
   assert.ok(conflicts.every(r => r.missingFields.some(x => x.includes('N.Cliente associado'))));
   assert.equal(buildBillingForecastRows([synthetic,{...other,isExcluded:true}], [previousMonth], '2026-10', '2027-01')[0].missingFields.length, 0);
   assert.ok(getBillingProfileCompletenessErrors({...complete,issueMonthOffset:3}).includes('mês de emissão inválido'));
+  assert.deepEqual(parseBillingEmails('Enilda@SNTBSB.com.br;  jjunior@sntbsb.com.br, enilda@sntbsb.com.br'), { emails: ['enilda@sntbsb.com.br', 'jjunior@sntbsb.com.br'], invalid: [] });
+  assert.deepEqual(parseBillingEmails('a@x.com.br; jjunior@').invalid, ['jjunior@']);
+  assert.ok(getBillingProfileCompletenessErrors({...complete,deliveryChannels:['email'],billingEmail:'a@x.com.br; b@x.com.br'}).every(e => !e.includes('e-mail')));
+  assert.ok(getBillingProfileCompletenessErrors({...complete,deliveryChannels:['email'],billingEmail:'a@x.com.br; b@'}).some(e => e.includes('inválido (b@)')));
 
   const billingReportSource = readFileSync(new URL('../services/billingReportService.ts', import.meta.url), 'utf8');
   const financialReportSource = readFileSync(new URL('../services/reportService.ts', import.meta.url), 'utf8');
