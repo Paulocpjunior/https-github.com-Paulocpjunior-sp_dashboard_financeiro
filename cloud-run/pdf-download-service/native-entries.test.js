@@ -376,9 +376,9 @@ test('communication workflow routes reject unauthenticated and non-admin callers
   assert.equal((await harness({profile:{active:true,role:'operacional'}}).call(route,{},'good',method)).status,403);
  }
 });
-test("Fatura Wix da mesma empresa no mês bloqueia a Nova cobrança e registra log", async () => {
+test("Fatura Wix da mesma empresa com mesmo valor e vencimento bloqueia a Nova cobrança e registra log", async () => {
   const h = harness();
-  h.store.set("transactions/wix-inv-0004300", { source: "wix", movement: "Entrada", client: "Cliente Ficticio", status: "Paga", dueDate: "2026-11-05", wixInvoiceNumber: "0004300", valorOriginal: 300 });
+  h.store.set("transactions/wix-inv-0004300", { source: "wix", movement: "Entrada", client: "Cliente Ficticio", status: "Paga", dueDate: "2026-11-20", wixInvoiceNumber: "0004300", valorOriginal: 100.3 });
   const body = { requestId: randomUUID(), entry: input() };
   const p = await h.call("preview", body);
   assert.equal(p.status, 409);
@@ -392,7 +392,7 @@ test("Fatura Wix da mesma empresa no mês bloqueia a Nova cobrança e registra l
   h.store.delete("transactions/wix-inv-0004300");
   const ok = await h.call("preview", body);
   assert.equal(ok.status, 200);
-  h.store.set("transactions/wix-inv-0004300", { source: "wix", client: "CLIENTE FICTÍCIO LTDA", status: "Pendente", dueDate: "2026-11-30", wixInvoiceNumber: "0004300" });
+  h.store.set("transactions/wix-inv-0004300", { source: "wix", client: "CLIENTE FICTÍCIO LTDA", status: "Pendente", dueDate: "2026-11-20", wixInvoiceNumber: "0004300", valorOriginal: 100.3 });
   const commit = await h.call("commit", { ...body, confirmHash: ok.body.previewHash });
   assert.equal(commit.status, 409);
   assert.equal([...h.store.keys()].filter((k) => k.startsWith("transactions/native-")).length, 0);
@@ -400,8 +400,8 @@ test("Fatura Wix da mesma empresa no mês bloqueia a Nova cobrança e registra l
   const pay = await h.call("preview", { requestId: randomUUID(), entry: payable() });
   assert.equal(pay.status, 200);
 });
-test("Fatura Wix em aberto de qualquer mês bloqueia; exceção só pelo master, com motivo, log e registro no lançamento", async () => {
-  const open = { source: "wix", client: "Cliente Ficticio", status: "Vencida", dueDate: "2026-03-10", wixInvoiceNumber: "0004400" };
+test("Fatura Wix com mesmo valor e vencimento bloqueia; exceção só pelo master, com motivo, log e registro no lançamento", async () => {
+  const open = { source: "wix", client: "Cliente Ficticio", status: "Vencida", dueDate: "2026-11-20", wixInvoiceNumber: "0004400", valorOriginal: 100.3 };
   const reason = "Acordo do Wix é de outro serviço";
   const h = harness();
   h.store.set("transactions/wix-inv-0004400", open);
@@ -409,8 +409,10 @@ test("Fatura Wix em aberto de qualquer mês bloqueia; exceção só pelo master,
   const refused = await h.call("preview", body);
   assert.equal(refused.status, 403);
   assert.deepEqual(refused.body.wixLock.invoices.map((i) => i.id), ["wix-inv-0004400"]);
-  // Fatura paga de outro mês não trava.
-  h.store.set("transactions/wix-inv-0004400", { ...open, status: "Paga" });
+  // Fatura em aberto de outro vencimento ou de outro valor não trava.
+  h.store.set("transactions/wix-inv-0004400", { ...open, dueDate: "2026-03-10" });
+  assert.equal((await h.call("preview", { requestId: randomUUID(), entry: input() })).status, 200);
+  h.store.set("transactions/wix-inv-0004400", { ...open, valorOriginal: 100 });
   assert.equal((await h.call("preview", { requestId: randomUUID(), entry: input() })).status, 200);
 
   const master = "hpdsWehGGAYE3uKCar4pBiRVxFJ3";

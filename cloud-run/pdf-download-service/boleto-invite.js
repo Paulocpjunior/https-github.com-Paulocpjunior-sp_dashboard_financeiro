@@ -3,12 +3,18 @@ const { gerarIcs, dataCivil } = require('./convites-vencimento.cjs');
 class InviteError extends Error { constructor(message, status = 409) { super(message); this.status = status; } }
 const hash = s => createHash('sha256').update(s).digest('hex');
 const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+// Situações em que o boleto não volta a ficar em aberto: nunca vale esperar.
+const CLOSED = ['PAGO', 'LIQUIDADO', 'LIQUIDACAO', 'BAIXADO', 'BAIXA', 'CANCELADO', 'CANCELAMENTO_CONFIRMADO', 'PROTESTADO', 'REGISTRO_REJEITADO'];
 function validateSituation(b, expected, currentDay = today()) {
-  if (!b || b.token !== expected.token || b.situacao !== 'EM_ABERTO' || b.pagamento || b.baixa || b.registro?.erro)
-    throw new InviteError('INVITE disponível somente para boleto em aberto, com registro bancário confirmado e sem pagamento ou baixa.');
-  // Recém-emitido: o banco ainda não confirmou o registro. Tentar de novo depois.
-  if (b.registro?.situacao !== 'REGISTRO_CONFIRMADO')
-    throw Object.assign(new InviteError('Registro bancário ainda não confirmado. O boleto só vai ao cliente depois da confirmação do banco.'), { pending: true });
+  const situation = String(b?.situacao || '').toUpperCase();
+  const registration = String(b?.registro?.situacao || '').toUpperCase();
+  const where = ` (emissor: ${situation || 'sem situação'}, registro: ${registration || 'sem registro'})`;
+  if (!b || b.token !== expected.token || b.pagamento || b.baixa || b.registro?.erro || CLOSED.includes(situation) || CLOSED.includes(registration))
+    throw new InviteError('INVITE disponível somente para boleto em aberto, com registro bancário confirmado e sem pagamento ou baixa.' + (b ? where : ''));
+  // Recém-emitido: o emissor pode ainda não marcar EM_ABERTO enquanto o banco não
+  // confirma o registro. Aguarda e tenta de novo, sem enviar nada ao cliente.
+  if (registration !== 'REGISTRO_CONFIRMADO' || situation !== 'EM_ABERTO')
+    throw Object.assign(new InviteError('Registro bancário ainda não confirmado. O boleto só vai ao cliente depois da confirmação do banco.' + where), { pending: true });
   let due; try { due = dataCivil(b.vencimento); } catch { throw new InviteError('Vencimento inválido no emissor.', 502); }
   if (due < currentDay) throw new InviteError('Boleto vencido. Regularize o vencimento antes de preparar o INVITE.');
   if (!Number.isFinite(b.valor) || b.valor <= 0 || !b.numero || !b.pagador?.nome ||

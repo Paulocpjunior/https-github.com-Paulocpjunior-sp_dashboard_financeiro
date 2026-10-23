@@ -31,3 +31,11 @@ test('only provider GET, rechecks bank before returning and rejects races/errors
  await assert.rejects(prepareInvite({...input,fetchImpl:async url=>url.endsWith('/situacao')?{ok:true,json:async()=>({boleto:++read===1?b():{...b(),situacao:'PAGO'}})}:{ok:true,arrayBuffer:async()=>pdf}}),/em aberto/);
  await assert.rejects(prepareInvite({...input,fetchImpl:async()=>({ok:false})}),/Nenhum convite/);
 });
+test('recém-emitido ainda sem registro confirmado fica pendente (tenta de novo); pago ou baixado não',()=>{
+ const pending=patch=>{try{validateSituation({...b(),...patch},expected());}catch(e){return e.pending===true;}assert.fail('não bloqueou');};
+ assert.equal(pending({situacao:'EMITIDO',registro:null}),true);
+ assert.equal(pending({registro:{situacao:'AGUARDANDO'}}),true);
+ assert.equal(pending({situacao:'PAGO'}),false);
+ assert.equal(pending({registro:{situacao:'REGISTRO_REJEITADO'}}),false);
+ assert.equal(pending({baixa:{situacao:'SOLICITADA'}}),false);
+});
