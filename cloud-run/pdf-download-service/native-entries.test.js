@@ -154,8 +154,9 @@ function harness({
         const result = await fn({
           get: (r) => (r.query ? r.get() : Promise.resolve(snap(r))),
           create: (r, d) => pending.push([r.path, d]),
+          set: (r, d) => pending.push([r.path, d, true]),
         });
-        for (const [p] of pending) assert.equal(store.has(p), false);
+        for (const [p, , overwrite] of pending) if (!overwrite) assert.equal(store.has(p), false);
         pending.forEach(([p, d]) => store.set(p, d));
         return result;
       });
@@ -428,4 +429,29 @@ test("Fatura Wix com mesmo valor e vencimento bloqueia; exceção só pelo maste
   assert.deepEqual(saved.body.transaction.wixLockOverride.invoices, ["wix-inv-0004400"]);
   const logs = [...m.store.entries()].filter(([k]) => k.startsWith("wixBillingLockAudit/")).map(([, v]) => v.action).sort();
   assert.deepEqual(logs, ["blocked", "blocked", "override", "override"]);
+});
+
+test("filial with the same CNPJ root is a distinct company; excluded entries release the lock", async () => {
+  const matriz = { ...client, client: "Empresa Matriz", clientNumber: "1200", cpfCnpjDigits: "11222333000181" };
+  const filial = { ...client, client: "Empresa Filial", clientNumber: "1275", cpfCnpjDigits: "11222333000262" };
+  const h = harness();
+  h.store.set("clientRegistry/m", matriz);
+  h.store.set("clientRegistry/f", filial);
+  const commit = async (entry) => {
+    const b = { requestId: randomUUID(), entry };
+    const p = await h.call("preview", b);
+    return h.call("commit", { ...b, confirmHash: p.body.previewHash });
+  };
+  const first = await commit(input({ clientRegistryId: "m" }));
+  assert.equal(first.status, 201);
+  assert.equal((await commit(input({ clientRegistryId: "f" }))).status, 201);
+  const repeated = await commit(input({ clientRegistryId: "m" }));
+  assert.equal(repeated.status, 409);
+  assert.match(repeated.body.error, /N\.Cliente 1200/);
+  assert.match(repeated.body.error, new RegExp(first.body.transaction.id));
+  h.store.get(`transactions/${first.body.transaction.id}`).isExcluded = true;
+  const again = await commit(input({ clientRegistryId: "m" }));
+  assert.equal(again.status, 201);
+  const audit = h.store.get(`nativeEntryAudit/${again.body.transaction.id}`);
+  assert.equal(audit.releasedLock, first.body.transaction.id);
 });
