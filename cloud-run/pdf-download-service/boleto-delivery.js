@@ -6,6 +6,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { createProvider, configuration } = require("./communication-provider");
 const { SENDER } = require("./communication-rule");
 const { recipients } = require("./communication-recipients");
+const { escapeHtml, layoutEmail, logoInline } = require("./email-layout");
 
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const digits = (value) => String(value || "").replace(/\D/g, "");
@@ -129,7 +130,28 @@ async function finish(db, ref, { uid, attemptId, state, error = "", providerId =
     return next;
   });
 }
-function emailMessage(artifact, { to, idempotencyKey, value, dueDate }) {
+// Corpo no layout padrão dos apps da SP (logo, faixa azul, rodapé), com o
+// texto simples ao lado para leitores que não abrem HTML.
+function emailHtml({ client, number, value, date, detail }) {
+  const linha = (rotulo, valor) =>
+    `<tr><td style="padding:8px 12px; color:#6b7280; font-size:13px; border-bottom:1px solid #eef1f8;">${rotulo}</td><td style="padding:8px 12px; font-weight:bold; text-align:right; border-bottom:1px solid #eef1f8;">${escapeHtml(valor)}</td></tr>`;
+  const anexos = detail ? "o boleto em PDF, o demonstrativo da cobrança e" : "o boleto em PDF e";
+  const conteudoHtml = [
+    `<p style="margin:0 0 12px 0;">Olá${client ? `, <strong>${escapeHtml(client)}</strong>` : ""}.</p>`,
+    `<p style="margin:0 0 16px 0;">Segue o seu boleto da SP Assessoria Contábil.</p>`,
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1FF; border-radius:8px; margin:0 0 16px 0;">${linha("Boleto", number)}${linha("Valor", value)}${linha("Vencimento", date)}</table>`,
+    `<p style="margin:0 0 12px 0; font-size:13px; color:#166534; background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:10px 14px;">📎 Em anexo: ${anexos} o convite para a sua agenda, que também leva o boleto.</p>`,
+    `<p style="margin:0; font-size:13px; color:#92400E; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:10px 14px;">Confira os dados do beneficiário no PDF antes de pagar. Se já pagou, desconsidere esta mensagem.</p>`,
+  ].join("");
+  return layoutEmail({
+    titulo: `Boleto ${escapeHtml(number)}`,
+    selo: `Vence ${date}`,
+    conteudoHtml,
+    assinatura: "Equipe Financeira — SP Assessoria Contábil",
+    motivoRodape: "Você recebeu este e-mail porque sua empresa é atendida pelo nosso escritório. Em caso de dúvida, responda este e-mail.",
+  });
+}
+function emailMessage(artifact, { to, idempotencyKey, value, dueDate, client = "" }) {
   const number = artifact.number;
   const date = dueDate.split("-").reverse().join("/");
   const attachments = [
@@ -145,6 +167,8 @@ function emailMessage(artifact, { to, idempotencyKey, value, dueDate }) {
     idempotencyKey,
     subject: `Boleto ${number} — vencimento ${date} — SP Assessoria Contábil`,
     text: `Olá,\n\nSegue o boleto de ${value}, com vencimento em ${date}, e o convite para adicionar o vencimento à sua agenda. O PDF do boleto está anexado e também vai dentro do convite.\n\nConfira os dados do beneficiário no PDF antes de pagar. Se já pagou, desconsidere esta mensagem. Em caso de dúvida, responda a este e-mail.\n\nEquipe Financeira — SP Assessoria Contábil`,
+    html: emailHtml({ client: String(client || "").trim(), number, value, date, detail: Boolean(artifact.detail) }),
+    inline: logoInline(),
     attachments,
   };
 }

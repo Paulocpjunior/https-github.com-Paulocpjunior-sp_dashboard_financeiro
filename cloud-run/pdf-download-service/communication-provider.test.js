@@ -28,3 +28,14 @@ test('Graph receives every confirmed address exactly once; invalid list blocks t
  assert.deepEqual(JSON.parse(calls[1].body).message.toRecipients.map(r=>r.emailAddress.address),['a@example.com','b@example.com']);
  for(const to of [[],['a@example.com','invalid'],['a@example.com','b@example.com\r\nBcc:x@example.com'],Array(51).fill('a@example.com')])await assert.rejects(createProvider({env,fetchImpl:async()=>assert.fail('no network')}).send({...message(),to}));
 });
+
+test('layout HTML goes as HTML body with the logo inline; bad inline image blocks before network',async()=>{
+ const png=Buffer.concat([Buffer.from([0x89]),Buffer.from('PNG'),Buffer.alloc(10)]);
+ const calls=[],provider=createProvider({env,fetchImpl:async(url,options)=>{calls.push(options);return calls.length===1?{ok:true,json:async()=>({access_token:'synthetic'})}:{status:202};}});
+ await provider.send({...message(),html:'<p>Olá <img src="cid:sp-logo"></p>',inline:[{name:'sp-logo.png',type:'image/png',contentId:'sp-logo',content:png}]});
+ const sent=JSON.parse(calls[1].body).message;
+ assert.deepEqual(sent.body,{contentType:'HTML',content:'<p>Olá <img src="cid:sp-logo"></p>'});
+ assert.deepEqual(sent.attachments.map(a=>[a.name,a.isInline===true,a.contentId]),[['sp-logo.png',true,'sp-logo'],['boleto.pdf',false,undefined]]);
+ for(const patch of [{html:''},{inline:[{name:'x.png',type:'image/png',contentId:'sp-logo',content:png}]},{html:'<p>x</p>',inline:[{name:'x.png',type:'image/svg+xml',contentId:'sp-logo',content:png}]},{html:'<p>x</p>',inline:[{name:'x.png',type:'image/png',contentId:'bad id',content:png}]},{html:'<p>x</p>',inline:[{name:'x.png',type:'image/png',contentId:'sp-logo',content:Buffer.from('%PDF-')}]}])
+  await assert.rejects(()=>createProvider({env,fetchImpl:async()=>assert.fail('no network')}).send({...message(),...patch}));
+});

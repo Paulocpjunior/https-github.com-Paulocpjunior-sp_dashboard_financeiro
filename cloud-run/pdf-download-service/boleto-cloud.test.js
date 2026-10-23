@@ -709,6 +709,14 @@ test("e-mail vai uma vez, com PDF e convite com o PDF dentro, para o e-mail da R
   assert.deepEqual(mail.toRecipients.map((r) => r.emailAddress.address), ["cliente@exemplo.com.br", "financeiro@exemplo.com.br"]);
   const names = mail.attachments.map((a) => a.name);
   assert.ok(names.some((n) => /^boleto-.*\.pdf$/.test(n)) && names.some((n) => /^vencimento-.*\.ics$/.test(n)));
+  // Layout padrão dos apps da SP: HTML com o logo inline por cid:.
+  assert.equal(mail.body.contentType, "HTML");
+  assert.match(mail.body.content, /src="cid:sp-logo"/);
+  assert.match(mail.body.content, /Departamento Financeiro/);
+  assert.match(mail.body.content, /10\/11\/2099/);
+  const logo = mail.attachments.find((a) => a.isInline);
+  assert.equal(logo.contentId, "sp-logo");
+  assert.equal(Buffer.from(logo.contentBytes, "base64").subarray(1, 4).toString(), "PNG");
   const ics = Buffer.from(mail.attachments.find((a) => a.name.endsWith(".ics")).contentBytes, "base64").toString();
   assert.match(ics.replace(/\r\n /g, ""), new RegExp("ATTACH;FMTTYPE=application/pdf;ENCODING=BASE64;VALUE=BINARY:" + Buffer.from("%PDF-1.4 boleto sintético").toString("base64")));
   // Segundo envio bloqueado; reenvio só com motivo, auditado.
