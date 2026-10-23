@@ -89,6 +89,10 @@ const isConfirmedBillingMethod = (value: string): boolean => [
   'Outro',
 ].includes(value);
 
+// Um ou mais e-mails de faturamento, separados por ; , ou espaço (mesma regra do servidor).
+export const BILLING_EMAIL = /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/;
+export const billingEmailList = (value?: string) => String(value || '').split(/[;,\s]+/).filter(Boolean);
+
 export const getBillingProfileCompletenessErrors = (profile: Pick<BillingProfile,
   'billingMethod' | 'issueDay' | 'issueMonthOffset' | 'dueDay' | 'deliveryChannels' | 'billingEmail' | 'whatsapp' | 'printedDeliveryDetails'
 >): string[] => {
@@ -99,7 +103,9 @@ export const getBillingProfileCompletenessErrors = (profile: Pick<BillingProfile
   if (profile.issueMonthOffset != null && ![-1, 0].includes(profile.issueMonthOffset)) errors.push('mês de emissão inválido');
   if ((profile.issueMonthOffset ?? 0) === 0 && profile.issueDay && profile.dueDay && profile.issueDay > profile.dueDay) errors.push('emissão posterior ao vencimento: confira o mês de emissão');
   if (!profile.deliveryChannels?.length) errors.push('meio de envio');
-  if (profile.deliveryChannels?.includes('email') && !String(profile.billingEmail || '').trim()) errors.push('e-mail de faturamento');
+  const emails = billingEmailList(profile.billingEmail);
+  if (profile.deliveryChannels?.includes('email') && !emails.length) errors.push('e-mail de faturamento');
+  else if (emails.some((email) => !BILLING_EMAIL.test(email))) errors.push('e-mail de faturamento inválido (separe vários com ;)');
   if (profile.deliveryChannels?.includes('whatsapp') && !String(profile.whatsapp || '').trim()) errors.push('WhatsApp');
   if (profile.deliveryChannels?.includes('printed') && !String(profile.printedDeliveryDetails || '').trim()) errors.push('detalhes da entrega física');
   return errors;

@@ -104,6 +104,12 @@ assert.deepEqual(getBillingProfileCompletenessErrors({
 assert.deepEqual(getBillingProfileCompletenessErrors({
   billingMethod: 'Boleto Itaú', issueDay: 5, dueDay: 10, deliveryChannels: ['whatsapp'], whatsapp: '',
 }), ['WhatsApp']);
+assert.deepEqual(getBillingProfileCompletenessErrors({
+  billingMethod: 'Boleto Itaú', issueDay: 5, dueDay: 10, deliveryChannels: ['email'], billingEmail: 'enilda@example.com.br;  jjunior@example.com.br',
+}), []);
+assert.deepEqual(getBillingProfileCompletenessErrors({
+  billingMethod: 'Boleto Itaú', issueDay: 5, dueDay: 10, deliveryChannels: ['email'], billingEmail: 'enilda@example.com.br; jjunior',
+}), ['e-mail de faturamento inválido (separe vários com ;)']);
 
   const synthetic = { id: 'audit-a', client: 'Cliente sintético', cpfCnpj: '11111111000111', clientNumber: '17', date: '2026-10-20', dueDate: '2026-11-05', movement: 'Entrada', type: 'Entrada de Caixa / Contas a Receber', status: 'Pendente', totalCobranca: 100, source: 'jotform' };
   const complete = { id: 'profile-a', identityKey: 'doc-11111111000111', client: 'Cliente sintético', cpfCnpj: synthetic.cpfCnpj, clientNumber: '17', active: true, billingMethod: 'Boleto Itaú', issueDay: 20, dueDay: 5, deliveryChannels: ['email'], billingEmail: 'teste@example.com' };
