@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { companyKey, sameCompany, activeFatura, monthRange } = require("./wix-billing-lock");
+const { companyKey, sameCompany, activeFatura, activeWixCharge, sameCharge, amountCents, monthRange } = require("./wix-billing-lock");
 
 test("nome da empresa ignora acentos, pontuação e sufixos societários", () => {
   assert.equal(companyKey("Padaria São José Ltda - ME"), "padaria sao jose");
@@ -26,4 +26,16 @@ test("só Faturas Wix ativas travam; pedidos da loja, canceladas e excluídas n�
   assert.equal(activeFatura("native-1", { source: "native-finance", wixInvoiceNumber: "" }), false);
   assert.deepEqual(monthRange("2026-02-14"), { month: "2026-02", start: "2026-02-01", end: "2026-02-31" });
   assert.equal(monthRange("14/02/2026"), null);
+});
+
+test("duplicata Wix exige mesmo valor em centavos e mesmo vencimento", () => {
+  const app = { dueDate: "2026-11-15", totalCobranca: 1621 };
+  assert.equal(amountCents({ honorarios: "1.600,00", valorExtra: "21" }), 162100);
+  assert.equal(sameCharge(app, { dueDate: "2026-11-15", valorOriginal: 1621 }), true);
+  assert.equal(sameCharge(app, { dueDate: "2026-07-19", valorOriginal: 1621 }), false);
+  assert.equal(sameCharge(app, { dueDate: "2026-11-15", valorOriginal: 1620.99 }), false);
+  assert.equal(sameCharge({ dueDate: "2026-11-15" }, { dueDate: "2026-11-15" }), false);
+  assert.equal(activeWixCharge("wix-abc", { source: "wix", wixOrderNumber: "10001", status: "Pago" }), true);
+  assert.equal(activeWixCharge("wix-abc", { source: "wix", wixOrderNumber: "10001", status: "Cancelado" }), false);
+  assert.equal(activeWixCharge("native-1", { source: "native-finance" }), false);
 });

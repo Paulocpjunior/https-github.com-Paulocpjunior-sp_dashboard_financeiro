@@ -432,13 +432,13 @@ test('native entry must use the configured Itaú account, without changing legac
   assert.throws(() => payload({...row(), source:'native-finance', bankAccount:'BB Física'}, address), /conta Itaú/);
   assert.equal(payload({...row(), source:'native-finance', bankAccount:require('./native-entry-catalog.json').banks[0]}, address)['boleto.valor'], '1250.00');
 });
-test("Fatura Wix da mesma empresa no mês bloqueia preview e emissão, com log", async () => {
+test("Fatura Wix da mesma empresa com mesmo valor e vencimento bloqueia preview e emissão, com log", async () => {
   let calls = 0;
   const f = fixture(() => {
     calls++;
     return success();
   });
-  const wix = { source: "wix", movement: "Entrada", type: "Entrada de Caixa / Contas a Receber", client: "EMPRESA TESTE LTDA", status: "Pendente", dueDate: "2099-11-25", wixInvoiceNumber: "0004200", valorOriginal: 1250 };
+  const wix = { source: "wix", movement: "Entrada", type: "Entrada de Caixa / Contas a Receber", client: "EMPRESA TESTE LTDA", status: "Pendente", dueDate: "2099-11-10", wixInvoiceNumber: "0004200", valorOriginal: 1250 };
   f.data.set("transactions/wix-inv-0004200", wix);
   const blocked = await f.preview();
   assert.equal(blocked.status, 409);
@@ -450,10 +450,12 @@ test("Fatura Wix da mesma empresa no mês bloqueia preview e emissão, com log",
   assert.equal(logs[0][1].channel, "boleto");
   assert.equal(logs[0][1].uid, "user");
   assert.deepEqual(logs[0][1].invoices, ["wix-inv-0004200"]);
-  // Fatura cancelada, paga em outro mês ou pedido do e-commerce não travam.
+  // Serviços distintos convivem: fatura cancelada, outro vencimento, outro valor
+  // ou pedido do e-commerce com outro valor não travam.
   f.data.set("transactions/wix-inv-0004200", { ...wix, status: "Cancelada" });
-  f.data.set("transactions/wix-inv-0004201", { ...wix, status: "Paga", dueDate: "2099-12-10" });
-  f.data.set("transactions/wix-order", { ...wix, wixInvoiceNumber: undefined, wixOrderNumber: "10050", type: "Recebimento Wix / Cartao", status: "Pago" });
+  f.data.set("transactions/wix-inv-0004201", { ...wix, wixInvoiceNumber: "0004201", status: "Vencida", dueDate: "2099-11-11" });
+  f.data.set("transactions/wix-inv-0004203", { ...wix, wixInvoiceNumber: "0004203", valorOriginal: 1249.99 });
+  f.data.set("transactions/wix-order", { ...wix, wixInvoiceNumber: undefined, wixOrderNumber: "10050", type: "Recebimento Wix / Cartao", status: "Pago", valorOriginal: 300 });
   const p = await f.preview();
   assert.equal(p.body.state, "draft");
   // Fatura emitida entre a revisão e a emissão: bloqueia antes de chamar o emissor.
@@ -463,13 +465,21 @@ test("Fatura Wix da mesma empresa no mês bloqueia preview e emissão, com log",
   assert.equal(calls, 0);
   assert.equal([...f.data.keys()].filter((k) => k.startsWith("wixBillingLockAudit/")).length, 2);
 });
-test("Fatura Wix em aberto de outro mês também bloqueia; exceção só pelo master, com motivo e log", async () => {
+test("Fatura Wix em aberto de outro mês não trava; duplicata só passa com exceção do master, com motivo e log", async () => {
   let calls = 0;
   const f = fixture((...args) => {
     calls++;
     return success(...args);
   });
-  f.data.set("transactions/wix-inv-0004300", { source: "wix", client: "Empresa Teste", status: "Vencida", dueDate: "2099-01-10", wixInvoiceNumber: "0004300" });
+  // Caso VASCO: fatura vencida de outro mês e outro valor não impede o boleto.
+  f.data.set("transactions/wix-inv-0004300", { source: "wix", client: "Empresa Teste", status: "Vencida", dueDate: "2099-01-10", wixInvoiceNumber: "0004300", valorOriginal: 1621 });
+  assert.equal((await f.preview()).body.state, "draft");
+  f.data.set("transactions/wix-order-1", { source: "wix", client: "Empresa Teste", status: "Pago", dueDate: "2099-11-10", wixOrderNumber: "10077", valorOriginal: 1250 });
+  const order = await f.preview();
+  assert.equal(order.status, 409);
+  assert.match(order.body.error, /Pedido Wix #10077/);
+  f.data.delete("transactions/wix-order-1");
+  f.data.set("transactions/wix-inv-0004300", { source: "wix", client: "Empresa Teste", status: "Vencida", dueDate: "2099-11-10", wixInvoiceNumber: "0004300", valorOriginal: 1250 });
   assert.equal((await f.preview()).status, 409);
   const refused = await f.call("preview", { address, wixOverride: { reason: "Acordo separado do boleto mensal" } });
   assert.equal(refused.status, 403);
@@ -485,7 +495,7 @@ test("Fatura Wix em aberto de outro mês também bloqueia; exceção só pelo ma
   assert.equal(issued.body.state, "issued");
   assert.equal(calls, 1);
   const logs = [...f.data.values()].filter((v) => v && v.channel === "boleto" && v.action);
-  assert.deepEqual(logs.map((l) => l.action).sort(), ["blocked", "blocked", "blocked", "blocked", "override", "override"]);
+  assert.deepEqual(logs.map((l) => l.action).sort(), ["blocked", "blocked", "blocked", "blocked", "blocked", "override", "override"]);
   assert.ok(logs.filter((l) => l.action === "override").every((l) => l.uid === master && l.reason));
 });
 
@@ -564,7 +574,7 @@ test("lote: revisão com total e motivos por item, endereço reaproveitado, sem 
   f.data.set("transactions/c", { ...row(), cpfCnpj: "52998224725", dueDate: "2099-12-10", totalCobranca: 200, nativeEntry: { address } });
   f.data.set("transactions/d", { ...row(), cpfCnpj: "123", dueDate: "2099-12-10" });
   f.data.set("transactions/e", { ...row(), cpfCnpj: "11444777000161", dueDate: "2099-12-10" });
-  f.data.set("transactions/wix-inv-1", { source: "wix", client: "Empresa Wix", cpfCnpj: "", status: "Pendente", dueDate: "2099-12-01", wixInvoiceNumber: "1" });
+  f.data.set("transactions/wix-inv-1", { source: "wix", client: "Empresa Wix", cpfCnpj: "", status: "Pendente", dueDate: "2099-12-15", wixInvoiceNumber: "1", valorOriginal: 1250 });
   f.data.set("transactions/w", { ...row(), client: "Empresa Wix", cpfCnpj: "11444777000161", dueDate: "2099-12-15" });
   const res = await f.post("batch/preview", { batchId, ids: ["a", "b", "c", "d", "e", "w"], filters: { dueFrom: "2099-12-10" } });
   assert.equal(res.status, 200);

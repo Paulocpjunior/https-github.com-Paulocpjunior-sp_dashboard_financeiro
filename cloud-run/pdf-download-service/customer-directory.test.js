@@ -66,6 +66,12 @@ test('regra sem mudança de identificação dispensa motivo e mesmo assim gera h
  assert.equal(h.store.get('billingProfiles/doc-07147345000111').issueDay,24);assert.equal(h.store.has('financialSettings/customerDirectory'),false);
  assert.equal([...h.store.keys()].filter(k=>k.startsWith('billingProfileAudit/')).length,1);
 });
+test('regra aceita mais de um e-mail de faturamento e recusa endereço inválido',async()=>{
+ const h=billing();
+ await h.save({rule:{...rule,billingEmail:'Enilda@Example.test;  jjunior@example.test, enilda@example.test'}});
+ assert.equal(h.store.get('billingProfiles/doc-07147345000111').billingEmail,'enilda@example.test; jjunior@example.test');
+ await assert.rejects(h.save({revision:1,rule:{...rule,billingEmail:'enilda@example.test; jjunior'}}),/E-mail de faturamento inválido: jjunior/);
+});
 test('bloqueia CNPJ inválido, documento ou número de outro cliente e documento em branco',async()=>{
  const h=billing(),reason='Correção conferida com o cliente';
  await assert.rejects(h.save({reason,customer:{client:radio.client,cpfCnpj:'12.345.678/0001-90',clientNumber:'170'}}),/dígitos verificadores/);
