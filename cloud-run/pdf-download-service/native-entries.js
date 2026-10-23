@@ -250,8 +250,45 @@ function buildEntry(input, client, actor, now = new Date().toISOString(), source
   else result.observacaoAPagar = note;
   return {
     record: result,
-    duplicateKey: hash([input.kind, identity, input.dueDate, original]),
+    // Matriz and filial share the CNPJ root but are distinct companies: the key
+    // uses the full document and the N.Cliente, never the root or the name.
+    duplicateKey: hash([input.kind, identity, receivable ? String(client.clientNumber) : "", input.dueDate, original]),
   };
+}
+function recordCents(r) {
+  const raw = String(
+    r.totalCobranca || r.valorOriginal || r.valuePaid || r.valueReceived || 0,
+  ).replace(/[^0-9.,-]/g, "");
+  return Math.round(
+    Number(raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw) * 100,
+  );
+}
+// Same company is the exact CPF/CNPJ (14 digits for a filial), never the root.
+function sameDebt(r, record, kind) {
+  if (!r || r.isExcluded || r.deletedAt) return false;
+  const identity =
+    kind === "receber"
+      ? String(r.cpfCnpj || "").replace(/\D/g, "") === record.cpfCnpj
+      : maintenance.sameAccount(r.description, record.description);
+  return (
+    r.movement === record.movement &&
+    r.dueDate === record.dueDate &&
+    identity &&
+    recordCents(r) === Math.round(record.valorOriginal * 100)
+  );
+}
+function describeEntry(r, lock = {}) {
+  if (!r) return `registro ${lock.transactionId || "sem referência"}`;
+  const when = String(r.createdAt || lock.createdAt || "").slice(0, 10).split("-").reverse().join("/");
+  return [
+    r.nCliente || r.clientNumber ? `N.Cliente ${r.nCliente || r.clientNumber}` : "",
+    r.client,
+    r.cpfCnpj,
+    r.description ? `"${r.description}"` : "",
+    r.createdByName ? `criado por ${r.createdByName}` : "",
+    when ? `em ${when}` : "",
+    `(registro ${lock.transactionId})`,
+  ].filter(Boolean).join(" · ");
 }
 function createNativeEntryHandler({
   getServices,
@@ -542,9 +579,16 @@ function createNativeEntryHandler({
             409,
           );
         const lock = (await tx.get(lockRef)).data();
-        if (lock)
+        const locked = lock?.transactionId
+          ? (await tx.get(db.collection("transactions").doc(lock.transactionId))).data()
+          : null;
+        // A lock only blocks while its entry is still the same active debt; an
+        // excluded or corrected entry must not hold the slot forever.
+        if (lock && (!lock.transactionId || sameDebt(locked, built.record, input.kind)))
           throw new EntryError(
-            "Já existe um lançamento nativo com a mesma identificação, valor e vencimento. Consulte antes de repetir.",
+            "Já existe um lançamento nativo com a mesma identificação, valor e vencimento: " +
+              describeEntry(locked, lock) +
+              ". Consulte antes de repetir.",
             409,
           );
         const peers = await tx.get(
@@ -558,36 +602,14 @@ function createNativeEntryHandler({
             "Volume exige conferência manual de duplicidade.",
             409,
           );
-        const duplicate = peers.docs.some((d) => {
-          const r = d.data();
-          const identity =
-            input.kind === "receber"
-              ? String(r.cpfCnpj || "").replace(/\D/g, "") ===
-                built.record.cpfCnpj
-              : maintenance.sameAccount(r.description,built.record.description);
-          const rawAmount = String(
-            r.totalCobranca ||
-              r.valorOriginal ||
-              r.valuePaid ||
-              r.valueReceived ||
-              0,
-          ).replace(/[^0-9.,-]/g, "");
-          const amount = Number(
-            rawAmount.includes(",")
-              ? rawAmount.replace(/\./g, "").replace(",", ".")
-              : rawAmount,
-          );
-          return (
-            !r.isExcluded &&
-            r.movement === built.record.movement &&
-            identity &&
-            Math.round(amount * 100) ===
-              Math.round(built.record.valorOriginal * 100)
-          );
-        });
+        const duplicate = peers.docs.find((d) =>
+          sameDebt(d.data(), built.record, input.kind),
+        );
         if (duplicate)
           throw new EntryError(
-            "Possível duplicidade no histórico: mesma identificação, valor e vencimento. Confira o lançamento existente.",
+            "Possível duplicidade no histórico: mesma identificação, valor e vencimento: " +
+              describeEntry(duplicate.data(), { transactionId: duplicate.id }) +
+              ". Confira o lançamento existente.",
             409,
           );
         const now = new Date().toISOString();
@@ -599,13 +621,19 @@ function createNativeEntryHandler({
           ...(wixLockOverride ? { wixLockOverride } : {}),
         };
         tx.create(ref, record);
-        tx.create(lockRef, { transactionId: id, uid, createdAt: now });
+        tx.set(lockRef, {
+          transactionId: id,
+          uid,
+          createdAt: now,
+          ...(lock ? { replaced: { transactionId: lock.transactionId || "", uid: lock.uid || "", createdAt: lock.createdAt || "", releasedAt: now } } : {}),
+        });
         tx.create(db.collection("nativeEntryAudit").doc(id), {
           action: "create",
           transactionId: id,
           uid,
           at: now,
           hash: previewHash,
+          ...(lock ? { releasedLock: lock.transactionId || "" } : {}),
         });
         return { record, replayed: false };
       });
