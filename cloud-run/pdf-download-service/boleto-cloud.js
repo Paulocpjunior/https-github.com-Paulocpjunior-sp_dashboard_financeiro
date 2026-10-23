@@ -635,7 +635,7 @@ function createBoletoHandler({
         });
         const value = amount(row).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         if (channel === "email") {
-          const message = delivery.emailMessage(artifact, { to: contacts.email, idempotencyKey: delivery.deliveryKey(cfg.environment, id, existing.token, channel), value, dueDate: row.dueDate });
+          const message = delivery.emailMessage(artifact, { to: contacts.email, idempotencyKey: delivery.deliveryKey(cfg.environment, id, existing.token, channel), value, dueDate: row.dueDate, client: row.client });
           const result = await delivery.sendEmail({ env, fetchImpl, message });
           const saved = await delivery.finish(db, target, { uid, attemptId, ...result });
           sendJson(request, response, 200, { channel, delivery: delivery.publicDelivery(saved) });

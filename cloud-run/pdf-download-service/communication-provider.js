@@ -10,7 +10,12 @@ function createProvider({env=process.env,fetchImpl=fetch}={}){
   if(message.from!==SENDER||message.replyTo!==SENDER||! /^[a-f0-9]{64}$/.test(message.idempotencyKey||''))throw Error('Envelope inválido.');
   const to=recipients(message.to);
   validateArtifacts(message);
-  const payload=JSON.stringify({message:{subject:message.subject,body:{contentType:'Text',content:message.text},toRecipients:to.map(address=>({emailAddress:{address}})),replyTo:[{emailAddress:{address:SENDER}}],internetMessageHeaders:[{name:'x-financeiro-reference',value:message.idempotencyKey}],attachments:message.attachments.map(a=>({'@odata.type':'#microsoft.graph.fileAttachment',name:a.name,contentType:a.type,contentBytes:a.content.toString('base64')}))},saveToSentItems:true});
+  // Layout HTML opcional, com imagens só inline (logo por cid:), PNG e pequenas.
+  const html=message.html===undefined?null:message.html;
+  if(html!==null&&(typeof html!=='string'||!html.trim()||html.length>200000))throw Error('Mensagem inválida.');
+  const inline=message.inline===undefined?[]:message.inline;
+  if(!Array.isArray(inline)||inline.length>2||(inline.length&&html===null)||inline.some(i=>!Buffer.isBuffer(i.content)||i.type!=='image/png'||i.content.subarray(1,4).toString()!=='PNG'||i.content.length>200000||! /^[a-zA-Z0-9_.-]{1,120}$/.test(i.name)||! /^[a-z0-9-]{1,40}$/.test(i.contentId)))throw Error('Imagem inválida.');
+  const payload=JSON.stringify({message:{subject:message.subject,body:html===null?{contentType:'Text',content:message.text}:{contentType:'HTML',content:html},toRecipients:to.map(address=>({emailAddress:{address}})),replyTo:[{emailAddress:{address:SENDER}}],internetMessageHeaders:[{name:'x-financeiro-reference',value:message.idempotencyKey}],attachments:[...inline.map(i=>({'@odata.type':'#microsoft.graph.fileAttachment',name:i.name,contentType:i.type,contentBytes:i.content.toString('base64'),isInline:true,contentId:i.contentId})),...message.attachments.map(a=>({'@odata.type':'#microsoft.graph.fileAttachment',name:a.name,contentType:a.type,contentBytes:a.content.toString('base64')}))]},saveToSentItems:true});
   // Graph direct attachment requests must fit the request limit. Do not silently drop files.
   if(message.attachments.some(a=>a.content.length>=3000000)||Buffer.byteLength(payload)>3900000)throw Error('Mensagem excede o limite do canal.');
   const tokenResponse=await fetchImpl(`https://login.microsoftonline.com/${env[keys[0]]}/oauth2/v2.0/token`,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env[keys[1]],client_secret:env[keys[2]],scope:'https://graph.microsoft.com/.default',grant_type:'client_credentials'}).toString()});
