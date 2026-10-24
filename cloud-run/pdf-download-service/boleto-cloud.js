@@ -660,6 +660,8 @@ function createBoletoHandler({
           nomeArquivo: `boleto-${artifact.number}.pdf`,
           pdfBase64: artifact.pdf.toString("base64"),
           referencia: `financeiro:boleto ${artifact.number}`,
+          // Final do link do botão "Adicionar à agenda" do modelo (public/agenda.html?b=...).
+          botaoUrl: `${row.dueDate.replace(/-/g, "")}.${artifact.number}.${Math.round(amount(row) * 100)}`,
           variaveis: {
             cliente: String(row.client || "").trim(),
             nome: String(row.client || "").trim(),

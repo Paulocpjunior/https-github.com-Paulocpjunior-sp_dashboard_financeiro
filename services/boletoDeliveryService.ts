@@ -46,7 +46,7 @@ export async function sendBoleto(id: string, channel: DeliveryChannel, resendRea
   // O modelo é conferido antes de reservar o envio: sem modelo, nada é registrado.
   const { template, error: templateError } = await SpConnectGateway.documentTemplate();
   if (!template) return { state: 'failed', error: templateError || 'Modelo de WhatsApp indisponível.', notConfigured: true };
-  let prepared: { attemptId: string; para: string; pdfBase64: string; nomeArquivo: string; referencia: string; variaveis: Record<string, string> };
+  let prepared: { attemptId: string; para: string; pdfBase64: string; nomeArquivo: string; referencia: string; botaoUrl?: string; variaveis: Record<string, string> };
   try {
     prepared = await (await boletoRequest(path(id, 'delivery'), { channel, ...extra })).json();
   } catch (error) {
@@ -59,6 +59,7 @@ export async function sendBoleto(id: string, channel: DeliveryChannel, resendRea
     pdfBase64: prepared.pdfBase64,
     nomeArquivo: prepared.nomeArquivo,
     referencia: prepared.referencia,
+    botaoUrl: prepared.botaoUrl,
   });
   try {
     const saved = await (await boletoRequest(path(id, 'delivery-result'), {

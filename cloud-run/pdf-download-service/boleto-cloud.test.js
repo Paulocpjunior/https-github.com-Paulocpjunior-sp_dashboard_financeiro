@@ -779,6 +779,8 @@ test("WhatsApp: tela recebe o PDF e o número do cadastro, resultado fica regist
   assert.equal(prepared.body.para, "5511987654321");
   assert.equal(Buffer.from(prepared.body.pdfBase64, "base64").toString(), "%PDF-1.4 boleto sintético");
   assert.match(prepared.body.variaveis.valor, /^R\$\s1\.250,00$/);
+  // Botão "Adicionar à agenda": vencimento, número e valor em centavos para public/agenda.html.
+  assert.match(prepared.body.botaoUrl, /^20991110\.[0-9A-Za-z-]+\.125000$/);
   assert.equal((await f.call("delivery", { channel: "whatsapp" })).status, 409, "em andamento");
   assert.equal((await f.call("delivery-result", { channel: "whatsapp", attemptId: "outro", ok: true, messageId: "x" })).status, 409);
   const done = await f.call("delivery-result", { channel: "whatsapp", attemptId: prepared.body.attemptId, ok: true, messageId: "wamid.1" });

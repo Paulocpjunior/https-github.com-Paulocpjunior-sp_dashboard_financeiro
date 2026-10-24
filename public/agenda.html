@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Lembrete do boleto · SP Assessoria Contábil</title>
+<link rel="icon" href="/favicon.png">
+<!-- Página do botão "Adicionar à agenda" do WhatsApp do boleto. Estática: lê o
+     vencimento, o número e o valor do próprio link (b=AAAAMMDD.NUMERO.CENTAVOS),
+     não consulta nem grava nada. Cores e tipografia do design system SP v0.2. -->
+<style>
+ :root { --sp-bg:#f5f5f7; --sp-surface:#fff; --sp-text:#1d1d1f; --sp-muted:#626268; --sp-border:#d2d2d7; --sp-accent:#0066cc; --sp-accent-hover:#0055aa; --sp-brand:#0E3BFA; --sp-navy:#091D8D; --sp-danger:#b42318; }
+ @media (prefers-color-scheme: dark) { :root { --sp-bg:#161617; --sp-surface:#232326; --sp-text:#f5f5f7; --sp-muted:#b2b2b9; --sp-border:#505057; --sp-accent:#8ac2ff; --sp-accent-hover:#b5d8ff; --sp-danger:#ffaca5; } }
+ * { box-sizing: border-box; }
+ body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px 16px; background:var(--sp-bg); color:var(--sp-text); font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter Variable",Inter,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
+ main { width:100%; max-width:440px; background:var(--sp-surface); border:1px solid var(--sp-border); border-radius:20px; overflow:hidden; box-shadow:0 4px 20px rgb(0 0 0 / .05); }
+ header { text-align:center; padding:22px 24px 16px; }
+ header img { width:52px; height:auto; display:block; margin:0 auto 8px; }
+ header strong { display:block; color:var(--sp-navy); }
+ @media (prefers-color-scheme: dark) { header strong { color:var(--sp-text); } }
+ header span { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--sp-muted); }
+ .band { background:linear-gradient(135deg,var(--sp-brand),var(--sp-navy)); color:#fff; padding:16px 24px; font-weight:600; font-size:18px; }
+ .band small { display:inline-block; margin-top:6px; padding:4px 12px; border-radius:99px; background:rgb(255 255 255 / .22); font-size:12px; letter-spacing:.6px; text-transform:uppercase; }
+ section { padding:20px 24px 24px; }
+ dl { margin:0 0 20px; display:grid; grid-template-columns:auto 1fr; gap:8px 12px; }
+ dt { color:var(--sp-muted); font-size:14px; } dd { margin:0; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+ .actions { display:grid; gap:10px; }
+ a.btn, button.btn { display:flex; align-items:center; justify-content:center; min-height:48px; padding:10px 18px; border-radius:10px; border:1px solid var(--sp-border); background:var(--sp-surface); color:var(--sp-text); font:inherit; font-weight:600; text-decoration:none; cursor:pointer; }
+ a.btn.primary { background:var(--sp-accent); border-color:var(--sp-accent); color:var(--sp-surface); }
+ a.btn.primary:hover { background:var(--sp-accent-hover); }
+ :focus-visible { outline:3px solid var(--sp-accent); outline-offset:3px; }
+ p.note { margin:16px 0 0; font-size:13px; color:var(--sp-muted); }
+ p.error { color:var(--sp-danger); }
+</style>
+</head>
+<body>
+<main>
+ <header><img src="/logo-sp.png" alt=""><strong>SP Assessoria Contábil</strong><span>Departamento Financeiro</span></header>
+ <div class="band" id="title">Lembrete do boleto</div>
+ <section id="content"><p class="error">Link inválido. Confira a mensagem do WhatsApp ou fale com o Financeiro da SP Assessoria Contábil.</p></section>
+</main>
+<script>
+(function () {
+  var m = /^(\d{4})(\d{2})(\d{2})\.([0-9A-Za-z-]{1,30})\.(\d{1,12})$/.exec(new URLSearchParams(location.search).get('b') || '');
+  if (!m) return;
+  var due = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (due.getUTCMonth() !== +m[2] - 1) return;
+  var next = new Date(due.getTime() + 86400000);
+  var ymd = function (d) { return d.toISOString().slice(0, 10); };
+  var date = m[3] + '/' + m[2] + '/' + m[1];
+  var number = m[4];
+  var value = (Number(m[5]) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  var title = 'Vencimento do boleto ' + number + ' — SP Assessoria Contábil';
+  var details = 'Boleto ' + number + ' da SP Assessoria Contábil. Valor: ' + value + '. Vencimento: ' + date + '. O PDF do boleto está na mensagem do WhatsApp. Se já pagou, desconsidere.';
+  var google = 'https://calendar.google.com/calendar/render?' + new URLSearchParams({ action: 'TEMPLATE', text: title, dates: ymd(due).replace(/-/g, '') + '/' + ymd(next).replace(/-/g, ''), details: details });
+  var outlook = 'https://outlook.office.com/calendar/0/deeplink/compose?' + new URLSearchParams({ path: '/calendar/action/compose', rru: 'addevent', subject: title, body: details, startdt: ymd(due), enddt: ymd(next), allday: 'true' });
+  var esc = function (s) { return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n'); };
+  var stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//SP Assessoria Contabil//Financeiro//PT', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+    'UID:boleto-' + number + '-' + m[1] + m[2] + m[3] + '@financeiro.sp', 'DTSTAMP:' + stamp,
+    'DTSTART;VALUE=DATE:' + m[1] + m[2] + m[3], 'DTEND;VALUE=DATE:' + ymd(next).replace(/-/g, ''),
+    'SUMMARY:' + esc(title), 'DESCRIPTION:' + esc(details), 'TRANSP:TRANSPARENT',
+    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + esc(title), 'TRIGGER:-PT15H', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
+  var icsUrl = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+  document.getElementById('title').innerHTML = 'Boleto ' + number.replace(/[^0-9A-Za-z-]/g, '') + '<br><small>Vence ' + date + '</small>';
+  var content = document.getElementById('content');
+  content.innerHTML = '<dl><dt>Boleto</dt><dd></dd><dt>Valor</dt><dd></dd><dt>Vencimento</dt><dd></dd></dl>' +
+    '<div class="actions"><a class="btn primary" id="google" target="_blank" rel="noopener">Google Agenda</a>' +
+    '<a class="btn primary" id="outlook" target="_blank" rel="noopener">Outlook</a>' +
+    '<a class="btn" id="ics">iPhone, Mac e outros (.ics)</a></div>' +
+    '<p class="note">O lembrete fica no dia do vencimento. Se já pagou, desconsidere.</p>';
+  var dd = content.querySelectorAll('dd');
+  dd[0].textContent = number; dd[1].textContent = value; dd[2].textContent = date;
+  document.getElementById('google').href = google;
+  document.getElementById('outlook').href = outlook;
+  var a = document.getElementById('ics'); a.href = icsUrl; a.download = 'vencimento-' + number + '.ics';
+})();
+</script>
+</body>
+</html>
