@@ -1,0 +1,21 @@
+/* Emissão Boleto Cloud no padrão SP (design-system v0.2): superfície, raios, azul de ação e avisos semânticos. */
+.sp-ui.sp-boleto-dialog { background: var(--sp-surface); color: var(--sp-text); border: 1px solid var(--sp-border); border-radius: var(--sp-radius-modal); box-shadow: 0 24px 80px rgb(0 0 0 / .22); }
+.sp-boleto-dialog .sp-boleto-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--sp-border); padding-bottom: 16px; }
+.sp-boleto-dialog .sp-boleto-header h2 { margin: 0; }
+.sp-boleto-dialog .sp-boleto-close { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--sp-radius-control); color: var(--sp-muted); }
+.sp-boleto-dialog .sp-boleto-close:hover:not(:disabled) { background: var(--sp-selected); color: var(--sp-text); }
+.sp-boleto-dialog .sp-boleto-tabs { display: flex; gap: 8px; padding: 6px; background: var(--sp-bg); border-radius: var(--sp-radius-card); }
+.sp-boleto-dialog .sp-boleto-tabs .sp-button { flex: 1 1 0; border-color: transparent; background: transparent; color: var(--sp-muted); }
+.sp-boleto-dialog .sp-boleto-tabs .sp-button[aria-selected="true"] { background: var(--sp-surface); color: var(--sp-accent); border-color: var(--sp-accent); font-weight: 600; }
+.sp-boleto-dialog .sp-boleto-notice { border-left: 4px solid var(--sp-warning); background: var(--sp-bg); color: var(--sp-warning); padding: 12px 16px; border-radius: var(--sp-radius-control); }
+.sp-boleto-dialog .sp-boleto-error { border-left: 4px solid var(--sp-danger); background: var(--sp-bg); color: var(--sp-danger); padding: 12px 16px; border-radius: var(--sp-radius-control); }
+.sp-boleto-dialog .sp-boleto-danger { color: var(--sp-danger); }
+.sp-boleto-dialog .sp-boleto-panel { border: 1px solid var(--sp-border); border-radius: var(--sp-radius-card); padding: 16px; }
+.sp-boleto-dialog .sp-boleto-env { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .02em; padding: 4px 10px; border-radius: 99px; background: var(--sp-selected); color: var(--sp-accent); }
+.sp-boleto-dialog .sp-boleto-env[data-env="production"] { background: var(--sp-bg); color: var(--sp-danger); border: 1px solid var(--sp-danger); }
+.sp-boleto-dialog input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--sp-accent); flex-shrink: 0; }
+.sp-boleto-dialog label .sp-field { margin-top: 4px; }
+@media (max-width: 639px) {
+ .sp-ui.sp-boleto-dialog { padding: 16px; }
+ .sp-boleto-dialog .sp-boleto-address { grid-template-columns: 1fr; }
+}
