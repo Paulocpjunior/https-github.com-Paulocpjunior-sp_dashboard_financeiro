@@ -726,6 +726,10 @@ test("e-mail vai uma vez, com PDF e convite com o PDF dentro, para o e-mail da R
   assert.match(mail.body.content, /src="cid:sp-logo"/);
   assert.match(mail.body.content, /Departamento Financeiro/);
   assert.match(mail.body.content, /10\/11\/2099/);
+  // Botões "Adicionar à agenda": evento de dia inteiro no vencimento.
+  const html = mail.body.content.replace(/&amp;/g, "&");
+  assert.match(html, /https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE&[^"]*dates=20991110%2F20991111/);
+  assert.match(html, /https:\/\/outlook\.office\.com\/calendar\/0\/deeplink\/compose\?[^"]*startdt=2099-11-10&enddt=2099-11-11&allday=true/);
   const logo = mail.attachments.find((a) => a.isInline);
   assert.equal(logo.contentId, "sp-logo");
   assert.equal(Buffer.from(logo.contentBytes, "base64").subarray(1, 4).toString(), "PNG");
