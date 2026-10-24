@@ -4,6 +4,7 @@ import argparse
 import datetime
 import json
 import pathlib
+import re
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ def describe(*args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--apply', action='store_true', help='Requires the full SHA explicitly approved by Paulo.')
+    parser.add_argument('--delivery-since', help='ISO UTC instant; boletos issued from then on and never sent are e-mailed by the job. Only with Paulo approval.')
     opts = parser.parse_args()
     if not opts.apply:
         print('Plan: reuse the approved service image and secret references; create a single-task Cloud Run Job; invoke every 15 minutes via a dedicated OAuth service account. Run --apply only after full-SHA approval and service publication.')
@@ -70,7 +72,9 @@ def main():
     # older ones stay with the team. Redeploys keep the original start.
     containers = (((((current or {}).get('spec') or {}).get('template') or {}).get('spec') or {}).get('template') or {}).get('spec', {}).get('containers') or [{}]
     previous = {e.get('name'): e.get('value') for e in containers[0].get('env', [])}
-    sweep_since = previous.get('BOLETO_DELIVERY_SWEEP_SINCE') or datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    if opts.delivery_since and not re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ', opts.delivery_since):
+        raise RuntimeError('Use --delivery-since YYYY-MM-DDTHH:MM:SSZ.')
+    sweep_since = opts.delivery_since or previous.get('BOLETO_DELIVERY_SWEEP_SINCE') or datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     gcloud('run', 'jobs', operation, JOB, '--region', REGION, '--image', image, '--service-account', account,
            '--command', 'launcher', '--args', 'node boleto-return-job.js', '--tasks', '1', '--parallelism', '1', '--max-retries', '0',
            '--task-timeout', '600s', '--memory', '512Mi', '--cpu', '1', '--set-secrets', ','.join(secrets),

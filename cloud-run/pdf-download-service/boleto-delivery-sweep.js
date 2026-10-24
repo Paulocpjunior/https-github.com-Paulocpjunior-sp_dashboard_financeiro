@@ -25,8 +25,8 @@ async function runDeliverySweep({ db, env = process.env, fetchImpl = fetch, dryR
   const issues = (await db.collection("boletoIssues").where("state", "==", "issued").get()).docs
     .map((d) => d.data())
     .filter((i) => i.environment === "production" && i.token && i.transactionId &&
-      i.accountFingerprint === cfg.accountFingerprint && Date.parse(i.updatedAt) >= from)
-    .sort((a, b) => String(a.updatedAt).localeCompare(String(b.updatedAt)));
+      i.accountFingerprint === cfg.accountFingerprint && Number(i.attemptAt) >= from)
+    .sort((a, b) => a.attemptAt - b.attemptAt);
   for (const existing of issues) {
     if (Date.now() + 30000 >= deadline || counts.candidates >= PAGE) break;
     const id = existing.transactionId;

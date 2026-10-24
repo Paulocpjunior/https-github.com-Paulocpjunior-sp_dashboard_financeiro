@@ -3,6 +3,8 @@ const { config } = require('./boleto-cloud');
 const { idFor, mergeSituation } = require('./boleto-history');
 const PAGE_SIZE = 60;
 const RECENT_MS = 7 * 86400000;
+// Respostas que dizem respeito ao título consultado, não à disponibilidade do emissor.
+const TITLE_STATUS = [400, 404, 410, 422];
 
 // History synchronization never writes transactions or creates settlement evidence.
 function candidates(records, updates, nativeTokens, exportedAt, now) {
@@ -38,7 +40,7 @@ async function runHistorySync({ db, env = process.env, fetchImpl = fetch, dryRun
     });
     if (!claimed) return { busy: true };
   }
-  const counts = { scanned: 0, updated: 0, errors: 0, superseded: 0 };
+  const counts = { scanned: 0, updated: 0, errors: 0, superseded: 0, titleErrors: 0 };
   const attention = [];
   try {
     const chunks = await db.collection(`boletoHistorySnapshots/${snapshot}/chunks`).get();
@@ -62,7 +64,7 @@ async function runHistorySync({ db, env = process.env, fetchImpl = fetch, dryRun
           method: 'GET', headers: { Authorization: `Basic ${Buffer.from(`${cfg.apiKey}:token`).toString('base64')}`, Accept: 'application/json' },
           redirect: 'error', signal: AbortSignal.timeout(15000),
         });
-        if (!response.ok) throw Error('PROVIDER_UNAVAILABLE');
+        if (!response.ok) throw Object.assign(Error(TITLE_STATUS.includes(response.status) ? 'TITLE_REFUSED' : 'PROVIDER_UNAVAILABLE'), { status: response.status });
         const next = mergeSituation(record, await response.json(), at);
         if (!dryRun) {
           const updated = await db.runTransaction(async tx => {
@@ -81,9 +83,17 @@ async function runHistorySync({ db, env = process.env, fetchImpl = fetch, dryRun
         counts.updated++;
       } catch (e) {
         if (['LEASE_LOST', 'HISTORY_CHANGED'].includes(e.message)) throw e;
+        // Recusa de um título só (não encontrado, formato) não é queda do emissor:
+        // fica em atenção com o código, sem parar a página nem deixar o job vermelho.
+        if (e.message === 'TITLE_REFUSED') {
+          counts.titleErrors++;
+          attention.push({ number: record.number || 'Sem número', checkedAt: at, status: e.status,
+            reason: `Emissor recusou a consulta deste título (HTTP ${e.status}). Histórico preservado; conferir no painel Boleto Cloud.` });
+          continue;
+        }
         counts.errors++;
-        attention.push({ number: record.number || 'Sem número', checkedAt: at,
-          reason: 'Consulta não concluída. Histórico preservado; nova tentativa na próxima volta.' });
+        attention.push({ number: record.number || 'Sem número', checkedAt: at, ...(e.status ? { status: e.status } : {}),
+          reason: `Consulta não concluída${e.status ? ` (HTTP ${e.status})` : ''}. Histórico preservado; nova tentativa na próxima volta.` });
         // Do not hammer a rate-limited or unavailable credential; retain progress for the next run.
         if (e.message === 'PROVIDER_UNAVAILABLE') break;
       }
