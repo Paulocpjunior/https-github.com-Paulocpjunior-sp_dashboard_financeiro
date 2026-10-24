@@ -6,7 +6,6 @@ const { config, prepareDelivery, finishEmail } = require("./boleto-cloud");
 const delivery = require("./boleto-delivery");
 
 const SWEEP_UID = "system:delivery-sweep";
-const WINDOW_MS = 20 * 86400000;
 const PAGE = 40;
 const MAX_TRIES = 12;
 const today = () =>
@@ -19,7 +18,8 @@ async function runDeliverySweep({ db, env = process.env, fetchImpl = fetch, dryR
   const cfg = config(env);
   if (cfg.environment !== "production" || !cfg.apiKey || !cfg.accountToken) return { skipped: true, reason: "CONFIGURATION" };
   if (!delivery.emailEnabled(env)) return { skipped: true, reason: "EMAIL_NOT_CONFIGURED" };
-  const from = Math.max(since, now - WINDOW_MS);
+  // Vale a data de início configurada; boleto vencido já fica de fora mais abaixo.
+  const from = since;
   const counts = { candidates: 0, sent: 0, pending: 0, skipped: 0, failed: 0, errors: 0 };
   const attention = [];
   const issues = (await db.collection("boletoIssues").where("state", "==", "issued").get()).docs
