@@ -29,6 +29,7 @@ Reaproveita o mesmo aplicativo que o Consultor Fiscal já usa para mandar e-mail
 1. Se já existir um modelo aprovado com cabeçalho DOCUMENTO que sirva para boleto, basta cadastrá-lo para o Financeiro. Se não, criar no Gerenciador do WhatsApp um modelo UTILITY com cabeçalho DOCUMENTO e aguardar a aprovação da Meta.
 2. No SP Connect, em Config Admin, cadastrar o modelo para o departamento `financeiro`, marcar "tem documento" e deixar só um modelo do Financeiro com documento ativo.
 3. Variáveis disponíveis para o modelo: `cliente`, `nome`, `valor`, `vencimento`, `numero`, `boleto`.
+4. Botões "Adicionar à agenda" (Paulo, 24/10/2026): o modelo `boleto_financeiro` tem dois botões de link com final variável, nesta ordem: **Google Agenda** `https://calendar.google.com/calendar/render?{{1}}` e **Outlook** `https://outlook.office.com/calendar/0/deeplink/compose?{{1}}`. O envio manda `agendaGoogle` e `agendaOutlook` (o que vem depois do "?", com número, valor e vencimento, evento de dia inteiro no vencimento). No SP Connect, cadastrar os botões com essas chaves, na mesma ordem. Precisa do SP Connect com suporte a botões de link (CFI e `sp-connect`); sem ele, o modelo com botão é recusado pela Meta no envio.
 
 ## Primeiro teste
 

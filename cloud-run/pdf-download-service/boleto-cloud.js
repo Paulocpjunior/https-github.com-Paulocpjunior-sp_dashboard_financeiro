@@ -653,6 +653,7 @@ function createBoletoHandler({
         }
         // WhatsApp: a tela envia pelo SP Connect com a sessão do usuário e
         // devolve o resultado em delivery-result.
+        const date = row.dueDate.split("-").reverse().join("/");
         sendJson(request, response, 200, {
           channel,
           attemptId,
@@ -664,9 +665,11 @@ function createBoletoHandler({
             cliente: String(row.client || "").trim(),
             nome: String(row.client || "").trim(),
             valor: value,
-            vencimento: row.dueDate.split("-").reverse().join("/"),
+            vencimento: date,
             numero: artifact.number,
             boleto: artifact.number,
+            // Final dos botões Google Agenda e Outlook do modelo.
+            ...delivery.whatsappCalendarSuffixes({ number: artifact.number, value, date, dueDate: row.dueDate }),
           },
         });
         return true;

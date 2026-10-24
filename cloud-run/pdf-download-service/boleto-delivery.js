@@ -133,9 +133,9 @@ async function finish(db, ref, { uid, attemptId, state, error = "", providerId =
 // Links "Adicionar à agenda": abrem o evento de dia inteiro no vencimento, já
 // preenchido, no Google Agenda e no Outlook (Microsoft 365). Só levam texto; o
 // PDF segue no e-mail e no convite .ics.
-function calendarLinks({ number, value, date, dueDate }) {
+function calendarLinks({ number, value, date, dueDate, pdfAt = `no e-mail enviado por ${SENDER}` }) {
   const title = `Vencimento do boleto ${number} — SP Assessoria Contábil`;
-  const details = `Boleto ${number} da SP Assessoria Contábil. Valor: ${value}. Vencimento: ${date}. O PDF do boleto está no e-mail enviado por ${SENDER}. Se já pagou, desconsidere.`;
+  const details = `Boleto ${number} da SP Assessoria Contábil. Valor: ${value}. Vencimento: ${date}. O PDF do boleto está ${pdfAt}. Se já pagou, desconsidere.`;
   const next = new Date(`${dueDate}T12:00:00Z`);
   next.setUTCDate(next.getUTCDate() + 1);
   const end = next.toISOString().slice(0, 10);
@@ -144,6 +144,20 @@ function calendarLinks({ number, value, date, dueDate }) {
   const outlook = new URL("https://outlook.office.com/calendar/0/deeplink/compose");
   outlook.search = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent", subject: title, body: details, startdt: dueDate, enddt: end, allday: "true" }).toString();
   return { google: google.toString(), outlook: outlook.toString() };
+}
+// Botões "Adicionar à agenda" do modelo de WhatsApp: a Meta aprova o endereço
+// fixo e o envio completa só o final (o que vem depois do "?").
+const WHATSAPP_CALENDAR_BASE = {
+  agendaGoogle: "https://calendar.google.com/calendar/render?",
+  agendaOutlook: "https://outlook.office.com/calendar/0/deeplink/compose?",
+};
+function whatsappCalendarSuffixes(input) {
+  const links = calendarLinks({ ...input, pdfAt: "na mensagem de WhatsApp da SP Assessoria Contábil" });
+  const suffix = (url, key) => {
+    if (!url.startsWith(WHATSAPP_CALENDAR_BASE[key])) throw new DeliveryError("Link da agenda fora do modelo aprovado.", 500);
+    return url.slice(WHATSAPP_CALENDAR_BASE[key].length);
+  };
+  return { agendaGoogle: suffix(links.google, "agendaGoogle"), agendaOutlook: suffix(links.outlook, "agendaOutlook") };
 }
 // Corpo no layout padrão dos apps da SP (logo, faixa azul, rodapé), com o
 // texto simples ao lado para leitores que não abrem HTML.
@@ -219,6 +233,8 @@ module.exports = {
   finish,
   emailMessage,
   calendarLinks,
+  WHATSAPP_CALENDAR_BASE,
+  whatsappCalendarSuffixes,
   sendEmail,
   whatsappFrom,
 };

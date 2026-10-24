@@ -779,6 +779,17 @@ test("WhatsApp: tela recebe o PDF e o número do cadastro, resultado fica regist
   assert.equal(prepared.body.para, "5511987654321");
   assert.equal(Buffer.from(prepared.body.pdfBase64, "base64").toString(), "%PDF-1.4 boleto sintético");
   assert.match(prepared.body.variaveis.valor, /^R\$\s1\.250,00$/);
+  // Botões da agenda: o modelo fixa o endereço e o envio completa o final.
+  const { agendaGoogle, agendaOutlook } = prepared.body.variaveis;
+  const google = new URL(`https://calendar.google.com/calendar/render?${agendaGoogle}`).searchParams;
+  assert.equal(google.get("action"), "TEMPLATE");
+  assert.equal(google.get("dates"), "20991110/20991111");
+  assert.match(google.get("details"), /Valor: R\$\s1\.250,00\. Vencimento: 10\/11\/2099\. O PDF do boleto está na mensagem de WhatsApp/);
+  const outlook = new URL(`https://outlook.office.com/calendar/0/deeplink/compose?${agendaOutlook}`).searchParams;
+  assert.equal(outlook.get("startdt"), "2099-11-10");
+  assert.equal(outlook.get("enddt"), "2099-11-11");
+  assert.equal(outlook.get("allday"), "true");
+  assert.match(outlook.get("subject"), /^Vencimento do boleto \S+ — SP Assessoria Contábil$/);
   assert.equal((await f.call("delivery", { channel: "whatsapp" })).status, 409, "em andamento");
   assert.equal((await f.call("delivery-result", { channel: "whatsapp", attemptId: "outro", ok: true, messageId: "x" })).status, 409);
   const done = await f.call("delivery-result", { channel: "whatsapp", attemptId: prepared.body.attemptId, ok: true, messageId: "wamid.1" });
