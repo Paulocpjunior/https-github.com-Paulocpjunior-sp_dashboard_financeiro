@@ -130,17 +130,36 @@ async function finish(db, ref, { uid, attemptId, state, error = "", providerId =
     return next;
   });
 }
+// Links "Adicionar à agenda": abrem o evento de dia inteiro no vencimento, já
+// preenchido, no Google Agenda e no Outlook (Microsoft 365). Só levam texto; o
+// PDF segue no e-mail e no convite .ics.
+function calendarLinks({ number, value, date, dueDate }) {
+  const title = `Vencimento do boleto ${number} — SP Assessoria Contábil`;
+  const details = `Boleto ${number} da SP Assessoria Contábil. Valor: ${value}. Vencimento: ${date}. O PDF do boleto está no e-mail enviado por ${SENDER}. Se já pagou, desconsidere.`;
+  const next = new Date(`${dueDate}T12:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  const end = next.toISOString().slice(0, 10);
+  const google = new URL("https://calendar.google.com/calendar/render");
+  google.search = new URLSearchParams({ action: "TEMPLATE", text: title, dates: `${dueDate.replace(/-/g, "")}/${end.replace(/-/g, "")}`, details }).toString();
+  const outlook = new URL("https://outlook.office.com/calendar/0/deeplink/compose");
+  outlook.search = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent", subject: title, body: details, startdt: dueDate, enddt: end, allday: "true" }).toString();
+  return { google: google.toString(), outlook: outlook.toString() };
+}
 // Corpo no layout padrão dos apps da SP (logo, faixa azul, rodapé), com o
 // texto simples ao lado para leitores que não abrem HTML.
-function emailHtml({ client, number, value, date, detail }) {
+function emailHtml({ client, number, value, date, dueDate, detail }) {
   const linha = (rotulo, valor) =>
     `<tr><td style="padding:8px 12px; color:#6b7280; font-size:13px; border-bottom:1px solid #eef1f8;">${rotulo}</td><td style="padding:8px 12px; font-weight:bold; text-align:right; border-bottom:1px solid #eef1f8;">${escapeHtml(valor)}</td></tr>`;
+  const links = calendarLinks({ number, value, date, dueDate });
+  const botao = (href, texto) =>
+    `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" style="display:inline-block; background:#0E3BFA; color:#ffffff; font-weight:bold; font-size:14px; padding:12px 20px; border-radius:8px; text-decoration:none; margin:4px;">${texto}</a>`;
   const anexos = detail ? "o boleto em PDF, o demonstrativo da cobrança e" : "o boleto em PDF e";
   const conteudoHtml = [
     `<p style="margin:0 0 12px 0;">Olá${client ? `, <strong>${escapeHtml(client)}</strong>` : ""}.</p>`,
     `<p style="margin:0 0 16px 0;">Segue o seu boleto da SP Assessoria Contábil.</p>`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1FF; border-radius:8px; margin:0 0 16px 0;">${linha("Boleto", number)}${linha("Valor", value)}${linha("Vencimento", date)}</table>`,
     `<p style="margin:0 0 12px 0; font-size:13px; color:#166534; background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:10px 14px;">📎 Em anexo: ${anexos} o convite para a sua agenda, que também leva o boleto.</p>`,
+    `<div style="margin:0 0 16px 0; text-align:center;"><p style="margin:0 0 6px 0; font-weight:bold; color:#091D8D;">📅 Adicione o lembrete do vencimento à sua agenda</p>${botao(links.google, "Google Agenda")}${botao(links.outlook, "Outlook")}<p style="margin:6px 0 0 0; font-size:12px; color:#6b7280;">No iPhone, Mac ou Outlook do computador, abra o anexo vencimento-${escapeHtml(number)}.ics.</p></div>`,
     `<p style="margin:0; font-size:13px; color:#92400E; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:10px 14px;">Confira os dados do beneficiário no PDF antes de pagar. Se já pagou, desconsidere esta mensagem.</p>`,
   ].join("");
   return layoutEmail({
@@ -167,7 +186,7 @@ function emailMessage(artifact, { to, idempotencyKey, value, dueDate, client = "
     idempotencyKey,
     subject: `Boleto ${number} — vencimento ${date} — SP Assessoria Contábil`,
     text: `Olá,\n\nSegue o boleto de ${value}, com vencimento em ${date}, e o convite para adicionar o vencimento à sua agenda. O PDF do boleto está anexado e também vai dentro do convite.\n\nConfira os dados do beneficiário no PDF antes de pagar. Se já pagou, desconsidere esta mensagem. Em caso de dúvida, responda a este e-mail.\n\nEquipe Financeira — SP Assessoria Contábil`,
-    html: emailHtml({ client: String(client || "").trim(), number, value, date, detail: Boolean(artifact.detail) }),
+    html: emailHtml({ client: String(client || "").trim(), number, value, date, dueDate, detail: Boolean(artifact.detail) }),
     inline: logoInline(),
     attachments,
   };
@@ -199,6 +218,7 @@ module.exports = {
   claim,
   finish,
   emailMessage,
+  calendarLinks,
   sendEmail,
   whatsappFrom,
 };

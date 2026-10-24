@@ -129,6 +129,8 @@ export const SpConnectGateway = {
     pdfBase64: string;
     nomeArquivo: string;
     referencia?: string;
+    // Final do link do botão de URL dinâmica do modelo ("Adicionar à agenda").
+    botaoUrl?: string;
   }) =>
     request<SpConnectResult & { messageId?: string; numeroEnviado?: string }>('/api/admin/whatsapp/enviar', {
       method: 'POST',

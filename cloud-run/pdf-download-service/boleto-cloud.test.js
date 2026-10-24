@@ -726,6 +726,10 @@ test("e-mail vai uma vez, com PDF e convite com o PDF dentro, para o e-mail da R
   assert.match(mail.body.content, /src="cid:sp-logo"/);
   assert.match(mail.body.content, /Departamento Financeiro/);
   assert.match(mail.body.content, /10\/11\/2099/);
+  // Botões "Adicionar à agenda": evento de dia inteiro no vencimento.
+  const html = mail.body.content.replace(/&amp;/g, "&");
+  assert.match(html, /https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE&[^"]*dates=20991110%2F20991111/);
+  assert.match(html, /https:\/\/outlook\.office\.com\/calendar\/0\/deeplink\/compose\?[^"]*startdt=2099-11-10&enddt=2099-11-11&allday=true/);
   const logo = mail.attachments.find((a) => a.isInline);
   assert.equal(logo.contentId, "sp-logo");
   assert.equal(Buffer.from(logo.contentBytes, "base64").subarray(1, 4).toString(), "PNG");
@@ -775,6 +779,8 @@ test("WhatsApp: tela recebe o PDF e o número do cadastro, resultado fica regist
   assert.equal(prepared.body.para, "5511987654321");
   assert.equal(Buffer.from(prepared.body.pdfBase64, "base64").toString(), "%PDF-1.4 boleto sintético");
   assert.match(prepared.body.variaveis.valor, /^R\$\s1\.250,00$/);
+  // Botão "Adicionar à agenda": vencimento, número e valor em centavos para public/agenda.html.
+  assert.match(prepared.body.botaoUrl, /^20991110\.[0-9A-Za-z-]+\.125000$/);
   assert.equal((await f.call("delivery", { channel: "whatsapp" })).status, 409, "em andamento");
   assert.equal((await f.call("delivery-result", { channel: "whatsapp", attemptId: "outro", ok: true, messageId: "x" })).status, 409);
   const done = await f.call("delivery-result", { channel: "whatsapp", attemptId: prepared.body.attemptId, ok: true, messageId: "wamid.1" });

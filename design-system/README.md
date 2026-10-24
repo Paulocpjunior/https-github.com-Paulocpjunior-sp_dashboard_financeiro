@@ -85,3 +85,7 @@ Validado localmente com dados fictícios em 390 e 1440 px, nos temas claro e esc
 Nova conta a receber, Nova conta a pagar e gestão de contas/recorrências usam os tokens comuns em campos, botões, cabeçalhos e abas. Os diálogos nativos preservam o fechamento e o foco; revisão, confirmações, anexos, permissões e regras financeiras permanecem existentes.
 
 Verificação local com APIs fictícias: campos obrigatórios, revisão antes da confirmação, Escape, seleção obrigatória dos meses, layouts de 390 e 1440 px e temas claro/escuro. Testes existentes de lançamentos nativos, contas a pagar e permissões, lint, build e guard de publicação passaram. Nenhum dado financeiro real foi alterado. Esta etapa depende de publicação por SHA autorizado.
+
+## Emissão Boleto Cloud — quarta etapa
+
+Pedido de Paulo (24/10/2026): a tela de emissão de boletos usa o layout e as cores da SP, como os demais apps. O diálogo adota `.sp-ui` com superfície, raio de modal, abas "Uma cobrança"/"Em lote" no padrão segmentado, campos `sp-field`, botões `sp-button` (azul só na ação principal de cada etapa: Revisar cobrança, Confirmar emissão, Baixar PDF), selo de ambiente (Produção/Sandbox) e avisos com faixa semântica (alerta/erro). O verde fixo dos botões foi removido. Regras de emissão, travas, envio ao cliente e textos permanecem os existentes. Conferido localmente com APIs fictícias em 1000 e 390 px, nos temas claro e escuro.
