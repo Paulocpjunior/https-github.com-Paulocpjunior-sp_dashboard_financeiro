@@ -5,6 +5,7 @@ const { runReconciliations } = require('./boleto-reconciliation');
 const { runHistorySync } = require('./boleto-history-sync');
 const { runRetFiles } = require('./boleto-ret-files');
 const { runDeliverySweep } = require('./boleto-delivery-sweep');
+const { runDailyAlert, recordRun } = require('./boleto-daily-alert');
 initializeApp();
 (async () => {
   const options = { db: getFirestore(), dryRun: process.argv.includes('--dry-run') };
@@ -17,7 +18,11 @@ initializeApp();
   // Envio de boleto emitido que ficou sem e-mail; nunca reenvia o que já saiu.
   const deliveries = await runDeliverySweep({ ...options, deadline: Math.min(deadline, Date.now()+120000) }).catch(() => ({ errors: 1 }));
   const history = await runHistorySync({ ...options, deadline });
-  return { ...native, returns, history, reconciliations, deliveries, errors: (returns.errors || 0) + (native.errors || 0) + (history.errors || 0) + (reconciliations.errors || 0) + (deliveries.errors || 0) };
+  // Alerta diário para o Paulo; conta as execuções com erro do dia anterior.
+  const alert = await runDailyAlert(options).catch(() => ({ errors: 1 }));
+  const errors = (returns.errors || 0) + (native.errors || 0) + (history.errors || 0) + (reconciliations.errors || 0) + (deliveries.errors || 0) + (alert.errors || 0);
+  if (!options.dryRun) await recordRun(options.db, errors > 0).catch(() => {});
+  return { ...native, returns, history, reconciliations, deliveries, alert, errors };
 })()
   .then(result => { console.log(JSON.stringify(result)); if (result.errors) process.exitCode = 1; })
   .catch(() => { console.error('Consulta automática não concluída. Consulte o estado do job; nenhuma credencial é registrada em log.'); process.exitCode = 1; });

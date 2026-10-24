@@ -26,6 +26,7 @@ def describe(*args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--apply', action='store_true', help='Requires the full SHA explicitly approved by Paulo.')
+    parser.add_argument('--alert-email', help="Address(es) for the daily billing alert, separated by ';'. Kept on later deploys.")
     parser.add_argument('--delivery-since', help='ISO UTC instant; boletos issued from then on and never sent are e-mailed by the job. Only with Paulo approval.')
     opts = parser.parse_args()
     if not opts.apply:
@@ -74,11 +75,14 @@ def main():
     previous = {e.get('name'): e.get('value') for e in containers[0].get('env', [])}
     if opts.delivery_since and not re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ', opts.delivery_since):
         raise RuntimeError('Use --delivery-since YYYY-MM-DDTHH:MM:SSZ.')
+    alert_email = opts.alert_email or previous.get('BOLETO_DAILY_ALERT_EMAIL') or ''
+    if not re.fullmatch(r"[^\s,=;]+@[^\s,=;]+(;[^\s,=;]+@[^\s,=;]+)*", alert_email):
+        raise RuntimeError('Inform --alert-email with the address that receives the daily billing alert.')
     sweep_since = opts.delivery_since or previous.get('BOLETO_DELIVERY_SWEEP_SINCE') or datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     gcloud('run', 'jobs', operation, JOB, '--region', REGION, '--image', image, '--service-account', account,
            '--command', 'launcher', '--args', 'node boleto-return-job.js', '--tasks', '1', '--parallelism', '1', '--max-retries', '0',
-           '--task-timeout', '600s', '--memory', '512Mi', '--cpu', '1', '--set-secrets', ','.join(secrets),
-           '--set-env-vars', f'BOLETO_CLOUD_ENVIRONMENT=production,BOLETO_CLOUD_CUTOVER_DATE={cutover},BOLETO_CLOUD_RETURN_ENABLED=true,BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=true,BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=true,BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED=true,FINANCEIRO_COMMUNICATION_SEND_ENABLED=true,BOLETO_DELIVERY_SWEEP_ENABLED=true,BOLETO_DELIVERY_SWEEP_SINCE={sweep_since}',
+           '--task-timeout', '600s', '--memory', '2Gi', '--cpu', '1', '--set-secrets', ','.join(secrets),
+           '--set-env-vars', f'BOLETO_CLOUD_ENVIRONMENT=production,BOLETO_CLOUD_CUTOVER_DATE={cutover},BOLETO_CLOUD_RETURN_ENABLED=true,BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=true,BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=true,BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED=true,FINANCEIRO_COMMUNICATION_SEND_ENABLED=true,BOLETO_DELIVERY_SWEEP_ENABLED=true,BOLETO_DELIVERY_SWEEP_SINCE={sweep_since},BOLETO_DAILY_ALERT_EMAIL={alert_email}',
            '--update-labels' if operation == 'update' else '--labels', f'financeiro-commit={sha}')
     gcloud('run', 'jobs', 'add-iam-policy-binding', JOB, '--region', REGION, '--member', f'serviceAccount:{INVOKER}', '--role', 'roles/run.invoker')
     gcloud('scheduler', 'jobs', 'update' if existing else 'create', 'http', SCHEDULER, '--location', REGION,

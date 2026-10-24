@@ -58,6 +58,7 @@ function fixture(fetchImpl, environment = env, historyRows = []) {
   const collection = (path) => ({
     doc: (id) => doc(`${path}/${id || `event-${++seq}`}`),
     where: (field, op, value) => query(path, [[field, op, value]]),
+    get: async () => ({ docs: matching({ path, filters: [], max: 10000 }) }),
   });
   const query = (path, filters) => ({
     path,
@@ -845,4 +846,54 @@ test("job não envia sem chave, antes da data de início, sem e-mail, pago, venc
   const before = g.calls.filter((u) => u.includes("sendMail")).length;
   assert.equal((await sweep(g)).candidates, 0);
   assert.equal(g.calls.filter((u) => u.includes("sendMail")).length, before);
+});
+
+// Alerta diário: lista o que pode deixar o faturamento incompleto e sai uma vez por dia.
+const { runDailyAlert, recordRun } = require("./boleto-daily-alert");
+const alertEnv = { ...production, ...graph, BOLETO_DAILY_ALERT_EMAIL: "paulo@exemplo.com.br" };
+const at10 = (day) => Date.parse(`${day}T13:00:00Z`);
+
+test("alerta diário lista boleto sem envio, retorno em conferência e robô com erro, uma vez por dia", async () => {
+  const f = deliveryFixture({ registered: false });
+  await f.issued();
+  const [key, issue] = f.stored();
+  f.data.set(key, { ...issue, attemptAt: Date.now() - 2 * 3600000 });
+  f.data.set("boletoReturnEvents/e1", { state: "review", number: "00024749-8", reason: "Conta já paga com valor ou data divergente do banco." });
+  f.data.set("boletoReturnJobs/history-production", { attention: [{ number: "00025048-4", reason: "Emissor recusou a consulta deste título (HTTP 404)." }] });
+  const now = Date.now();
+  await recordRun(f.db, true, now - 86400000);
+  await recordRun(f.db, false, now - 86400000);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(now));
+  const run = (extra = {}, when = Math.max(now, at10(today))) => runDailyAlert({ db: f.db, env: { ...alertEnv, ...extra }, fetchImpl: f.fetchImpl, now: when });
+  assert.equal((await run({ BOLETO_DAILY_ALERT_EMAIL: "" })).disabled, true);
+  assert.equal((await run({}, Date.parse(`${today}T09:00:00Z`))).waiting, true, "antes das 8h de Brasília");
+  const sent = await run();
+  assert.equal(sent.state, "sent", JSON.stringify(sent));
+  assert.equal(sent.findings, 4);
+  const mail = f.calls.mail.message;
+  assert.deepEqual(mail.toRecipients.map((r) => r.emailAddress.address), ["paulo@exemplo.com.br"]);
+  assert.match(mail.subject, /4 ponto\(s\) para conferir/);
+  assert.match(mail.body.content, /ainda não enviado/);
+  assert.match(mail.body.content, /em conferência/);
+  assert.match(mail.body.content, /execução em erro/);
+  const pdf = mail.attachments.find((a) => a.name.endsWith(".pdf"));
+  assert.equal(Buffer.from(pdf.contentBytes, "base64").subarray(0, 5).toString(), "%PDF-");
+  // Mesmo dia: não repete.
+  assert.ok((await run()).alreadySent);
+  assert.equal(f.calls.filter((u) => u.includes("sendMail")).length, 1);
+});
+
+test("alerta sem pendência também sai (prova que funciona) e falha de envio tenta de novo", async () => {
+  const f = deliveryFixture({ mail: 500 });
+  const now = Date.now();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(now));
+  const when = Math.max(now, at10(today));
+  const failed = await runDailyAlert({ db: f.db, env: alertEnv, fetchImpl: f.fetchImpl, now: when });
+  assert.equal(failed.state, "failed");
+  assert.equal(failed.errors, 1);
+  f.state.mail = 202;
+  const ok = await runDailyAlert({ db: f.db, env: alertEnv, fetchImpl: f.fetchImpl, now: when });
+  assert.equal(ok.state, "sent");
+  assert.equal(ok.findings, 0);
+  assert.match(f.calls.mail.message.subject, /sem pendências/);
 });
