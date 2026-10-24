@@ -35,22 +35,26 @@ async function collect(db, cfg, now) {
     .filter((i) => i.environment === "production" && i.accountFingerprint === cfg.accountFingerprint && Number(i.attemptAt) >= now - WINDOW_MS);
   add("Emissão sem confirmação há mais de 10 minutos (não emitir de novo; usar Recuperar tentativa)",
     issues.filter((i) => ["issuing", "unknown"].includes(i.state) && now - Number(i.attemptAt) > 600000).map((i) => i.transactionId));
-  const noEmail = [], printed = [], uncertain = [];
+  const noEmail = [], printed = [], uncertain = [], noWhatsapp = [];
   for (const issue of issues.filter((i) => i.state === "issued" && i.token)) {
     const row = (await db.collection("transactions").doc(issue.transactionId).get()).data();
     if (!row || row.isExcluded || Number(row.valueReceived) > 0 || !(row.dueDate >= dayOf(now))) continue;
     const label = `${issue.number || "sem número"} · ${row.client || issue.transactionId} · vence ${br(row.dueDate)}`;
-    const sent = (await delivery.deliveryRef(db, cfg.environment, issue.transactionId, issue.token, "email").get()).data();
-    if (sent && ["failed", "unknown", "sending"].includes(sent.state)) { uncertain.push(`${label} · ${sent.state === "failed" ? "falhou" : "sem confirmação"}`); continue; }
-    if (sent) continue;
     if (now - Number(issue.attemptAt) < 3600000) continue;
     const contacts = await delivery.contactsFor(db, row).catch(() => null);
-    if (delivery.contactError(contacts, "email")) {
-      if (!contacts?.channels?.includes("whatsapp")) printed.push(label);
-    } else noEmail.push(label);
+    const sent = (await delivery.deliveryRef(db, cfg.environment, issue.transactionId, issue.token, "email").get()).data();
+    if (sent && ["failed", "unknown", "sending"].includes(sent.state)) uncertain.push(`${label} · e-mail ${sent.state === "failed" ? "falhou" : "sem confirmação"}`);
+    else if (!sent && !delivery.contactError(contacts, "email")) noEmail.push(label);
+    // WhatsApp sai só pela tela (modelo do SP Connect): lista à parte o que ficou sem sair.
+    if (contacts?.channels?.includes("whatsapp")) {
+      const zap = (await delivery.deliveryRef(db, cfg.environment, issue.transactionId, issue.token, "whatsapp").get()).data();
+      if (zap?.state !== "sent") noWhatsapp.push(`${label} · ${!contacts.whatsapp ? "WhatsApp inválido no cadastro" : zap ? (zap.state === "failed" ? "falhou: " + String(zap.error || "").slice(0, 80) : "sem confirmação") : "não enviado (modelo do Financeiro ativo no SP Connect?)"}`);
+    }
+    if (!sent && delivery.contactError(contacts, "email") && !contacts?.channels?.includes("whatsapp")) printed.push(label);
   }
   add("Boleto emitido com e-mail no cadastro e ainda não enviado (mais de 1 hora)", noEmail);
   add("Envio por e-mail com falha ou sem confirmação (conferir antes de reenviar)", uncertain);
+  add("Boleto com WhatsApp no cadastro e não enviado por WhatsApp", noWhatsapp);
   add("Boleto emitido sem envio digital (cadastro com envio Impresso ou sem e-mail)", printed,
     "Conferir se o cliente recebe o boleto impresso ou se falta marcar e-mail na Regra de faturamento.");
   const events = (await db.collection("boletoReturnEvents").where("state", "in", ["review", "error"]).get()).docs.map((d) => d.data());

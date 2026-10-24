@@ -869,10 +869,10 @@ test("alerta diário lista boleto sem envio, retorno em conferência e robô com
   assert.equal((await run({}, Date.parse(`${today}T09:00:00Z`))).waiting, true, "antes das 8h de Brasília");
   const sent = await run();
   assert.equal(sent.state, "sent", JSON.stringify(sent));
-  assert.equal(sent.findings, 4);
+  assert.equal(sent.findings, 5);
   const mail = f.calls.mail.message;
   assert.deepEqual(mail.toRecipients.map((r) => r.emailAddress.address), ["paulo@exemplo.com.br"]);
-  assert.match(mail.subject, /4 ponto\(s\) para conferir/);
+  assert.match(mail.subject, /5 ponto\(s\) para conferir/);
   assert.match(mail.body.content, /ainda não enviado/);
   assert.match(mail.body.content, /em conferência/);
   assert.match(mail.body.content, /execução em erro/);
@@ -896,4 +896,16 @@ test("alerta sem pendência também sai (prova que funciona) e falha de envio te
   assert.equal(ok.state, "sent");
   assert.equal(ok.findings, 0);
   assert.match(f.calls.mail.message.subject, /sem pendências/);
+});
+
+test("alerta lista à parte o WhatsApp que não saiu", async () => {
+  const f = deliveryFixture();
+  await f.issued();
+  const [key, issue] = f.stored();
+  f.data.set(key, { ...issue, attemptAt: Date.now() - 2 * 3600000 });
+  assert.equal((await f.call("delivery", { channel: "email" })).body.delivery.state, "sent");
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const r = await runDailyAlert({ db: f.db, env: alertEnv, fetchImpl: f.fetchImpl, now: Math.max(Date.now(), at10(today)) });
+  assert.equal(r.findings, 1);
+  assert.match(f.calls.mail.message.body.content, /não enviado por WhatsApp/);
 });
