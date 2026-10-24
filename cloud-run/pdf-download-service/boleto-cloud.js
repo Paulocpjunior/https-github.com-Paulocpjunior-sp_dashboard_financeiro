@@ -282,6 +282,37 @@ const BATCH_LIMIT = 100,
 let sharedHistory;
 const defaultHistory = () =>
   (sharedHistory ||= require("./boleto-history").createHistoryReader());
+// Confere a cobrança, o contato e o boleto no emissor (em aberto, registro
+// confirmado, mesmo valor, vencimento e pagador) antes de qualquer envio. Usado
+// pela tela e pelo envio automático do job; nada é reservado aqui.
+async function prepareDelivery({ db, env, fetchImpl, cfg, id, existing, row, channel }) {
+  if (!row || !eligible(row) || money(row.valueReceived) > 0)
+    throw new BoletoError("Cobrança paga, excluída ou indisponível para envio.", 409);
+  const contacts = await delivery.contactsFor(db, row);
+  const problem = delivery.contactError(contacts, channel);
+  if (problem) throw Object.assign(new BoletoError(problem, 409), { needsContact: true });
+  if (channel === "email" && !delivery.emailEnabled(env))
+    throw Object.assign(new BoletoError("Envio por e-mail ainda não habilitado: faltam as credenciais do Microsoft 365 da caixa financeiro@.", 503), { notConfigured: true });
+  if (!cfg.apiKey || !cfg.accountToken) throw new BoletoError("Credenciais indisponíveis.", 503);
+  let artifact;
+  try {
+    // Demonstrativo só quando a composição confere com o valor do boleto.
+    const entry = Math.round(Number(row.valorOriginal) * 100) === Math.round(amount(row) * 100) ? row : null;
+    artifact = await prepareInvite({token:existing.token,base:cfg.base,apiKey:cfg.apiKey,fetchImpl,entry,
+      expected:{token:existing.token,number:existing.number,amountCents:Math.round(amount(row)*100),dueDate:row.dueDate,payerDocument:digits(row.cpfCnpj)}});
+  } catch (error) {
+    if (error instanceof InviteError) throw Object.assign(new BoletoError(error.message, error.status), { pending: Boolean(error.pending) });
+    throw error;
+  }
+  const value = amount(row).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return { contacts, artifact, value, target: delivery.deliveryRef(db, cfg.environment, id, existing.token, channel) };
+}
+// Envia o e-mail já reservado (claim) e grava o resultado.
+async function finishEmail({ db, env, fetchImpl, cfg, id, existing, row, uid, attemptId, contacts, artifact, value, target }) {
+  const message = delivery.emailMessage(artifact, { to: contacts.email, idempotencyKey: delivery.deliveryKey(cfg.environment, id, existing.token, "email"), value, dueDate: row.dueDate, client: row.client });
+  const result = await delivery.sendEmail({ env, fetchImpl, message });
+  return delivery.finish(db, target, { uid, attemptId, ...result });
+}
 function createBoletoHandler({
   getServices,
   readBody,
@@ -607,37 +638,16 @@ function createBoletoHandler({
           return true;
         }
         const row = (await source.get()).data();
-        if (!row || !eligible(row) || money(row.valueReceived) > 0)
-          throw new BoletoError("Cobrança paga, excluída ou indisponível para envio.", 409);
-        const contacts = await delivery.contactsFor(db, row);
-        const problem = delivery.contactError(contacts, channel);
-        if (problem) throw Object.assign(new BoletoError(problem, 409), { needsContact: true });
-        if (channel === "email" && !delivery.emailEnabled(env))
-          throw Object.assign(new BoletoError("Envio por e-mail ainda não habilitado: faltam as credenciais do Microsoft 365 da caixa financeiro@.", 503), { notConfigured: true });
-        if (!cfg.apiKey || !cfg.accountToken) throw new BoletoError("Credenciais indisponíveis.", 503);
-        // Confere no emissor: em aberto, registro confirmado, mesmo valor, vencimento e pagador.
-        let artifact;
-        try {
-          // Demonstrativo só quando a composição confere com o valor do boleto.
-          const entry = Math.round(Number(row.valorOriginal) * 100) === Math.round(amount(row) * 100) ? row : null;
-          artifact = await prepareInvite({token:existing.token,base:cfg.base,apiKey:cfg.apiKey,fetchImpl,entry,
-            expected:{token:existing.token,number:existing.number,amountCents:Math.round(amount(row)*100),dueDate:row.dueDate,payerDocument:digits(row.cpfCnpj)}});
-        } catch (error) {
-          if (error instanceof InviteError) throw Object.assign(new BoletoError(error.message, error.status), { pending: Boolean(error.pending) });
-          throw error;
-        }
+        const prepared = await prepareDelivery({ db, env, fetchImpl, cfg, id, existing, row, channel });
+        const { contacts, artifact, value, target } = prepared;
         const to = channel === "email" ? contacts.email.join(", ") : contacts.whatsapp;
-        const target = ref(existing.token);
         const attemptId = await delivery.claim(db, target, {
           uid, channel, to, resendReason: body.resendReason,
           base: { transactionId: id, environment: cfg.environment, number: existing.number || "", profileId: contacts.profileId },
           allowed: async (tx) => { if (!allowed((await tx.get(userRef)).data())) throw new BoletoError("Acesso revogado.", 403); },
         });
-        const value = amount(row).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         if (channel === "email") {
-          const message = delivery.emailMessage(artifact, { to: contacts.email, idempotencyKey: delivery.deliveryKey(cfg.environment, id, existing.token, channel), value, dueDate: row.dueDate, client: row.client });
-          const result = await delivery.sendEmail({ env, fetchImpl, message });
-          const saved = await delivery.finish(db, target, { uid, attemptId, ...result });
+          const saved = await finishEmail({ db, env, fetchImpl, cfg, id, existing, row, uid, attemptId, ...prepared });
           sendJson(request, response, 200, { channel, delivery: delivery.publicDelivery(saved) });
           return true;
         }
@@ -1011,6 +1021,8 @@ function createBoletoHandler({
 }
 module.exports = {
   createBoletoHandler,
+  prepareDelivery,
+  finishEmail,
   payload,
   eligible,
   amount,

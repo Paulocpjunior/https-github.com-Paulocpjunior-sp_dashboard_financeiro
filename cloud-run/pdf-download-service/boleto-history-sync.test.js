@@ -59,3 +59,13 @@ test('candidate selection includes recent settlements for credit but excludes lo
  const old={...row(1),paidAt:'2020-01-01'};const recent={...row(2),paidAt:'2026-10-09'};const cancelled={...row(3),cancelledAt:'2020-01-01'};
  assert.deepEqual(candidates([old,recent,cancelled,row(4)],new Map(),new Set(),'2026-01-01',Date.parse('2026-10-10T12:00:00Z')).map(r=>r.number).sort(),['2','4']);
 });
+test('title refused by the issuer stays in attention with its HTTP code without failing the job or stopping the page',async()=>{
+ const f=fixture(3);const refused=encodeURIComponent(f.records[1].token);
+ const r=await f.run({fetchImpl:async(url,opts)=>url.includes(refused)?{ok:false,status:404}:f.fetchImpl(url,opts)});
+ assert.equal(r.errors,0);assert.equal(r.titleErrors,1);assert.equal(r.updated,2);
+ const job=f.data.get('boletoReturnJobs/history-production');
+ assert.deepEqual(job.attention.map(a=>[a.number,a.status]),[['1',404]]);assert.match(job.attention[0].reason,/HTTP 404/);
+ assert.equal(f.data.has('boletoHistoryUpdates/'+idFor(f.records[1].token)),false);
+ const g=fixture(2);const outage=await g.run({fetchImpl:async()=>({ok:false,status:503})});
+ assert.equal(outage.errors,1);assert.equal(outage.scanned,1);assert.equal(g.data.get('boletoReturnJobs/history-production').attention[0].status,503);
+});

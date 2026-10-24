@@ -52,11 +52,13 @@ function fixture(fetchImpl, environment = env, historyRows = []) {
     path,
     get: async () => snap(path),
     update: async (value) => data.set(path, { ...data.get(path), ...value }),
+    set: async (value) => data.set(path, structuredClone(value)),
     collection: (name) => collection(`${path}/${name}`),
   });
   const collection = (path) => ({
     doc: (id) => doc(`${path}/${id || `event-${++seq}`}`),
     where: (field, op, value) => query(path, [[field, op, value]]),
+    get: async () => ({ docs: matching({ path, filters: [], max: 10000 }) }),
   });
   const query = (path, filters) => ({
     path,
@@ -153,7 +155,7 @@ function fixture(fetchImpl, environment = env, historyRows = []) {
     [...data.entries()].find(
       ([key]) => key.startsWith("boletoIssues/") && key.split("/").length === 2,
     );
-  return { data, call, post, preview, issue, stored };
+  return { data, db, call, post, preview, issue, stored };
 }
 const success = (url, options) => {
   const control = new URLSearchParams(options.body).get(
@@ -694,7 +696,7 @@ function deliveryFixture({ environment = { ...production, ...graph }, registered
     assert.equal(r.body.state, "issued");
     number = f.stored()[1].number || "";
   };
-  return { ...f, calls, state, issued };
+  return { ...f, calls, state, issued, fetchImpl };
 }
 const deliveries = (f) => [...f.data.entries()].filter(([k]) => k.startsWith("boletoDeliveries/"));
 
@@ -785,4 +787,125 @@ test("WhatsApp: tela recebe o PDF e o número do cadastro, resultado fica regist
   const p = await g.call("delivery", { channel: "whatsapp" });
   await g.call("delivery-result", { channel: "whatsapp", attemptId: p.body.attemptId, ok: false, error: "Modelo não aprovado" });
   assert.equal((await g.call("delivery", { channel: "whatsapp" })).status, 200);
+});
+
+// Envio automático pelo job: boleto emitido que ficou sem e-mail (tela fechada
+// ou registro do banco demorou). Nunca repete o que já saiu ou ficou incerto.
+const { runDeliverySweep, SWEEP_UID } = require("./boleto-delivery-sweep");
+const sweepEnv = { ...production, ...graph, BOLETO_DELIVERY_SWEEP_ENABLED: "true", BOLETO_DELIVERY_SWEEP_SINCE: "2000-01-01T00:00:00Z" };
+const sweep = (f, extra = {}) => runDeliverySweep({ db: f.db, env: { ...sweepEnv, ...extra }, fetchImpl: f.fetchImpl, now: Date.now() });
+
+test("job envia por e-mail o boleto emitido que ficou sem envio, uma vez só", async () => {
+  const f = deliveryFixture({ registered: false });
+  await f.issued();
+  // Registro ainda não confirmado: nada sai, tenta depois com espera.
+  const waiting = await sweep(f);
+  assert.equal(waiting.pending, 1);
+  assert.equal(deliveries(f).length, 0);
+  assert.equal(f.calls.filter((u) => u.includes("sendMail")).length, 0);
+  const [retryKey, retry] = [...f.data.entries()].find(([k]) => k.startsWith("boletoDeliverySweep/"));
+  assert.equal(retry.tries, 1);
+  // Dentro da espera não consulta o emissor de novo.
+  const second = await sweep(f); assert.equal(second.skipped, 1, JSON.stringify(second));
+  f.data.set(retryKey, { ...retry, nextAt: 0 });
+  f.state.registered = true;
+  const sent = await sweep(f);
+  assert.equal(sent.sent, 1, JSON.stringify(sent));
+  assert.equal(f.calls.filter((u) => u.includes("sendMail")).length, 1);
+  const [, saved] = deliveries(f).find(([k]) => !k.includes("/events/"));
+  assert.equal(saved.state, "sent");
+  assert.equal(saved.uid, SWEEP_UID);
+  assert.equal(saved.automatic, true);
+  // Já enviado: o job não repete e a tela pede motivo.
+  assert.equal((await sweep(f)).sent, 0);
+  assert.equal(f.calls.filter((u) => u.includes("sendMail")).length, 1);
+  assert.equal((await f.call("delivery", { channel: "email" })).body.alreadySent, true);
+});
+
+test("job não envia sem chave, antes da data de início, sem e-mail, pago, vencido ou já tentado pela tela", async () => {
+  const mails = (f) => f.calls.filter((u) => u.includes("sendMail")).length;
+  const f = deliveryFixture();
+  await f.issued();
+  assert.equal((await sweep(f, { BOLETO_DELIVERY_SWEEP_ENABLED: "false" })).disabled, true);
+  assert.equal((await sweep(f, { BOLETO_DELIVERY_SWEEP_SINCE: "" })).reason, "NO_START_DATE");
+  assert.equal((await sweep(f, { BOLETO_DELIVERY_SWEEP_SINCE: "2999-01-01T00:00:00Z" })).candidates, 0);
+  assert.equal((await sweep(f, { FINANCEIRO_COMMUNICATION_SEND_ENABLED: "false" })).reason, "EMAIL_NOT_CONFIGURED");
+  const tx = f.data.get("transactions/a"), profile = f.data.get("billingProfiles/doc-11222333000181");
+  f.data.set("billingProfiles/doc-11222333000181", { ...profile, deliveryChannels: ["whatsapp"] });
+  assert.equal((await sweep(f)).skipped, 1);
+  f.data.set("billingProfiles/doc-11222333000181", profile);
+  f.data.set("transactions/a", { ...tx, dueDate: "2000-01-01" });
+  assert.equal((await sweep(f)).skipped, 1);
+  f.data.set("transactions/a", { ...tx, status: "Pago", valueReceived: 1250 });
+  assert.equal((await sweep(f)).pending, 1);
+  assert.equal(mails(f), 0);
+  // Envio incerto pela tela: o job não toca.
+  const g = deliveryFixture({ mail: 500 });
+  await g.issued();
+  assert.equal((await g.call("delivery", { channel: "email" })).body.delivery.state, "unknown");
+  const before = g.calls.filter((u) => u.includes("sendMail")).length;
+  assert.equal((await sweep(g)).candidates, 0);
+  assert.equal(g.calls.filter((u) => u.includes("sendMail")).length, before);
+});
+
+// Alerta diário: lista o que pode deixar o faturamento incompleto e sai uma vez por dia.
+const { runDailyAlert, recordRun } = require("./boleto-daily-alert");
+const alertEnv = { ...production, ...graph, BOLETO_DAILY_ALERT_EMAIL: "paulo@exemplo.com.br" };
+const at10 = (day) => Date.parse(`${day}T13:00:00Z`);
+
+test("alerta diário lista boleto sem envio, retorno em conferência e robô com erro, uma vez por dia", async () => {
+  const f = deliveryFixture({ registered: false });
+  await f.issued();
+  const [key, issue] = f.stored();
+  f.data.set(key, { ...issue, attemptAt: Date.now() - 2 * 3600000 });
+  f.data.set("boletoReturnEvents/e1", { state: "review", number: "00024749-8", reason: "Conta já paga com valor ou data divergente do banco." });
+  f.data.set("boletoReturnJobs/history-production", { attention: [{ number: "00025048-4", reason: "Emissor recusou a consulta deste título (HTTP 404)." }] });
+  const now = Date.now();
+  await recordRun(f.db, true, now - 86400000);
+  await recordRun(f.db, false, now - 86400000);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(now));
+  const run = (extra = {}, when = Math.max(now, at10(today))) => runDailyAlert({ db: f.db, env: { ...alertEnv, ...extra }, fetchImpl: f.fetchImpl, now: when });
+  assert.equal((await run({ BOLETO_DAILY_ALERT_EMAIL: "" })).disabled, true);
+  assert.equal((await run({}, Date.parse(`${today}T09:00:00Z`))).waiting, true, "antes das 8h de Brasília");
+  const sent = await run();
+  assert.equal(sent.state, "sent", JSON.stringify(sent));
+  assert.equal(sent.findings, 5);
+  const mail = f.calls.mail.message;
+  assert.deepEqual(mail.toRecipients.map((r) => r.emailAddress.address), ["paulo@exemplo.com.br"]);
+  assert.match(mail.subject, /5 ponto\(s\) para conferir/);
+  assert.match(mail.body.content, /ainda não enviado/);
+  assert.match(mail.body.content, /em conferência/);
+  assert.match(mail.body.content, /execução em erro/);
+  const pdf = mail.attachments.find((a) => a.name.endsWith(".pdf"));
+  assert.equal(Buffer.from(pdf.contentBytes, "base64").subarray(0, 5).toString(), "%PDF-");
+  // Mesmo dia: não repete.
+  assert.ok((await run()).alreadySent);
+  assert.equal(f.calls.filter((u) => u.includes("sendMail")).length, 1);
+});
+
+test("alerta sem pendência também sai (prova que funciona) e falha de envio tenta de novo", async () => {
+  const f = deliveryFixture({ mail: 500 });
+  const now = Date.now();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(now));
+  const when = Math.max(now, at10(today));
+  const failed = await runDailyAlert({ db: f.db, env: alertEnv, fetchImpl: f.fetchImpl, now: when });
+  assert.equal(failed.state, "failed");
+  assert.equal(failed.errors, 1);
+  f.state.mail = 202;
+  const ok = await runDailyAlert({ db: f.db, env: alertEnv, fetchImpl: f.fetchImpl, now: when });
+  assert.equal(ok.state, "sent");
+  assert.equal(ok.findings, 0);
+  assert.match(f.calls.mail.message.subject, /sem pendências/);
+});
+
+test("alerta lista à parte o WhatsApp que não saiu", async () => {
+  const f = deliveryFixture();
+  await f.issued();
+  const [key, issue] = f.stored();
+  f.data.set(key, { ...issue, attemptAt: Date.now() - 2 * 3600000 });
+  assert.equal((await f.call("delivery", { channel: "email" })).body.delivery.state, "sent");
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const r = await runDailyAlert({ db: f.db, env: alertEnv, fetchImpl: f.fetchImpl, now: Math.max(Date.now(), at10(today)) });
+  assert.equal(r.findings, 1);
+  assert.match(f.calls.mail.message.body.content, /não enviado por WhatsApp/);
 });

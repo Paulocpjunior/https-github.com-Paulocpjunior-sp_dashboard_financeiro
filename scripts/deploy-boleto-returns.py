@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Provision the approved bank-return worker. No credential values are read or printed."""
 import argparse
+import datetime
 import json
 import pathlib
+import re
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -24,6 +26,8 @@ def describe(*args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--apply', action='store_true', help='Requires the full SHA explicitly approved by Paulo.')
+    parser.add_argument('--alert-email', help="Address(es) for the daily billing alert, separated by ';'. Kept on later deploys.")
+    parser.add_argument('--delivery-since', help='ISO UTC instant; boletos issued from then on and never sent are e-mailed by the job. Only with Paulo approval.')
     opts = parser.parse_args()
     if not opts.apply:
         print('Plan: reuse the approved service image and secret references; create a single-task Cloud Run Job; invoke every 15 minutes via a dedicated OAuth service account. Run --apply only after full-SHA approval and service publication.')
@@ -41,13 +45,16 @@ def main():
     container = revision['spec']['containers'][0]
     env = {e['name']: e for e in container.get('env', [])}
     secrets = []
-    for name in ['BOLETO_CLOUD_API_KEY', 'BOLETO_CLOUD_ACCOUNT_TOKEN']:
+    # The Microsoft 365 credentials let the job e-mail issued boletos that were never sent.
+    for name in ['BOLETO_CLOUD_API_KEY', 'BOLETO_CLOUD_ACCOUNT_TOKEN', 'FINANCEIRO_GRAPH_TENANT_ID', 'FINANCEIRO_GRAPH_CLIENT_ID', 'FINANCEIRO_GRAPH_CLIENT_SECRET']:
         ref = env[name]['valueFrom']['secretKeyRef']
         # Cloud Run may alias secret names through its secrets annotation.
         aliases = dict(pair.split(':', 1) for pair in revision['metadata'].get('annotations', {}).get('run.googleapis.com/secrets', '').split(',') if ':' in pair)
         secret = aliases.get(ref['name'], ref['name'])
         secrets.append(f"{name}={secret}:{ref['key']}")
     cutover = env['BOLETO_CLOUD_CUTOVER_DATE']['value']
+    if env.get('FINANCEIRO_COMMUNICATION_SEND_ENABLED', {}).get('value') != 'true':
+        raise RuntimeError('E-mail sending must be enabled on the approved backend before the job sends boletos.')
     if env['BOLETO_CLOUD_ENVIRONMENT']['value'] != 'production':
         raise RuntimeError('Production configuration is required.')
     account = revision['spec']['serviceAccountName']
@@ -60,11 +67,22 @@ def main():
     if existing:
         gcloud('scheduler', 'jobs', 'pause', SCHEDULER, '--location', REGION)
     jobs = describe('run', 'jobs', 'list', '--region', REGION)
-    operation = 'update' if any(j['metadata']['name'] == JOB for j in jobs) else 'create'
+    current = next((j for j in jobs if j['metadata']['name'] == JOB), None)
+    operation = 'update' if current else 'create'
+    # The job only e-mails boletos issued after the first deploy with this step;
+    # older ones stay with the team. Redeploys keep the original start.
+    containers = (((((current or {}).get('spec') or {}).get('template') or {}).get('spec') or {}).get('template') or {}).get('spec', {}).get('containers') or [{}]
+    previous = {e.get('name'): e.get('value') for e in containers[0].get('env', [])}
+    if opts.delivery_since and not re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ', opts.delivery_since):
+        raise RuntimeError('Use --delivery-since YYYY-MM-DDTHH:MM:SSZ.')
+    alert_email = opts.alert_email or previous.get('BOLETO_DAILY_ALERT_EMAIL') or ''
+    if not re.fullmatch(r"[^\s,=;]+@[^\s,=;]+(;[^\s,=;]+@[^\s,=;]+)*", alert_email):
+        raise RuntimeError('Inform --alert-email with the address that receives the daily billing alert.')
+    sweep_since = opts.delivery_since or previous.get('BOLETO_DELIVERY_SWEEP_SINCE') or datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     gcloud('run', 'jobs', operation, JOB, '--region', REGION, '--image', image, '--service-account', account,
            '--command', 'launcher', '--args', 'node boleto-return-job.js', '--tasks', '1', '--parallelism', '1', '--max-retries', '0',
-           '--task-timeout', '600s', '--memory', '512Mi', '--cpu', '1', '--set-secrets', ','.join(secrets),
-           '--set-env-vars', f'BOLETO_CLOUD_ENVIRONMENT=production,BOLETO_CLOUD_CUTOVER_DATE={cutover},BOLETO_CLOUD_RETURN_ENABLED=true,BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=true,BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=true,BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED=true',
+           '--task-timeout', '600s', '--memory', '2Gi', '--cpu', '1', '--set-secrets', ','.join(secrets),
+           '--set-env-vars', f'BOLETO_CLOUD_ENVIRONMENT=production,BOLETO_CLOUD_CUTOVER_DATE={cutover},BOLETO_CLOUD_RETURN_ENABLED=true,BOLETO_CLOUD_RETURN_SETTLEMENT_ENABLED=true,BOLETO_CLOUD_RETURN_AUTO_LINK_ENABLED=true,BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED=true,FINANCEIRO_COMMUNICATION_SEND_ENABLED=true,BOLETO_DELIVERY_SWEEP_ENABLED=true,BOLETO_DELIVERY_SWEEP_SINCE={sweep_since},BOLETO_DAILY_ALERT_EMAIL={alert_email}',
            '--update-labels' if operation == 'update' else '--labels', f'financeiro-commit={sha}')
     gcloud('run', 'jobs', 'add-iam-policy-binding', JOB, '--region', REGION, '--member', f'serviceAccount:{INVOKER}', '--role', 'roles/run.invoker')
     gcloud('scheduler', 'jobs', 'update' if existing else 'create', 'http', SCHEDULER, '--location', REGION,

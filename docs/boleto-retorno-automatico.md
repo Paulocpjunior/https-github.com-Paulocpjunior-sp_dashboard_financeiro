@@ -128,3 +128,7 @@ Condições, todas obrigatórias, além das conferências de sempre (consulta in
 O lançamento fica como Pago com o valor recebido real (`valueReceived`), e a diferença vai em `boletoSettlement.interestCents` (e em `decision.payment.interestCents` na auditoria do vínculo automático; em `boletoSettlementAudit` para boleto emitido pelo app). Pagamento menor que o boleto, com desconto ou antes do vencimento continua em conferência.
 
 Chave: `BOLETO_CLOUD_RETURN_LATE_INTEREST_ENABLED=true` no deploy do job (`scripts/deploy-boleto-returns.py`). Com a chave desligada, a regra antiga (só valor exato) vale. A conciliação manual pela tela não usa essa regra.
+
+## Histórico: título recusado pelo emissor (24/10/2026)
+
+Cinco títulos antigos em aberto (00024961-9, 00024959-3, 00024816-5, 00024868-6 e 00025048-4) falhavam na consulta `/situacao` a cada volta do histórico, deixando o job vermelho em cerca de 63% das execuções sem afetar as baixas. A recusa de um título só (HTTP 400/404/410/422) agora fica em `attention` com o código, sem contar como erro do job. Queda do emissor (5xx, 401/403/429, tempo esgotado) continua erro e para a página, agora com o código HTTP registrado.
