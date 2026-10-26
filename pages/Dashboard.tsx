@@ -16,6 +16,7 @@ import { ClientProfile } from '../components/ClientProfile';
 import { DataService } from '../services/dataService';
 import { buscarCadastroCentral, conferirTransacoes, ConferenciaFinanceiro } from '../services/cadastroCentralConferencia';
 import { auth } from '../services/firebaseConfig';
+import AvisosLegalizacaoCard from '../components/AvisosLegalizacaoCard';
 import { AuthService } from '../services/authService';
 import { hasFinancialPermission } from '../utils/financialPermissions';
 import { FilterState, KPIData, Transaction } from '../types';
@@ -666,6 +667,8 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
                 A Receber (Aberto)
             </button>
         </div>
+
+        <AvisosLegalizacaoCard />
 
         {confCentral && confCentral.foraDoCadastro.length > 0 && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm">

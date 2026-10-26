@@ -70,6 +70,7 @@ jobs:
           npm run test:data-loading
           npm run test:customer-directory
           npm run test:payment-method
+          npm run test:avisos-legalizacao
           npm run test:wix-funds
           npm run test:wix-receivables
 
