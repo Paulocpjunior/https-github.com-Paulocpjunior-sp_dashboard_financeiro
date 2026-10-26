@@ -1,5 +1,4 @@
 import { boletoRequest } from './boletoIssueStatus';
-import { SpConnectGateway } from './spConnectGateway';
 
 // Envio do boleto emitido ao cliente. Contatos da Regra de faturamento; cada
 // boleto vai uma vez por canal e reenviar exige motivo (servidor confere).
@@ -34,46 +33,14 @@ function failure(error: unknown): SendOutcome {
   };
 }
 
+// E-mail e WhatsApp saem pelo servidor do Financeiro, que confere quem está
+// logado e registra o resultado. O WhatsApp não depende do e-mail do login.
 export async function sendBoleto(id: string, channel: DeliveryChannel, resendReason?: string): Promise<SendOutcome> {
   const extra = resendReason ? { resendReason } : {};
-  if (channel === 'email') {
-    try {
-      return (await (await boletoRequest(path(id, 'delivery'), { channel, ...extra })).json()).delivery;
-    } catch (error) {
-      return failure(error);
-    }
-  }
-  // O modelo é conferido antes de reservar o envio: sem modelo, nada é registrado.
-  const { template, error: templateError } = await SpConnectGateway.documentTemplate();
-  if (!template) return { state: 'failed', error: templateError || 'Modelo de WhatsApp indisponível.', notConfigured: true };
-  let prepared: { attemptId: string; para: string; pdfBase64: string; nomeArquivo: string; referencia: string; botaoUrl?: string; variaveis: Record<string, string> };
   try {
-    prepared = await (await boletoRequest(path(id, 'delivery'), { channel, ...extra })).json();
+    return (await (await boletoRequest(path(id, 'delivery'), { channel, ...extra })).json()).delivery;
   } catch (error) {
     return failure(error);
-  }
-  const result = await SpConnectGateway.sendTemplate({
-    para: prepared.para,
-    template: template.nome,
-    variaveis: prepared.variaveis,
-    pdfBase64: prepared.pdfBase64,
-    nomeArquivo: prepared.nomeArquivo,
-    referencia: prepared.referencia,
-    botaoUrl: prepared.botaoUrl,
-  });
-  try {
-    const saved = await (await boletoRequest(path(id, 'delivery-result'), {
-      channel,
-      attemptId: prepared.attemptId,
-      ok: result.ok === true,
-      messageId: typeof result.messageId === 'string' ? result.messageId : '',
-      indeterminado: result.indeterminado === true,
-      error: result.ok ? '' : String(result.error || ''),
-    })).json();
-    return saved.delivery;
-  } catch {
-    // O WhatsApp pode ter saído; o registro fica "sem confirmação" e não repete sozinho.
-    return { state: 'unknown', error: result.ok ? 'Enviado, mas o registro não foi gravado. Não reenvie sem conferir.' : String(result.error || 'Envio não confirmado.') };
   }
 }
 

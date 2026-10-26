@@ -206,6 +206,35 @@ async function sendEmail({ env, fetchImpl, message }) {
     return { state: posted ? "unknown" : "failed", error: error.message || "Envio não concluído." };
   }
 }
+// WhatsApp pelo SERVIDOR (Paulo, 26/10): o envio não depende do e-mail do
+// login de quem aperta o botão. A equipe toda usa financeiro@, e o CFI só
+// aceita token de e-mail verificado, que só uma conta pode ter. O servidor
+// confere o usuário aqui e chama o /enviar do CFI pela chave de serviço que
+// o CFI aceita para os apps (header x-cron-secret, departamento financeiro).
+const WHATSAPP_CONFIG = ["CFI_WHATSAPP_URL", "SEFAZ_CRON_SECRET", "BOLETO_WHATSAPP_TEMPLATE"];
+function whatsappMissing(env) {
+  return WHATSAPP_CONFIG.filter((name) => !String(env[name] || "").trim());
+}
+async function sendWhatsapp({ env, fetchImpl, message }) {
+  const base = String(env.CFI_WHATSAPP_URL).trim().replace(/\/+$/, "");
+  let response;
+  try {
+    response = await fetchImpl(`${base}/api/admin/whatsapp/enviar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": String(env.SEFAZ_CRON_SECRET).trim() },
+      body: JSON.stringify({ ...message, departamento: "financeiro", template: String(env.BOLETO_WHATSAPP_TEMPLATE).trim() }),
+    });
+  } catch (error) {
+    // Sem resposta: o pedido pode ter chegado. Fica incerto e não repete sozinho.
+    return { state: "unknown", error: "Sem resposta do envio de WhatsApp. Não reenvie sem conferir." };
+  }
+  const data = await response.json().catch(() => ({}));
+  if (response.ok && data.ok !== false && typeof data.messageId === "string" && data.messageId)
+    return { state: "sent", providerId: data.messageId };
+  const error = String(data.error || data.erro || `Envio de WhatsApp recusado (HTTP ${response.status}).`);
+  if (response.ok || data.indeterminado === true || response.status >= 500) return { state: "unknown", error };
+  return { state: "failed", error };
+}
 module.exports = {
   DeliveryError,
   CHANNELS,
@@ -220,5 +249,7 @@ module.exports = {
   emailMessage,
   calendarLinks,
   sendEmail,
+  sendWhatsapp,
+  whatsappMissing,
   whatsappFrom,
 };

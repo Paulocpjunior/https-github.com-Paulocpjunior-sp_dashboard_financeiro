@@ -293,6 +293,8 @@ async function prepareDelivery({ db, env, fetchImpl, cfg, id, existing, row, cha
   if (problem) throw Object.assign(new BoletoError(problem, 409), { needsContact: true });
   if (channel === "email" && !delivery.emailEnabled(env))
     throw Object.assign(new BoletoError("Envio por e-mail ainda não habilitado: faltam as credenciais do Microsoft 365 da caixa financeiro@.", 503), { notConfigured: true });
+  if (channel === "whatsapp" && delivery.whatsappMissing(env).length)
+    throw Object.assign(new BoletoError(`Envio por WhatsApp ainda não habilitado no servidor: falta ${delivery.whatsappMissing(env).join(", ")}.`, 503), { notConfigured: true });
   if (!cfg.apiKey || !cfg.accountToken) throw new BoletoError("Credenciais indisponíveis.", 503);
   let artifact;
   try {
@@ -651,11 +653,9 @@ function createBoletoHandler({
           sendJson(request, response, 200, { channel, delivery: delivery.publicDelivery(saved) });
           return true;
         }
-        // WhatsApp: a tela envia pelo SP Connect com a sessão do usuário e
-        // devolve o resultado em delivery-result.
-        sendJson(request, response, 200, {
-          channel,
-          attemptId,
+        // WhatsApp: o servidor envia pelo CFI com a chave de serviço; o login
+        // de quem apertou o botão já foi conferido acima e fica na auditoria.
+        const result = await delivery.sendWhatsapp({ env, fetchImpl, message: {
           para: contacts.whatsapp,
           nomeArquivo: `boleto-${artifact.number}.pdf`,
           pdfBase64: artifact.pdf.toString("base64"),
@@ -670,7 +670,9 @@ function createBoletoHandler({
             numero: artifact.number,
             boleto: artifact.number,
           },
-        });
+        } });
+        const saved = await delivery.finish(db, target, { uid, attemptId, ...result });
+        sendJson(request, response, 200, { channel, delivery: delivery.publicDelivery(saved) });
         return true;
       }
       if (["invite", "invite-email"].includes(action) && request.method === "GET") {
