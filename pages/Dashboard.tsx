@@ -18,7 +18,7 @@ import { buscarCadastroCentral, conferirTransacoes, ConferenciaFinanceiro } from
 import { auth } from '../services/firebaseConfig';
 import AvisosLegalizacaoCard from '../components/AvisosLegalizacaoCard';
 import { AuthService } from '../services/authService';
-import { hasFinancialPermission } from '../utils/financialPermissions';
+import { canCreateFinancialEntries, hasFinancialPermission } from '../utils/financialPermissions';
 import { FilterState, KPIData, Transaction } from '../types';
 import { ArrowDown, ArrowUp, DollarSign, Filter, Search, Loader2, XCircle, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp, Layers, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
@@ -73,6 +73,8 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
   const canManageReceivable = hasFinancialPermission(currentUser,'receivables.reverse') || hasFinancialPermission(currentUser,'receivables.amend') || hasFinancialPermission(currentUser,'receivables.adjust') || hasFinancialPermission(currentUser,'receivables.read') || hasFinancialPermission(currentUser,'receivables.settle');
   const canManagePayable = (['payables.amend','payables.read','payables.settle','payables.reverse','payables.recurrence','payables.invite','payables.approve'] as const).some(p => hasFinancialPermission(currentUser,p));
   const canManageRecurrences = hasFinancialPermission(currentUser,'payables.recurrence');
+  // Lançar contas é de toda a equipe ativa; só a exclusão continua exclusiva do titular.
+  const canCreateEntries = canCreateFinancialEntries(currentUser);
   const canExportBoletoCloud = hasFinancialPermission(currentUser, 'billing.boleto-cloud.issue');
 
   const [payableModal, setPayableModal] = useState<{id?:string}|null>(null);
@@ -632,7 +634,7 @@ const Dashboard: React.FC<{ entriesOnly?: boolean }> = ({ entriesOnly = false })
           entryActions={entriesOnly}
           title={entriesOnly ? 'Lançamentos' : isContasAPagar ? 'Contas a pagar' : isContasAReceber ? 'Contas a receber' : 'Painel Principal'}
           description={entriesOnly ? 'Consulte receitas e despesas, filtre o período e acompanhe cada lançamento. Use as ações abaixo para cadastrar contas.' : 'Acompanhe saldos, indicadores, alertas e gráficos do Financeiro.'}
-          isAdmin={isAdmin} canRecurrences={canManageRecurrences} lastUpdated={lastUpdated} refreshCountdown={refreshCountdown}
+          isAdmin={isAdmin} canCreateEntries={canCreateEntries} canRecurrences={canManageRecurrences} lastUpdated={lastUpdated} refreshCountdown={refreshCountdown}
           isRefreshing={isRefreshing} hasFilters={Object.values(filters).some(Boolean)} filtersOpen={isFilterMenuOpen}
           onNewReceivable={() => setNativeEntryKind('receber')} onNewPayable={() => setNativeEntryKind('pagar')}
           onRecurrences={() => setPayableModal({})} onRefresh={handleManualRefresh}

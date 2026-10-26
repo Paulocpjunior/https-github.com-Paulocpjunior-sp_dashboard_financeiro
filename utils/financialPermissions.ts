@@ -62,6 +62,10 @@ export const hasFinancialPermission = (user: User | null, permission: FinancialP
   return user.financialPermissions?.includes(permission) === true;
 };
 
+export const canCreateFinancialEntries = (user: User | null): boolean => (
+  Boolean(user && user.active !== false && !['blocked', 'deleted'].includes(String((user as { status?: unknown }).status || '')))
+);
+
 export const canOpenWixTreasury = (user: User | null): boolean => {
   // A conta Wix é compartilhada pela equipe financeira; o Dashboard só abre a
   // página oficial e não executa nenhuma operação financeira.

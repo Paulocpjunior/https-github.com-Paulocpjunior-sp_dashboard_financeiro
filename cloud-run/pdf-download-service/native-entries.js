@@ -17,6 +17,13 @@ const allowed = (p) =>
   p?.active === true &&
   p.role === "admin" &&
   !["blocked", "deleted"].includes(p.status);
+// Lançar contas é de toda a equipe ativa (regra do titular, 20/10/2026); só a
+// exclusão continua exclusiva dele. Comunicações, parâmetros e desativação de
+// cadastro seguem restritos ao administrador.
+const entryAllowed = (p) =>
+  p?.active === true && !["blocked", "deleted"].includes(p.status);
+const adminRoute = (pathname) =>
+  /^\/api\/financial-entries\/(communications|communication-settings|maintenance|clients\/deactivate)(\/|$)/.test(pathname);
 const dateValid = (s) =>
   typeof s === "string" &&
   /^\d{4}-\d{2}-\d{2}$/.test(s) &&
@@ -319,7 +326,7 @@ function createNativeEntryHandler({
       const customerPath = url.pathname.startsWith("/api/financial-entries/customers/");
       const routeAllowed = customerPath ? profile => require("./customer-directory").allowed(profile,request.method) : receivablePath !== null ? profile => require("./receivables").routeAllowed(profile, request.method, receivablePath) : payablePath !== null
         ? profile => require("./payable-permissions").routeAllowed(profile, request.method, payablePath)
-        : allowed;
+        : adminRoute(url.pathname) ? allowed : entryAllowed;
       if (!routeAllowed(user))
         throw new EntryError(
           "Seu usuário não possui permissão para esta operação.",
@@ -363,7 +370,7 @@ function createNativeEntryHandler({
             "Cadastro excede o limite de consulta do piloto.",
             409,
           );
-        if (!allowed((await userRef.get()).data()))
+        if (!entryAllowed((await userRef.get()).data()))
           throw new EntryError("Acesso revogado.", 403);
         reply({
           enabled,
@@ -390,7 +397,7 @@ function createNativeEntryHandler({
         catch { throw new EntryError("Dados inválidos."); }
         const registration = require("./client-registration");
         const action = url.pathname.endsWith("/deactivate") ? registration.deactivateClient : registration.registerClient;
-        reply(await action({ db, userRef, user, uid, allowed, body }));
+        reply(await action({ db, userRef, user, uid, allowed: action === registration.registerClient ? entryAllowed : allowed, body }));
         return true;
       }
       const statementMatch = url.pathname.match(/^\/api\/financial-entries\/statement\/([a-zA-Z0-9_-]{1,200})$/);
@@ -399,7 +406,7 @@ function createNativeEntryHandler({
         const entry = (await ref.get()).data();
         const bytes = await require("./receivable-statement").statement(entry);
         if (!bytes) throw new EntryError("Detalhamento indisponível para este lançamento.",404);
-        if (!allowed((await userRef.get()).data())) throw new EntryError("Acesso revogado.",403);
+        if (!entryAllowed((await userRef.get()).data())) throw new EntryError("Acesso revogado.",403);
         if (JSON.stringify((await ref.get()).data()) !== JSON.stringify(entry))
           throw new EntryError("Cobrança alterada. Consulte novamente.",409);
         reply({name:"demonstrativo.pdf",type:"application/pdf",base64:bytes.toString("base64")});
@@ -421,7 +428,7 @@ function createNativeEntryHandler({
         const [bytes] = await getBucket(env.NATIVE_ENTRY_ATTACHMENT_BUCKET)
           .file(path)
           .download();
-        if (!allowed((await userRef.get()).data()))
+        if (!entryAllowed((await userRef.get()).data()))
           throw new EntryError("Acesso revogado.", 403);
         reply({
           name: attachment.name,
@@ -496,7 +503,7 @@ function createNativeEntryHandler({
       const ref = db.collection("transactions").doc(id);
       const requestRef = db.collection("nativeEntryRequests").doc(id);
       const lockRef = db.collection("nativeEntryLocks").doc(built.duplicateKey);
-      if (!allowed((await userRef.get()).data()))
+      if (!entryAllowed((await userRef.get()).data()))
         throw new EntryError("Acesso revogado.", 403);
       const wixLock = (stage) => input.kind === "receber"
         ? require("./wix-billing-lock").assertNoWixInvoice(db, built.record, { channel: "native-entry", uid, actor: actor.name, stage, profile: user, override: body.wixOverride || null })
@@ -517,7 +524,7 @@ function createNativeEntryHandler({
         );
       // Reserve the request hash first. A lost response must never turn into a different entry.
       const existing = await db.runTransaction(async (tx) => {
-        if (!allowed((await tx.get(userRef)).data()))
+        if (!entryAllowed((await tx.get(userRef)).data()))
           throw new EntryError("Acesso revogado.", 403);
         const attempt = (await tx.get(requestRef)).data();
         if(((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision) throw new EntryError("Parâmetros alterados. Reabra e revise o lançamento.",409);
@@ -565,7 +572,7 @@ function createNativeEntryHandler({
         attachments.push({ ...meta, path });
       }
       const saved = await db.runTransaction(async (tx) => {
-        if (!allowed((await tx.get(userRef)).data()))
+        if (!entryAllowed((await tx.get(userRef)).data()))
           throw new EntryError("Acesso revogado.", 403);
         if(((await tx.get(catalogRef)).data()?.revision||0)!==catalogState.revision) throw new EntryError("Parâmetros alterados. Reabra e revise o lançamento.",409);
         const old = (await tx.get(ref)).data();
@@ -657,5 +664,6 @@ module.exports = {
   buildEntry,
   files,
   allowed,
+  entryAllowed,
   EntryError,
 };
