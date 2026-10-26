@@ -8,7 +8,6 @@ import { AuthService } from './authService';
 import { MASTER_USER_ID, isMasterAccount } from '../utils/masterAccount';
 import { logger } from '../utils/logger';
 import { sanitizeFinancialPermissions } from '../utils/financialPermissions';
-import { buildAuthEmailAlias } from '../utils/authEmailAlias';
 
 export interface UserFormData {
   name: string;
@@ -56,7 +55,12 @@ const adminRequiredResult = (): MutationResult => ({
   message: 'Ação permitida apenas para administradores.',
 });
 
-const createAuthAccountWithAlias = async (
+// A equipe toda usa financeiro@ e se distingue pelo usuário. O Firebase Auth
+// não aceita duas contas com o mesmo e-mail, então, quando financeiro@ já tem
+// conta, o login interno segue o padrão técnico que o sistema já usava
+// (usuario@auth.spcontabil.local). Ele não aparece em tela e não recebe nada;
+// o e-mail do cadastro continua sendo o digitado.
+const createAuthAccountForUser = async (
   email: string,
   username: string,
   password: string,
@@ -65,12 +69,8 @@ const createAuthAccountWithAlias = async (
   try {
     return await createAuthAccount(email, password, displayName);
   } catch (error: any) {
-    if (error?.code !== 'auth/email-already-in-use') throw error;
-
-    const alias = buildAuthEmailAlias(email, username);
-    if (!alias) throw error;
-
-    return createAuthAccount(alias, password, displayName);
+    if (error?.code !== 'auth/email-already-in-use' || !username) throw error;
+    return createAuthAccount(`${username}${TECHNICAL_AUTH_EMAIL_DOMAIN}`, password, displayName);
   }
 };
 
@@ -217,13 +217,13 @@ export const UserAdminService = {
       return { success: false, message: 'Este nome de usuário já está em uso.' };
     }
 
-    // O e-mail não é mais chave: a equipe compartilha a caixa financeiro@ e se
-    // distingue pelo usuário. Conta repetida é tratada com apelido do e-mail.
+    // O e-mail não é chave: a equipe compartilha financeiro@ e se distingue
+    // pelo usuário.
 
     let createdAuth: Awaited<ReturnType<typeof createAuthAccount>> | null = null;
 
     try {
-      createdAuth = await createAuthAccountWithAlias(email, username, data.password, data.name);
+      createdAuth = await createAuthAccountForUser(email, username, data.password, data.name);
       const profileDb = isAdminCreation ? db : getFirestore(createdAuth.secondaryApp);
       const role = isAdminCreation ? normalizeRole(data.role) : 'operacional';
 

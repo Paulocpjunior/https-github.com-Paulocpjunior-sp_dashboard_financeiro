@@ -667,16 +667,17 @@ test("revisar de novo um item mantém os demais no lote para a emissão", async 
 
 // Envio ao cliente: contatos da Regra de faturamento, registro confirmado e
 // uma vez por canal. Tudo simulado: nenhuma chamada real ao Microsoft 365.
+const cfiWhatsapp = { CFI_WHATSAPP_URL: "https://cfi.exemplo.test/", SEFAZ_CRON_SECRET: "segredo-sintetico", BOLETO_WHATSAPP_TEMPLATE: "boleto_financeiro" };
 const graph = {
   FINANCEIRO_COMMUNICATION_SEND_ENABLED: "true",
   FINANCEIRO_GRAPH_TENANT_ID: "00000000-0000-0000-0000-000000000001",
   FINANCEIRO_GRAPH_CLIENT_ID: "00000000-0000-0000-0000-000000000002",
   FINANCEIRO_GRAPH_CLIENT_SECRET: "synthetic-secret",
 };
-function deliveryFixture({ environment = { ...production, ...graph }, registered = true, mail = 202 } = {}) {
+function deliveryFixture({ environment = { ...production, ...graph, ...cfiWhatsapp }, registered = true, mail = 202 } = {}) {
   const calls = [];
   let number = "";
-  const state = { registered, mail };
+  const state = { registered, mail, whatsapp: { status: 200, body: { ok: true, messageId: "wamid.1" } } };
   const fetchImpl = async (url, options = {}) => {
     calls.push(String(url));
     if (options.method === "POST" && String(url).includes("boletocloud")) return success(url, options);
@@ -686,6 +687,11 @@ function deliveryFixture({ environment = { ...production, ...graph }, registered
     if (String(url).includes("/atualizado/vencimento/")) return new Response("%PDF-1.4 boleto sintético");
     if (String(url).includes("login.microsoftonline.com")) return new Response(JSON.stringify({ access_token: "synthetic-token" }));
     if (String(url).includes("/sendMail")) { calls.mail = JSON.parse(options.body); return new Response(null, { status: state.mail }); }
+    if (String(url) === "https://cfi.exemplo.test/api/admin/whatsapp/enviar") {
+      calls.whatsapp = { headers: options.headers, body: JSON.parse(options.body) };
+      if (state.whatsapp === "offline") throw new Error("rede caiu");
+      return new Response(JSON.stringify(state.whatsapp.body), { status: state.whatsapp.status });
+    }
     throw new Error("Chamada inesperada: " + url);
   };
   const f = fixture(fetchImpl, environment, []);
@@ -771,28 +777,58 @@ test("sem confirmação do Microsoft 365 o envio fica incerto e não repete sem 
   assert.equal((await f.call("delivery", { channel: "email" })).body.alreadySent, true);
 });
 
-test("WhatsApp: tela recebe o PDF e o número do cadastro, resultado fica registrado", async () => {
+test("WhatsApp sai pelo servidor com a chave de serviço, sem depender do e-mail do login", async () => {
   const f = deliveryFixture();
   await f.issued();
-  const prepared = await f.call("delivery", { channel: "whatsapp" });
-  assert.equal(prepared.status, 200, JSON.stringify(prepared.body));
-  assert.equal(prepared.body.para, "5511987654321");
-  assert.equal(Buffer.from(prepared.body.pdfBase64, "base64").toString(), "%PDF-1.4 boleto sintético");
-  assert.match(prepared.body.variaveis.valor, /^R\$\s1\.250,00$/);
+  const sent = await f.call("delivery", { channel: "whatsapp" });
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.equal(sent.body.delivery.state, "sent");
+  const { headers, body } = f.calls.whatsapp;
+  assert.equal(headers["x-cron-secret"], "segredo-sintetico");
+  assert.equal(headers.Authorization, undefined, "nenhum token de usuário vai ao CFI");
+  assert.equal(body.departamento, "financeiro");
+  assert.equal(body.template, "boleto_financeiro");
+  assert.equal(body.para, "5511987654321");
+  assert.equal(Buffer.from(body.pdfBase64, "base64").toString(), "%PDF-1.4 boleto sintético");
+  assert.match(body.variaveis.valor, /^R\$\s1\.250,00$/);
   // Botão "Adicionar à agenda": vencimento, número e valor em centavos para public/agenda.html.
-  assert.match(prepared.body.botaoUrl, /^20991110\.[0-9A-Za-z-]+\.125000$/);
-  assert.equal((await f.call("delivery", { channel: "whatsapp" })).status, 409, "em andamento");
-  assert.equal((await f.call("delivery-result", { channel: "whatsapp", attemptId: "outro", ok: true, messageId: "x" })).status, 409);
-  const done = await f.call("delivery-result", { channel: "whatsapp", attemptId: prepared.body.attemptId, ok: true, messageId: "wamid.1" });
-  assert.equal(done.body.delivery.state, "sent");
+  assert.match(body.botaoUrl, /^20991110\.[0-9A-Za-z-]+\.125000$/);
   assert.equal((await f.call("delivery")).body.deliveries.whatsapp.state, "sent");
   assert.equal((await f.call("delivery", { channel: "whatsapp" })).body.alreadySent, true);
-  // Falha comprovada pode tentar de novo sem motivo.
+  const events = [...f.data.entries()].filter(([k]) => k.startsWith("boletoDeliveries/") && k.includes("/events/")).map(([, v]) => v);
+  assert.deepEqual(events.map((e) => e.action), ["send", "result"]);
+  assert.ok(events.every((e) => e.uid), "quem apertou o botão fica na auditoria");
+});
+
+test("WhatsApp: recusa comprovada pode tentar de novo; sem resposta fica incerto", async () => {
   const g = deliveryFixture();
   await g.issued();
-  const p = await g.call("delivery", { channel: "whatsapp" });
-  await g.call("delivery-result", { channel: "whatsapp", attemptId: p.body.attemptId, ok: false, error: "Modelo não aprovado" });
-  assert.equal((await g.call("delivery", { channel: "whatsapp" })).status, 200);
+  g.state.whatsapp = { status: 400, body: { ok: false, error: "Modelo não aprovado" } };
+  const refused = await g.call("delivery", { channel: "whatsapp" });
+  assert.equal(refused.body.delivery.state, "failed");
+  assert.equal(refused.body.delivery.error, "Modelo não aprovado");
+  g.state.whatsapp = { status: 200, body: { ok: true, messageId: "wamid.2" } };
+  assert.equal((await g.call("delivery", { channel: "whatsapp" })).body.delivery.state, "sent");
+  for (const outcome of ["offline", { status: 502, body: { ok: false, error: "Meta fora" } }, { status: 200, body: { ok: true } }]) {
+    const h = deliveryFixture();
+    await h.issued();
+    h.state.whatsapp = outcome;
+    assert.equal((await h.call("delivery", { channel: "whatsapp" })).body.delivery.state, "unknown", JSON.stringify(outcome));
+    assert.equal((await h.call("delivery", { channel: "whatsapp" })).body.alreadySent, true, "incerto não repete sem motivo");
+  }
+});
+
+test("WhatsApp sem configuração do servidor não reserva nem envia", async () => {
+  for (const missing of ["CFI_WHATSAPP_URL", "SEFAZ_CRON_SECRET", "BOLETO_WHATSAPP_TEMPLATE"]) {
+    const f = deliveryFixture({ environment: { ...production, ...graph, ...cfiWhatsapp, [missing]: "" } });
+    await f.issued();
+    const r = await f.call("delivery", { channel: "whatsapp" });
+    assert.equal(r.status, 503);
+    assert.equal(r.body.notConfigured, true);
+    assert.match(r.body.error, new RegExp(missing));
+    assert.equal(deliveries(f).length, 0);
+    assert.equal(f.calls.whatsapp, undefined);
+  }
 });
 
 // Envio automático pelo job: boleto emitido que ficou sem e-mail (tela fechada

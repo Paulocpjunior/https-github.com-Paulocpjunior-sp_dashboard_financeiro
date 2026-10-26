@@ -107,36 +107,6 @@ export const SpConnectGateway = {
     };
   },
 
-  // Modelo do Financeiro com cabeçalho de DOCUMENTO: o único que leva o PDF do boleto.
-  documentTemplate: async (): Promise<{ template?: SpConnectRegisteredTemplate; error?: string }> => {
-    const result = await request<SpConnectResult & { templates?: SpConnectRegisteredTemplate[] }>(
-      '/api/admin/whatsapp/templates?departamento=financeiro'
-    );
-    if (!result.ok) return { error: result.error };
-    const withDocument = (result.templates || []).filter((item) => item.ativo !== false && item.temDocumento);
-    if (withDocument.length === 1) return { template: withDocument[0] };
-    return {
-      error: withDocument.length
-        ? `Há ${withDocument.length} modelos de WhatsApp do Financeiro com documento. Deixe só um ativo no SP Connect para o envio do boleto.`
-        : 'Falta no SP Connect um modelo de WhatsApp do Financeiro com documento (PDF) aprovado pela Meta.',
-    };
-  },
-
-  sendTemplate: (input: {
-    para: string;
-    template: string;
-    variaveis: Record<string, string>;
-    pdfBase64: string;
-    nomeArquivo: string;
-    referencia?: string;
-    // Final do link do botão de URL dinâmica do modelo ("Adicionar à agenda").
-    botaoUrl?: string;
-  }) =>
-    request<SpConnectResult & { messageId?: string; numeroEnviado?: string }>('/api/admin/whatsapp/enviar', {
-      method: 'POST',
-      body: JSON.stringify({ departamento: 'financeiro', ...input }),
-    }),
-
   startConversation: (input: {
     para: string;
     nomeContato?: string;
