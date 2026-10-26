@@ -48,6 +48,7 @@
     "test:data-loading": "node scripts/test-data-loading-concurrency.mjs",
     "test:dashboard-duplicates-sorting": "node scripts/test-dashboard-duplicates-sorting.mjs",
     "test:payment-method": "node scripts/test-payment-method.mjs",
+    "test:avisos-legalizacao": "node scripts/test-avisos-legalizacao.mjs",
     "test:wix-receivables": "node scripts/test-wix-receivables.mjs",
     "test:wix-funds": "node scripts/test-wix-funds-report.mjs",
     "test:billing-forecast": "node scripts/test-billing-forecast.mjs",

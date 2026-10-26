@@ -91,3 +91,43 @@ export async function buscarCadastroCentral(
         return null;
     }
 }
+
+/**
+ * 📣 Avisos da Legalização para o Financeiro (fase 4 do checklist, 26/10).
+ * A Legalização é dona do cadastro geral: empresa que entrou, foi suspensa,
+ * saiu ou foi baixada, dados gerais e serviços/honorários que mudaram viram
+ * aviso. Vem pelo mesmo túnel do CFI. SÓ MOSTRA: nenhuma cobrança muda
+ * sozinha, e o valor dos honorários nunca vem no aviso. Falha → null.
+ */
+export interface AvisoLegalizacao {
+    id: string;
+    tipo: string;
+    rotulo: string;
+    em: string | null;
+    empresaNome: string | null;
+    cnpj: string | null;
+    porNome: string | null;
+    campos: string[];
+    acao: string | null;
+}
+
+export interface AvisosLegalizacao { avisos: AvisoLegalizacao[]; cortado: boolean; dias: number }
+
+export async function buscarAvisosLegalizacao(
+    getToken: () => Promise<string>,
+    deps: { fetchImpl?: typeof fetch; dias?: number } = {},
+): Promise<AvisosLegalizacao | null> {
+    const doFetch = deps.fetchImpl ?? fetch;
+    const dias = deps.dias ?? 30;
+    try {
+        const token = await getToken();
+        const resp = await doFetch(`${CFI_URL}/api/admin/cadastro/avisos-legalizacao?destino=financeiro&dias=${dias}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const corpo = await resp.json().catch(() => ({}));
+        if (!resp.ok || corpo?.ok !== true || !Array.isArray(corpo.avisos)) return null;
+        return { avisos: corpo.avisos, cortado: corpo.cortado === true, dias: Number(corpo.dias) || dias };
+    } catch {
+        return null;
+    }
+}
