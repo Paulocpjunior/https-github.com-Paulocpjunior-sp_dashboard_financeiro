@@ -37,6 +37,7 @@
     "registry:clients": "node scripts/build-client-registry.mjs",
     "registry:clients:apply": "node scripts/build-client-registry.mjs --apply-registry",
     "registry:clients:backfill": "node scripts/build-client-registry.mjs --apply-registry --apply-transactions",
+    "auth:verify-email": "node scripts/verify-auth-email.mjs",
     "test:self-registration": "node scripts/test-self-registration-email.mjs",
     "test:customer-directory": "node scripts/test-customer-directory.mjs && node --test cloud-run/pdf-download-service/customer-directory.test.js",
     "test:client-registry": "node scripts/test-client-registry.mjs",
