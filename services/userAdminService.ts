@@ -8,6 +8,7 @@ import { AuthService } from './authService';
 import { MASTER_USER_ID, isMasterAccount } from '../utils/masterAccount';
 import { logger } from '../utils/logger';
 import { sanitizeFinancialPermissions } from '../utils/financialPermissions';
+import { buildAuthEmailAlias } from '../utils/authEmailAlias';
 
 export interface UserFormData {
   name: string;
@@ -54,6 +55,24 @@ const adminRequiredResult = (): MutationResult => ({
   success: false,
   message: 'Ação permitida apenas para administradores.',
 });
+
+const createAuthAccountWithAlias = async (
+  email: string,
+  username: string,
+  password: string,
+  displayName: string,
+) => {
+  try {
+    return await createAuthAccount(email, password, displayName);
+  } catch (error: any) {
+    if (error?.code !== 'auth/email-already-in-use') throw error;
+
+    const alias = buildAuthEmailAlias(email, username);
+    if (!alias) throw error;
+
+    return createAuthAccount(alias, password, displayName);
+  }
+};
 
 const createAuthAccount = async (email: string, password: string, displayName: string) => {
   const secondaryApp = initializeApp(firebaseConfig, `user-provisioning-${Date.now()}-${Math.random()}`);
@@ -188,21 +207,23 @@ export const UserAdminService = {
     const now = new Date().toISOString();
     const isAdminCreation = isCurrentUserAdmin();
 
-    const existingUsername = await findUserDocByUsername(username);
-    if (existingUsername) {
+    // Quem ainda não entrou não pode consultar a coleção users (firestore.rules
+    // libera o list só para admin). O índice de login é público para leitura, e
+    // é ele que decide o login, então é por ele que o autocadastro confere.
+    const usernameTaken = isAdminCreation
+      ? Boolean(await findUserDocByUsername(username))
+      : (await getDoc(doc(db, 'loginIndex', username))).exists();
+    if (usernameTaken) {
       return { success: false, message: 'Este nome de usuário já está em uso.' };
     }
 
-    const emailQuery = query(collection(db, 'users'), where('email', '==', email));
-    const existingEmail = await getDocs(emailQuery);
-    if (!existingEmail.empty) {
-      return { success: false, message: 'Este e-mail já está cadastrado.' };
-    }
+    // O e-mail não é mais chave: a equipe compartilha a caixa financeiro@ e se
+    // distingue pelo usuário. Conta repetida é tratada com apelido do e-mail.
 
     let createdAuth: Awaited<ReturnType<typeof createAuthAccount>> | null = null;
 
     try {
-      createdAuth = await createAuthAccount(email, data.password, data.name);
+      createdAuth = await createAuthAccountWithAlias(email, username, data.password, data.name);
       const profileDb = isAdminCreation ? db : getFirestore(createdAuth.secondaryApp);
       const role = isAdminCreation ? normalizeRole(data.role) : 'operacional';
 
