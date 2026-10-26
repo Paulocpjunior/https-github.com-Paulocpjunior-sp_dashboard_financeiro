@@ -4,13 +4,13 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Timer, RefreshCw, Filter, Printer, Download, MessageCircle, ArrowUpCircle, ArrowDownCircle, CalendarClock } from 'lucide-react';
 interface Props {
- title: string; description?: string; entryActions?: boolean; isAdmin: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
+ title: string; description?: string; entryActions?: boolean; isAdmin: boolean; canCreateEntries?: boolean; canRecurrences?: boolean; lastUpdated: Date | null; refreshCountdown: number;
  isRefreshing: boolean; hasFilters: boolean; filtersOpen: boolean;
  onNewReceivable: () => void; onNewPayable: () => void; onRecurrences: () => void;
  onRefresh: () => void; onFilters: () => void; onPrint: () => void;
  onExport: () => void; onWhatsApp: () => void;
 }
-export default function DashboardToolbar({title,description,entryActions = true,isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
+export default function DashboardToolbar({title,description,entryActions = true,isAdmin,canCreateEntries = isAdmin,canRecurrences = isAdmin,lastUpdated,refreshCountdown,isRefreshing,hasFilters,filtersOpen,onNewReceivable,onNewPayable,onRecurrences,onRefresh,onFilters,onPrint,onExport,onWhatsApp}: Props) {
  return (
         <section aria-label="Ações do painel" className="sp-ui sp-finance-toolbar space-y-4 print:hidden">
           <div className="print:hidden">
@@ -19,9 +19,9 @@ export default function DashboardToolbar({title,description,entryActions = true,
           </div>
           
           <div className="sp-card space-y-4">
-            {entryActions && (isAdmin || canRecurrences) && (
+            {entryActions && (canCreateEntries || canRecurrences) && (
               <div role="group" aria-label="Lançamentos e recorrências" className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {isAdmin && <><button type="button" aria-label="Nova conta a receber" onClick={onNewReceivable}
+                {canCreateEntries && <><button type="button" aria-label="Nova conta a receber" onClick={onNewReceivable}
                   className="sp-entry-action">
                   <span className="sp-entry-icon" aria-hidden="true">
                     <ArrowUpCircle className="h-7 w-7" />

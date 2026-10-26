@@ -204,14 +204,15 @@ function harness({
   };
   return { call, store, objects };
 }
-test("anonymous, revoked, inactive, operator and disabled feature cannot write", async () => {
+test("anonymous, revoked, inactive, blocked and disabled feature cannot write", async () => {
   const h = harness();
   assert.equal((await h.call("preview", {}, "")).status, 401);
   assert.equal((await h.call("preview", {}, "bad")).status, 401);
   for (const profile of [
     { active: false, role: "admin" },
-    { active: true, role: "operacional" },
+    { active: false, role: "operacional" },
     { active: true, role: "admin", status: "blocked" },
+    { active: true, role: "operacional", status: "deleted" },
   ])
     assert.equal((await harness({ profile }).call("preview", {})).status, 403);
   assert.equal(
@@ -253,6 +254,22 @@ test("preview creates nothing; concurrent replay commits once, records actor and
   );
   assert.equal(status.body.state, "saved");
   assert.equal(status.body.transaction.createdBy, "u");
+});
+test("colaborador ativo (operacional) lança conta com autor e auditoria; parâmetros seguem do administrador", async () => {
+  const h = harness({ profile: { active: true, role: "operacional", name: "Colaboradora" } });
+  assert.equal((await h.call("config", undefined, "good", "GET")).status, 200);
+  const body = { requestId: randomUUID(), entry: input() };
+  const p = await h.call("preview", body);
+  assert.equal(p.status, 200);
+  const saved = await h.call("commit", { ...body, confirmHash: p.body.previewHash });
+  assert.equal(saved.status, 201);
+  assert.equal(saved.body.transaction.createdBy, "u");
+  assert.equal(saved.body.transaction.createdByName, "Colaboradora");
+  const audit = [...h.store.entries()].filter(([k]) => k.startsWith("nativeEntryAudit/"));
+  assert.equal(audit.length, 1);
+  assert.equal(audit[0][1].action, "create");
+  assert.equal(audit[0][1].uid, "u");
+  assert.equal((await h.call("clients/deactivate", {}, "good", "POST")).status, 403);
 });
 test("changed payload and revoked permissions cannot commit the reviewed request", async () => {
   const h = harness();
