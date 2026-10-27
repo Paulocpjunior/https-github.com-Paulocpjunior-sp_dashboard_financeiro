@@ -66,6 +66,10 @@ export const canCreateFinancialEntries = (user: User | null): boolean => (
   Boolean(user && user.active !== false && !['blocked', 'deleted'].includes(String((user as { status?: unknown }).status || '')))
 );
 
+// Baixa manual, estorno e correções de contas a receber valem para toda a
+// equipe ativa, como o lançamento; o servidor aplica a mesma regra.
+export const canManageReceivables = canCreateFinancialEntries;
+
 export const canOpenWixTreasury = (user: User | null): boolean => {
   // A conta Wix é compartilhada pela equipe financeira; o Dashboard só abre a
   // página oficial e não executa nenhuma operação financeira.

@@ -11,6 +11,7 @@ const server = await createServer({
 try {
   const {
     FINANCIAL_PERMISSION_OPTIONS,
+    canManageReceivables,
     canOpenWixTreasury,
     hasFinancialPermission,
     sanitizeFinancialPermissions,
@@ -43,6 +44,9 @@ try {
   assert.deepEqual(sanitizeFinancialPermissions(['receivables.adjust']), ['receivables.adjust']);
   assert.equal(hasFinancialPermission({ ...operator, financialPermissions: ['receivables.adjust'] }, 'receivables.adjust'), true);
   assert.equal(hasFinancialPermission(operator, 'receivables.adjust'), false);
+  assert.equal(canManageReceivables({ ...operator, financialPermissions: [] }), true);
+  assert.equal(canManageReceivables({ ...operator, active: false }), false);
+  assert.equal(canManageReceivables({ ...operator, status: 'blocked' }), false);
   assert.equal(canOpenWixTreasury(operator), true);
   assert.equal(canOpenWixTreasury({ ...operator, active: false }), false);
   assert.equal(hasFinancialPermission({ ...operator, active: false }, 'itau.openfinance.read'), false);

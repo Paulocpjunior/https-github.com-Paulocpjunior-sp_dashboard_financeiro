@@ -5,7 +5,10 @@ const hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
 const evidenceHash=v=>hash(canonical(v));
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
-const permits=(user,action)=>user?.active===true&&!['blocked','deleted'].includes(user.status)&&(user.role==='admin'||user.financialPermissions?.includes(`receivables.${action}`));
+// Baixa manual, estorno e correções de conta a receber são de toda a equipe ativa
+// (regra do titular, 20/10 e 27/10/2026); só a exclusão segue exclusiva dele.
+// Cada ação continua exigindo forma de recebimento, comprovante/motivo e log.
+const permits=(user,_action)=>user?.active===true&&!['blocked','deleted'].includes(user.status);
 function routeAllowed(user,method,path){
  return method==='GET'&&/^items\/[^/]+$/.test(path)?['read','settle','reverse','amend','adjust'].some(a=>permits(user,a)):method==='POST'&&(['receipt/preview','receipt/commit'].includes(path)?permits(user,'settle'):['reversal/preview','reversal/commit','reopen/preview','reopen/commit'].includes(path)?permits(user,'reverse'):['due-date/preview','due-date/commit'].includes(path)?permits(user,'amend'):['charge/preview','charge/commit'].includes(path)&&permits(user,'adjust'));
 }

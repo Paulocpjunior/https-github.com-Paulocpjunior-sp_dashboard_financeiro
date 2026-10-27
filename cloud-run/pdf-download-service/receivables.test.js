@@ -114,10 +114,12 @@ test('alteração concorrente e permissão revogada impedem gravação',async()=
  const h2=harness(),b2=await body(h2),p2=await h2.call('receipt/preview',b2);h2.store.set('users/u',{active:false,role:'admin'});
  assert.equal((await h2.call('receipt/commit',{...b2,confirmHash:p2.body.reviewHash})).status,403);
 });
-test('permissões de recebimento são independentes das contas a pagar',async()=>{
- const h=harness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['payables.settle']});assert.equal((await h.call('items/legacy')).status,403);
- h.store.get('users/u').financialPermissions=['receivables.read'];assert.equal((await h.call('items/legacy')).status,200);assert.equal((await h.call('receipt/preview',await body(h))).status,403);
- h.store.get('users/u').financialPermissions=['receivables.settle'];assert.equal((await commit(h,await body(h))).status,200);
+test('baixa manual vale para toda a equipe ativa; perfil bloqueado ou inativo não acessa',async()=>{
+ const h=harness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:[]});
+ const d=await h.call('items/legacy');assert.equal(d.status,200);assert.equal(d.body.canSettle,true);assert.equal(d.body.canReverse,true);assert.equal(d.body.canAmend,true);assert.equal(d.body.canAdjust,true);
+ const pending=await body(h);h.store.get('users/u').status='blocked';assert.equal((await h.call('items/legacy')).status,403);assert.equal((await h.call('receipt/preview',pending)).status,403);
+ h.store.set('users/u',{active:false,role:'operacional',financialPermissions:['receivables.settle']});assert.equal((await h.call('items/legacy')).status,403);
+ h.store.set('users/u',{active:true,role:'operacional',financialPermissions:[]});const c=await commit(h,await body(h));assert.equal(c.status,200);
 });
 test('valida dinheiro, datas, desconto e referências sem gravações',async()=>{
  for(const overrides of [{amount:'0.00'},{amount:'1000.00'},{amount:'NaN'},{interest:'-1.00'},{discount:'90.00'},{date:'2099-01-01'},{date:'2026-02-30'},{note:''},{bankAccount:'inventada'},{method:'inventado'}]){
@@ -175,9 +177,9 @@ test('estorna parciais em ordem inversa e preserva anexos',async()=>{
  for(const remaining of [6100,10000]){const d=await h.call('items/legacy'),b={id:'legacy',requestId:randomUUID(),version:d.body.version,reason:'Corrigir lançamento manual conferido'},p=await h.call('reversal/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));const r=await h.call('reversal/commit',{...b,confirmHash:p.body.reviewHash});assert.equal(r.status,200);assert.equal(r.body.transaction.receivableBalance?.remainingCents??10000,remaining);assert.equal(r.body.transaction.attachments[0].name,'prova.pdf');}
  assert.equal(h.store.get('transactions/legacy').receivableReceipts.length,2);
 });
-test('estorno exige permissão própria, histórico íntegro e bloqueia retorno bancário',async()=>{
+test('estorno exige perfil ativo, histórico íntegro e bloqueia retorno bancário',async()=>{
  for(const mode of ['permission','bank','tamper','stale']){const h=harness();await commit(h,await body(h));const d=await h.call('items/legacy');
- if(mode==='permission')h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.settle']});
+ if(mode==='permission')h.store.set('users/u',{active:true,role:'operacional',status:'blocked',financialPermissions:['receivables.reverse']});
  if(mode==='bank')h.store.get('transactions/legacy').boletoSettlement={source:'return'};
  if(mode==='tamper')h.store.get('transactions/legacy').valorPago='99';
  const fresh=await h.call('items/legacy');const b={id:'legacy',requestId:randomUUID(),version:mode==='stale'?d.body.version:fresh.body.version,reason:'Corrigir data após conferência'};
@@ -243,10 +245,9 @@ test('corrige vencimento com prévia, motivo e histórico',async()=>{
  const audit=[...h.store].find(([k,v])=>k.startsWith('receivableAudit/')&&v.action==='due-date-amendment');assert.equal(audit[1].before.dueDate,'2026-01-31');
  assert.equal((await h.call('due-date/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').dueDateAmendments.length,1);
 });
-test('correção de vencimento exige permissão própria',async()=>{
- const h=harness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.settle']});
- assert.equal((await h.call('due-date/preview',await dueBody(h))).status,403);
- h.store.get('users/u').financialPermissions=['receivables.amend'];const d=await h.call('items/legacy');assert.equal(d.status,200);assert.equal(d.body.canAmend,true);
+test('correção de vencimento vale para a equipe ativa',async()=>{
+ const h=harness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:[]});
+ const d=await h.call('items/legacy');assert.equal(d.status,200);assert.equal(d.body.canAmend,true);
  assert.equal((await h.call('due-date/preview',await dueBody(h))).status,200);
 });
 test('vencimento inválido, sem motivo ou anterior ao lançamento não grava',async()=>{
@@ -286,10 +287,9 @@ test('adiciona extra com prévia, motivo e histórico',async()=>{
  const audit=[...h.store].find(([k,v])=>k.startsWith('receivableAudit/')&&v.action==='charge-amendment');assert.equal(audit[1].before.totalCobranca,100);assert.equal(audit[1].after.totalCobranca,150);
  assert.equal((await h.call('charge/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').chargeAmendments.length,1);
 });
-test('correção de valores exige permissão própria',async()=>{
- const h=nativeHarness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.amend']});
- assert.equal((await h.call('charge/preview',await chargeBody(h))).status,403);
- h.store.get('users/u').financialPermissions=['receivables.adjust'];const d=await h.call('items/legacy');assert.equal(d.body.canAdjust,true);assert.equal(d.body.canAmend,false);
+test('correção de valores vale para a equipe ativa',async()=>{
+ const h=nativeHarness();h.store.set('users/u',{active:true,role:'operacional',financialPermissions:[]});
+ const d=await h.call('items/legacy');assert.equal(d.body.canAdjust,true);
  assert.equal((await h.call('charge/preview',await chargeBody(h))).status,200);
 });
 test('valores inválidos, sem motivo ou iguais aos atuais não gravam',async()=>{
@@ -322,11 +322,11 @@ test('reabre conta quitada fora do fluxo com prévia, motivo e histórico, e ace
  const again=await h.call('items/legacy');assert.equal(again.body.reopenable,false);assert.equal(again.body.blockedReason,null);
  assert.equal((await commit(h,await body(h,{date:'2026-01-20',amount:'100.00',interest:'0',discount:'0'}))).status,200);assert.equal(h.store.get('transactions/legacy').status,'Pago');
 });
-test('reabertura exige permissão de estorno e motivo; não vale para baixa bancária, baixa do Financeiro ou conta aberta',async()=>{
+test('reabertura exige perfil ativo e motivo; não vale para baixa bancária, baixa do Financeiro ou conta aberta',async()=>{
  const paid={status:'Pago',pago:'Pago',paymentDate:'2026-01-02',valueReceived:100};
- let h=harness();Object.assign(h.store.get('transactions/legacy'),paid);h.store.set('users/u',{active:true,role:'operacional',financialPermissions:['receivables.settle','receivables.amend','receivables.adjust']});
- assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,403);
- h.store.get('users/u').financialPermissions=['receivables.reverse'];assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,200);
+ let h=harness();Object.assign(h.store.get('transactions/legacy'),paid);h.store.set('users/u',{active:true,role:'operacional',financialPermissions:[]});const pending=await reopenBody(h);
+ h.store.get('users/u').status='blocked';assert.equal((await h.call('reopen/preview',pending)).status,403);
+ h.store.set('users/u',{active:true,role:'operacional',financialPermissions:[]});assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,200);
  assert.equal((await h.call('reopen/preview',await reopenBody(h,'curto'))).status,400);
  for(const extra of [{boletoSettlement:{evidenceId:'bank'}},{boletoReconciliation:{boletoId:'x'}}]){h=harness();Object.assign(h.store.get('transactions/legacy'),paid,extra);assert.equal((await h.call('items/legacy')).body.reopenable,false);assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,409);}
  h=harness();assert.equal((await h.call('items/legacy')).body.reopenable,false);assert.equal((await h.call('reopen/preview',await reopenBody(h))).status,409);
