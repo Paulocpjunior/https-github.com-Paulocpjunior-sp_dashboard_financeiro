@@ -1,14 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { buscarAvisosLegalizacao, type AvisosLegalizacao } from '../services/cadastroCentralConferencia';
+import { buscarAvisosLegalizacao, detalheAviso, CAMPO_AVISO, type AvisosLegalizacao } from '../services/cadastroCentralConferencia';
 import { auth } from '../services/firebaseConfig';
 
 // 📣 Avisos da Legalização (fase 4, 26/10): o que mudou no cadastro geral das
 // empresas, vindo do checklist da Legalização pelo túnel do CFI. Só mostra.
 
-const CAMPO: Record<string, string> = {
-  empresaNome: 'nome', documento: 'CNPJ', tributacao: 'tributação', 'datas.alteracao': 'data de alteração',
-  servicosContratados: 'serviços contratados', honorarios: 'honorários',
-};
 const COR: Record<string, string> = {
   empresa_entrou: 'border-emerald-500', empresa_reativada: 'border-emerald-500',
   empresa_suspensa: 'border-amber-500', empresa_saiu: 'border-red-500', empresa_baixada: 'border-red-500',
@@ -16,7 +12,8 @@ const COR: Record<string, string> = {
 const fmtCnpj = (d: string) => (d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : d);
 
 const AvisosLegalizacaoCard: React.FC = () => {
-  const [dados, setDados] = useState<AvisosLegalizacao | null>(null);
+  // undefined = carregando; null = o CFI não respondeu (aparece, não some).
+  const [dados, setDados] = useState<AvisosLegalizacao | null | undefined>(undefined);
   const [aberto, setAberto] = useState(true);
   useEffect(() => {
     let vivo = true;
@@ -27,7 +24,14 @@ const AvisosLegalizacaoCard: React.FC = () => {
     }).then((r) => { if (vivo) setDados(r); });
     return () => { vivo = false; };
   }, []);
-  if (!dados) return null;
+  if (dados === undefined) return null;
+  if (dados === null) {
+    return (
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+        📣 Não carregou os avisos da Legalização: o CFI não respondeu. Recarregue a página; se continuar, avise o Paulo.
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
@@ -53,13 +57,14 @@ const AvisosLegalizacaoCard: React.FC = () => {
                 <strong className="text-slate-800">{a.empresaNome || '—'}</strong>
                 {a.cnpj && <span className="text-xs font-mono text-slate-500">{fmtCnpj(a.cnpj)}</span>}
                 <span className="text-xs font-semibold text-slate-700">
-                  {a.rotulo}{a.campos.length ? `: ${a.campos.map((c) => CAMPO[c] ?? c).join(', ')}` : ''}
+                  {a.rotulo}{a.campos.length ? `: ${a.campos.map((c) => CAMPO_AVISO[c] ?? c).join(', ')}` : ''}
                 </span>
                 <span className="ml-auto text-[11px] text-slate-500">
                   {a.em ? new Date(a.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'sem data'}
                   {a.porNome ? ` · ${a.porNome}` : ''}
                 </span>
               </div>
+              {detalheAviso(a).length > 0 && <div className="text-xs text-slate-800">{detalheAviso(a).join(' · ')}</div>}
               {a.acao && <div className="text-xs text-slate-600">{a.acao}</div>}
             </li>
           ))}

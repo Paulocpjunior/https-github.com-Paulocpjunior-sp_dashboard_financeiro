@@ -23,6 +23,17 @@ try {
   assert.equal(await buscarAvisosLegalizacao(async () => 'tok', { fetchImpl: async () => { throw new Error('CORS'); } }), null);
   assert.equal(await buscarAvisosLegalizacao(async () => 'tok', { fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({ ok: false }) }) }), null);
   assert.equal(await buscarAvisosLegalizacao(async () => { throw new Error('sem sessão'); }), null);
+  // 27/10: detalhe com "de → para" e serviços; aviso antigo não ganha linha.
+  const { detalheAviso } = await server.ssrLoadModule('/services/cadastroCentralConferencia.ts');
+  const base = { id: 'a', tipo: 'empresa_entrou', rotulo: 'Entrou', em: null, empresaNome: 'X', cnpj: null, porNome: null, campos: [], acao: null };
+  assert.deepEqual(detalheAviso(base), []);
+  assert.deepEqual(detalheAviso({ ...base, servicos: null }), []);
+  assert.deepEqual(detalheAviso({ ...base, tributacao: '02 - SIMPLES', servicos: ['Contabilidade', 'Fiscal'] }), ['Tributação: 02 - SIMPLES', 'Serviços: Contabilidade, Fiscal']);
+  assert.deepEqual(detalheAviso({ ...base, servicos: [] }), ['Nenhum serviço marcado no checklist']);
+  assert.deepEqual(
+    detalheAviso({ ...base, tipo: 'servicos_alterados', valores: [{ campo: 'servicosContratados', de: 'Fiscal', para: null }], servicosSairam: ['Fiscal'] }),
+    ['serviços contratados: Fiscal → —', 'Saiu do contrato: Fiscal'],
+  );
   console.log('avisos da Legalização: ok');
 } finally {
   await server.close();
