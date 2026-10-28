@@ -42,6 +42,8 @@ test('N.Cliente de outro cliente, documento inválido, cadastro manual sem motiv
  await assert.rejects(h.call(body({clientNumber:'A1'})),/N.Cliente/);
  await assert.rejects(h.call(body({source:'manual',checklistSubmissionId:'',reason:'curto'})),/motivo/);
  await assert.rejects(h.call(body({checklistSubmissionId:''})),/Checklist/);
+ await assert.rejects(h.call(body({checklistSubmissionId:'legalizacao/../x'})),/Checklist/);
+ assert.equal((await fixture().call(body({requestId:'44444444-4444-4444-8444-444444444444',checklistSubmissionId:'legalizacao/doc_07147345000111'}))).created,true);
  assert.equal(h.store.has('clientRegistry/doc-'+RADIO),false);
  const m=fixture();await m.call(body({source:'manual',checklistSubmissionId:'',reason:'Contrato assinado em 20/10, ainda fora do Checklist.'}));
  assert.equal(m.store.get(m.store.get(audits(m.store)[0]).after?'clientRegistry/doc-'+RADIO:'').registeredFrom,'manual');

@@ -10,7 +10,7 @@
  * a divergência não determina automaticamente qual fonte está incorreta.
  */
 
-const CFI_URL = 'https://consultor-fiscal-inteligente-zricstsjqa-uw.a.run.app';
+export const CFI_URL = 'https://consultor-fiscal-inteligente-zricstsjqa-uw.a.run.app';
 
 const soDigitos = (v: unknown) => String(v ?? '').replace(/\D/g, '');
 
@@ -108,7 +108,35 @@ export interface AvisoLegalizacao {
     cnpj: string | null;
     porNome: string | null;
     campos: string[];
+    /** "de → para" (desde 27/10; aviso antigo vem vazio). Honorários nunca têm valor. */
+    valores?: Array<{ campo: string; de: string | null; para: string | null }>;
+    tributacao?: string | null;
+    /** Serviços contratados no momento do aviso; null = aviso antigo, sem a informação. */
+    servicos?: string[] | null;
+    servicosEntraram?: string[];
+    servicosSairam?: string[];
     acao: string | null;
+}
+
+export const CAMPO_AVISO: Record<string, string> = {
+    empresaNome: 'nome', documento: 'CNPJ', tributacao: 'tributação', statusCliente: 'status',
+    servicosContratados: 'serviços contratados', honorarios: 'honorários', nossoNumero: 'nosso número', 'datas.alteracao': 'data de alteração',
+};
+
+/**
+ * Detalhe do aviso para o Financeiro: "de → para", serviço que entrou/saiu e,
+ * na entrada, a tributação e os serviços contratados. Aviso antigo (sem esses
+ * campos) não ganha linha: ausente não vira "nenhum serviço".
+ */
+export function detalheAviso(a: AvisoLegalizacao): string[] {
+    const out = (a.valores ?? []).map((v) => `${CAMPO_AVISO[v.campo] ?? v.campo}: ${v.de ?? '—'} → ${v.para ?? '—'}`);
+    if (a.servicosEntraram?.length) out.push(`Entrou no contrato: ${a.servicosEntraram.join(', ')}`);
+    if (a.servicosSairam?.length) out.push(`Saiu do contrato: ${a.servicosSairam.join(', ')}`);
+    if (a.tipo === 'empresa_entrou') {
+        if (a.tributacao) out.push(`Tributação: ${a.tributacao}`);
+        if (Array.isArray(a.servicos)) out.push(a.servicos.length ? `Serviços: ${a.servicos.join(', ')}` : 'Nenhum serviço marcado no checklist');
+    }
+    return out;
 }
 
 export interface AvisosLegalizacao { avisos: AvisoLegalizacao[]; cortado: boolean; dias: number }

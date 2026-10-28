@@ -6,11 +6,11 @@ import { checklistEvent, checklistEventLabels, checklistEventGuidance, checklist
 const copy: Record<ChecklistSource, { heading: string; intro: string[]; idle: string; busy: string; unavailable: string; warning: string; empty: string; row: string; noAmount: string }> = {
   legal: {
     heading: 'Checklist do Legal — leitura e conferência',
-    intro: ['Leitura somente consulta do formulário Checklist do Legal no Jotform. O formulário de caixa do Financeiro continua desligado.',
-      'O STATUS define o evento de cada resposta: entrada, saída, alteração ou suspensão. Datas incompatíveis com esse evento ficam apenas nos dados originais. Honorários, início da responsabilidade, dia de cobrança e última cobrança nas observações precisam de conferência humana.'],
+    intro: ['Leitura somente consulta do checklist do app Legalização, pelo cadastro do CFI. O formulário do Jotform não é mais lido: cada empresa aparece uma vez, com os dados atuais do Legal.',
+      'O STATUS define o evento de cada empresa: entrada, saída, alteração ou suspensão. Datas incompatíveis com esse evento ficam apenas nos dados originais. Honorários, início da responsabilidade, dia de cobrança e última cobrança nas observações precisam de conferência humana.'],
     idle: 'Consultar checklist completo', busy: 'Lendo e validando o checklist...', unavailable: 'Checklist indisponível',
-    warning: 'Leitura completa não comprova contrato validado, cliente ainda ativo, cobrança emitida ou dispensa aprovada. Uma resposta pode registrar um evento histórico, não o estado atual do contrato. Pendência de campo não comprova erro de cadastro. Datas de saída ou suspensão em uma entrada não autorizam interromper cobrança. Nenhuma cobrança é criada por esta consulta.',
-    empty: 'Nenhuma resposta neste filtro.', row: 'Resposta', noAmount: 'Conferir nas observações',
+    warning: 'Leitura completa não comprova contrato validado, cliente ainda ativo, cobrança emitida ou dispensa aprovada. O STATUS pode registrar um evento histórico, não o estado atual do contrato. Pendência de campo não comprova erro de cadastro. Datas de saída ou suspensão em uma entrada não autorizam interromper cobrança. Nenhuma cobrança é criada por esta consulta.',
+    empty: 'Nenhuma empresa neste filtro.', row: 'Item', noAmount: 'Conferir nas observações',
   },
   registry: {
     heading: 'Cadastro financeiro — conferência contratual',
