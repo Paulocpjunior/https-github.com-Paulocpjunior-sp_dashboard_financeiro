@@ -30,6 +30,12 @@ try {
   assert.equal(lido.records[0].submissionId,'legalizacao/doc_07147345000111'); assert.equal(lido.records[0].identity,'doc:07147345000111');
   assert.equal(lido.records[0].amount,1200); assert.equal(lido.records[0].clientNumber,'170'); assert.equal(lido.records[0].notes,'Início em 01/10');
   assert.equal(lido.records[1].amount,null,'honorário ausente não vira zero');
+  assert.equal(lido.records[0].sourceCreatedAt,'2026-10-01','a entrada é a origem do registro');
+  const invalida = await mapLegalizacaoChecklist({...tunel,itens:[{...tunel.itens[0],datas:{cadastro:'2026-02-30'}}]},'2026-10-28T12:00:00Z');
+  assert.equal(invalida.records[0].entryDate,null); assert.ok(invalida.records[0].issues.includes('Data de entrada: data inválida no checklist')); assert.equal(invalida.validRecords,0);
+  const { buildBillingObligations } = await server.ssrLoadModule('/utils/billingObligations.ts');
+  const antes = buildBillingObligations([], lido.records, '2026-09');
+  assert.ok(JSON.stringify(antes).includes('cadastrada após o mês escolhido'),'mês anterior à entrada avisa');
   assert.ok(lido.records[1].issues.includes('Saída anterior à entrada')); assert.ok(lido.records[1].issues.includes('Identificação ausente: não unir por nome'));
   await assert.rejects(mapLegalizacaoChecklist({...tunel,honorarios:false},'2026-10-28T12:00:00Z'),/honorários/);
   await assert.rejects(mapLegalizacaoChecklist({...tunel,cortado:true},'2026-10-28T12:00:00Z'),/cortado/);

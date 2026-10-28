@@ -44,13 +44,21 @@ export async function mapLegalizacaoChecklist(body: any, readAt: string): Promis
     if (!identity) issues.push('Identificação ausente: não unir por nome');
     const amount = parseHonorarios(it.honorarios);
     if (amount == null) issues.push(text(it.honorarios) ? 'Honorários: valor inválido' : 'Honorários ausentes ou inválidos');
-    const entryDate = isoDay(it.datas?.cadastro), exitDate = isoDay(it.datas?.saida);
+    // Data enviada mas ilegível vira pendência, nunca "Não informada" (achado do Codex, 28/10).
+    const day = (raw: unknown, label: string) => {
+      const d = isoDay(raw);
+      if (!d && text(raw)) issues.push(`${label}: data inválida no checklist`);
+      return d;
+    };
+    const entryDate = day(it.datas?.cadastro, 'Data de entrada'), exitDate = day(it.datas?.saida, 'Data de saída');
+    const suspensionDate = day(it.datas?.suspensao, 'Data de suspensão');
     if (entryDate && exitDate && exitDate < entryDate) issues.push('Saída anterior à entrada');
     return {
       submissionId: `legalizacao/${text(it.id)}`, identity, client, clientNumber: clientNumber || null, document,
-      amount, entryDate, exitDate, suspensionDate: isoDay(it.datas?.suspensao),
+      amount, entryDate, exitDate, suspensionDate,
       status: text(it.statusCliente) || null, notes: text(it.observacao?.texto) || null,
-      sourceCreatedAt: null, sourceUpdatedAt: text(it.atualizadoEm) || null,
+      // A entrada no escritório é a origem do registro: a lista de um mês anterior a ela avisa (guarda de billingObligations).
+      sourceCreatedAt: entryDate, sourceUpdatedAt: text(it.atualizadoEm) || null,
       // O app não tem "dia de cobrança" nem "última cobrança": seguem para conferência humana.
       observationsRequireReview: true, issues, contractValidated: false,
     };
