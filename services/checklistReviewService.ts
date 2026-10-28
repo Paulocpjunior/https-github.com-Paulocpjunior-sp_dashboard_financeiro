@@ -1,6 +1,8 @@
 import { auth, firebaseConfig } from './firebaseConfig';
 import { readFirestoreChecklist } from './firestoreChecklistReader';
 import { assertChecklistResponse } from '../utils/checklistResponse';
+import { mapLegalizacaoChecklist } from '../utils/legalizacaoChecklist';
+import { CFI_URL } from './cadastroCentralConferencia';
 export interface ChecklistRecord {
   sourceCollection?: 'clientRegistry' | 'billingProfiles';
   document?: string; sourceCreatedAt?: string | null;
@@ -10,7 +12,7 @@ export interface ChecklistRecord {
   sourceUpdatedAt: string | null; contractValidated: false;
 }
 export interface ChecklistReview {
-  source?: 'firestore';
+  source?: 'firestore' | 'legalizacao';
   formId: string; title: string; readAt: string; sourceFingerprint: string; complete: true;
   expected: number; received: number; active: number; excluded: number;
   validRecords: number; conflictRecords: number; observationsToReview: number;
@@ -18,21 +20,25 @@ export interface ChecklistReview {
 }
 export type ChecklistSource = 'legal' | 'registry';
 
-/** Checklist do Legal (Jotform 210135417457653), lido pelo servidor só para consulta. */
+/**
+ * Checklist do Legal, lido do app Legalização pelo túnel do CFI (28/10: o
+ * Jotform 210135417457653 saiu). O token deste projeto é o que libera os
+ * honorários lá; nenhuma outra origem os recebe.
+ */
 export async function fetchChecklistReview(signal: AbortSignal): Promise<ChecklistReview> {
   const user = auth.currentUser;
   if (!user) throw new Error('Entre novamente para consultar o checklist.');
   const token = await user.getIdToken();
-  const response = await fetch('/api/billing-checklist/review', {
-    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ force: true }), signal,
+  const response = await fetch(`${CFI_URL}/api/admin/cadastro/checklist-legalizacao`, {
+    headers: { Authorization: `Bearer ${token}` }, signal,
   });
   if (auth.currentUser !== user) throw new Error('Sessão alterada durante a consulta.');
   const data = await response.json().catch(() => null);
   if (auth.currentUser !== user) throw new Error('Sessão alterada durante a consulta.');
-  if (!response.ok) throw new Error(`${data?.error || 'Leitura do checklist indisponível.'}${data?.code ? ` [${data.code}]` : ` [HTTP ${response.status}]`}`);
-  assertChecklistResponse(data);
-  return data;
+  if (!response.ok) throw new Error(`${data?.error || 'Leitura do checklist indisponível.'} [HTTP ${response.status}]`);
+  const review = await mapLegalizacaoChecklist(data, new Date().toISOString());
+  assertChecklistResponse(review);
+  return review;
 }
 
 /** Cadastros do próprio Financeiro no Firestore (clientRegistry e billingProfiles). */

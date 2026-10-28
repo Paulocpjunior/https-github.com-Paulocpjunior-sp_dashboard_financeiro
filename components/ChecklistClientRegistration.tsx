@@ -158,7 +158,7 @@ export default function ChecklistClientRegistration({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-600 dark:text-slate-400">Nenhuma resposta do Checklist encontrada para “{search.trim()}”.</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Nenhuma empresa do Checklist encontrada para “{search.trim()}”.</p>
         )
       )}
       <div className="grid sm:grid-cols-3 gap-3">
@@ -180,7 +180,7 @@ export default function ChecklistClientRegistration({
         </label>
       </div>
       <p className="text-xs text-slate-500">
-        {fromChecklist ? `Origem: Checklist do Legal (resposta ${form.submissionId}).` : "Origem: cadastro manual."} Um cadastro já conferido não é substituído.
+        {fromChecklist ? `Origem: Checklist do Legal (${form.submissionId}).` : "Origem: cadastro manual."} Um cadastro já conferido não é substituído.
       </p>
       {error && <p className="text-sm text-red-700 dark:text-red-300" role="alert">{error}</p>}
       <div className="flex flex-wrap gap-2">

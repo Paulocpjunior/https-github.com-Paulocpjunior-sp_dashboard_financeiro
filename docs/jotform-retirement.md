@@ -37,3 +37,11 @@ Publicação, com o SHA completo aprovado em `FINANCEIRO_APPROVED_COMMIT`:
 
 1. `python3 scripts/enable-legal-checklist.py` (Cloud Shell ou Mac com gcloud). Na primeira vez pede a chave sem exibi-la e cria o segredo.
 2. Deploy oficial do Hosting pelo GitHub Actions com o mesmo SHA. A fixação da rota exige `checklistReadEnabled: true`, então o Hosting não publica a tela antes do servidor.
+
+## Checklist do Legal sai do Jotform (28/10/2026)
+
+Paulo: "todos apps passam a ler o checklist do app legalizacao, jotform morre". A tela passa a ler o checklist do app Legalização pelo túnel do CFI (`GET /api/admin/cadastro/checklist-legalizacao`), com o token do usuário logado. Os honorários só vêm quando o token é deste projeto; sem eles a leitura é recusada, nunca mostrada como completa.
+
+- Uma linha por empresa (`legalizacao/<id>`), não mais por resposta do formulário. O STATUS, as datas de entrada, saída e suspensão, o nosso número e a última observação vêm do app.
+- O cadastro de cliente a partir do checklist (`client-registration.js`) aceita `legalizacao/<id>`; respostas numéricas antigas continuam válidas para o histórico. Vale após o deploy do `pdf-download-service`.
+- A rota `POST /api/billing-checklist/review` deixa de ser chamada pela tela. Desligá-la (`CHECKLIST_READ_ENABLED = false`) e remover `JOTFORM_CHECKLIST_API_KEY` do runtime é o passo seguinte, com o roteiro de publicação protegida acima.

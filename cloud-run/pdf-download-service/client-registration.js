@@ -17,8 +17,9 @@ function validate(b){
  if(![11,14].includes(document.length)||!validDocument(document))fail('Informe CPF (11 dígitos) ou CNPJ (14 dígitos) válido.',400);
  if(!/^\d{1,20}$/.test(clientNumber)||!number(clientNumber))fail('Informe o N.Cliente (somente números).',400);
  const source=str(b.source,20);if(!sources.includes(source))fail('Origem do cadastro inválida.',400);
- const submissionId=str(b.checklistSubmissionId,40);
- if(source==='checklist'&&!/^\d{1,30}$/.test(submissionId))fail('Resposta do Checklist inválida.',400);
+ // Resposta numérica = Jotform antigo (histórico); legalizacao/<id> = checklist do app Legalização (28/10).
+ const submissionId=str(b.checklistSubmissionId,220);
+ if(source==='checklist'&&!/^(\d{1,30}|legalizacao\/[A-Za-z0-9_-]{1,200})$/.test(submissionId))fail('Resposta do Checklist inválida.',400);
  const reason=str(b.reason,2000);
  if(source==='manual'&&reason.length<10)fail('Informe a origem e o motivo do cadastro manual (mínimo de 10 caracteres).',400);
  return {client,document,clientNumber,source,submissionId:source==='checklist'?submissionId:'',reason};

@@ -10,7 +10,7 @@
  * a divergência não determina automaticamente qual fonte está incorreta.
  */
 
-const CFI_URL = 'https://consultor-fiscal-inteligente-zricstsjqa-uw.a.run.app';
+export const CFI_URL = 'https://consultor-fiscal-inteligente-zricstsjqa-uw.a.run.app';
 
 const soDigitos = (v: unknown) => String(v ?? '').replace(/\D/g, '');
 
