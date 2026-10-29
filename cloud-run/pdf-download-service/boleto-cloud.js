@@ -228,6 +228,13 @@ async function validationError(result, cfg) {
     return details.length ? `Boleto Cloud: ${details.join("; ")}` : fallback;
   } catch { return fallback; }
 }
+// Pix copia e cola (EMV) que o Boleto Cloud devolve quando o Pix está ativo
+// na conta (header X-BoletoCloud-Pix-Codigo-EMV, plano Personalizado). Só
+// aceita um código EMV de Pix bem formado; qualquer outra coisa é ignorada.
+function pixCode(value) {
+  const code = String(value || "").trim();
+  return /^000201[\x20-\x7E]{20,500}$/.test(code) ? code : "";
+}
 function publicRecord(record, cfg) {
   if (!record)
     return {
@@ -242,6 +249,7 @@ function publicRecord(record, cfg) {
     previewHash: record.previewHash,
     fields: record.fields,
     number: record.number || "",
+    pix: Boolean(record.pixEmv),
     registration: record.registration || null,
     updatedAt: record.updatedAt,
     error: record.error || "",
@@ -311,7 +319,7 @@ async function prepareDelivery({ db, env, fetchImpl, cfg, id, existing, row, cha
 }
 // Envia o e-mail já reservado (claim) e grava o resultado.
 async function finishEmail({ db, env, fetchImpl, cfg, id, existing, row, uid, attemptId, contacts, artifact, value, target }) {
-  const message = delivery.emailMessage(artifact, { to: contacts.email, idempotencyKey: delivery.deliveryKey(cfg.environment, id, existing.token, "email"), value, dueDate: row.dueDate, client: row.client });
+  const message = delivery.emailMessage(artifact, { to: contacts.email, idempotencyKey: delivery.deliveryKey(cfg.environment, id, existing.token, "email"), value, dueDate: row.dueDate, client: row.client, pix: existing.pixEmv || "" });
   const result = await delivery.sendEmail({ env, fetchImpl, message });
   return delivery.finish(db, target, { uid, attemptId, ...result });
 }
@@ -921,6 +929,7 @@ function createBoletoHandler({
                   state: "issued",
                   token: boleto.token,
                   number: String(boleto.numero || ""),
+                  pixEmv: pixCode(boleto.codigoEMV || boleto.pix?.codigoEMV),
                   error: "",
                 }
               : {
@@ -961,6 +970,7 @@ function createBoletoHandler({
               token,
               number:
                 result.headers.get("x-boletocloud-nib-nosso-numero") || "",
+              pixEmv: pixCode(result.headers.get("x-boletocloud-pix-codigo-emv")),
               error: "",
             };
           } else if (
@@ -1036,4 +1046,5 @@ module.exports = {
   publicRecord,
   priorBoletos,
   normalizeAddress,
+  pixCode,
 };

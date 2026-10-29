@@ -147,7 +147,7 @@ function calendarLinks({ number, value, date, dueDate }) {
 }
 // Corpo no layout padrão dos apps da SP (logo, faixa azul, rodapé), com o
 // texto simples ao lado para leitores que não abrem HTML.
-function emailHtml({ client, number, value, date, dueDate, detail }) {
+function emailHtml({ client, number, value, date, dueDate, detail, pix = "" }) {
   const linha = (rotulo, valor) =>
     `<tr><td style="padding:8px 12px; color:#6b7280; font-size:13px; border-bottom:1px solid #eef1f8;">${rotulo}</td><td style="padding:8px 12px; font-weight:bold; text-align:right; border-bottom:1px solid #eef1f8;">${escapeHtml(valor)}</td></tr>`;
   const links = calendarLinks({ number, value, date, dueDate });
@@ -158,6 +158,7 @@ function emailHtml({ client, number, value, date, dueDate, detail }) {
     `<p style="margin:0 0 12px 0;">Olá${client ? `, <strong>${escapeHtml(client)}</strong>` : ""}.</p>`,
     `<p style="margin:0 0 16px 0;">Segue o seu boleto da SP Assessoria Contábil.</p>`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1FF; border-radius:8px; margin:0 0 16px 0;">${linha("Boleto", number)}${linha("Valor", value)}${linha("Vencimento", date)}</table>`,
+    ...(pix ? [`<div style="margin:0 0 16px 0; background:#EEF1FF; border-radius:8px; padding:12px 14px;"><p style="margin:0 0 6px 0; font-weight:bold; color:#091D8D;">Pague com Pix</p><p style="margin:0 0 8px 0; font-size:13px; color:#374151;">Leia o QR Code do PDF ou copie o código abaixo e cole no app do seu banco, em Pix copia e cola. Vale até o vencimento.</p><p style="margin:0; font-family:monospace; font-size:12px; word-break:break-all; background:#ffffff; border:1px solid #d6dcf5; border-radius:6px; padding:8px 10px;">${escapeHtml(pix)}</p></div>`] : []),
     `<p style="margin:0 0 12px 0; font-size:13px; color:#166534; background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:10px 14px;">📎 Em anexo: ${anexos} o convite para a sua agenda, que também leva o boleto.</p>`,
     `<div style="margin:0 0 16px 0; text-align:center;"><p style="margin:0 0 6px 0; font-weight:bold; color:#091D8D;">📅 Adicione o lembrete do vencimento à sua agenda</p>${botao(links.google, "Google Agenda")}${botao(links.outlook, "Outlook")}<p style="margin:6px 0 0 0; font-size:12px; color:#6b7280;">No iPhone, Mac ou Outlook do computador, abra o anexo vencimento-${escapeHtml(number)}.ics.</p></div>`,
     `<p style="margin:0; font-size:13px; color:#92400E; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:10px 14px;">Confira os dados do beneficiário no PDF antes de pagar. Se já pagou, desconsidere esta mensagem.</p>`,
@@ -170,7 +171,7 @@ function emailHtml({ client, number, value, date, dueDate, detail }) {
     motivoRodape: "Você recebeu este e-mail porque sua empresa é atendida pelo nosso escritório. Em caso de dúvida, responda este e-mail.",
   });
 }
-function emailMessage(artifact, { to, idempotencyKey, value, dueDate, client = "" }) {
+function emailMessage(artifact, { to, idempotencyKey, value, dueDate, client = "", pix = "" }) {
   const number = artifact.number;
   const date = dueDate.split("-").reverse().join("/");
   const attachments = [
@@ -185,8 +186,8 @@ function emailMessage(artifact, { to, idempotencyKey, value, dueDate, client = "
     to,
     idempotencyKey,
     subject: `Boleto ${number} — vencimento ${date} — SP Assessoria Contábil`,
-    text: `Olá,\n\nSegue o boleto de ${value}, com vencimento em ${date}, e o convite para adicionar o vencimento à sua agenda. O PDF do boleto está anexado e também vai dentro do convite.\n\nConfira os dados do beneficiário no PDF antes de pagar. Se já pagou, desconsidere esta mensagem. Em caso de dúvida, responda a este e-mail.\n\nEquipe Financeira — SP Assessoria Contábil`,
-    html: emailHtml({ client: String(client || "").trim(), number, value, date, dueDate, detail: Boolean(artifact.detail) }),
+    text: `Olá,\n\nSegue o boleto de ${value}, com vencimento em ${date}, e o convite para adicionar o vencimento à sua agenda. O PDF do boleto está anexado e também vai dentro do convite.\n\n${pix ? `Para pagar com Pix, leia o QR Code do PDF ou use o Pix copia e cola (vale até o vencimento):\n${pix}\n\n` : ""}Confira os dados do beneficiário no PDF antes de pagar. Se já pagou, desconsidere esta mensagem. Em caso de dúvida, responda a este e-mail.\n\nEquipe Financeira — SP Assessoria Contábil`,
+    html: emailHtml({ client: String(client || "").trim(), number, value, date, dueDate, detail: Boolean(artifact.detail), pix }),
     inline: logoInline(),
     attachments,
   };

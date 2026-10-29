@@ -6,7 +6,9 @@ const {
   amount,
   validDocument,
   config,
+  pixCode,
 } = require("./boleto-cloud");
+const { emailMessage } = require("./boleto-delivery");
 const row = () => ({
   client: "Empresa Teste",
   cpfCnpj: "11222333000181",
@@ -950,4 +952,34 @@ test("alerta lista à parte o WhatsApp que não saiu", async () => {
   const r = await runDailyAlert({ db: f.db, env: alertEnv, fetchImpl: f.fetchImpl, now: Math.max(Date.now(), at10(today)) });
   assert.equal(r.findings, 1);
   assert.match(f.calls.mail.message.body.content, /não enviado por WhatsApp/);
+});
+
+const EMV = "00020101021226850014br.gov.bcb.pix2563qrpix.example.com/v2/cobv/abc5204000053039865802BR5913SP ASSESSORIA6009SAO PAULO62070503***6304ABCD";
+test("Pix copia e cola: guarda o EMV devolvido na emissão e ignora valores inválidos", async () => {
+  assert.equal(pixCode(EMV), EMV);
+  for (const bad of ["", "abc", "000201", `000201${"x".repeat(600)}`, `000201${"a".repeat(30)}\u0007b`, `000201${"a".repeat(30)}\nb`]) assert.equal(pixCode(bad), "");
+  const f = fixture((url, options) => {
+    const response = success(url, options);
+    response.headers.set("X-BoletoCloud-Pix-Codigo-EMV", EMV);
+    return response;
+  });
+  const result = await f.issue();
+  assert.equal(result.body.state, "issued");
+  assert.equal(result.body.pix, true);
+  assert.equal(f.stored()[1].pixEmv, EMV);
+  const plain = fixture(success);
+  const without = await plain.issue();
+  assert.equal(without.body.pix, false);
+  assert.equal(plain.stored()[1].pixEmv, "");
+});
+test("e-mail do boleto mostra o Pix copia e cola só quando existe", () => {
+  const artifact = { number: "00025100-1", pdf: Buffer.from("%PDF"), ics: "BEGIN:VCALENDAR" };
+  const base = { to: ["cliente@example.com"], idempotencyKey: "k", value: "R$ 10,00", dueDate: "2099-11-10", client: "Empresa" };
+  const com = emailMessage(artifact, { ...base, pix: EMV });
+  assert.match(com.html, /Pague com Pix/);
+  assert.ok(com.html.includes(EMV));
+  assert.ok(com.text.includes(EMV));
+  const sem = emailMessage(artifact, base);
+  assert.doesNotMatch(sem.html, /Pague com Pix/);
+  assert.doesNotMatch(sem.text, /Pix/);
 });
