@@ -108,7 +108,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "tailwindcss": "^4.2.1",
     "typescript": "~5.8.2",
-    "vite": "6.4.4"
+    "vite": "6.4.5"
   },
   "overrides": {
     "@grpc/grpc-js": "1.14.6"
