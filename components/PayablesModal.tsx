@@ -83,7 +83,8 @@ export default function PayablesModal({
   const [month, setMonth] = useState(toLocalISODate(new Date()).slice(0, 7)),
     [variableAmount, setVariableAmount] = useState("");
   async function load(key = selected) {
-    const list = await api("rules");
+    // Quem só corrige vencimento não consulta regras de recorrência.
+    const list = await api("rules").catch((e: any) => e?.status === 403 ? { rules: [] } : Promise.reject(e));
     setRules(list.rules);
     if (!id) setDrafts((await api("drafts")).drafts);
     setVariableAmount("");
@@ -91,7 +92,7 @@ export default function PayablesModal({
       const d = await api("items/" + encodeURIComponent(key));
       setData(d);
       const caps = d.capabilities || {};
-      setTab(caps.settle ? "payment" : "history");
+      setTab(caps.settle ? "payment" : caps.dueDate ? "dueDate" : "history");
       setRecipients(d.recipients.join("; "));
       setPayment({
         date: toLocalISODate(new Date()),
@@ -416,6 +417,7 @@ export default function PayablesModal({
           <nav aria-label="Operações da conta" className="sp-form-tabs flex flex-wrap gap-2 my-4">
             {[
               ["history", "Histórico"],
+              ["dueDate", "Corrigir vencimento"],
               ["invoice", "Corrigir valor da fatura"],
               ["approvals", "Aprovações"],
               ["payment", "Registrar pagamento"],
@@ -423,7 +425,7 @@ export default function PayablesModal({
               ["generate", "Gerar competência"],
               ["invite", "INVITE"],
               ["reversal", "Estornar baixa"],
-            ].filter(([key]) => key === "history" || key === "approvals" || data.capabilities?.[({invoice:"amend",payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
+            ].filter(([key]) => key === "history" || key === "approvals" || data.capabilities?.[({dueDate:"dueDate",invoice:"amend",payment:"settle",reversal:"reverse",recurrence:"recurrence",generate:"recurrence",invite:"invite"} as Record<string,string>)[key]]).map(([key, title]) => (
               <button
                 key={key}
                 aria-pressed={tab === key}
@@ -462,6 +464,7 @@ export default function PayablesModal({
             </article>)}
           </section>}
           {tab === "history" && <p className="text-sm">Consulta do histórico. As ações disponíveis dependem dos direitos definidos em Usuários.</p>}
+          {tab === "dueDate" && <FinancialCorrection kind="dueDate" hint="Corrige o vencimento lançado errado. Só vale para conta em aberto, sem baixa registrada; o vencimento anterior fica no histórico com quem alterou." id={selected} version={data.version} row={row} api={api} onLock={setCorrectionLocked} onSaved={()=>{onSaved();onClose();}}/>}
           {tab === "invoice" && <FinancialCorrection kind="invoice" id={selected} version={data.version} row={row} api={api} onLock={setCorrectionLocked} onSaved={()=>{onSaved();onClose();}}/>}
           <fieldset disabled={busy || uncertain || correctionLocked} className="space-y-3">
             {tab === "reversal" && <section className="space-y-3 rounded-xl border border-amber-400 p-4">
@@ -785,6 +788,7 @@ export default function PayablesModal({
           {tab === "reversal" && row?.payableSettlement && <button className={btn + " mt-4 w-full min-h-12"} disabled={busy || reversalReason.trim().length < 10} onClick={reversePayment}>{busy ? "Aguarde…" : uncertain ? "Consultar resultado do estorno" : reversalReview ? "Confirmar estorno e concluir" : "Revisar estorno"}</button>}
           {row?.payableReversals?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de estornos</h3>{row.payableReversals.map((r:any)=><p key={r.requestId} className="my-2 text-sm">{brl(r.amountCents/100)} · {r.at} · {r.actor}<br/>{r.reason}</p>)}</section>}
           {(tab === "payment" || tab === "history") && row?.payablePayments?.length > 0 && <section className="my-3 rounded border p-3"><h3 className="font-semibold">Histórico de baixas</h3><p className="text-xs text-slate-500">Os totais da conta são acumulados. O filtro por data de baixa considera a última baixa; cada pagamento está detalhado abaixo.</p>{row.payablePayments.map((p:any) => <p className="my-2 text-sm" key={p.requestId}>{(row.payableReversals || []).some((r:any)=>r.paymentRequestId === p.requestId) ? "ESTORNADA · " : ""}{p.date} · Pago {brl(p.amountCents/100)} · Juros {brl(p.interestCents/100)} · Multa {brl(p.fineCents/100)} · Desconto {brl(p.discountCents/100)} · Saldo {brl(p.remainingCents/100)}<br/>{p.bankAccount} · {p.method} · Registrado por {p.actor}<br/>{p.note}{p.approval && <><br/>Aprovação independente: {p.approval.name} · {p.approval.at} · {p.approval.reason}</>}</p>)}</section>}
+          {!!row.dueDateAmendments?.length && <section className="sp-card my-3"><h3>Histórico de correções do vencimento</h3>{row.dueDateAmendments.map(a=><p key={a.requestId}>{a.before || "sem vencimento"} → {a.after} · {a.actor} · {a.at}<br/>{a.reason}</p>)}</section>}
           {!!row.invoiceAmendments?.length && <section className="sp-card my-3"><h3>Histórico de correções da fatura</h3>{row.invoiceAmendments.map(a=><p key={a.requestId}>{brl(a.beforeCents/100)} → {brl(a.afterCents/100)} · {a.actor} · {a.at}<br/>{a.reason}</p>)}</section>}
           {review && (
             <div className="border rounded p-3 my-3">

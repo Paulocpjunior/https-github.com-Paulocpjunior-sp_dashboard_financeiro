@@ -209,6 +209,9 @@ test("blocks unauthorized, disabled, stale and partial payments without changing
     409,
   );
   h.store.set("users/u", { active: true, role: "operator" });
+  assert.equal((await h.call("items/legacy")).body.capabilities.settle, false);
+  assert.equal((await h.call("payment/preview", b)).status, 403);
+  h.store.set("users/u", { active: true, role: "operator", status: "blocked" });
   assert.equal((await h.call("items/legacy")).status, 403);
   assert.equal(h.store.get("transactions/legacy").status, "Pendente");
 });
@@ -424,7 +427,7 @@ test('authenticated authorizer defaults to the managed user, with unchanged perm
  const saved=await h.call('payment/commit',b);assert.equal(saved.status,200);
  assert.equal(saved.body.transaction.payableSettlement.authorizedByUid,'u');
  assert.equal(saved.body.transaction.nativeEntry.authorizedBy,'Autorizador histórico');
- for(const profile of [{active:false,role:'admin'}, {active:true,role:'operacional'}, {active:true,role:'admin',status:'blocked'}]) {
+ for(const profile of [{active:false,role:'admin'}, {active:true,role:'admin',status:'blocked'}]) {
    h.store.set('users/u',{...profile,name:'Administrador de teste'});
    assert.equal((await h.call('items/legacy')).status,403);
  }
@@ -629,4 +632,33 @@ test('correção exige permissão, motivo, versão atual e ausência de pagament
  if(mode==='reason')b.invoice.reason='';if(mode==='negative')b.invoice.amount='-1';if(mode==='stale')h.store.get('transactions/legacy').valuePaid=101;
  const r=await h.call('invoice/preview',b);assert.ok(r.status>=400,mode);
  }
+});
+test('colaboradora ativa corrige vencimento da conta a pagar com histórico e auditoria; exclusão segue fora',async()=>{
+ const h=harness();h.store.set('users/u',{active:true,role:'operacional',name:'Colaboradora',financialPermissions:[]});
+ const d=await h.call('items/legacy');assert.equal(d.status,200,JSON.stringify(d.body));assert.equal(d.body.capabilities.dueDate,true);assert.equal(d.body.capabilities.settle,false);assert.equal(d.body.capabilities.amend,false);
+ const b={id:'legacy',requestId:randomUUID(),version:d.body.version,amendment:{dueDate:'2099-02-10',reason:'Lançado no mês errado, fatura vence em fevereiro'}};
+ const before=structuredClone([...h.store]),p=await h.call('due-date/preview',b);assert.equal(p.status,200,JSON.stringify(p.body));assert.deepEqual([...h.store],before);assert.equal(p.body.after.dueDate,'2099-02-10');
+ const payload={...b,confirmHash:p.body.reviewHash},r=await h.call('due-date/commit',payload);assert.equal(r.status,200,JSON.stringify(r.body));
+ const saved=h.store.get('transactions/legacy');assert.equal(saved.dueDate,'2099-02-10');assert.equal(saved.valuePaid,100);assert.equal(saved.status,'Pendente');
+ assert.deepEqual([saved.dueDateAmendments[0].before,saved.dueDateAmendments[0].after,saved.dueDateAmendments[0].actor],['2099-01-31','2099-02-10','Colaboradora']);
+ const audit=[...h.store].filter(([k,v])=>k.startsWith('payableAudit/')&&v.action==='due-date-amendment');assert.equal(audit.length,1);assert.equal(audit[0][1].before.dueDate,'2099-01-31');assert.equal(audit[0][1].uid,'u');
+ assert.equal((await h.call('due-date/commit',payload)).status,200);assert.equal(h.store.get('transactions/legacy').dueDateAmendments.length,1);
+ assert.equal((await h.call('invoice/preview',{id:'legacy',requestId:randomUUID(),version:d.body.version,invoice:{amount:'90.00',reason:'Valor final conferido na fatura'}})).status,403);
+});
+test('correção de vencimento a pagar recusa conta paga, motivo curto, data inválida, versão antiga e perfil bloqueado',async()=>{
+ for(const mode of ['paid','reason','invalid','same','beforeEntry','stale','blocked','inactive']){const h=harness();h.store.set('users/u',{active:true,role:'operacional',name:'Colaboradora',financialPermissions:[]});const d=await h.call('items/legacy');
+ const b={id:'legacy',requestId:randomUUID(),version:d.body.version,amendment:{dueDate:'2099-02-10',reason:'Lançado no mês errado, conferir fatura'}};
+ if(mode==='paid'){Object.assign(h.store.get('transactions/legacy'),{paymentDate:'2026-01-01'});b.version=(await h.call('items/legacy')).body.version;}
+ if(mode==='reason')b.amendment.reason='curto';if(mode==='invalid')b.amendment.dueDate='2099-02-30';if(mode==='same')b.amendment.dueDate='2099-01-31';if(mode==='beforeEntry')b.amendment.dueDate='2025-12-31';
+ if(mode==='stale')h.store.get('transactions/legacy').valuePaid=101;
+ if(mode==='blocked')h.store.get('users/u').status='blocked';if(mode==='inactive')h.store.get('users/u').active=false;
+ const r=await h.call('due-date/preview',b);assert.ok(r.status>=400,mode+JSON.stringify(r.body));assert.equal(h.store.get('transactions/legacy').dueDate,'2099-01-31');
+ }
+});
+test('permissão de vencimento a pagar vale para equipe ativa e não abre outras ações',()=>{
+ const {routeAllowed,capabilities}=require('./payable-permissions');const p={active:true,role:'operacional',financialPermissions:[]};
+ assert.equal(routeAllowed(p,'POST','due-date/commit'),true);assert.equal(routeAllowed(p,'GET','items/legacy'),true);assert.equal(routeAllowed(p,'GET','ledger'),false);assert.equal(routeAllowed(p,'GET','rules'),false);assert.equal(capabilities(p).read,false);
+ for(const path of ['payment/commit','invoice/commit','reversal/commit','rules/save','invite/download','approvals/decide'])assert.equal(routeAllowed(p,'POST',path),false,path);
+ assert.equal(routeAllowed({...p,status:'blocked'},'POST','due-date/commit'),false);assert.equal(routeAllowed({...p,active:false},'POST','due-date/preview'),false);
+ assert.equal(capabilities(p).dueDate,true);assert.equal(capabilities({active:false}).read,false);
 });

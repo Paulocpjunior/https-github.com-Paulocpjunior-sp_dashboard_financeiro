@@ -18,13 +18,23 @@ const row: any = {
   attachments: [],
 };
 const readOnlyPreview = new URLSearchParams(window.location.search).get('access') === 'read';
+const teamPreview = new URLSearchParams(window.location.search).get('access') === 'team';
 const approvalPreview = new URLSearchParams(window.location.search).get('access') === 'approve';
 let approvals:any[] = approvalPreview ? [{id:'fixture-approval',transactionId:'demo',version:'demo',status:'pending',requesterUid:'another-user',requesterName:'Colaborador fictício',attachments:[],payment:{date:'2026-10-11',amount:'150.00',mode:'full',interest:'0',fine:'0',discount:'0',supplier:'Fornecedor fictício',personType:'PJ',bankAccount:catalog.banks[0],method:catalog.paymentMethods[2],paidBy:catalog.paidBy[0],authorizedBy:'Colaborador fictício',note:'Fatura de demonstração'}}] : [];
 let rules: any[] = [];
 let previousPayment: any = null;
 async function demo(path: string, b?: any) {
   if (readOnlyPreview && b) throw Object.assign(Error("Perfil de consulta não pode alterar dados."),{status:403});
-  if (path === "rules") return { rules };
+  if (path === "rules") { if (teamPreview) throw Object.assign(Error("Sem acesso às recorrências."),{status:403}); return { rules }; }
+  if (path === "due-date/preview" || path === "due-date/commit") {
+    const a = b.amendment;
+    if (!a.dueDate || a.dueDate === row.dueDate || a.reason.trim().length < 10) throw Object.assign(Error("Confira o vencimento e o motivo."),{status:400});
+    const after = {...row, dueDate: a.dueDate};
+    if (path.endsWith('preview')) return {reviewHash:'demo-due-date', after};
+    row.dueDateAmendments=[...(row.dueDateAmendments||[]),{requestId:b.requestId,before:row.dueDate,after:a.dueDate,reason:a.reason,actor:'Colaboradora fictícia',at:new Date().toISOString()}];
+    row.dueDate=a.dueDate;
+    return {transaction:{...row}};
+  }
   if (path === "drafts") return {drafts:[]};
   if (path.startsWith("items/"))
     return {
@@ -33,7 +43,7 @@ async function demo(path: string, b?: any) {
       actor: {uid:"demo-user",role:"admin",name:"Administrador fictício"},
       approvalPolicy:{enabled:approvalPreview,thresholdCents:10000},
       approvals,
-      capabilities:{approve:approvalPreview,read:true,settle:!readOnlyPreview,reverse:!readOnlyPreview,recurrence:!readOnlyPreview,invite:!readOnlyPreview},
+      capabilities: teamPreview ? {read:false,dueDate:true} : {approve:approvalPreview,read:true,dueDate:!readOnlyPreview,settle:!readOnlyPreview,reverse:!readOnlyPreview,recurrence:!readOnlyPreview,invite:!readOnlyPreview},
       version: "demo",
       recipients: [],
     };

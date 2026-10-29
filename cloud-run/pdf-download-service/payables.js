@@ -183,6 +183,20 @@ function amendInvoice(row,input){
  if(next===nominal(row))fail('O valor informado é igual ao valor atual.',400);
  return {...row,valuePaid:next/100,valorOriginal:next/100};
 }
+// Vencimento lançado errado: só conta em aberto, sem baixa nem conciliação; o vencimento anterior fica no histórico.
+function dueDateChange(row,input){
+ pending(row);
+ if(/entrada|receber/.test(norm(row.type)))fail('Tipo de lançamento conflitante. Solicite revisão.');
+ if(row.payableSettlement||row.payableBalance||row.boletoSettlement||row.reconciliation||row.reconciledAt)fail('Estorne as baixas e confira a conciliação antes de corrigir o vencimento.');
+ const p=input||{};
+ if(typeof p.dueDate!=='string')fail('Informe um vencimento válido.',400);
+ date(p.dueDate);
+ if(p.dueDate<'2000-01-01'||p.dueDate>'2099-12-31')fail('Informe um vencimento válido.',400);
+ if(p.dueDate===row.dueDate)fail('O novo vencimento é igual ao atual.',400);
+ if(/^\d{4}-\d{2}-\d{2}$/.test(row.date||'')&&p.dueDate<row.date)fail('O vencimento não pode ser anterior à data de lançamento.',400);
+ if(typeof p.reason!=='string'||p.reason.trim().length<10||p.reason.length>2000)fail('Informe o motivo da correção (10 a 2000 caracteres).',400);
+ return {...row,dueDate:p.dueDate};
+}
 function calendar(r, id, to, pdf) {
   pending(r);
   date(r.dueDate);
@@ -417,6 +431,24 @@ async function handlePayables(ctx) {
       record.updatedAt=at;
       const result={transaction:{...record,id}};
       tx.set(ref,record);tx.create(db.collection('payableAudit').doc(hash([uid,b.requestId])),{action:'invoice-amendment',transactionId:id,uid,at,before:current,after:record});tx.create(op,{digest,result,at});return result;
+    });reply(result);return;
+  }
+  if(path === 'due-date/preview' || path === 'due-date/commit'){
+    const result=await db.runTransaction(async tx=>{
+      await recheck(tx);
+      const prior=replay((await tx.get(op)).data());if(prior)return prior;
+      const current=(await tx.get(ref)).data();if(!current)fail('Conta não encontrada.',404);
+      if(hash(current)!==b.version)fail('Conta alterada. Reabra a revisão.');
+      const record=dueDateChange(current,b.amendment);
+      const reviewHash=hash([id,b.version,b.amendment,actor,'due-date']);
+      if(path.endsWith('preview'))return {reviewHash,before:{...current,id},after:{...record,id}};
+      if(b.confirmHash!==reviewHash)fail('Revise a correção antes de confirmar.');
+      const at=new Date().toISOString(),entry={requestId:b.requestId,before:current.dueDate||'',after:record.dueDate,reason:b.amendment.reason.trim(),uid,actor:actor.name,at};
+      record.dueDateAmendments=[...(current.dueDateAmendments||[]),entry];
+      if(record.dueDateAmendments.length>50)fail('Limite de correções atingido. Solicite revisão.');
+      record.updatedAt=at;
+      const result={transaction:{...record,id}};
+      tx.set(ref,record);tx.create(db.collection('payableAudit').doc(hash([uid,b.requestId])),{action:'due-date-amendment',transactionId:id,uid,at,before:current,after:record,amendment:entry});tx.create(op,{digest,result,at});return result;
     });reply(result);return;
   }
   if (path === "reversal/preview" || path === "reversal/commit") {
@@ -792,6 +824,7 @@ async function handlePayables(ctx) {
 module.exports = {
   handlePayables,
   amendInvoice,
+  dueDateChange,
   reversal,
   payment,
   calendar,
