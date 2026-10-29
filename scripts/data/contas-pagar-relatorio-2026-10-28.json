@@ -1,0 +1,6327 @@
+{
+ "source": "Relatorio_Financeiro_2026-10-28.pdf",
+ "emitidoPor": "HEVELYN KELLE ALMEIDA",
+ "emitidoEm": "2026-10-28T16:52:51-03:00",
+ "count": 702,
+ "totalCents": 279846529,
+ "rows": [
+  {
+   "line": 1,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "12- Estacionamento",
+   "amountCents": 75000,
+   "client": "ESTACIONAMENTO",
+   "observacaoAPagar": "ESTACIONAMENTO"
+  },
+  {
+   "line": 2,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "5-Condominio",
+   "amountCents": 116676,
+   "client": "COND. APTO 82 ED. MEDITERRANEE",
+   "observacaoAPagar": "COND. APTO 82 ED. MEDITERRANEE"
+  },
+  {
+   "line": 3,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 10440,
+   "client": "TELEFONES",
+   "observacaoAPagar": "TELEFONES"
+  },
+  {
+   "line": 4,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "1-Retirada Paulo",
+   "amountCents": 154800,
+   "client": "MARI",
+   "observacaoAPagar": "MARI"
+  },
+  {
+   "line": 5,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "1-Retirada Paulo",
+   "amountCents": 33563,
+   "client": "BANCO ITAU VGBL",
+   "observacaoAPagar": "BANCO ITAU VGBL"
+  },
+  {
+   "line": 6,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "1-Retirada Paulo",
+   "amountCents": 41608,
+   "client": "SKY",
+   "observacaoAPagar": "SKY"
+  },
+  {
+   "line": 7,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "1-Retirada Paulo",
+   "amountCents": 26242,
+   "client": "LUZ MORADA",
+   "observacaoAPagar": "LUZ MORADA"
+  },
+  {
+   "line": 8,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "27- Doméstica",
+   "amountCents": 35000,
+   "client": "MAGALI EMPREGADA PRAIA",
+   "observacaoAPagar": "MAGALI EMPREGADA PRAIA"
+  },
+  {
+   "line": 9,
+   "date": "2021-01-29",
+   "dueDate": "2021-01-29",
+   "description": "1-Retirada Paulo",
+   "amountCents": 45600,
+   "client": "OUROCARD ANA",
+   "observacaoAPagar": "OUROCARD ANA"
+  },
+  {
+   "line": 10,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "",
+   "amountCents": 44217,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 11,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 260302,
+   "client": "APTO JR",
+   "observacaoAPagar": "APTO JR"
+  },
+  {
+   "line": 12,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 107605,
+   "client": "COND RUA SALETE",
+   "observacaoAPagar": "COND RUA SALETE"
+  },
+  {
+   "line": 13,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "13-FGTS",
+   "amountCents": 1103242,
+   "client": "FGTS FUNC",
+   "observacaoAPagar": "FGTS FUNC"
+  },
+  {
+   "line": 14,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "35- Salários - SP",
+   "amountCents": 2752559,
+   "client": "SALARIOS FUNCIONARIOS LEGALIZA",
+   "observacaoAPagar": "SALARIOS FUNCIONARIOS LEGALIZA"
+  },
+  {
+   "line": 15,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "35- Salários - SP",
+   "amountCents": 9366233,
+   "client": "SALARIOS FUNCIONARIOS",
+   "observacaoAPagar": "SALARIOS FUNCIONARIOS"
+  },
+  {
+   "line": 16,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "5-Condominio",
+   "amountCents": 317654,
+   "client": "COND. BARÃO ED. LA ROYALE",
+   "observacaoAPagar": "COND. BARÃO ED. LA ROYALE"
+  },
+  {
+   "line": 17,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "5-Condominio",
+   "amountCents": 79480,
+   "client": "COND . SERRA BRAGANÇA",
+   "observacaoAPagar": "COND . SERRA BRAGANÇA"
+  },
+  {
+   "line": 18,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 40151,
+   "client": "NET RUA SALETE",
+   "observacaoAPagar": "NET RUA SALETE"
+  },
+  {
+   "line": 19,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "39- Assistência Médica",
+   "amountCents": 61133,
+   "client": "PORTO SEGURO / DENTISTA",
+   "observacaoAPagar": "PORTO SEGURO / DENTISTA"
+  },
+  {
+   "line": 20,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "5-Condominio",
+   "amountCents": 58570,
+   "client": "COND. SPAZIO",
+   "observacaoAPagar": "COND. SPAZIO"
+  },
+  {
+   "line": 21,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "",
+   "amountCents": 105000,
+   "client": "IMOBILIZADO - RELOGIO DE PONTO",
+   "observacaoAPagar": "IMOBILIZADO - RELOGIO DE PONTO"
+  },
+  {
+   "line": 22,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 75000,
+   "client": "VALE TAIS",
+   "observacaoAPagar": "VALE TAIS"
+  },
+  {
+   "line": 23,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "9-Cartão",
+   "amountCents": 1236557,
+   "client": "CARTÃO ESCRITORIO",
+   "observacaoAPagar": "CARTÃO ESCRITORIO"
+  },
+  {
+   "line": 24,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 72178,
+   "client": "SEGURO DE VIDA",
+   "observacaoAPagar": "SEGURO DE VIDA"
+  },
+  {
+   "line": 25,
+   "date": "2021-02-01",
+   "dueDate": "2021-02-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 120347,
+   "client": "PORTO SEGURO -PCP/JR",
+   "observacaoAPagar": "PORTO SEGURO -PCP/JR"
+  },
+  {
+   "line": 26,
+   "date": "2021-02-02",
+   "dueDate": "2021-02-02",
+   "description": "",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 27,
+   "date": "2021-02-02",
+   "dueDate": "2021-02-02",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO DIGITAL PJ A1 E-PJ A1 IDEAL",
+   "observacaoAPagar": "CERTIFICADO DIGITAL PJ A1 E-PJ A1 IDEAL"
+  },
+  {
+   "line": 28,
+   "date": "2021-02-02",
+   "dueDate": "2021-02-02",
+   "description": "",
+   "amountCents": 5580,
+   "client": "AUTENTICAÇÃO - XEROX PRESS FUTEBOL",
+   "observacaoAPagar": "AUTENTICAÇÃO - XEROX PRESS FUTEBOL"
+  },
+  {
+   "line": 29,
+   "date": "2021-02-02",
+   "dueDate": "2021-02-02",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 38327,
+   "client": "FOLHAMATIC NF 3950056",
+   "observacaoAPagar": "FOLHAMATIC NF 3950056"
+  },
+  {
+   "line": 30,
+   "date": "2021-02-02",
+   "dueDate": "2021-02-02",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 81829,
+   "client": "FOLHAMATIC NF 4015610",
+   "observacaoAPagar": "FOLHAMATIC NF 4015610"
+  },
+  {
+   "line": 31,
+   "date": "2021-02-02",
+   "dueDate": "2021-02-02",
+   "description": "1-Retirada Paulo",
+   "amountCents": 1202920,
+   "client": "CARTÃO ITAU",
+   "observacaoAPagar": "CARTÃO ITAU"
+  },
+  {
+   "line": 32,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "14- Vale Refeição -",
+   "amountCents": 30000,
+   "client": "SODEXO - VALE REFEIÇÃO ANA LUCIA TOLEDO",
+   "observacaoAPagar": "SODEXO - VALE REFEIÇÃO ANA LUCIA TOLEDO"
+  },
+  {
+   "line": 33,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "24- Manutenção",
+   "amountCents": 139990,
+   "client": "MERCADO LIVRE - DVR STAND ALONE 16",
+   "observacaoAPagar": "MERCADO LIVRE - DVR STAND ALONE 16"
+  },
+  {
+   "line": 34,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "15- Vale Transporte -",
+   "amountCents": 5000,
+   "client": "CONDUÇÃO ESCRITORIO",
+   "observacaoAPagar": "CONDUÇÃO ESCRITORIO"
+  },
+  {
+   "line": 35,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "14- Vale Refeição -",
+   "amountCents": 64500,
+   "client": "Sodexo",
+   "observacaoAPagar": "Sodexo"
+  },
+  {
+   "line": 36,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "24- Manutenção",
+   "amountCents": 21920,
+   "client": "Discarpon",
+   "observacaoAPagar": "Discarpon"
+  },
+  {
+   "line": 37,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2150,
+   "client": "VR Thais Fridisen",
+   "observacaoAPagar": "VR Thais Fridisen"
+  },
+  {
+   "line": 38,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "14- Vale Refeição -",
+   "amountCents": 10750,
+   "client": "Vr Kelvim Silva",
+   "observacaoAPagar": "Vr Kelvim Silva"
+  },
+  {
+   "line": 39,
+   "date": "2021-02-03",
+   "dueDate": "2021-02-03",
+   "description": "15- Vale Transporte -",
+   "amountCents": 1848,
+   "client": "VT THAIS FRIDISEN",
+   "observacaoAPagar": "VT THAIS FRIDISEN"
+  },
+  {
+   "line": 40,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "12- Estacionamento",
+   "amountCents": 75000,
+   "client": "ESTACIONAMENTO",
+   "observacaoAPagar": "ESTACIONAMENTO"
+  },
+  {
+   "line": 41,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 125520,
+   "client": "VIVO 3155-1554",
+   "observacaoAPagar": "VIVO 3155-1554"
+  },
+  {
+   "line": 42,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "1-Retirada Paulo",
+   "amountCents": 7695,
+   "client": "PROVEDOR DE INTERNET UOL",
+   "observacaoAPagar": "PROVEDOR DE INTERNET UOL"
+  },
+  {
+   "line": 43,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "11-Convenio Saude",
+   "amountCents": 62839,
+   "client": "PORTO SEGURO - SEGURO SAÚDE",
+   "observacaoAPagar": "PORTO SEGURO - SEGURO SAÚDE"
+  },
+  {
+   "line": 44,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "33 -DARF",
+   "amountCents": 12134,
+   "client": "DARF- RESCISÃO DAYANE DE SOUZA",
+   "observacaoAPagar": "DARF- RESCISÃO DAYANE DE SOUZA"
+  },
+  {
+   "line": 45,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 1215059,
+   "client": "GPS - INSS FUNCIONARIOS SP ASSESSORIA",
+   "observacaoAPagar": "GPS - INSS FUNCIONARIOS SP ASSESSORIA"
+  },
+  {
+   "line": 46,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 27500,
+   "client": "GPS - INSS - PRO LABORE",
+   "observacaoAPagar": "GPS - INSS - PRO LABORE"
+  },
+  {
+   "line": 47,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "33 -DARF",
+   "amountCents": 13851,
+   "client": "DARF - RECOLHIMENTO DE IR DE FÉRIAS -",
+   "observacaoAPagar": "DARF - RECOLHIMENTO DE IR DE FÉRIAS -"
+  },
+  {
+   "line": 48,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "33 -DARF",
+   "amountCents": 7260,
+   "client": "DARF - RECOLHIMENTO DE IR FÉRIAS SANDRA",
+   "observacaoAPagar": "DARF - RECOLHIMENTO DE IR FÉRIAS SANDRA"
+  },
+  {
+   "line": 49,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 588704,
+   "client": "GPS - INSS FUNCIONARIOS LEGALIZA",
+   "observacaoAPagar": "GPS - INSS FUNCIONARIOS LEGALIZA"
+  },
+  {
+   "line": 50,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "33 -DARF",
+   "amountCents": 25903,
+   "client": "DARF- IRRF SALARIO LEGALIZA",
+   "observacaoAPagar": "DARF- IRRF SALARIO LEGALIZA"
+  },
+  {
+   "line": 51,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "1-Retirada Paulo",
+   "amountCents": 594444,
+   "client": "HOTEL",
+   "observacaoAPagar": "HOTEL"
+  },
+  {
+   "line": 52,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "1-Retirada Paulo",
+   "amountCents": 79569,
+   "client": "ADBENS ADMINISTRAÇÃO",
+   "observacaoAPagar": "ADBENS ADMINISTRAÇÃO"
+  },
+  {
+   "line": 53,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "",
+   "amountCents": 15000,
+   "client": "GSST GENTE CONSULTORIA - SEGURANÇA DO",
+   "observacaoAPagar": "GSST GENTE CONSULTORIA - SEGURANÇA DO"
+  },
+  {
+   "line": 54,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "24- Manutenção",
+   "amountCents": 906311,
+   "client": "REFRIGELO CLIMATIZAÇÃO - LEVEROS -( PAGO",
+   "observacaoAPagar": "REFRIGELO CLIMATIZAÇÃO - LEVEROS -( PAGO"
+  },
+  {
+   "line": 55,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "1-Retirada Paulo",
+   "amountCents": 25000,
+   "client": "ALESSANDRA MATOS VENTURA - AG. 0503/ PC.",
+   "observacaoAPagar": "ALESSANDRA MATOS VENTURA - AG. 0503/ PC."
+  },
+  {
+   "line": 56,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "43- CRC ( Pessoa Física",
+   "amountCents": 56200,
+   "client": "CRC - ESCRITORIO",
+   "observacaoAPagar": "CRC - ESCRITORIO"
+  },
+  {
+   "line": 57,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "5-Condominio",
+   "amountCents": 52087,
+   "client": "COND. ED. LA ROYALE - OBRAS FEV/2021",
+   "observacaoAPagar": "COND. ED. LA ROYALE - OBRAS FEV/2021"
+  },
+  {
+   "line": 58,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "43- CRC ( Pessoa Física",
+   "amountCents": 50300,
+   "client": "CRC BRUNO",
+   "observacaoAPagar": "CRC BRUNO"
+  },
+  {
+   "line": 59,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "24- Manutenção",
+   "amountCents": 511554,
+   "client": "FRIGELAR COMERCIO -AR CONDICIONADO",
+   "observacaoAPagar": "FRIGELAR COMERCIO -AR CONDICIONADO"
+  },
+  {
+   "line": 60,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 1600,
+   "client": "PODER JUD. HS EQUIP.E SERVIÇOS LTDA",
+   "observacaoAPagar": "PODER JUD. HS EQUIP.E SERVIÇOS LTDA"
+  },
+  {
+   "line": 61,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "14- Vale Refeição -",
+   "amountCents": 10750,
+   "client": "VR KERLVIM SILVA",
+   "observacaoAPagar": "VR KERLVIM SILVA"
+  },
+  {
+   "line": 62,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2150,
+   "client": "VR THAIS FRIDISEN",
+   "observacaoAPagar": "VR THAIS FRIDISEN"
+  },
+  {
+   "line": 63,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "15- Vale Transporte -",
+   "amountCents": 1848,
+   "client": "VT THAIS FRIDISEN",
+   "observacaoAPagar": "VT THAIS FRIDISEN"
+  },
+  {
+   "line": 64,
+   "date": "2021-02-04",
+   "dueDate": "2021-02-04",
+   "description": "33 -DARF",
+   "amountCents": 116411,
+   "client": "DARF- RECOLHIMENTO DE IR SOBRE",
+   "observacaoAPagar": "DARF- RECOLHIMENTO DE IR SOBRE"
+  },
+  {
+   "line": 65,
+   "date": "2021-02-11",
+   "dueDate": "2021-02-11",
+   "description": "46- Férias",
+   "amountCents": 165571,
+   "client": "FÉRIAS GABRIEL DE CARVALHGO DOS SANTOS",
+   "observacaoAPagar": "FÉRIAS GABRIEL DE CARVALHGO DOS SANTOS"
+  },
+  {
+   "line": 66,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "14- Vale Refeição -",
+   "amountCents": 32250,
+   "client": "VALE REFEIÇÃO FUNCIONARIOS",
+   "observacaoAPagar": "VALE REFEIÇÃO FUNCIONARIOS"
+  },
+  {
+   "line": 67,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "15- Vale Transporte -",
+   "amountCents": 14784,
+   "client": "VALE TRANSPORTE FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIOS"
+  },
+  {
+   "line": 68,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 4140,
+   "client": "RECONHECIMENTO DE FIRMA SCHIAVINATO",
+   "observacaoAPagar": "RECONHECIMENTO DE FIRMA SCHIAVINATO"
+  },
+  {
+   "line": 69,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "",
+   "amountCents": 1800,
+   "client": "CARIMBO - BACHEGA ADVOGADOS",
+   "observacaoAPagar": "CARIMBO - BACHEGA ADVOGADOS"
+  },
+  {
+   "line": 70,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 6210,
+   "client": "RECONHECIMENTO DE FIRMA LU FESTAS COD",
+   "observacaoAPagar": "RECONHECIMENTO DE FIRMA LU FESTAS COD"
+  },
+  {
+   "line": 71,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "48- Material Escritório /",
+   "amountCents": 10300,
+   "client": "FERETTI EMBALAGENS - PRODUTOS DE",
+   "observacaoAPagar": "FERETTI EMBALAGENS - PRODUTOS DE"
+  },
+  {
+   "line": 72,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "15- Vale Transporte -",
+   "amountCents": 57687,
+   "client": "SP TRANSPORTES VT FUNCIONARIOS ANA",
+   "observacaoAPagar": "SP TRANSPORTES VT FUNCIONARIOS ANA"
+  },
+  {
+   "line": 73,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "14- Vale Refeição -",
+   "amountCents": 23650,
+   "client": "VALE REFEIÇÃO FUNCIONARIOS LEGALIZA",
+   "observacaoAPagar": "VALE REFEIÇÃO FUNCIONARIOS LEGALIZA"
+  },
+  {
+   "line": 74,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "15- Vale Transporte -",
+   "amountCents": 28413,
+   "client": "SP TRANSPORTES VT THAIS FRIDISEN",
+   "observacaoAPagar": "SP TRANSPORTES VT THAIS FRIDISEN"
+  },
+  {
+   "line": 75,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "",
+   "amountCents": 18720,
+   "client": "VIAÇÃO - BEM FRANCO DA ROCHA",
+   "observacaoAPagar": "VIAÇÃO - BEM FRANCO DA ROCHA"
+  },
+  {
+   "line": 76,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "14- Vale Refeição -",
+   "amountCents": 21500,
+   "client": "SODEXO - VALE REFEIÇÃO THAIS FRIDISEN",
+   "observacaoAPagar": "SODEXO - VALE REFEIÇÃO THAIS FRIDISEN"
+  },
+  {
+   "line": 77,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "48- Material Escritório /",
+   "amountCents": 290000,
+   "client": "KLV NOTEBOOK - PAGO VIA CARTÃO DE",
+   "observacaoAPagar": "KLV NOTEBOOK - PAGO VIA CARTÃO DE"
+  },
+  {
+   "line": 78,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "48- Material Escritório /",
+   "amountCents": 116000,
+   "client": "KLV NOTEBOOK - PED. 72743/1",
+   "observacaoAPagar": "KLV NOTEBOOK - PED. 72743/1"
+  },
+  {
+   "line": 79,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 6103,
+   "client": "AVERBAÇÃO DE DISTRATO SOCIAL DA JCA",
+   "observacaoAPagar": "AVERBAÇÃO DE DISTRATO SOCIAL DA JCA"
+  },
+  {
+   "line": 80,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "48- Material Escritório /",
+   "amountCents": 87900,
+   "client": "BRASIL INTER COMEX - NF 195034",
+   "observacaoAPagar": "BRASIL INTER COMEX - NF 195034"
+  },
+  {
+   "line": 81,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "47- Despesa Correios",
+   "amountCents": 4145,
+   "client": "SEDEX HEALTH GOODS",
+   "observacaoAPagar": "SEDEX HEALTH GOODS"
+  },
+  {
+   "line": 82,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 38327,
+   "client": "FOLHAMATIC NF 4017425",
+   "observacaoAPagar": "FOLHAMATIC NF 4017425"
+  },
+  {
+   "line": 83,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 81829,
+   "client": "FOLHAMATIC NF 4086471",
+   "observacaoAPagar": "FOLHAMATIC NF 4086471"
+  },
+  {
+   "line": 84,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO DIGITAL PJ A1 E-PJ A1 CASA",
+   "observacaoAPagar": "CERTIFICADO DIGITAL PJ A1 E-PJ A1 CASA"
+  },
+  {
+   "line": 85,
+   "date": "2021-02-12",
+   "dueDate": "2021-02-12",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "CERTIFICADO DIGITAL PJ A3 E-PJ A3",
+   "observacaoAPagar": "CERTIFICADO DIGITAL PJ A3 E-PJ A3"
+  },
+  {
+   "line": 86,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "49- Investimentos (Fusão)",
+   "amountCents": 11081466,
+   "client": "INVESTIMENTO FUSÃO LEGALIZA 1/3",
+   "observacaoAPagar": "INVESTIMENTO FUSÃO LEGALIZA 1/3"
+  },
+  {
+   "line": 87,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "19- IPTU",
+   "amountCents": 138748,
+   "client": "IPTU -SPAZIO",
+   "observacaoAPagar": "IPTU -SPAZIO"
+  },
+  {
+   "line": 88,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "14- Vale Refeição -",
+   "amountCents": 21500,
+   "client": "SODEXO - FUNCIONARIOS",
+   "observacaoAPagar": "SODEXO - FUNCIONARIOS"
+  },
+  {
+   "line": 89,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "1-Retirada Paulo",
+   "amountCents": 120310,
+   "client": "PORTO PCP/JR",
+   "observacaoAPagar": "PORTO PCP/JR"
+  },
+  {
+   "line": 90,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "9-Cartão",
+   "amountCents": 1322392,
+   "client": "CARTÃO EMPRESA",
+   "observacaoAPagar": "CARTÃO EMPRESA"
+  },
+  {
+   "line": 91,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "19- IPTU",
+   "amountCents": 192836,
+   "client": "IPTU /NEWW",
+   "observacaoAPagar": "IPTU /NEWW"
+  },
+  {
+   "line": 92,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "1-Retirada Paulo",
+   "amountCents": 637086,
+   "client": "IPTU - SALETE",
+   "observacaoAPagar": "IPTU - SALETE"
+  },
+  {
+   "line": 93,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "1-Retirada Paulo",
+   "amountCents": 72178,
+   "client": "Liberty seguros - PAULO",
+   "observacaoAPagar": "Liberty seguros - PAULO"
+  },
+  {
+   "line": 94,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 38327,
+   "client": "FOLHAMATIC - 4017425",
+   "observacaoAPagar": "FOLHAMATIC - 4017425"
+  },
+  {
+   "line": 95,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "33 -DARF",
+   "amountCents": 193591,
+   "client": "DARF - IRRF sobre adiantamento - Legaliza",
+   "observacaoAPagar": "DARF - IRRF sobre adiantamento - Legaliza"
+  },
+  {
+   "line": 96,
+   "date": "2021-02-17",
+   "dueDate": "2021-02-17",
+   "description": "48- Material Escritório /",
+   "amountCents": 77535,
+   "client": "GIMBA - NF 4753162",
+   "observacaoAPagar": "GIMBA - NF 4753162"
+  },
+  {
+   "line": 97,
+   "date": "2021-02-18",
+   "dueDate": "2021-02-18",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 98,
+   "date": "2021-02-18",
+   "dueDate": "2021-02-18",
+   "description": "6-Vivo - Internet Fibra",
+   "amountCents": 27054,
+   "client": "VIVO - 32140446 LINK 300",
+   "observacaoAPagar": "VIVO - 32140446 LINK 300"
+  },
+  {
+   "line": 99,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "41- IRRF",
+   "amountCents": 25903,
+   "client": "IRRD SOBRE SALÁRIO LEGALIZA",
+   "observacaoAPagar": "IRRD SOBRE SALÁRIO LEGALIZA"
+  },
+  {
+   "line": 100,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 588704,
+   "client": "INSS GPS LEGALIZA",
+   "observacaoAPagar": "INSS GPS LEGALIZA"
+  },
+  {
+   "line": 101,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "13-FGTS",
+   "amountCents": 64189,
+   "client": "FGTS RECISORIO ANDREIA",
+   "observacaoAPagar": "FGTS RECISORIO ANDREIA"
+  },
+  {
+   "line": 102,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "",
+   "amountCents": 369784,
+   "client": "RESCISAO ANDREIA FILIPIM",
+   "observacaoAPagar": "RESCISAO ANDREIA FILIPIM"
+  },
+  {
+   "line": 103,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 116677,
+   "client": "RETIRADA PAULO - COND APT 82",
+   "observacaoAPagar": "RETIRADA PAULO - COND APT 82"
+  },
+  {
+   "line": 104,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 139150,
+   "client": "RETIRADA PAULO - OUROCARD",
+   "observacaoAPagar": "RETIRADA PAULO - OUROCARD"
+  },
+  {
+   "line": 105,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "41- IRRF",
+   "amountCents": 1535,
+   "client": "IRRF - FÉRIAS CLEIDIANE",
+   "observacaoAPagar": "IRRF - FÉRIAS CLEIDIANE"
+  },
+  {
+   "line": 106,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "41- IRRF",
+   "amountCents": 7260,
+   "client": "IRRF - FÉRIAS -SANDRA GONZAGA DOS",
+   "observacaoAPagar": "IRRF - FÉRIAS -SANDRA GONZAGA DOS"
+  },
+  {
+   "line": 107,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "41- IRRF",
+   "amountCents": 209558,
+   "client": "IRRF SALARIOS - VALE LEGALIZA",
+   "observacaoAPagar": "IRRF SALARIOS - VALE LEGALIZA"
+  },
+  {
+   "line": 108,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "35- Salários - SP",
+   "amountCents": 1764500,
+   "client": "VALE -LEGALIZA",
+   "observacaoAPagar": "VALE -LEGALIZA"
+  },
+  {
+   "line": 109,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "32 -Simples SP",
+   "amountCents": 6575960,
+   "client": "VALE DA SP",
+   "observacaoAPagar": "VALE DA SP"
+  },
+  {
+   "line": 110,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "41- IRRF",
+   "amountCents": 116411,
+   "client": "IRRF - SALARIOS SP",
+   "observacaoAPagar": "IRRF - SALARIOS SP"
+  },
+  {
+   "line": 111,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "46- Férias",
+   "amountCents": 497583,
+   "client": "FÉRIAS - HENRIQUE ANTONIO DE SOUZA",
+   "observacaoAPagar": "FÉRIAS - HENRIQUE ANTONIO DE SOUZA"
+  },
+  {
+   "line": 112,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "41- IRRF",
+   "amountCents": 12134,
+   "client": "IRRF SALARIOS - QUITAÇÃO LEGALIZA",
+   "observacaoAPagar": "IRRF SALARIOS - QUITAÇÃO LEGALIZA"
+  },
+  {
+   "line": 113,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 690217,
+   "client": "RETIRADA PAULO - AMIL",
+   "observacaoAPagar": "RETIRADA PAULO - AMIL"
+  },
+  {
+   "line": 114,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 204880,
+   "client": "RETIRADA PAULO - AMIL MARI",
+   "observacaoAPagar": "RETIRADA PAULO - AMIL MARI"
+  },
+  {
+   "line": 115,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 7499,
+   "client": "RETIRADA PAULO - FIBRA MORADA IMPERADOR",
+   "observacaoAPagar": "RETIRADA PAULO - FIBRA MORADA IMPERADOR"
+  },
+  {
+   "line": 116,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "32 -Simples SP",
+   "amountCents": 1071380,
+   "client": "SIMPLES NACIONAL SP",
+   "observacaoAPagar": "SIMPLES NACIONAL SP"
+  },
+  {
+   "line": 117,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 1060,
+   "client": "RETIRADA PAULO - GAS ITAPETI",
+   "observacaoAPagar": "RETIRADA PAULO - GAS ITAPETI"
+  },
+  {
+   "line": 118,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 91768,
+   "client": "RETIRADA PAULO - ARAÇATUBA",
+   "observacaoAPagar": "RETIRADA PAULO - ARAÇATUBA"
+  },
+  {
+   "line": 119,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "35- Salários - SP",
+   "amountCents": 366500,
+   "client": "VALE REFEIÇÃO - LEGALIZA",
+   "observacaoAPagar": "VALE REFEIÇÃO - LEGALIZA"
+  },
+  {
+   "line": 120,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 53689,
+   "client": "TELEFONICA - CELULAR PCP VIVO",
+   "observacaoAPagar": "TELEFONICA - CELULAR PCP VIVO"
+  },
+  {
+   "line": 121,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "9-Cartão",
+   "amountCents": 4227649,
+   "client": "OUTRAS DESPESAS - CARTAO JUNIOR",
+   "observacaoAPagar": "OUTRAS DESPESAS - CARTAO JUNIOR"
+  },
+  {
+   "line": 122,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2915686,
+   "client": "VALE REFEIÇÃO - TICKET REFEIÇÃO",
+   "observacaoAPagar": "VALE REFEIÇÃO - TICKET REFEIÇÃO"
+  },
+  {
+   "line": 123,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "",
+   "amountCents": 299668,
+   "client": "ELETROPAULO - LUZ BARAO",
+   "observacaoAPagar": "ELETROPAULO - LUZ BARAO"
+  },
+  {
+   "line": 124,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 8454,
+   "client": "RETIRADA PAULO - LUIZ ITAPETI",
+   "observacaoAPagar": "RETIRADA PAULO - LUIZ ITAPETI"
+  },
+  {
+   "line": 125,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 912,
+   "client": "RETIRADA PAULO - GAZ RUA SALETE",
+   "observacaoAPagar": "RETIRADA PAULO - GAZ RUA SALETE"
+  },
+  {
+   "line": 126,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "48- Material Escritório /",
+   "amountCents": 37800,
+   "client": "MAT.DE LIMPEZA - BRASLIMPO",
+   "observacaoAPagar": "MAT.DE LIMPEZA - BRASLIMPO"
+  },
+  {
+   "line": 127,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "11-Convenio Saude",
+   "amountCents": 1367194,
+   "client": "ASSISTENCIA MEDICA - INTERMEDICA",
+   "observacaoAPagar": "ASSISTENCIA MEDICA - INTERMEDICA"
+  },
+  {
+   "line": 128,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 1194206,
+   "client": "RETIRADA PAULO - 82",
+   "observacaoAPagar": "RETIRADA PAULO - 82"
+  },
+  {
+   "line": 129,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "46- Férias",
+   "amountCents": 165571,
+   "client": "FÉRIAS - GABRIEL DE CARVALHO DOS SANTOS",
+   "observacaoAPagar": "FÉRIAS - GABRIEL DE CARVALHO DOS SANTOS"
+  },
+  {
+   "line": 130,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "15- Vale Transporte -",
+   "amountCents": 37884,
+   "client": "Vale transporte - Funcionários",
+   "observacaoAPagar": "Vale transporte - Funcionários"
+  },
+  {
+   "line": 131,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "",
+   "amountCents": 16217,
+   "client": "CARTÓRIO - AVERBAÇÃO",
+   "observacaoAPagar": "CARTÓRIO - AVERBAÇÃO"
+  },
+  {
+   "line": 132,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "15- Vale Transporte -",
+   "amountCents": 4951,
+   "client": "VALE TRANSPORTE - DANIELLE",
+   "observacaoAPagar": "VALE TRANSPORTE - DANIELLE"
+  },
+  {
+   "line": 133,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "",
+   "amountCents": 2400,
+   "client": "IOB - INFORMAÇÕES",
+   "observacaoAPagar": "IOB - INFORMAÇÕES"
+  },
+  {
+   "line": 134,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "14- Vale Refeição -",
+   "amountCents": 27950,
+   "client": "VALE REFEIÇÃO - FUNCIONARIOS",
+   "observacaoAPagar": "VALE REFEIÇÃO - FUNCIONARIOS"
+  },
+  {
+   "line": 135,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "15- Vale Transporte -",
+   "amountCents": 2898,
+   "client": "VALE TRANSPORTES - DANIELLE",
+   "observacaoAPagar": "VALE TRANSPORTES - DANIELLE"
+  },
+  {
+   "line": 136,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "",
+   "amountCents": 1710,
+   "client": "CUPOM FISCAL CARTÓRIO - 27 TABELIÃO DE",
+   "observacaoAPagar": "CUPOM FISCAL CARTÓRIO - 27 TABELIÃO DE"
+  },
+  {
+   "line": 137,
+   "date": "2021-02-19",
+   "dueDate": "2021-02-19",
+   "description": "",
+   "amountCents": 2580,
+   "client": "CUPOM FISCAL - CORREIO",
+   "observacaoAPagar": "CUPOM FISCAL - CORREIO"
+  },
+  {
+   "line": 138,
+   "date": "2021-02-23",
+   "dueDate": "2021-02-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 594444,
+   "client": "RETIRADA PAULO - HOTEL",
+   "observacaoAPagar": "RETIRADA PAULO - HOTEL"
+  },
+  {
+   "line": 139,
+   "date": "2021-02-23",
+   "dueDate": "2021-02-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 25000,
+   "client": "RETIRADA PAULO - GARAGEM FUSCA",
+   "observacaoAPagar": "RETIRADA PAULO - GARAGEM FUSCA"
+  },
+  {
+   "line": 140,
+   "date": "2021-02-23",
+   "dueDate": "2021-02-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 1060,
+   "client": "RETIRADA PAULO - GAS ITAPETI",
+   "observacaoAPagar": "RETIRADA PAULO - GAS ITAPETI"
+  },
+  {
+   "line": 141,
+   "date": "2021-02-23",
+   "dueDate": "2021-02-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 494500,
+   "client": "RETIRADA PAULO - VR LEGALIZA",
+   "observacaoAPagar": "RETIRADA PAULO - VR LEGALIZA"
+  },
+  {
+   "line": 142,
+   "date": "2021-02-23",
+   "dueDate": "2021-02-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 53689,
+   "client": "RETIRADA PAULO - TELEFONICA",
+   "observacaoAPagar": "RETIRADA PAULO - TELEFONICA"
+  },
+  {
+   "line": 143,
+   "date": "2021-02-23",
+   "dueDate": "2021-02-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 309400,
+   "client": "RETIRADA PAULO - APTO ITAPETI",
+   "observacaoAPagar": "RETIRADA PAULO - APTO ITAPETI"
+  },
+  {
+   "line": 144,
+   "date": "2021-02-23",
+   "dueDate": "2021-02-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 3103550,
+   "client": "RETIRADA PAULO - VALE REFEIÇÃO",
+   "observacaoAPagar": "RETIRADA PAULO - VALE REFEIÇÃO"
+  },
+  {
+   "line": 145,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 190600,
+   "client": "Material de escritório - maqmov",
+   "observacaoAPagar": "Material de escritório - maqmov"
+  },
+  {
+   "line": 146,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 29009,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 147,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 8727,
+   "client": "TRIBUNAL DE JUSTICA - DOC 21.912",
+   "observacaoAPagar": "TRIBUNAL DE JUSTICA - DOC 21.912"
+  },
+  {
+   "line": 148,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "1-Retirada Paulo",
+   "amountCents": 29900,
+   "client": "RETIRADA SEU PAULO - CPD",
+   "observacaoAPagar": "RETIRADA SEU PAULO - CPD"
+  },
+  {
+   "line": 149,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 84245,
+   "client": "Material de escritório - GIMBA",
+   "observacaoAPagar": "Material de escritório - GIMBA"
+  },
+  {
+   "line": 150,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "",
+   "amountCents": 2400,
+   "client": "IOB INFORMATICA",
+   "observacaoAPagar": "IOB INFORMATICA"
+  },
+  {
+   "line": 151,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "15- Vale Transporte -",
+   "amountCents": 52785,
+   "client": "VALE TRANSPORTE - FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTE - FUNCIONARIOS"
+  },
+  {
+   "line": 152,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 9105,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 153,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "14- Vale Refeição -",
+   "amountCents": 10750,
+   "client": "VALE REFEIÇÃO - DANIELLE VIEIRA BARBOSA",
+   "observacaoAPagar": "VALE REFEIÇÃO - DANIELLE VIEIRA BARBOSA"
+  },
+  {
+   "line": 154,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 4300,
+   "client": "COMPROVANTE DE PAGTO - TJSP",
+   "observacaoAPagar": "COMPROVANTE DE PAGTO - TJSP"
+  },
+  {
+   "line": 155,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 156,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "",
+   "amountCents": 34900,
+   "client": "PRESS FUTEBOL - CERTIFICADO",
+   "observacaoAPagar": "PRESS FUTEBOL - CERTIFICADO"
+  },
+  {
+   "line": 157,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "",
+   "amountCents": 20900,
+   "client": "MINIMERCADO SEMPREBOM - CERTIFICADOI",
+   "observacaoAPagar": "MINIMERCADO SEMPREBOM - CERTIFICADOI"
+  },
+  {
+   "line": 158,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 73360,
+   "client": "MATERIAL DE ESCRITORIO - LOJA DO SILVA",
+   "observacaoAPagar": "MATERIAL DE ESCRITORIO - LOJA DO SILVA"
+  },
+  {
+   "line": 159,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 13580,
+   "client": "MATERIAL DE ESCRITORIO- DIEGO ANTONIO",
+   "observacaoAPagar": "MATERIAL DE ESCRITORIO- DIEGO ANTONIO"
+  },
+  {
+   "line": 160,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 34790,
+   "client": "MATERIAL DE ESCRITORIO - STAND NFE-",
+   "observacaoAPagar": "MATERIAL DE ESCRITORIO - STAND NFE-"
+  },
+  {
+   "line": 161,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 23317,
+   "client": "MATERIAL DE ESCRITORIO - STAND NFE-",
+   "observacaoAPagar": "MATERIAL DE ESCRITORIO - STAND NFE-"
+  },
+  {
+   "line": 162,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 189933,
+   "client": "MATERIAL DE ESCRITORIO - M. E SILVA NF-E 522",
+   "observacaoAPagar": "MATERIAL DE ESCRITORIO - M. E SILVA NF-E 522"
+  },
+  {
+   "line": 163,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "24- Manutenção",
+   "amountCents": 285000,
+   "client": "MANUTENÇÃO - TELEFONE",
+   "observacaoAPagar": "MANUTENÇÃO - TELEFONE"
+  },
+  {
+   "line": 164,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 95960,
+   "client": "MATERIAL ESCRITORIO - MANSAO DECOR NF-E",
+   "observacaoAPagar": "MATERIAL ESCRITORIO - MANSAO DECOR NF-E"
+  },
+  {
+   "line": 165,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "47- Despesa Correios",
+   "amountCents": 3470,
+   "client": "CUSTAS DE CORREIO - 18/02",
+   "observacaoAPagar": "CUSTAS DE CORREIO - 18/02"
+  },
+  {
+   "line": 166,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "47- Despesa Correios",
+   "amountCents": 1925,
+   "client": "CUSTA DE CORREIO - COMERCIAL VEGGA 02/03",
+   "observacaoAPagar": "CUSTA DE CORREIO - COMERCIAL VEGGA 02/03"
+  },
+  {
+   "line": 167,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "47- Despesa Correios",
+   "amountCents": 2100,
+   "client": "CUSTA DE CORREIO 25/02",
+   "observacaoAPagar": "CUSTA DE CORREIO 25/02"
+  },
+  {
+   "line": 168,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "48- Material Escritório /",
+   "amountCents": 64773,
+   "client": "MATERIAL DE LIMPEZA - POUPAKI ATACADISTA",
+   "observacaoAPagar": "MATERIAL DE LIMPEZA - POUPAKI ATACADISTA"
+  },
+  {
+   "line": 169,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 6210,
+   "client": "TAXAS CARTORARIAS - ROTAMAXIMA",
+   "observacaoAPagar": "TAXAS CARTORARIAS - ROTAMAXIMA"
+  },
+  {
+   "line": 170,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "15- Vale Transporte -",
+   "amountCents": 5000,
+   "client": "PASSAGEM ESCRITORIO",
+   "observacaoAPagar": "PASSAGEM ESCRITORIO"
+  },
+  {
+   "line": 171,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "1-Retirada Paulo",
+   "amountCents": 10000,
+   "client": "CERTIFICADO",
+   "observacaoAPagar": "CERTIFICADO"
+  },
+  {
+   "line": 172,
+   "date": "2021-03-08",
+   "dueDate": "2021-03-08",
+   "description": "1-Retirada Paulo",
+   "amountCents": 20000,
+   "client": "RETIRADA SEU PAULO - CPD SMS",
+   "observacaoAPagar": "RETIRADA SEU PAULO - CPD SMS"
+  },
+  {
+   "line": 173,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 23280,
+   "client": "Manutenção - Gesso Mix comercio",
+   "observacaoAPagar": "Manutenção - Gesso Mix comercio"
+  },
+  {
+   "line": 174,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 53800,
+   "client": "SCARMAGNANI - Material de escritorio",
+   "observacaoAPagar": "SCARMAGNANI - Material de escritorio"
+  },
+  {
+   "line": 175,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "",
+   "amountCents": 40000,
+   "client": "DESPESAS DIVERSAS - República das Flores",
+   "observacaoAPagar": "DESPESAS DIVERSAS - República das Flores"
+  },
+  {
+   "line": 176,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 23100,
+   "client": "Material de escritório - Siscontech / Base notebook",
+   "observacaoAPagar": "Material de escritório - Siscontech / Base notebook"
+  },
+  {
+   "line": 177,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "",
+   "amountCents": 20000,
+   "client": "outras despesas - PRISCILA BENIDITO",
+   "observacaoAPagar": "outras despesas - PRISCILA BENIDITO"
+  },
+  {
+   "line": 178,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 2600,
+   "client": "TJSP - CUSTAS FEDTJ",
+   "observacaoAPagar": "TJSP - CUSTAS FEDTJ"
+  },
+  {
+   "line": 179,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 21895,
+   "client": "Manutenção - Folha lixa",
+   "observacaoAPagar": "Manutenção - Folha lixa"
+  },
+  {
+   "line": 180,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 42260,
+   "client": "Manutenção - Disparcon duto flexível",
+   "observacaoAPagar": "Manutenção - Disparcon duto flexível"
+  },
+  {
+   "line": 181,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 75500,
+   "client": "Manutenção - Disparcon wetf grade",
+   "observacaoAPagar": "Manutenção - Disparcon wetf grade"
+  },
+  {
+   "line": 182,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "",
+   "amountCents": 52000,
+   "client": "outras despesas - Andre Sage",
+   "observacaoAPagar": "outras despesas - Andre Sage"
+  },
+  {
+   "line": 183,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 100800,
+   "client": "Material de escritório -nfe 101.044",
+   "observacaoAPagar": "Material de escritório -nfe 101.044"
+  },
+  {
+   "line": 184,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 540852,
+   "client": "Material de escritório - Unicameras Bianca",
+   "observacaoAPagar": "Material de escritório - Unicameras Bianca"
+  },
+  {
+   "line": 185,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 33600,
+   "client": "Material de escritório - Nfe - 101.043 Fonecar",
+   "observacaoAPagar": "Material de escritório - Nfe - 101.043 Fonecar"
+  },
+  {
+   "line": 186,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 11668,
+   "client": "manutenção CIA DISTRIBUIDORA - NOGUEIRA",
+   "observacaoAPagar": "manutenção CIA DISTRIBUIDORA - NOGUEIRA"
+  },
+  {
+   "line": 187,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 40899,
+   "client": "Manutenção - COVEB VIDRO",
+   "observacaoAPagar": "Manutenção - COVEB VIDRO"
+  },
+  {
+   "line": 188,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 9137,
+   "client": "TAXA CARTÓRIO - AVERBAÇÃO",
+   "observacaoAPagar": "TAXA CARTÓRIO - AVERBAÇÃO"
+  },
+  {
+   "line": 189,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "",
+   "amountCents": 1250,
+   "client": "outras despesas - kaori",
+   "observacaoAPagar": "outras despesas - kaori"
+  },
+  {
+   "line": 190,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 9400,
+   "client": "Material de escritório - hikari mascara",
+   "observacaoAPagar": "Material de escritório - hikari mascara"
+  },
+  {
+   "line": 191,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "",
+   "amountCents": 12000,
+   "client": "outras Despesas -Drogasil TESTE DE COVID -",
+   "observacaoAPagar": "outras Despesas -Drogasil TESTE DE COVID -"
+  },
+  {
+   "line": 192,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 5600,
+   "client": "material de limpeza - Feretti saco de lixo",
+   "observacaoAPagar": "material de limpeza - Feretti saco de lixo"
+  },
+  {
+   "line": 193,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 2641,
+   "client": "Material de escritório Armarinhos Fernandes -",
+   "observacaoAPagar": "Material de escritório Armarinhos Fernandes -"
+  },
+  {
+   "line": 194,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "47- Despesa Correios",
+   "amountCents": 1665,
+   "client": "Correio - DMT Produções",
+   "observacaoAPagar": "Correio - DMT Produções"
+  },
+  {
+   "line": 195,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "",
+   "amountCents": 4740,
+   "client": "Material de escritório Armarinho Fernandes mascara",
+   "observacaoAPagar": "Material de escritório Armarinho Fernandes mascara"
+  },
+  {
+   "line": 196,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "48- Material Escritório /",
+   "amountCents": 9300,
+   "client": "material de limpeza - Feretti saco de lixo",
+   "observacaoAPagar": "material de limpeza - Feretti saco de lixo"
+  },
+  {
+   "line": 197,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 2550,
+   "client": "MANUTEÇÃO MATERIAIS DE CONSTRUÇÃO - HB",
+   "observacaoAPagar": "MANUTEÇÃO MATERIAIS DE CONSTRUÇÃO - HB"
+  },
+  {
+   "line": 198,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 5450,
+   "client": "Material de construção HB 1",
+   "observacaoAPagar": "Material de construção HB 1"
+  },
+  {
+   "line": 199,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 7540,
+   "client": "MATERIAL DE CONSTRUCAO ZIDKO MASSA",
+   "observacaoAPagar": "MATERIAL DE CONSTRUCAO ZIDKO MASSA"
+  },
+  {
+   "line": 200,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 7740,
+   "client": "Manutenção - ZIDKO MASSA",
+   "observacaoAPagar": "Manutenção - ZIDKO MASSA"
+  },
+  {
+   "line": 201,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 7204,
+   "client": "Manutenção - Disparcon duto flexivel",
+   "observacaoAPagar": "Manutenção - Disparcon duto flexivel"
+  },
+  {
+   "line": 202,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 42307,
+   "client": "MANUTEÇÃO MATERIAIS DE CONSTRUÇÃO",
+   "observacaoAPagar": "MANUTEÇÃO MATERIAIS DE CONSTRUÇÃO"
+  },
+  {
+   "line": 203,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 5331,
+   "client": "vale transportes escritorio",
+   "observacaoAPagar": "vale transportes escritorio"
+  },
+  {
+   "line": 204,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 600,
+   "client": "Manutencao -GESSO MIX",
+   "observacaoAPagar": "Manutencao -GESSO MIX"
+  },
+  {
+   "line": 205,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 9800,
+   "client": "Material de escritório Armarinho Fernandes -",
+   "observacaoAPagar": "Material de escritório Armarinho Fernandes -"
+  },
+  {
+   "line": 206,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 26000,
+   "client": "Manutenção Disparcon wataf difusor",
+   "observacaoAPagar": "Manutenção Disparcon wataf difusor"
+  },
+  {
+   "line": 207,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 47500,
+   "client": "Manutenção - Disparcon wetf grade redonda",
+   "observacaoAPagar": "Manutenção - Disparcon wetf grade redonda"
+  },
+  {
+   "line": 208,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "24- Manutenção",
+   "amountCents": 76778,
+   "client": "Combustível",
+   "observacaoAPagar": "Combustível"
+  },
+  {
+   "line": 209,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "15- Vale Transporte -",
+   "amountCents": 17823,
+   "client": "vale transportes Renata perciballi",
+   "observacaoAPagar": "vale transportes Renata perciballi"
+  },
+  {
+   "line": 210,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "15- Vale Transporte -",
+   "amountCents": 211763,
+   "client": "vale transportes - SP",
+   "observacaoAPagar": "vale transportes - SP"
+  },
+  {
+   "line": 211,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "14- Vale Refeição -",
+   "amountCents": 38700,
+   "client": "Vale Refeição - Sedexo",
+   "observacaoAPagar": "Vale Refeição - Sedexo"
+  },
+  {
+   "line": 212,
+   "date": "2021-04-16",
+   "dueDate": "2021-04-16",
+   "description": "15- Vale Transporte -",
+   "amountCents": 42809,
+   "client": "vale transportes Via Nova",
+   "observacaoAPagar": "vale transportes Via Nova"
+  },
+  {
+   "line": 213,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "15- Vale Transporte -",
+   "amountCents": 37270,
+   "client": "Vale transportes - Funcionário - SP 04/2021",
+   "observacaoAPagar": "Vale transportes - Funcionário - SP 04/2021"
+  },
+  {
+   "line": 214,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "15- Vale Transporte -",
+   "amountCents": 19200,
+   "client": "Vale transportes - Funcionário - SP 03/2021",
+   "observacaoAPagar": "Vale transportes - Funcionário - SP 03/2021"
+  },
+  {
+   "line": 215,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "14- Vale Refeição -",
+   "amountCents": 10750,
+   "client": "Vale Refeição - Funcionário - SP 04/2021",
+   "observacaoAPagar": "Vale Refeição - Funcionário - SP 04/2021"
+  },
+  {
+   "line": 216,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "15- Vale Transporte -",
+   "amountCents": 10700,
+   "client": "Vale transportes - Funcionário - SP 22/04/2021",
+   "observacaoAPagar": "Vale transportes - Funcionário - SP 22/04/2021"
+  },
+  {
+   "line": 217,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "15- Vale Transporte -",
+   "amountCents": 18900,
+   "client": "Vale transportes Via Nova Serviços - Funcionário -",
+   "observacaoAPagar": "Vale transportes Via Nova Serviços - Funcionário -"
+  },
+  {
+   "line": 218,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "",
+   "amountCents": 56000,
+   "client": "Sieg Solições Inteligentes",
+   "observacaoAPagar": "Sieg Solições Inteligentes"
+  },
+  {
+   "line": 219,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "14- Vale Refeição -",
+   "amountCents": 30100,
+   "client": "Sodexo - RENATA PERCIBALLI 05.21",
+   "observacaoAPagar": "Sodexo - RENATA PERCIBALLI 05.21"
+  },
+  {
+   "line": 220,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "14- Vale Refeição -",
+   "amountCents": 341850,
+   "client": "Sodexo - Funcionário SP 12.05.21",
+   "observacaoAPagar": "Sodexo - Funcionário SP 12.05.21"
+  },
+  {
+   "line": 221,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "",
+   "amountCents": 10000,
+   "client": "Iugu Serviços na Internet",
+   "observacaoAPagar": "Iugu Serviços na Internet"
+  },
+  {
+   "line": 222,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "24- Manutenção",
+   "amountCents": 227330,
+   "client": "NF-e 62.7092 Disparcon",
+   "observacaoAPagar": "NF-e 62.7092 Disparcon"
+  },
+  {
+   "line": 223,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "48- Material Escritório /",
+   "amountCents": 65606,
+   "client": "NF-e 014.809",
+   "observacaoAPagar": "NF-e 014.809"
+  },
+  {
+   "line": 224,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "24- Manutenção",
+   "amountCents": 100800,
+   "client": "NF-e 101.234 Fonecar",
+   "observacaoAPagar": "NF-e 101.234 Fonecar"
+  },
+  {
+   "line": 225,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "24- Manutenção",
+   "amountCents": 14560,
+   "client": "Gesso Mix - Orçamento 7685",
+   "observacaoAPagar": "Gesso Mix - Orçamento 7685"
+  },
+  {
+   "line": 226,
+   "date": "2021-04-19",
+   "dueDate": "2021-04-19",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 27054,
+   "client": "Vivo Telefone -3214-0446",
+   "observacaoAPagar": "Vivo Telefone -3214-0446"
+  },
+  {
+   "line": 227,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 16800,
+   "client": "Manutenção - DISPARCON DISTRIBUIDORA",
+   "observacaoAPagar": "Manutenção - DISPARCON DISTRIBUIDORA"
+  },
+  {
+   "line": 228,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 2300,
+   "client": "Manutenção - SÃO JOÃO COMERCIO",
+   "observacaoAPagar": "Manutenção - SÃO JOÃO COMERCIO"
+  },
+  {
+   "line": 229,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 11960,
+   "client": "Manutenção - RPS MATERIAS",
+   "observacaoAPagar": "Manutenção - RPS MATERIAS"
+  },
+  {
+   "line": 230,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 5700,
+   "client": "Manutenção - MATERIAL DE CONSTRUCAO HB",
+   "observacaoAPagar": "Manutenção - MATERIAL DE CONSTRUCAO HB"
+  },
+  {
+   "line": 231,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 9600,
+   "client": "Manutenção - PETRORIA COMERCIO",
+   "observacaoAPagar": "Manutenção - PETRORIA COMERCIO"
+  },
+  {
+   "line": 232,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 1800,
+   "client": "Manutenção - VAGNER LOPES TINTAS",
+   "observacaoAPagar": "Manutenção - VAGNER LOPES TINTAS"
+  },
+  {
+   "line": 233,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 2975,
+   "client": "Manutenção - BMB MATERIAL",
+   "observacaoAPagar": "Manutenção - BMB MATERIAL"
+  },
+  {
+   "line": 234,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 21100,
+   "client": "Manutenção - MATERIAL HB",
+   "observacaoAPagar": "Manutenção - MATERIAL HB"
+  },
+  {
+   "line": 235,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 3500,
+   "client": "Manutenção - CAMILA CERES PRADO",
+   "observacaoAPagar": "Manutenção - CAMILA CERES PRADO"
+  },
+  {
+   "line": 236,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 9000,
+   "client": "Manutenção -",
+   "observacaoAPagar": "INOVA PALMEIRA"
+  },
+  {
+   "line": 237,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 5440,
+   "client": "Manutenção -",
+   "observacaoAPagar": "ANCHIETA MATERIAIS DE CONST"
+  },
+  {
+   "line": 238,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 6000,
+   "client": "MATERIAIS DE ESCRITORIO - MT MOVEIS",
+   "observacaoAPagar": "MATERIAIS DE ESCRITORIO - MT MOVEIS"
+  },
+  {
+   "line": 239,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 180000,
+   "client": "MANUTENÇÃO - ELIELSON DUTOS 08/01/2021",
+   "observacaoAPagar": "MANUTENÇÃO - ELIELSON DUTOS 08/01/2021"
+  },
+  {
+   "line": 240,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 7464,
+   "client": "VALE TRANSPORTES - SP FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTES - SP FUNCIONARIOS"
+  },
+  {
+   "line": 241,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "14- Vale Refeição -",
+   "amountCents": 8600,
+   "client": "VALE REFEIÇÃO - TAIS SOUSA MELO 04/2021",
+   "observacaoAPagar": "VALE REFEIÇÃO - TAIS SOUSA MELO 04/2021"
+  },
+  {
+   "line": 242,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 6102,
+   "client": "CARTÓRIO - AVERBAÇÃO",
+   "observacaoAPagar": "CARTÓRIO - AVERBAÇÃO"
+  },
+  {
+   "line": 243,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "24- Manutenção",
+   "amountCents": 1500,
+   "client": "MANUTENÇÃO - CRISTALTEC VIDRAÇARIA",
+   "observacaoAPagar": "MANUTENÇÃO - CRISTALTEC VIDRAÇARIA"
+  },
+  {
+   "line": 244,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "",
+   "amountCents": 90600,
+   "client": "C P D - PITSTOPELETRONICO",
+   "observacaoAPagar": "C P D - PITSTOPELETRONICO"
+  },
+  {
+   "line": 245,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO DIGITAL - IUGU CLUDE CLUBE",
+   "observacaoAPagar": "CERTIFICADO DIGITAL - IUGU CLUDE CLUBE"
+  },
+  {
+   "line": 246,
+   "date": "2021-04-23",
+   "dueDate": "2021-04-23",
+   "description": "26- Certificados Digitais",
+   "amountCents": 13400,
+   "client": "CERTIFICADO DIGITAL - IUGU FATIMA",
+   "observacaoAPagar": "CERTIFICADO DIGITAL - IUGU FATIMA"
+  },
+  {
+   "line": 247,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "47- Despesa Correios",
+   "amountCents": 3510,
+   "client": "Despesas de Correios Cliente - SBE EDIÇÕES",
+   "observacaoAPagar": "Despesas de Correios Cliente - SBE EDIÇÕES"
+  },
+  {
+   "line": 248,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 675,
+   "client": "Reconhecimento de Firma - GMX 124",
+   "observacaoAPagar": "Reconhecimento de Firma - GMX 124"
+  },
+  {
+   "line": 249,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Imposto Dare - Alto Grande",
+   "observacaoAPagar": "Imposto Dare - Alto Grande"
+  },
+  {
+   "line": 250,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "15- Vale Transporte -",
+   "amountCents": 966,
+   "client": "Vale Transporte Cesar Retsuo",
+   "observacaoAPagar": "Vale Transporte Cesar Retsuo"
+  },
+  {
+   "line": 251,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "14- Vale Refeição -",
+   "amountCents": 34400,
+   "client": "Vale Refeição Flavio Santos",
+   "observacaoAPagar": "Vale Refeição Flavio Santos"
+  },
+  {
+   "line": 252,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "14- Vale Refeição -",
+   "amountCents": 12900,
+   "client": "Vale Refeição Funcionarios",
+   "observacaoAPagar": "Vale Refeição Funcionarios"
+  },
+  {
+   "line": 253,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "24- Manutenção",
+   "amountCents": 890,
+   "client": "XKNV COMERCIAL FITAS MAQ",
+   "observacaoAPagar": "XKNV COMERCIAL FITAS MAQ"
+  },
+  {
+   "line": 254,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "6-Vivo - Internet Fibra",
+   "amountCents": 54108,
+   "client": "TELEFONE SP 3214-0446 / 3214-0422",
+   "observacaoAPagar": "TELEFONE SP 3214-0446 / 3214-0422"
+  },
+  {
+   "line": 255,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "48- Material Escritório /",
+   "amountCents": 25000,
+   "client": "CAMISAS SOCIAL SP ASSESSORIA",
+   "observacaoAPagar": "CAMISAS SOCIAL SP ASSESSORIA"
+  },
+  {
+   "line": 256,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "CERTIFICADO ASCEL VERBAL",
+   "observacaoAPagar": "CERTIFICADO ASCEL VERBAL"
+  },
+  {
+   "line": 257,
+   "date": "2021-05-17",
+   "dueDate": "2021-05-17",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO ASCEL RC COUTINHO",
+   "observacaoAPagar": "CERTIFICADO ASCEL RC COUTINHO"
+  },
+  {
+   "line": 258,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "48- Material Escritório /",
+   "amountCents": 8200,
+   "client": "MATERIAL DE LIMPEZA",
+   "observacaoAPagar": "MATERIAL DE LIMPEZA"
+  },
+  {
+   "line": 259,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 220000,
+   "client": "C.P.D FOLHAMATIC",
+   "observacaoAPagar": "C.P.D FOLHAMATIC"
+  },
+  {
+   "line": 260,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "48- Material Escritório /",
+   "amountCents": 66059,
+   "client": "GIMBA NF 4897995 MATERIAL DE ESCRITORIO",
+   "observacaoAPagar": "GIMBA NF 4897995 MATERIAL DE ESCRITORIO"
+  },
+  {
+   "line": 261,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "13-FGTS",
+   "amountCents": 147792,
+   "client": "FGTS LEGALIZA",
+   "observacaoAPagar": "FGTS LEGALIZA"
+  },
+  {
+   "line": 262,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 3000,
+   "client": "CECEU PAGAMENTO LIMPEZA ATA",
+   "observacaoAPagar": "CECEU PAGAMENTO LIMPEZA ATA"
+  },
+  {
+   "line": 263,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "35- Salários - SP",
+   "amountCents": 876800,
+   "client": "SALARIO LEGALIZA FUNCIONARIOS",
+   "observacaoAPagar": "SALARIO LEGALIZA FUNCIONARIOS"
+  },
+  {
+   "line": 264,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "36- Adiantamentos - SP",
+   "amountCents": 40000,
+   "client": "AJUDA DE CUSTO FELIPE ANDRE OLIVEIRA",
+   "observacaoAPagar": "AJUDA DE CUSTO FELIPE ANDRE OLIVEIRA"
+  },
+  {
+   "line": 265,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "",
+   "amountCents": 40000,
+   "client": "AJUDA DE CUSTO LEANDRO PUCHETTI",
+   "observacaoAPagar": "AJUDA DE CUSTO LEANDRO PUCHETTI"
+  },
+  {
+   "line": 266,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "36- Adiantamentos - SP",
+   "amountCents": 233633,
+   "client": "ADIANTAMENTO DE SALARIO ALEXANDRE",
+   "observacaoAPagar": "ADIANTAMENTO DE SALARIO ALEXANDRE"
+  },
+  {
+   "line": 267,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "29 -Provedor de Internet -",
+   "amountCents": 15114,
+   "client": "INTERNET - PROVEDOR TERRA",
+   "observacaoAPagar": "INTERNET - PROVEDOR TERRA"
+  },
+  {
+   "line": 268,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 1804622,
+   "client": "CARTÃO ITAÚ",
+   "observacaoAPagar": "CARTÃO ITAÚ"
+  },
+  {
+   "line": 269,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "29 -Provedor de Internet -",
+   "amountCents": 9079,
+   "client": "INTERNET - PROVEDOR TERRA",
+   "observacaoAPagar": "INTERNET - PROVEDOR TERRA"
+  },
+  {
+   "line": 270,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "48- Material Escritório /",
+   "amountCents": 5000,
+   "client": "MATERIAL DE ESCRITORIO",
+   "observacaoAPagar": "MATERIAL DE ESCRITORIO"
+  },
+  {
+   "line": 271,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 675,
+   "client": "CARTORIO SBE RECONHECIMENTO DE FIRMA",
+   "observacaoAPagar": "CARTORIO SBE RECONHECIMENTO DE FIRMA"
+  },
+  {
+   "line": 272,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "37- Despesas Bancarias",
+   "amountCents": 15300,
+   "client": "PACOTE SERVIÇO BBJ",
+   "observacaoAPagar": "PACOTE SERVIÇO BBJ"
+  },
+  {
+   "line": 273,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "15- Vale Transporte -",
+   "amountCents": 14322,
+   "client": "VALE TRANSPORTE FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIOS"
+  },
+  {
+   "line": 274,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "14- Vale Refeição -",
+   "amountCents": 34400,
+   "client": "VALE REFEIÇÃO",
+   "observacaoAPagar": "VALE REFEIÇÃO"
+  },
+  {
+   "line": 275,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "4-Luz",
+   "amountCents": 181607,
+   "client": "LUZ ESCRITORIO",
+   "observacaoAPagar": "LUZ ESCRITORIO"
+  },
+  {
+   "line": 276,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "",
+   "amountCents": 10000,
+   "client": "C.P.D YUP CHAT",
+   "observacaoAPagar": "C.P.D YUP CHAT"
+  },
+  {
+   "line": 277,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 3600,
+   "client": "TELEFONE 34778955",
+   "observacaoAPagar": "TELEFONE 34778955"
+  },
+  {
+   "line": 278,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "",
+   "amountCents": 51203,
+   "client": "RESCISÃO RAFHAELA",
+   "observacaoAPagar": "RESCISÃO RAFHAELA"
+  },
+  {
+   "line": 279,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "47- Despesa Correios",
+   "amountCents": 3510,
+   "client": "CORREIOS - SBE EDIÇÕES",
+   "observacaoAPagar": "CORREIOS - SBE EDIÇÕES"
+  },
+  {
+   "line": 280,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "",
+   "amountCents": 15900,
+   "client": "SINDICATO - SINDAESP",
+   "observacaoAPagar": "SINDICATO - SINDAESP"
+  },
+  {
+   "line": 281,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "38- Cartão ITAU-PJ",
+   "amountCents": 2465268,
+   "client": "CARTAO ESCRITORIO",
+   "observacaoAPagar": "CARTAO ESCRITORIO"
+  },
+  {
+   "line": 282,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 8811,
+   "client": "FIBRA MORADA IMPERADOR",
+   "observacaoAPagar": "FIBRA MORADA IMPERADOR"
+  },
+  {
+   "line": 283,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 284,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "",
+   "amountCents": 675,
+   "client": "CARTORIO- RECONHECIMENTO FIRMA GMX",
+   "observacaoAPagar": "CARTORIO- RECONHECIMENTO FIRMA GMX"
+  },
+  {
+   "line": 285,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "CERTIFICADO LOJA DO CENTRO",
+   "observacaoAPagar": "CERTIFICADO LOJA DO CENTRO"
+  },
+  {
+   "line": 286,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "15- Vale Transporte -",
+   "amountCents": 13862,
+   "client": "VALE TRANSPORTE FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIOS"
+  },
+  {
+   "line": 287,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "43- CRC ( Pessoa Física",
+   "amountCents": 10060,
+   "client": "C R C PAULO CESAR PEREIRA JR",
+   "observacaoAPagar": "C R C PAULO CESAR PEREIRA JR"
+  },
+  {
+   "line": 288,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "46- Férias",
+   "amountCents": 256678,
+   "client": "FÉRIAS FELIPE ANDRE OLIVEIRA JESUS DE",
+   "observacaoAPagar": "FÉRIAS FELIPE ANDRE OLIVEIRA JESUS DE"
+  },
+  {
+   "line": 289,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "36- Adiantamentos - SP",
+   "amountCents": 6704260,
+   "client": "ADIANTAMENTO SALARIAL",
+   "observacaoAPagar": "ADIANTAMENTO SALARIAL"
+  },
+  {
+   "line": 290,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "",
+   "amountCents": 301731,
+   "client": "GPS LEGALIZA",
+   "observacaoAPagar": "GPS LEGALIZA"
+  },
+  {
+   "line": 291,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "41- IRRF",
+   "amountCents": 6876,
+   "client": "IRRF - SALARIOS",
+   "observacaoAPagar": "IRRF - SALARIOS"
+  },
+  {
+   "line": 292,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO M A COLOMBO CONSULTORIA",
+   "observacaoAPagar": "CERTIFICADO M A COLOMBO CONSULTORIA"
+  },
+  {
+   "line": 293,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "15- Vale Transporte -",
+   "amountCents": 10892,
+   "client": "VALE TRANSPORTE FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIOS"
+  },
+  {
+   "line": 294,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 4999,
+   "client": "CELULAR JUNIOR VIVO",
+   "observacaoAPagar": "CELULAR JUNIOR VIVO"
+  },
+  {
+   "line": 295,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "52-Indenizações",
+   "amountCents": 258439,
+   "client": "RESCISÃO - QUITAÇÃO FUNCIONARIA ANALINE",
+   "observacaoAPagar": "RESCISÃO - QUITAÇÃO FUNCIONARIA ANALINE"
+  },
+  {
+   "line": 296,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "35- Salários - SP",
+   "amountCents": 230313,
+   "client": "BANCO DE HORAS FUNCIONARIOS",
+   "observacaoAPagar": "BANCO DE HORAS FUNCIONARIOS"
+  },
+  {
+   "line": 297,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "39- Assistência Médica",
+   "amountCents": 1438268,
+   "client": "INTERMEDICA",
+   "observacaoAPagar": "INTERMEDICA"
+  },
+  {
+   "line": 298,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "24- Manutenção",
+   "amountCents": 15000,
+   "client": "GSST - CONTR. MANUTENÇÃO GSST",
+   "observacaoAPagar": "GSST - CONTR. MANUTENÇÃO GSST"
+  },
+  {
+   "line": 299,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 32170,
+   "client": "VALE TRANSPORTE THAIS",
+   "observacaoAPagar": "VALE TRANSPORTE THAIS"
+  },
+  {
+   "line": 300,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "4-Luz",
+   "amountCents": 23774,
+   "client": "ENEL RUA SALETE",
+   "observacaoAPagar": "ENEL RUA SALETE"
+  },
+  {
+   "line": 301,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "17 - Condominio - Escritório",
+   "amountCents": 52941,
+   "client": "COND. BARÃO ED. LA ROYALE",
+   "observacaoAPagar": "COND. BARÃO ED. LA ROYALE"
+  },
+  {
+   "line": 302,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "17 - Condominio - Escritório",
+   "amountCents": 349418,
+   "client": "COND. BARÃO ED LA ROYALE",
+   "observacaoAPagar": "COND. BARÃO ED LA ROYALE"
+  },
+  {
+   "line": 303,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 80417,
+   "client": "COND. SERRA BRAGANÇA",
+   "observacaoAPagar": "COND. SERRA BRAGANÇA"
+  },
+  {
+   "line": 304,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 43154,
+   "client": "NET RUA SALETE",
+   "observacaoAPagar": "NET RUA SALETE"
+  },
+  {
+   "line": 305,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "34- Porto Seguro -",
+   "amountCents": 86466,
+   "client": "PORTO SEGURO DENTISTA",
+   "observacaoAPagar": "PORTO SEGURO DENTISTA"
+  },
+  {
+   "line": 306,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 71636,
+   "client": "COND. SPAZIO",
+   "observacaoAPagar": "COND. SPAZIO"
+  },
+  {
+   "line": 307,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 43258,
+   "client": "Net Itapeti",
+   "observacaoAPagar": "Net Itapeti"
+  },
+  {
+   "line": 308,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "28 -Vivo - Internet Fibra",
+   "amountCents": 43999,
+   "client": "LINK 600 MB 31292975",
+   "observacaoAPagar": "LINK 600 MB 31292975"
+  },
+  {
+   "line": 309,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 81829,
+   "client": "FOLHAMATIC NF 4291748",
+   "observacaoAPagar": "FOLHAMATIC NF 4291748"
+  },
+  {
+   "line": 310,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 75000,
+   "client": "VALE TAIS",
+   "observacaoAPagar": "VALE TAIS"
+  },
+  {
+   "line": 311,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 120164,
+   "client": "PORTO SEGURO-PCP/JR",
+   "observacaoAPagar": "PORTO SEGURO-PCP/JR"
+  },
+  {
+   "line": 312,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "30 -Provedor de Internet -",
+   "amountCents": 7695,
+   "client": "UOL",
+   "observacaoAPagar": "UOL"
+  },
+  {
+   "line": 313,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 72178,
+   "client": "SEGURO DE VIDA",
+   "observacaoAPagar": "SEGURO DE VIDA"
+  },
+  {
+   "line": 314,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 38327,
+   "client": "FOLHAMATIC 4227915",
+   "observacaoAPagar": "FOLHAMATIC 4227915"
+  },
+  {
+   "line": 315,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 116677,
+   "client": "COND. APTO 82",
+   "observacaoAPagar": "COND. APTO 82"
+  },
+  {
+   "line": 316,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 840937,
+   "client": "AMIL",
+   "observacaoAPagar": "AMIL"
+  },
+  {
+   "line": 317,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "33 -DARF",
+   "amountCents": 5374,
+   "client": "IR DE FÉRIAS FELIPE ANDRE OLIVEIRA JESUS",
+   "observacaoAPagar": "IR DE FÉRIAS FELIPE ANDRE OLIVEIRA JESUS"
+  },
+  {
+   "line": 318,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "",
+   "amountCents": 27500,
+   "client": "GPS",
+   "observacaoAPagar": "GPS"
+  },
+  {
+   "line": 319,
+   "date": "2021-05-18",
+   "dueDate": "2021-05-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 25000,
+   "client": "GARAGEM FUSCA",
+   "observacaoAPagar": "GARAGEM FUSCA"
+  },
+  {
+   "line": 320,
+   "date": "2021-06-08",
+   "dueDate": "2021-05-19",
+   "description": "1-Retirada Paulo",
+   "amountCents": 6620,
+   "client": "DARF MORADA",
+   "observacaoAPagar": "DARF MORADA"
+  },
+  {
+   "line": 321,
+   "date": "2021-05-21",
+   "dueDate": "2021-05-21",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 7020,
+   "client": "RECONHECIMENTO DE FIRMA BABY AND KIDS",
+   "observacaoAPagar": "RECONHECIMENTO DE FIRMA BABY AND KIDS"
+  },
+  {
+   "line": 322,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 204880,
+   "client": "CONVENIO MARI",
+   "observacaoAPagar": "CONVENIO MARI"
+  },
+  {
+   "line": 323,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "4-Luz",
+   "amountCents": 28515,
+   "client": "LUZ MORADA",
+   "observacaoAPagar": "LUZ MORADA"
+  },
+  {
+   "line": 324,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 224391,
+   "client": "OUROCARD ANA",
+   "observacaoAPagar": "OUROCARD ANA"
+  },
+  {
+   "line": 325,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "18- Condominio - Aptos.",
+   "amountCents": 97543,
+   "client": "COND. RUA SALETE",
+   "observacaoAPagar": "COND. RUA SALETE"
+  },
+  {
+   "line": 326,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "12- Estacionamento",
+   "amountCents": 75000,
+   "client": "ESTACIONAMENTO",
+   "observacaoAPagar": "ESTACIONAMENTO"
+  },
+  {
+   "line": 327,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "35- Salários - SP",
+   "amountCents": 9828778,
+   "client": "SALARIOS FUNC",
+   "observacaoAPagar": "SALARIOS FUNC"
+  },
+  {
+   "line": 328,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "13-FGTS",
+   "amountCents": 1166581,
+   "client": "FGTS SP",
+   "observacaoAPagar": "FGTS SP"
+  },
+  {
+   "line": 329,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 116676,
+   "client": "COND. APTO 82 ED. MEDITERRANEE",
+   "observacaoAPagar": "COND. APTO 82 ED. MEDITERRANEE"
+  },
+  {
+   "line": 330,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 10440,
+   "client": "TELEFONES",
+   "observacaoAPagar": "TELEFONES"
+  },
+  {
+   "line": 331,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "",
+   "amountCents": 50163,
+   "client": "RESCISÃO CONTRATO DANIELLE VIEIRA",
+   "observacaoAPagar": "RESCISÃO CONTRATO DANIELLE VIEIRA"
+  },
+  {
+   "line": 332,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "29 -Provedor de Internet -",
+   "amountCents": 15114,
+   "client": "TERRA",
+   "observacaoAPagar": "TERRA"
+  },
+  {
+   "line": 333,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 33363,
+   "client": "BANCO ITAU VGBL",
+   "observacaoAPagar": "BANCO ITAU VGBL"
+  },
+  {
+   "line": 334,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 154800,
+   "client": "MARI",
+   "observacaoAPagar": "MARI"
+  },
+  {
+   "line": 335,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "4-Luz",
+   "amountCents": 26582,
+   "client": "ENEL RUA SALETE",
+   "observacaoAPagar": "ENEL RUA SALETE"
+  },
+  {
+   "line": 336,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 216542,
+   "client": "CONVENIO MARI",
+   "observacaoAPagar": "CONVENIO MARI"
+  },
+  {
+   "line": 337,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 2081595,
+   "client": "CARTÃO ITAU",
+   "observacaoAPagar": "CARTÃO ITAU"
+  },
+  {
+   "line": 338,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "48- Material Escritório /",
+   "amountCents": 56710,
+   "client": "BRASLIMPO NF 686123",
+   "observacaoAPagar": "BRASLIMPO NF 686123"
+  },
+  {
+   "line": 339,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "5-Condominio",
+   "amountCents": 317654,
+   "client": "COND. BARÃO ED. LA ROYALE",
+   "observacaoAPagar": "COND. BARÃO ED. LA ROYALE"
+  },
+  {
+   "line": 340,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 23451,
+   "client": "LUZ MORADA",
+   "observacaoAPagar": "LUZ MORADA"
+  },
+  {
+   "line": 341,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 80417,
+   "client": "COND. SERRA BRAGANÇA",
+   "observacaoAPagar": "COND. SERRA BRAGANÇA"
+  },
+  {
+   "line": 342,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 43305,
+   "client": "SKY",
+   "observacaoAPagar": "SKY"
+  },
+  {
+   "line": 343,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 43326,
+   "client": "NET RUA SALETE",
+   "observacaoAPagar": "NET RUA SALETE"
+  },
+  {
+   "line": 344,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 35000,
+   "client": "EMPREGADA MAGALI PRAIA",
+   "observacaoAPagar": "EMPREGADA MAGALI PRAIA"
+  },
+  {
+   "line": 345,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "34- Porto Seguro -",
+   "amountCents": 97508,
+   "client": "PORTO SEGURO /DENTISTA",
+   "observacaoAPagar": "PORTO SEGURO /DENTISTA"
+  },
+  {
+   "line": 346,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 64866,
+   "client": "COND. SPAZIO",
+   "observacaoAPagar": "COND. SPAZIO"
+  },
+  {
+   "line": 347,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 43088,
+   "client": "Net Itapeti",
+   "observacaoAPagar": "Net Itapeti"
+  },
+  {
+   "line": 348,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "48- Material Escritório /",
+   "amountCents": 5000,
+   "client": "MATERIAL DE ESCRITORIO",
+   "observacaoAPagar": "MATERIAL DE ESCRITORIO"
+  },
+  {
+   "line": 349,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 54108,
+   "client": "TELEFONE SP 3214-0446/3214-0422",
+   "observacaoAPagar": "TELEFONE SP 3214-0446/3214-0422"
+  },
+  {
+   "line": 350,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "28 -Vivo - Internet Fibra",
+   "amountCents": 43999,
+   "client": "LINK 600 MB 31292975",
+   "observacaoAPagar": "LINK 600 MB 31292975"
+  },
+  {
+   "line": 351,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 352,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "4-Luz",
+   "amountCents": 181607,
+   "client": "LUZ ESCRITORIO",
+   "observacaoAPagar": "LUZ ESCRITORIO"
+  },
+  {
+   "line": 353,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "35- Salários - SP",
+   "amountCents": 11561543,
+   "client": "SALARIOS FUNC",
+   "observacaoAPagar": "SALARIOS FUNC"
+  },
+  {
+   "line": 354,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 3600,
+   "client": "TELEFONE 3477-8955",
+   "observacaoAPagar": "TELEFONE 3477-8955"
+  },
+  {
+   "line": 355,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 75000,
+   "client": "VALE TAIS",
+   "observacaoAPagar": "VALE TAIS"
+  },
+  {
+   "line": 356,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 120310,
+   "client": "PORTO SEGURO PCP/JR",
+   "observacaoAPagar": "PORTO SEGURO PCP/JR"
+  },
+  {
+   "line": 357,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "30 -Provedor de Internet -",
+   "amountCents": 7695,
+   "client": "UOL",
+   "observacaoAPagar": "UOL"
+  },
+  {
+   "line": 358,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 38327,
+   "client": "FOLHAMATIC NF 4227915",
+   "observacaoAPagar": "FOLHAMATIC NF 4227915"
+  },
+  {
+   "line": 359,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 72178,
+   "client": "SEGURO DE VIDA",
+   "observacaoAPagar": "SEGURO DE VIDA"
+  },
+  {
+   "line": 360,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 81829,
+   "client": "FOLHAMATIC NF 4291748",
+   "observacaoAPagar": "FOLHAMATIC NF 4291748"
+  },
+  {
+   "line": 361,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "49- Investimentos (Fusão)",
+   "amountCents": 11081466,
+   "client": "INVESTIMENTO LEGALIZA",
+   "observacaoAPagar": "INVESTIMENTO LEGALIZA"
+  },
+  {
+   "line": 362,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 116677,
+   "client": "COND. APTO 82 ED. MEDITERRANEE",
+   "observacaoAPagar": "COND. APTO 82 ED. MEDITERRANEE"
+  },
+  {
+   "line": 363,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 155941,
+   "client": "OUROCARD",
+   "observacaoAPagar": "OUROCARD"
+  },
+  {
+   "line": 364,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 840937,
+   "client": "AMIL",
+   "observacaoAPagar": "AMIL"
+  },
+  {
+   "line": 365,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "41- IRRF",
+   "amountCents": 131803,
+   "client": "I R R F SALARIOS",
+   "observacaoAPagar": "I R R F SALARIOS"
+  },
+  {
+   "line": 366,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "",
+   "amountCents": 880704,
+   "client": "IAPAS - GPS",
+   "observacaoAPagar": "IAPAS - GPS"
+  },
+  {
+   "line": 367,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "",
+   "amountCents": 27500,
+   "client": "IAPAS - GPS",
+   "observacaoAPagar": "IAPAS - GPS"
+  },
+  {
+   "line": 368,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 25000,
+   "client": "GARAGE M FUSCA",
+   "observacaoAPagar": "GARAGE M FUSCA"
+  },
+  {
+   "line": 369,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "32 -Simples SP",
+   "amountCents": 951454,
+   "client": "SIMPLES NACIONAL",
+   "observacaoAPagar": "SIMPLES NACIONAL"
+  },
+  {
+   "line": 370,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 53689,
+   "client": "CELULAR PCP VIVO",
+   "observacaoAPagar": "CELULAR PCP VIVO"
+  },
+  {
+   "line": 371,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "3- Pagto.Apto - Itapeti",
+   "amountCents": 309400,
+   "client": "APTO ITAPETI",
+   "observacaoAPagar": "APTO ITAPETI"
+  },
+  {
+   "line": 372,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "9-Cartão",
+   "amountCents": 3772613,
+   "client": "CARTÃO JUNIOR",
+   "observacaoAPagar": "CARTÃO JUNIOR"
+  },
+  {
+   "line": 373,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 872500,
+   "client": "HOTEL",
+   "observacaoAPagar": "HOTEL"
+  },
+  {
+   "line": 374,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "4-Luz",
+   "amountCents": 9655,
+   "client": "LUZ ITAPETI",
+   "observacaoAPagar": "LUZ ITAPETI"
+  },
+  {
+   "line": 375,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2970350,
+   "client": "TICKET REFEIÇÃO",
+   "observacaoAPagar": "TICKET REFEIÇÃO"
+  },
+  {
+   "line": 376,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 919,
+   "client": "GAS RUA SALETE",
+   "observacaoAPagar": "GAS RUA SALETE"
+  },
+  {
+   "line": 377,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "5-Condominio",
+   "amountCents": 52087,
+   "client": "COND. BARÃO ED. LA ROYALE",
+   "observacaoAPagar": "COND. BARÃO ED. LA ROYALE"
+  },
+  {
+   "line": 378,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "11-Convenio Saude",
+   "amountCents": 1360384,
+   "client": "ASS. MEDICA - INTERMEDICA",
+   "observacaoAPagar": "ASS. MEDICA - INTERMEDICA"
+  },
+  {
+   "line": 379,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "",
+   "amountCents": 15000,
+   "client": "GSST - CONTR. MANUTENÇÃO GSST",
+   "observacaoAPagar": "GSST - CONTR. MANUTENÇÃO GSST"
+  },
+  {
+   "line": 380,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 33660,
+   "client": "VALE TRANSPORTE THAIS",
+   "observacaoAPagar": "VALE TRANSPORTE THAIS"
+  },
+  {
+   "line": 381,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 109542,
+   "client": "COND MORADA",
+   "observacaoAPagar": "COND MORADA"
+  },
+  {
+   "line": 382,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 131419,
+   "client": "TELEFONE SP 3155-1554",
+   "observacaoAPagar": "TELEFONE SP 3155-1554"
+  },
+  {
+   "line": 383,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "57-WHATSAPP-BUSINESS",
+   "amountCents": 31890,
+   "client": "WHATS APP",
+   "observacaoAPagar": "WHATS APP"
+  },
+  {
+   "line": 384,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "27- Doméstica",
+   "amountCents": 75000,
+   "client": "EMPREGADA CASA",
+   "observacaoAPagar": "EMPREGADA CASA"
+  },
+  {
+   "line": 385,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "15- Vale Transporte -",
+   "amountCents": 2095970,
+   "client": "VALE TRANSPORTE SP",
+   "observacaoAPagar": "VALE TRANSPORTE SP"
+  },
+  {
+   "line": 386,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 100104,
+   "client": "COND. RUA SALETE",
+   "observacaoAPagar": "COND. RUA SALETE"
+  },
+  {
+   "line": 387,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 41850,
+   "client": "E-SOCIAL ANA",
+   "observacaoAPagar": "E-SOCIAL ANA"
+  },
+  {
+   "line": 388,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 3000,
+   "client": "CECEU/ PAGAMENTO LIMPEZA ATA",
+   "observacaoAPagar": "CECEU/ PAGAMENTO LIMPEZA ATA"
+  },
+  {
+   "line": 389,
+   "date": "2021-05-26",
+   "dueDate": "2021-05-26",
+   "description": "1-Retirada Paulo",
+   "amountCents": 8811,
+   "client": "FIBRA MORADA IMPERADOR",
+   "observacaoAPagar": "FIBRA MORADA IMPERADOR"
+  },
+  {
+   "line": 390,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "",
+   "amountCents": 31890,
+   "client": "Ref. Whatsapp",
+   "observacaoAPagar": "Ref. Whatsapp"
+  },
+  {
+   "line": 391,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "41- IRRF",
+   "amountCents": 7480,
+   "client": "FÉRIAS JEFFERSON",
+   "observacaoAPagar": "FÉRIAS JEFFERSON"
+  },
+  {
+   "line": 392,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "41- IRRF",
+   "amountCents": 177363,
+   "client": "SALÁRIOS LEGALIZA",
+   "observacaoAPagar": "SALÁRIOS LEGALIZA"
+  },
+  {
+   "line": 393,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "55-QUALILOG",
+   "amountCents": 110000,
+   "client": "QUALILOG SERVIÇOS AUXILIARES GSST",
+   "observacaoAPagar": "QUALILOG SERVIÇOS AUXILIARES GSST"
+  },
+  {
+   "line": 394,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "47- Despesa Correios",
+   "amountCents": 2100,
+   "client": "CORREIOS MAM ESTACIONAMENTOS",
+   "observacaoAPagar": "CORREIOS MAM ESTACIONAMENTOS"
+  },
+  {
+   "line": 395,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "48- Material Escritório /",
+   "amountCents": 49088,
+   "client": "ARMARINHOS FERNANDO - SQUEEZE",
+   "observacaoAPagar": "ARMARINHOS FERNANDO - SQUEEZE"
+  },
+  {
+   "line": 396,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "",
+   "amountCents": 17900,
+   "client": "TAXA DA JUSCESP - PROCESSO RAPIDO",
+   "observacaoAPagar": "TAXA DA JUSCESP - PROCESSO RAPIDO"
+  },
+  {
+   "line": 397,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "15- Vale Transporte -",
+   "amountCents": 5000,
+   "client": "BILHETE UNICO",
+   "observacaoAPagar": "BILHETE UNICO"
+  },
+  {
+   "line": 398,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "48- Material Escritório /",
+   "amountCents": 7886,
+   "client": "USE EPI - EQUIPAMENTO DE SEGURANÇA",
+   "observacaoAPagar": "USE EPI - EQUIPAMENTO DE SEGURANÇA"
+  },
+  {
+   "line": 399,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "48- Material Escritório /",
+   "amountCents": 67061,
+   "client": "POUPAKI ATACADISTA - MATERIAL DE LIMPEZA",
+   "observacaoAPagar": "POUPAKI ATACADISTA - MATERIAL DE LIMPEZA"
+  },
+  {
+   "line": 400,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "15- Vale Transporte -",
+   "amountCents": 7392,
+   "client": "VALE TRANSPORTE FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIOS"
+  },
+  {
+   "line": 401,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "14- Vale Refeição -",
+   "amountCents": 32250,
+   "client": "VALE REFEIÇÃO FUNCIONARIOS",
+   "observacaoAPagar": "VALE REFEIÇÃO FUNCIONARIOS"
+  },
+  {
+   "line": 402,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO CLAUDIA BARRETO",
+   "observacaoAPagar": "CERTIFICADO CLAUDIA BARRETO"
+  },
+  {
+   "line": 403,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 404,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "14- Vale Refeição -",
+   "amountCents": 11365,
+   "client": "VALE TRANSPORTE FUNCIONARIOS",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIOS"
+  },
+  {
+   "line": 405,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "",
+   "amountCents": 20000,
+   "client": "GRU JUDICIAL",
+   "observacaoAPagar": "GRU JUDICIAL"
+  },
+  {
+   "line": 406,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "14- Vale Refeição -",
+   "amountCents": 12900,
+   "client": "SODEXO - VALE REFEIÇÃO FUNC ANA BEATRIZ",
+   "observacaoAPagar": "SODEXO - VALE REFEIÇÃO FUNC ANA BEATRIZ"
+  },
+  {
+   "line": 407,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "CERTIFICADO CENTRO MEDICO KAWAI",
+   "observacaoAPagar": "CERTIFICADO CENTRO MEDICO KAWAI"
+  },
+  {
+   "line": 408,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "48- Material Escritório /",
+   "amountCents": 28425,
+   "client": "FECHADURA ELETRONICA - GBL",
+   "observacaoAPagar": "FECHADURA ELETRONICA - GBL"
+  },
+  {
+   "line": 409,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "48- Material Escritório /",
+   "amountCents": 140000,
+   "client": "PRINTER SUPPORT NF 123300",
+   "observacaoAPagar": "PRINTER SUPPORT NF 123300"
+  },
+  {
+   "line": 410,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 6720,
+   "client": "PREFEITURA ITAPECIRICA DA SERRA",
+   "observacaoAPagar": "PREFEITURA ITAPECIRICA DA SERRA"
+  },
+  {
+   "line": 411,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "1-Retirada Paulo",
+   "amountCents": 256892,
+   "client": "APTO JR",
+   "observacaoAPagar": "APTO JR"
+  },
+  {
+   "line": 412,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "9-Cartão",
+   "amountCents": 1417486,
+   "client": "CARTÃO ESCRITORIO",
+   "observacaoAPagar": "CARTÃO ESCRITORIO"
+  },
+  {
+   "line": 413,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "1-Retirada Paulo",
+   "amountCents": 510188,
+   "client": "OUROCARD",
+   "observacaoAPagar": "OUROCARD"
+  },
+  {
+   "line": 414,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "36- Adiantamentos - SP",
+   "amountCents": 6730420,
+   "client": "ADIANTAMENTO SALARIAL",
+   "observacaoAPagar": "ADIANTAMENTO SALARIAL"
+  },
+  {
+   "line": 415,
+   "date": "2021-05-28",
+   "dueDate": "2021-05-28",
+   "description": "111- Taxi/Uber",
+   "amountCents": 10098,
+   "client": "99 TAXI - PRISCILA",
+   "observacaoAPagar": "99 TAXI - PRISCILA"
+  },
+  {
+   "line": 416,
+   "date": "2021-06-01",
+   "dueDate": "2021-06-01",
+   "description": "54-TAGPLUS",
+   "amountCents": 56000,
+   "client": "SISTEMA TAGPLUS",
+   "observacaoAPagar": "SISTEMA TAGPLUS"
+  },
+  {
+   "line": 417,
+   "date": "2021-06-02",
+   "dueDate": "2021-06-02",
+   "description": "47- Despesa Correios",
+   "amountCents": 133320,
+   "client": "DESPESAS CORREIOS",
+   "observacaoAPagar": "DESPESAS CORREIOS"
+  },
+  {
+   "line": 418,
+   "date": "2021-06-02",
+   "dueDate": "2021-06-02",
+   "description": "29 -Provedor de Internet -",
+   "amountCents": 7406,
+   "client": "TERRA PROVEDOR",
+   "observacaoAPagar": "TERRA PROVEDOR"
+  },
+  {
+   "line": 419,
+   "date": "2021-06-02",
+   "dueDate": "2021-06-02",
+   "description": "29 -Provedor de Internet -",
+   "amountCents": 1815,
+   "client": "TERRA PROVEDOR",
+   "observacaoAPagar": "TERRA PROVEDOR"
+  },
+  {
+   "line": 420,
+   "date": "2021-06-03",
+   "dueDate": "2021-06-03",
+   "description": "37- Despesas Bancarias",
+   "amountCents": 18700,
+   "client": "DESPESAS BCO. BRASIL",
+   "observacaoAPagar": "DESPESAS BCO. BRASIL"
+  },
+  {
+   "line": 421,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "24- Manutenção",
+   "amountCents": 5400,
+   "client": "Canaã Iluminação - manutenção",
+   "observacaoAPagar": "Canaã Iluminação - manutenção"
+  },
+  {
+   "line": 422,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "51-Despesas Diversas",
+   "amountCents": 54600,
+   "client": "ASTRO BRINDES - REF. 100 CANETAS",
+   "observacaoAPagar": "ASTRO BRINDES - REF. 100 CANETAS"
+  },
+  {
+   "line": 423,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "24- Manutenção",
+   "amountCents": 110000,
+   "client": "MANUTENÇÃO AR",
+   "observacaoAPagar": "MANUTENÇÃO AR"
+  },
+  {
+   "line": 424,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "24- Manutenção",
+   "amountCents": 60000,
+   "client": "MANUTENÇÃO TELEFONE - PLACA",
+   "observacaoAPagar": "MANUTENÇÃO TELEFONE - PLACA"
+  },
+  {
+   "line": 425,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "24- Manutenção",
+   "amountCents": 35000,
+   "client": "MANUTENÇÃO LAMPADAS",
+   "observacaoAPagar": "MANUTENÇÃO LAMPADAS"
+  },
+  {
+   "line": 426,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "48- Material Escritório /",
+   "amountCents": 1799,
+   "client": "MERCADO HAPPY FAMILIA",
+   "observacaoAPagar": "MERCADO HAPPY FAMILIA"
+  },
+  {
+   "line": 427,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2150,
+   "client": "VALE REFEIÇÃO FUNCIONARIA JULIANA B.",
+   "observacaoAPagar": "VALE REFEIÇÃO FUNCIONARIA JULIANA B."
+  },
+  {
+   "line": 428,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "15- Vale Transporte -",
+   "amountCents": 880,
+   "client": "VALE TRANSPORTE FUNCIONARIA JULIANA B.",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIA JULIANA B."
+  },
+  {
+   "line": 429,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "51-Despesas Diversas",
+   "amountCents": 7000,
+   "client": "LTP IMPRESSOES",
+   "observacaoAPagar": "LTP IMPRESSOES"
+  },
+  {
+   "line": 430,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "24- Manutenção",
+   "amountCents": 228000,
+   "client": "MANUTENÇÃO TELEFONE",
+   "observacaoAPagar": "MANUTENÇÃO TELEFONE"
+  },
+  {
+   "line": 431,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 8727,
+   "client": "BCO BRASIL - PAGAMENTO P/ TRIBUNAL DE",
+   "observacaoAPagar": "BCO BRASIL - PAGAMENTO P/ TRIBUNAL DE"
+  },
+  {
+   "line": 432,
+   "date": "2021-06-07",
+   "dueDate": "2021-06-07",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "ASCEL - CERTIFICADO J M DIAS",
+   "observacaoAPagar": "ASCEL - CERTIFICADO J M DIAS"
+  },
+  {
+   "line": 433,
+   "date": "2021-06-08",
+   "dueDate": "2021-06-08",
+   "description": "41- IRRF",
+   "amountCents": 136729,
+   "client": "IRRF",
+   "observacaoAPagar": "IRRF"
+  },
+  {
+   "line": 434,
+   "date": "2021-06-08",
+   "dueDate": "2021-06-08",
+   "description": "53-GPS",
+   "amountCents": 865285,
+   "client": "IAPAS - GPS",
+   "observacaoAPagar": "IAPAS - GPS"
+  },
+  {
+   "line": 435,
+   "date": "2021-06-09",
+   "dueDate": "2021-06-09",
+   "description": "52-Indenizações",
+   "amountCents": 504318,
+   "client": "INDENICAÇÃO DIEGO",
+   "observacaoAPagar": "INDENICAÇÃO DIEGO"
+  },
+  {
+   "line": 436,
+   "date": "2021-06-09",
+   "dueDate": "2021-06-09",
+   "description": "52-Indenizações",
+   "amountCents": 106327,
+   "client": "INDENIZAÇÃO MARCELO",
+   "observacaoAPagar": "INDENIZAÇÃO MARCELO"
+  },
+  {
+   "line": 437,
+   "date": "2021-06-09",
+   "dueDate": "2021-06-09",
+   "description": "13-FGTS",
+   "amountCents": 82586,
+   "client": "FGTS QUITAÇÃO DIEGO",
+   "observacaoAPagar": "FGTS QUITAÇÃO DIEGO"
+  },
+  {
+   "line": 438,
+   "date": "2021-06-10",
+   "dueDate": "2021-06-10",
+   "description": "51-Despesas Diversas",
+   "amountCents": 49000,
+   "client": "INPI",
+   "observacaoAPagar": "INPI"
+  },
+  {
+   "line": 439,
+   "date": "2021-06-11",
+   "dueDate": "2021-06-11",
+   "description": "24- Manutenção",
+   "amountCents": 33505,
+   "client": "ATON ATLAS / CABOS",
+   "observacaoAPagar": "ATON ATLAS / CABOS"
+  },
+  {
+   "line": 440,
+   "date": "2021-06-11",
+   "dueDate": "2021-06-11",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2150,
+   "client": "VR - INGRID SAMPAIO",
+   "observacaoAPagar": "VR - INGRID SAMPAIO"
+  },
+  {
+   "line": 441,
+   "date": "2021-06-11",
+   "dueDate": "2021-06-11",
+   "description": "15- Vale Transporte -",
+   "amountCents": 1848,
+   "client": "VT - INGRID SAMPAIO",
+   "observacaoAPagar": "VT - INGRID SAMPAIO"
+  },
+  {
+   "line": 442,
+   "date": "2021-06-11",
+   "dueDate": "2021-06-11",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERT. 4T",
+   "observacaoAPagar": "CERT. 4T"
+  },
+  {
+   "line": 443,
+   "date": "2021-06-11",
+   "dueDate": "2021-06-11",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 444,
+   "date": "2021-06-11",
+   "dueDate": "2021-06-11",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 17949,
+   "client": "SINDICATO - MOBBUY",
+   "observacaoAPagar": "SINDICATO - MOBBUY"
+  },
+  {
+   "line": 445,
+   "date": "2021-06-11",
+   "dueDate": "2021-06-11",
+   "description": "48- Material Escritório /",
+   "amountCents": 104744,
+   "client": "GIMBA NF 4944259",
+   "observacaoAPagar": "GIMBA NF 4944259"
+  },
+  {
+   "line": 446,
+   "date": "2021-06-15",
+   "dueDate": "2021-06-15",
+   "description": "49- Investimentos (Fusão)",
+   "amountCents": 6976576,
+   "client": "INVESTIMENTO LEGALIZA",
+   "observacaoAPagar": "INVESTIMENTO LEGALIZA"
+  },
+  {
+   "line": 447,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "1-Retirada Paulo",
+   "amountCents": 23451,
+   "client": "LUZ MORADA",
+   "observacaoAPagar": "LUZ MORADA"
+  },
+  {
+   "line": 448,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "1-Retirada Paulo",
+   "amountCents": 216542,
+   "client": "CONVENIO MARI",
+   "observacaoAPagar": "CONVENIO MARI"
+  },
+  {
+   "line": 449,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "1-Retirada Paulo",
+   "amountCents": 116676,
+   "client": "COND. APTO 82 ED. MEDITERRANEE",
+   "observacaoAPagar": "COND. APTO 82 ED. MEDITERRANEE"
+  },
+  {
+   "line": 450,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "1-Retirada Paulo",
+   "amountCents": 154800,
+   "client": "MARI",
+   "observacaoAPagar": "MARI"
+  },
+  {
+   "line": 451,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 10440,
+   "client": "TELEFONES",
+   "observacaoAPagar": "TELEFONES"
+  },
+  {
+   "line": 452,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "12- Estacionamento",
+   "amountCents": 75000,
+   "client": "ESTACIONAMENTO",
+   "observacaoAPagar": "ESTACIONAMENTO"
+  },
+  {
+   "line": 453,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "1-Retirada Paulo",
+   "amountCents": 100104,
+   "client": "COND. RUA SALETE",
+   "observacaoAPagar": "COND. RUA SALETE"
+  },
+  {
+   "line": 454,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "1-Retirada Paulo",
+   "amountCents": 41850,
+   "client": "E-SOCIAL ANA",
+   "observacaoAPagar": "E-SOCIAL ANA"
+  },
+  {
+   "line": 455,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "14- Vale Refeição -",
+   "amountCents": 21500,
+   "client": "REF. VR AVULSO FUNCIONARIOS",
+   "observacaoAPagar": "REF. VR AVULSO FUNCIONARIOS"
+  },
+  {
+   "line": 456,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "15- Vale Transporte -",
+   "amountCents": 15834,
+   "client": "REF. VT AVULSO FUNCIONARIOS",
+   "observacaoAPagar": "REF. VT AVULSO FUNCIONARIOS"
+  },
+  {
+   "line": 457,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 10194,
+   "client": "JUROS E MULTAS ARMAZEM DOS BICHOS",
+   "observacaoAPagar": "JUROS E MULTAS ARMAZEM DOS BICHOS"
+  },
+  {
+   "line": 458,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 14630,
+   "client": "TAXA, CERTIDAO RITA DE CASSIA",
+   "observacaoAPagar": "TAXA, CERTIDAO RITA DE CASSIA"
+  },
+  {
+   "line": 459,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "",
+   "amountCents": 13900,
+   "client": "CREMESP PAULO",
+   "observacaoAPagar": "CREMESP PAULO"
+  },
+  {
+   "line": 460,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 461,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 1600,
+   "client": "TAXA HIDRO",
+   "observacaoAPagar": "TAXA HIDRO"
+  },
+  {
+   "line": 462,
+   "date": "2021-06-16",
+   "dueDate": "2021-06-16",
+   "description": "4-Luz",
+   "amountCents": 230597,
+   "client": "LUZ ESCRITÓRIO",
+   "observacaoAPagar": "LUZ ESCRITÓRIO"
+  },
+  {
+   "line": 463,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-17",
+   "description": "14- Vale Refeição -",
+   "amountCents": 38700,
+   "client": "SODEXO",
+   "observacaoAPagar": "SODEXO"
+  },
+  {
+   "line": 464,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-20",
+   "description": "48- Material Escritório /",
+   "amountCents": 73943,
+   "client": "SENDAS (ASSAI ATACADISTA)",
+   "observacaoAPagar": "SENDAS (ASSAI ATACADISTA)"
+  },
+  {
+   "line": 465,
+   "date": "2021-06-09",
+   "dueDate": "2021-06-21",
+   "description": "46- Férias",
+   "amountCents": 181127,
+   "client": "FERIAS RAAEBI",
+   "observacaoAPagar": "FERIAS RAAEBI"
+  },
+  {
+   "line": 466,
+   "date": "2021-06-21",
+   "dueDate": "2021-06-21",
+   "description": "",
+   "amountCents": 38700,
+   "client": "SODEXO PASS",
+   "observacaoAPagar": "SODEXO PASS"
+  },
+  {
+   "line": 467,
+   "date": "2021-06-21",
+   "dueDate": "2021-06-21",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 2070,
+   "client": "CARTORIO E 29º TABELIAO / CLINICA SALUS",
+   "observacaoAPagar": "CARTORIO E 29º TABELIAO / CLINICA SALUS"
+  },
+  {
+   "line": 468,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-21",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 53689,
+   "client": "CELULAR PCP VIVO",
+   "observacaoAPagar": "CELULAR PCP VIVO"
+  },
+  {
+   "line": 469,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-21",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 4999,
+   "client": "CELULAR LEGALIZA",
+   "observacaoAPagar": "CELULAR LEGALIZA"
+  },
+  {
+   "line": 470,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-21",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "CERTIFICADO SARA EMBAIXADA",
+   "observacaoAPagar": "CERTIFICADO SARA EMBAIXADA"
+  },
+  {
+   "line": 471,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-21",
+   "description": "15- Vale Transporte -",
+   "amountCents": 20190,
+   "client": "VT ESCRITORIO",
+   "observacaoAPagar": "VT ESCRITORIO"
+  },
+  {
+   "line": 472,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "CERTIFICADO CAFETERIA PROGRESSO",
+   "observacaoAPagar": "CERTIFICADO CAFETERIA PROGRESSO"
+  },
+  {
+   "line": 473,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-22",
+   "description": "1-Retirada Paulo",
+   "amountCents": 944,
+   "client": "GAS ITAPETI",
+   "observacaoAPagar": "GAS ITAPETI"
+  },
+  {
+   "line": 474,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-22",
+   "description": "32 -Simples SP",
+   "amountCents": 975119,
+   "client": "SIMPLES NACIONAL",
+   "observacaoAPagar": "SIMPLES NACIONAL"
+  },
+  {
+   "line": 475,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "51-Despesas Diversas",
+   "amountCents": 3300,
+   "client": "CARIMBO AC DUTOS",
+   "observacaoAPagar": "CARIMBO AC DUTOS"
+  },
+  {
+   "line": 476,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "14- Vale Refeição -",
+   "amountCents": 25800,
+   "client": "VALE REFEIÇÃO FUNCIONARIOS - AVULSO",
+   "observacaoAPagar": "VALE REFEIÇÃO FUNCIONARIOS - AVULSO"
+  },
+  {
+   "line": 477,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "15- Vale Transporte -",
+   "amountCents": 12138,
+   "client": "VALE TRANSPORTE FUNCIONARIOS - AVULSO",
+   "observacaoAPagar": "VALE TRANSPORTE FUNCIONARIOS - AVULSO"
+  },
+  {
+   "line": 478,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "48- Material Escritório /",
+   "amountCents": 1850,
+   "client": "CLICK AQUI COMERCIAL LTDA",
+   "observacaoAPagar": "CLICK AQUI COMERCIAL LTDA"
+  },
+  {
+   "line": 479,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "48- Material Escritório /",
+   "amountCents": 76000,
+   "client": "PRINTER SUPPORT TONER HP",
+   "observacaoAPagar": "PRINTER SUPPORT TONER HP"
+  },
+  {
+   "line": 480,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "48- Material Escritório /",
+   "amountCents": 4690,
+   "client": "KALUNGA",
+   "observacaoAPagar": "KALUNGA"
+  },
+  {
+   "line": 481,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-22",
+   "description": "48- Material Escritório /",
+   "amountCents": 25133,
+   "client": "TONER HP",
+   "observacaoAPagar": "TONER HP"
+  },
+  {
+   "line": 482,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-22",
+   "description": "1-Retirada Paulo",
+   "amountCents": 309400,
+   "client": "APTO ITAPETI",
+   "observacaoAPagar": "APTO ITAPETI"
+  },
+  {
+   "line": 483,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-23",
+   "description": "9-Cartão",
+   "amountCents": 3248600,
+   "client": "CARTAO JUNIOR",
+   "observacaoAPagar": "CARTAO JUNIOR"
+  },
+  {
+   "line": 484,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 872500,
+   "client": "HOTEL",
+   "observacaoAPagar": "HOTEL"
+  },
+  {
+   "line": 485,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-23",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2671450,
+   "client": "TICKET REFEIÇÃO",
+   "observacaoAPagar": "TICKET REFEIÇÃO"
+  },
+  {
+   "line": 486,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 919,
+   "client": "GAS RUA SALETE",
+   "observacaoAPagar": "GAS RUA SALETE"
+  },
+  {
+   "line": 487,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-23",
+   "description": "24- Manutenção",
+   "amountCents": 38000,
+   "client": "ARNALDO LOPES - MANUTENÇÃO AR",
+   "observacaoAPagar": "ARNALDO LOPES - MANUTENÇÃO AR"
+  },
+  {
+   "line": 488,
+   "date": "2021-06-29",
+   "dueDate": "2021-06-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 951,
+   "client": "GAS RUA SALETE",
+   "observacaoAPagar": "GAS RUA SALETE"
+  },
+  {
+   "line": 489,
+   "date": "2021-06-29",
+   "dueDate": "2021-06-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 8198,
+   "client": "LUZ ITAPETI",
+   "observacaoAPagar": "LUZ ITAPETI"
+  },
+  {
+   "line": 490,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-24",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "JUCESP FORTELLINE",
+   "observacaoAPagar": "JUCESP FORTELLINE"
+  },
+  {
+   "line": 491,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-25",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 2484,
+   "client": "BB TJSP - CUSTAS FEDTJ",
+   "observacaoAPagar": "BB TJSP - CUSTAS FEDTJ"
+  },
+  {
+   "line": 492,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-25",
+   "description": "51-Despesas Diversas",
+   "amountCents": 878400,
+   "client": "VOLK UNIFORMES",
+   "observacaoAPagar": "VOLK UNIFORMES"
+  },
+  {
+   "line": 493,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-25",
+   "description": "",
+   "amountCents": 2100,
+   "client": "13- Outros (Lançar em Observação)",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 494,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-28",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 132888,
+   "client": "TELEFONE SP 3155-1554",
+   "observacaoAPagar": "TELEFONE SP 3155-1554"
+  },
+  {
+   "line": 495,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-28",
+   "description": "57-WHATSAPP-BUSINESS",
+   "amountCents": 31890,
+   "client": "WHATSAPP",
+   "observacaoAPagar": "WHATSAPP"
+  },
+  {
+   "line": 496,
+   "date": "2021-06-22",
+   "dueDate": "2021-06-28",
+   "description": "1-Retirada Paulo",
+   "amountCents": 22950,
+   "client": "VALE TRANSPORTE THAIS",
+   "observacaoAPagar": "VALE TRANSPORTE THAIS"
+  },
+  {
+   "line": 497,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-28",
+   "description": "14- Vale Refeição -",
+   "amountCents": 32250,
+   "client": "VALE REFEIÇÃO ESCRITORIO (AVULSO)",
+   "observacaoAPagar": "VALE REFEIÇÃO ESCRITORIO (AVULSO)"
+  },
+  {
+   "line": 498,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-28",
+   "description": "15- Vale Transporte -",
+   "amountCents": 21768,
+   "client": "VALE TRANSPORTE ESCRITORIO (AVULSO)",
+   "observacaoAPagar": "VALE TRANSPORTE ESCRITORIO (AVULSO)"
+  },
+  {
+   "line": 499,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-28",
+   "description": "1-Retirada Paulo",
+   "amountCents": 109542,
+   "client": "COND.MORADA",
+   "observacaoAPagar": "COND.MORADA"
+  },
+  {
+   "line": 500,
+   "date": "2021-06-30",
+   "dueDate": "2021-06-29",
+   "description": "15- Vale Transporte -",
+   "amountCents": 5976,
+   "client": "VT FUNCIONARIOS ( AVULSO)",
+   "observacaoAPagar": "VT FUNCIONARIOS ( AVULSO)"
+  },
+  {
+   "line": 501,
+   "date": "2021-06-30",
+   "dueDate": "2021-06-29",
+   "description": "14- Vale Refeição -",
+   "amountCents": 8600,
+   "client": "VR FUNCIONARIOS ( AVULSO)",
+   "observacaoAPagar": "VR FUNCIONARIOS ( AVULSO)"
+  },
+  {
+   "line": 502,
+   "date": "2021-06-30",
+   "dueDate": "2021-06-29",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO AT PRAXIS CONSULTORIA",
+   "observacaoAPagar": "CERTIFICADO AT PRAXIS CONSULTORIA"
+  },
+  {
+   "line": 503,
+   "date": "2021-06-30",
+   "dueDate": "2021-06-29",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "CERTIFICADO VOLPI CONSULTORIA",
+   "observacaoAPagar": "CERTIFICADO VOLPI CONSULTORIA"
+  },
+  {
+   "line": 504,
+   "date": "2021-06-28",
+   "dueDate": "2021-06-30",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "ASCEL - CERT. VOLPI",
+   "observacaoAPagar": "ASCEL - CERT. VOLPI"
+  },
+  {
+   "line": 505,
+   "date": "2021-05-18",
+   "dueDate": "2021-06-30",
+   "description": "15- Vale Transporte -",
+   "amountCents": 1318807,
+   "client": "VALE TRANSPORTE SP",
+   "observacaoAPagar": "VALE TRANSPORTE SP"
+  },
+  {
+   "line": 506,
+   "date": "2021-07-02",
+   "dueDate": "2021-06-30",
+   "description": "48- Material Escritório /",
+   "amountCents": 8000,
+   "client": "MATERIAL DE LIMPEZA",
+   "observacaoAPagar": "MATERIAL DE LIMPEZA"
+  },
+  {
+   "line": 507,
+   "date": "2021-07-02",
+   "dueDate": "2021-06-30",
+   "description": "51-Despesas Diversas",
+   "amountCents": 148278,
+   "client": "PROSOFT LEGALIZA",
+   "observacaoAPagar": "PROSOFT LEGALIZA"
+  },
+  {
+   "line": 508,
+   "date": "2021-07-02",
+   "dueDate": "2021-06-30",
+   "description": "51-Despesas Diversas",
+   "amountCents": 129000,
+   "client": "SODEXO CARTÃO REFEIÇÃO NOVOS",
+   "observacaoAPagar": "SODEXO CARTÃO REFEIÇÃO NOVOS"
+  },
+  {
+   "line": 509,
+   "date": "2021-06-15",
+   "dueDate": "2021-07-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 242624,
+   "client": "CONVENIO MARI",
+   "observacaoAPagar": "CONVENIO MARI"
+  },
+  {
+   "line": 510,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-01",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 10440,
+   "client": "TELEFONES",
+   "observacaoAPagar": "TELEFONES"
+  },
+  {
+   "line": 511,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-01",
+   "description": "12- Estacionamento",
+   "amountCents": 75000,
+   "client": "ESTACIONAMENTO",
+   "observacaoAPagar": "ESTACIONAMENTO"
+  },
+  {
+   "line": 512,
+   "date": "2021-06-08",
+   "dueDate": "2021-07-01",
+   "description": "21- Multas",
+   "amountCents": 10413,
+   "client": "MULTA",
+   "observacaoAPagar": "MULTA"
+  },
+  {
+   "line": 513,
+   "date": "2021-06-11",
+   "dueDate": "2021-07-01",
+   "description": "48- Material Escritório /",
+   "amountCents": 37820,
+   "client": "BRASLIMPO NF 695710 / MAT. DE LIMPEZA",
+   "observacaoAPagar": "BRASLIMPO NF 695710 / MAT. DE LIMPEZA"
+  },
+  {
+   "line": 514,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-01",
+   "description": "1-Retirada Paulo",
+   "amountCents": 154800,
+   "client": "MARI - ESCOLA",
+   "observacaoAPagar": "MARI - ESCOLA"
+  },
+  {
+   "line": 515,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-01",
+   "description": "18- Condominio -",
+   "amountCents": 116676,
+   "client": "COND. APTO 82 ED. MEDITERRANEE",
+   "observacaoAPagar": "COND. APTO 82 ED. MEDITERRANEE"
+  },
+  {
+   "line": 516,
+   "date": "2021-07-02",
+   "dueDate": "2021-07-02",
+   "description": "15- Vale Transporte -",
+   "amountCents": 9668,
+   "client": "VT FUNCIONARIOS (AVULSO)",
+   "observacaoAPagar": "VT FUNCIONARIOS (AVULSO)"
+  },
+  {
+   "line": 517,
+   "date": "2021-07-02",
+   "dueDate": "2021-07-02",
+   "description": "14- Vale Refeição -",
+   "amountCents": 30100,
+   "client": "VR FUNCIONARIOS (AVULSO)",
+   "observacaoAPagar": "VR FUNCIONARIOS (AVULSO)"
+  },
+  {
+   "line": 518,
+   "date": "2021-08-02",
+   "dueDate": "2021-07-02",
+   "description": "1-Outros",
+   "amountCents": 191464,
+   "client": "70% ref. Pia lavabo , SD 30% Entrega",
+   "observacaoAPagar": "70% ref. Pia lavabo , SD 30% Entrega"
+  },
+  {
+   "line": 519,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-03",
+   "description": "6-Vivo - Internet Fibra",
+   "amountCents": 54108,
+   "client": "TELEFONE SP 3214-0446 / 3214-0422",
+   "observacaoAPagar": "TELEFONE SP 3214-0446 / 3214-0422"
+  },
+  {
+   "line": 520,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-03",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "Certificado Digital Arnold",
+   "observacaoAPagar": "Certificado Digital Arnold"
+  },
+  {
+   "line": 521,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-05",
+   "description": "1-Retirada Paulo",
+   "amountCents": 3000,
+   "client": "CECEU/ PAGAMENTO LIMPEZA ATA",
+   "observacaoAPagar": "CECEU/ PAGAMENTO LIMPEZA ATA"
+  },
+  {
+   "line": 522,
+   "date": "2021-06-18",
+   "dueDate": "2021-07-05",
+   "description": "1-Retirada Paulo",
+   "amountCents": 10413,
+   "client": "MULTA HRV",
+   "observacaoAPagar": "MULTA HRV"
+  },
+  {
+   "line": 523,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-05",
+   "description": "59-CENOFISCO",
+   "amountCents": 34100,
+   "client": "CENOFISCO",
+   "observacaoAPagar": "CENOFISCO"
+  },
+  {
+   "line": 524,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-05",
+   "description": "37- Despesas Bancarias",
+   "amountCents": 18700,
+   "client": "DESPESAS ITAU",
+   "observacaoAPagar": "DESPESAS ITAU"
+  },
+  {
+   "line": 525,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-06",
+   "description": "35- Salários - SP",
+   "amountCents": 11689965,
+   "client": "SALARIOS FUNCIONARIOS",
+   "observacaoAPagar": "SALARIOS FUNCIONARIOS"
+  },
+  {
+   "line": 526,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-06",
+   "description": "2-Pagto.Apto - Marechal",
+   "amountCents": 256892,
+   "client": "APTO JR",
+   "observacaoAPagar": "APTO JR"
+  },
+  {
+   "line": 527,
+   "date": "2021-06-16",
+   "dueDate": "2021-07-06",
+   "description": "1-Retirada Paulo",
+   "amountCents": 25989,
+   "client": "ENEL RUA SALETE",
+   "observacaoAPagar": "ENEL RUA SALETE"
+  },
+  {
+   "line": 528,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-06",
+   "description": "61-CPD/TI",
+   "amountCents": 288791,
+   "client": "CPD - MICROSOFT",
+   "observacaoAPagar": "CPD - MICROSOFT"
+  },
+  {
+   "line": 529,
+   "date": "2021-07-20",
+   "dueDate": "2021-07-06",
+   "description": "61-CPD/TI",
+   "amountCents": 261240,
+   "client": "CPD - MICROSOFT",
+   "observacaoAPagar": "CPD - MICROSOFT"
+  },
+  {
+   "line": 530,
+   "date": "2021-07-07",
+   "dueDate": "2021-07-07",
+   "description": "15- Vale Transporte -",
+   "amountCents": 14784,
+   "client": "Pagamento Vale Transporte - Funcionarios",
+   "observacaoAPagar": "Pagamento Vale Transporte - Funcionarios"
+  },
+  {
+   "line": 531,
+   "date": "2021-07-07",
+   "dueDate": "2021-07-07",
+   "description": "47- Despesa Correios",
+   "amountCents": 3510,
+   "client": "Correios - Cliente SBE Edições",
+   "observacaoAPagar": "Correios - Cliente SBE Edições"
+  },
+  {
+   "line": 532,
+   "date": "2021-07-07",
+   "dueDate": "2021-07-07",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "Pagamento Certificado Ascel - Baby And Kids",
+   "observacaoAPagar": "Pagamento Certificado Ascel - Baby And Kids"
+  },
+  {
+   "line": 533,
+   "date": "2021-07-07",
+   "dueDate": "2021-07-07",
+   "description": "51-Despesas Diversas",
+   "amountCents": 23200,
+   "client": "Pagamento Fone de Ouvido - Empresa Unicelular",
+   "observacaoAPagar": "Pagamento Fone de Ouvido - Empresa Unicelular"
+  },
+  {
+   "line": 534,
+   "date": "2021-07-07",
+   "dueDate": "2021-07-07",
+   "description": "51-Despesas Diversas",
+   "amountCents": 579023,
+   "client": "Pagamento Rodrigo Fernando Ribeiro - Telefone",
+   "observacaoAPagar": "Pagamento Rodrigo Fernando Ribeiro - Telefone"
+  },
+  {
+   "line": 535,
+   "date": "2021-07-07",
+   "dueDate": "2021-07-07",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 20712,
+   "client": "Pagamento Dare - H4M Assessoria",
+   "observacaoAPagar": "Pagamento Dare - H4M Assessoria"
+  },
+  {
+   "line": 536,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-07",
+   "description": "13-FGTS",
+   "amountCents": 1188285,
+   "client": "FGTS - SP",
+   "observacaoAPagar": "FGTS - SP"
+  },
+  {
+   "line": 537,
+   "date": "2021-07-15",
+   "dueDate": "2021-07-07",
+   "description": "62- Condomínio -",
+   "amountCents": 99371,
+   "client": "COND. RUA SALETE",
+   "observacaoAPagar": "COND. RUA SALETE"
+  },
+  {
+   "line": 538,
+   "date": "2021-07-15",
+   "dueDate": "2021-07-07",
+   "description": "1-Retirada Paulo",
+   "amountCents": 41850,
+   "client": "E-SOCIAL ANA",
+   "observacaoAPagar": "E-SOCIAL ANA"
+  },
+  {
+   "line": 539,
+   "date": "2021-06-18",
+   "dueDate": "2021-07-08",
+   "description": "1-Retirada Paulo",
+   "amountCents": 15919,
+   "client": "MULTA HRV",
+   "observacaoAPagar": "MULTA HRV"
+  },
+  {
+   "line": 540,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-08",
+   "description": "40- ISS - Trimestral SP",
+   "amountCents": 59858,
+   "client": "ISS SP ASSESSORIA CONTABIL TRIMESTRAL",
+   "observacaoAPagar": "ISS SP ASSESSORIA CONTABIL TRIMESTRAL"
+  },
+  {
+   "line": 541,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-08",
+   "description": "52-Indenizações",
+   "amountCents": 450272,
+   "client": "RESCISÃO CAMILLA NASCIMENTO",
+   "observacaoAPagar": "RESCISÃO CAMILLA NASCIMENTO"
+  },
+  {
+   "line": 542,
+   "date": "2021-06-21",
+   "dueDate": "2021-07-09",
+   "description": "37- Despesas Bancarias",
+   "amountCents": 18700,
+   "client": "DESPESAS BCO. BRASIL",
+   "observacaoAPagar": "DESPESAS BCO. BRASIL"
+  },
+  {
+   "line": 543,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-10",
+   "description": "34- Porto Seguro -",
+   "amountCents": 83694,
+   "client": "PORTO SEGURO DENTISTA",
+   "observacaoAPagar": "PORTO SEGURO DENTISTA"
+  },
+  {
+   "line": 544,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-10",
+   "description": "1-Retirada Paulo",
+   "amountCents": 43154,
+   "client": "NET RUA SALETE",
+   "observacaoAPagar": "NET RUA SALETE"
+  },
+  {
+   "line": 545,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-10",
+   "description": "1-Retirada Paulo",
+   "amountCents": 85217,
+   "client": "COND. SERRA BRAGANÇA",
+   "observacaoAPagar": "COND. SERRA BRAGANÇA"
+  },
+  {
+   "line": 546,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-10",
+   "description": "1-Outros",
+   "amountCents": 71554,
+   "client": "COND. SPAZIO",
+   "observacaoAPagar": "COND. SPAZIO"
+  },
+  {
+   "line": 547,
+   "date": "2021-07-07",
+   "dueDate": "2021-07-11",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "Pagamento Certificado Ascel - Bakerhourse",
+   "observacaoAPagar": "Pagamento Certificado Ascel - Bakerhourse"
+  },
+  {
+   "line": 548,
+   "date": "2021-07-12",
+   "dueDate": "2021-07-12",
+   "description": "46- Férias",
+   "amountCents": 278071,
+   "client": "Férias Giselle",
+   "observacaoAPagar": "Férias Giselle"
+  },
+  {
+   "line": 549,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-12",
+   "description": "14- Vale Refeição -",
+   "amountCents": 43000,
+   "client": "Sodexo , Funcionarios Novos",
+   "observacaoAPagar": "Sodexo , Funcionarios Novos"
+  },
+  {
+   "line": 550,
+   "date": "2021-07-12",
+   "dueDate": "2021-07-12",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 2070,
+   "client": "Reconhecimento de Firma - Cliente M&K Studio de",
+   "observacaoAPagar": "Reconhecimento de Firma - Cliente M&K Studio de"
+  },
+  {
+   "line": 551,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-13",
+   "description": "21- Multas",
+   "amountCents": 237358,
+   "client": "reembolso multa - Lorena Consuelo",
+   "observacaoAPagar": "reembolso multa - Lorena Consuelo"
+  },
+  {
+   "line": 552,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-14",
+   "description": "46- Férias",
+   "amountCents": 222598,
+   "client": "Férias Isabela",
+   "observacaoAPagar": "Férias Isabela"
+  },
+  {
+   "line": 553,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-14",
+   "description": "1-Retirada Paulo",
+   "amountCents": 2261755,
+   "client": "CARTÃI ITAÚ",
+   "observacaoAPagar": "CARTÃI ITAÚ"
+  },
+  {
+   "line": 554,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-14",
+   "description": "51-Despesas Diversas",
+   "amountCents": 27260,
+   "client": "TFE SP ASSESSORIA CONTABIL",
+   "observacaoAPagar": "TFE SP ASSESSORIA CONTABIL"
+  },
+  {
+   "line": 555,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-14",
+   "description": "13-FGTS",
+   "amountCents": 62810,
+   "client": "GUIA RESCISORIO FGTS BIANCA SANTOS",
+   "observacaoAPagar": "GUIA RESCISORIO FGTS BIANCA SANTOS"
+  },
+  {
+   "line": 556,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-14",
+   "description": "7-Vivo - Telefone Fixo",
+   "amountCents": 140427,
+   "client": "TELEFONE SP 3155-1554",
+   "observacaoAPagar": "TELEFONE SP 3155-1554"
+  },
+  {
+   "line": 557,
+   "date": "2021-06-21",
+   "dueDate": "2021-07-15",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 16483,
+   "client": "FOLHAMATIC 4227915",
+   "observacaoAPagar": "FOLHAMATIC 4227915"
+  },
+  {
+   "line": 558,
+   "date": "2021-06-21",
+   "dueDate": "2021-07-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 120127,
+   "client": "PORTO SEGURO - PCP/JR",
+   "observacaoAPagar": "PORTO SEGURO - PCP/JR"
+  },
+  {
+   "line": 559,
+   "date": "2021-06-21",
+   "dueDate": "2021-07-15",
+   "description": "9-Cartão",
+   "amountCents": 1698003,
+   "client": "CARTÃO ESCRITORIO",
+   "observacaoAPagar": "CARTÃO ESCRITORIO"
+  },
+  {
+   "line": 560,
+   "date": "2021-07-15",
+   "dueDate": "2021-07-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 256042,
+   "client": "APARTAMENTO JR",
+   "observacaoAPagar": "APARTAMENTO JR"
+  },
+  {
+   "line": 561,
+   "date": "2021-06-21",
+   "dueDate": "2021-07-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 75000,
+   "client": "VALE TAIS",
+   "observacaoAPagar": "VALE TAIS"
+  },
+  {
+   "line": 562,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-15",
+   "description": "49- Investimentos (Fusão)",
+   "amountCents": 9326576,
+   "client": "INVESTIMENTO LEGALIZA",
+   "observacaoAPagar": "INVESTIMENTO LEGALIZA"
+  },
+  {
+   "line": 563,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-15",
+   "description": "30 -Provedor de Internet -",
+   "amountCents": 7695,
+   "client": "UOL",
+   "observacaoAPagar": "UOL"
+  },
+  {
+   "line": 564,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-15",
+   "description": "60-SIEG",
+   "amountCents": 56000,
+   "client": "SIEG SISTEMA INTELIGENTE",
+   "observacaoAPagar": "SIEG SISTEMA INTELIGENTE"
+  },
+  {
+   "line": 565,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-15",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "Certificado Digital Paes e Doces",
+   "observacaoAPagar": "Certificado Digital Paes e Doces"
+  },
+  {
+   "line": 566,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-15",
+   "description": "1-Outros",
+   "amountCents": 110000,
+   "client": "Brindes -canetas",
+   "observacaoAPagar": "Brindes -canetas"
+  },
+  {
+   "line": 567,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 510188,
+   "client": "OUROCARD",
+   "observacaoAPagar": "OUROCARD"
+  },
+  {
+   "line": 568,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-20",
+   "description": "21- Multas",
+   "amountCents": 10413,
+   "client": "Multa",
+   "observacaoAPagar": "Multa"
+  },
+  {
+   "line": 569,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-20",
+   "description": "53-GPS",
+   "amountCents": 27500,
+   "client": "GPS",
+   "observacaoAPagar": "GPS"
+  },
+  {
+   "line": 570,
+   "date": "2021-06-21",
+   "dueDate": "2021-07-20",
+   "description": "36- Adiantamentos - SP",
+   "amountCents": 6928000,
+   "client": "ADIANTAMENTO SALARIAL",
+   "observacaoAPagar": "ADIANTAMENTO SALARIAL"
+  },
+  {
+   "line": 571,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-20",
+   "description": "1-Retirada Paulo",
+   "amountCents": 840937,
+   "client": "AMIL",
+   "observacaoAPagar": "AMIL"
+  },
+  {
+   "line": 572,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-20",
+   "description": "1-Retirada Paulo",
+   "amountCents": 25000,
+   "client": "GARAGEM FUSCA",
+   "observacaoAPagar": "GARAGEM FUSCA"
+  },
+  {
+   "line": 573,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-20",
+   "description": "1-Retirada Paulo",
+   "amountCents": 989,
+   "client": "GAS ITAPETI",
+   "observacaoAPagar": "GAS ITAPETI"
+  },
+  {
+   "line": 574,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-20",
+   "description": "32 -Simples SP",
+   "amountCents": 1022373,
+   "client": "SIMPLES NACIONAL",
+   "observacaoAPagar": "SIMPLES NACIONAL"
+  },
+  {
+   "line": 575,
+   "date": "2021-07-20",
+   "dueDate": "2021-07-20",
+   "description": "1-Retirada Paulo",
+   "amountCents": 10413,
+   "client": "MULTA BMW",
+   "observacaoAPagar": "MULTA BMW"
+  },
+  {
+   "line": 576,
+   "date": "2021-07-20",
+   "dueDate": "2021-07-20",
+   "description": "52-Indenizações",
+   "amountCents": 429747,
+   "client": "INDENIZAÇÃO RAABE",
+   "observacaoAPagar": "INDENIZAÇÃO RAABE"
+  },
+  {
+   "line": 577,
+   "date": "2021-07-20",
+   "dueDate": "2021-07-20",
+   "description": "13-FGTS",
+   "amountCents": 146317,
+   "client": "FGTS INDENIZAÇÃO RAABE",
+   "observacaoAPagar": "FGTS INDENIZAÇÃO RAABE"
+  },
+  {
+   "line": 578,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-20",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 14630,
+   "client": "TX CERTIDAO CARTORIO , IPT",
+   "observacaoAPagar": "TX CERTIDAO CARTORIO , IPT"
+  },
+  {
+   "line": 579,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-21",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 53799,
+   "client": "CELULAR PCP VIVO",
+   "observacaoAPagar": "CELULAR PCP VIVO"
+  },
+  {
+   "line": 580,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-21",
+   "description": "15- Vale Transporte -",
+   "amountCents": 39778,
+   "client": "VT NOVOS FUNCIONARIOS",
+   "observacaoAPagar": "VT NOVOS FUNCIONARIOS"
+  },
+  {
+   "line": 581,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-22",
+   "description": "9-Cartão",
+   "amountCents": 3451772,
+   "client": "CARTÃO JUNIOR",
+   "observacaoAPagar": "CARTÃO JUNIOR"
+  },
+  {
+   "line": 582,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-22",
+   "description": "1-Retirada Paulo",
+   "amountCents": 309400,
+   "client": "APTO ITAPETI",
+   "observacaoAPagar": "APTO ITAPETI"
+  },
+  {
+   "line": 583,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-22",
+   "description": "15- Vale Transporte -",
+   "amountCents": 11365,
+   "client": "VT NOVOS FUNCIONARIOS",
+   "observacaoAPagar": "VT NOVOS FUNCIONARIOS"
+  },
+  {
+   "line": 584,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 872500,
+   "client": "HOTEL",
+   "observacaoAPagar": "HOTEL"
+  },
+  {
+   "line": 585,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 9634,
+   "client": "LUZ ITAPETI",
+   "observacaoAPagar": "LUZ ITAPETI"
+  },
+  {
+   "line": 586,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-23",
+   "description": "14- Vale Refeição -",
+   "amountCents": 3070550,
+   "client": "SODEXO",
+   "observacaoAPagar": "SODEXO"
+  },
+  {
+   "line": 587,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 919,
+   "client": "GAS RUA SALETE",
+   "observacaoAPagar": "GAS RUA SALETE"
+  },
+  {
+   "line": 588,
+   "date": "2021-07-08",
+   "dueDate": "2021-07-23",
+   "description": "47- Despesa Correios",
+   "amountCents": 7105,
+   "client": "Correios - Radio SB",
+   "observacaoAPagar": "Correios - Radio SB"
+  },
+  {
+   "line": 589,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-23",
+   "description": "4-Luz",
+   "amountCents": 313482,
+   "client": "LUZ ESCRITORIO",
+   "observacaoAPagar": "LUZ ESCRITORIO"
+  },
+  {
+   "line": 590,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-23",
+   "description": "71- Correios",
+   "amountCents": 2900,
+   "client": "despesas correios",
+   "observacaoAPagar": "despesas correios"
+  },
+  {
+   "line": 591,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-25",
+   "description": "17 - Condominio - Escritório",
+   "amountCents": 52941,
+   "client": "COND. BARÃO ED. LA ROYALE",
+   "observacaoAPagar": "COND. BARÃO ED. LA ROYALE"
+  },
+  {
+   "line": 592,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-25",
+   "description": "39- Assistência Médica",
+   "amountCents": 1404435,
+   "client": "INTERMEDICA",
+   "observacaoAPagar": "INTERMEDICA"
+  },
+  {
+   "line": 593,
+   "date": "2021-07-13",
+   "dueDate": "2021-07-26",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 103673,
+   "client": "FOLHAMATIC NF 4393884 4456303",
+   "observacaoAPagar": "FOLHAMATIC NF 4393884 4456303"
+  },
+  {
+   "line": 594,
+   "date": "2021-08-02",
+   "dueDate": "2021-07-26",
+   "description": "15- Vale Transporte -",
+   "amountCents": 58784,
+   "client": "VR NOVOS FUNCIONARIOS DIA 01 A 26/07",
+   "observacaoAPagar": "VR NOVOS FUNCIONARIOS DIA 01 A 26/07"
+  },
+  {
+   "line": 595,
+   "date": "2021-08-02",
+   "dueDate": "2021-07-26",
+   "description": "14- Vale Refeição -",
+   "amountCents": 163400,
+   "client": "VR NOVOS FUNCIONARIOS 01 A 26/07/2021",
+   "observacaoAPagar": "VR NOVOS FUNCIONARIOS 01 A 26/07/2021"
+  },
+  {
+   "line": 596,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-26",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTificado Digital JOAO SANTORO G",
+   "observacaoAPagar": "CERTificado Digital JOAO SANTORO G"
+  },
+  {
+   "line": 597,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-26",
+   "description": "1-Outros",
+   "amountCents": 19500,
+   "client": "Silk Brindes",
+   "observacaoAPagar": "Silk Brindes"
+  },
+  {
+   "line": 598,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-27",
+   "description": "",
+   "amountCents": 235200,
+   "client": "18-Manuteção",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 599,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-28",
+   "description": "4-Luz",
+   "amountCents": 181607,
+   "client": "LUZ ESCRITORIO",
+   "observacaoAPagar": "LUZ ESCRITORIO"
+  },
+  {
+   "line": 600,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-28",
+   "description": "1-Retirada Paulo",
+   "amountCents": 33660,
+   "client": "VALE TRANSPORTE THAIS",
+   "observacaoAPagar": "VALE TRANSPORTE THAIS"
+  },
+  {
+   "line": 601,
+   "date": "2021-07-28",
+   "dueDate": "2021-07-28",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 4999,
+   "client": "vivo -SP LEGALIZA , USADO PARA WHATSAPP -",
+   "observacaoAPagar": "vivo -SP LEGALIZA , USADO PARA WHATSAPP -"
+  },
+  {
+   "line": 602,
+   "date": "2021-07-28",
+   "dueDate": "2021-07-28",
+   "description": "52-Indenizações",
+   "amountCents": 268748,
+   "client": "rescisão , Jose Eduardo - Contabil",
+   "observacaoAPagar": "rescisão , Jose Eduardo - Contabil"
+  },
+  {
+   "line": 603,
+   "date": "2021-06-15",
+   "dueDate": "2021-07-29",
+   "description": "1-Retirada Paulo",
+   "amountCents": 18649,
+   "client": "LUZ MORADA",
+   "observacaoAPagar": "LUZ MORADA"
+  },
+  {
+   "line": 604,
+   "date": "2021-05-18",
+   "dueDate": "2021-07-29",
+   "description": "27- Doméstica",
+   "amountCents": 75000,
+   "client": "EMPREGADA CASA",
+   "observacaoAPagar": "EMPREGADA CASA"
+  },
+  {
+   "line": 605,
+   "date": "2021-06-30",
+   "dueDate": "2021-07-29",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO CV DERMATOLOGIA",
+   "observacaoAPagar": "CERTIFICADO CV DERMATOLOGIA"
+  },
+  {
+   "line": 606,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-29",
+   "description": "57-WHATSAPP-BUSINESS",
+   "amountCents": 31890,
+   "client": "WHATS APP",
+   "observacaoAPagar": "WHATS APP"
+  },
+  {
+   "line": 607,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-29",
+   "description": "26- Certificados Digitais",
+   "amountCents": 34900,
+   "client": "Pagamento certificado , FOCO ENGENHARIA",
+   "observacaoAPagar": "Pagamento certificado , FOCO ENGENHARIA"
+  },
+  {
+   "line": 608,
+   "date": "2021-06-22",
+   "dueDate": "2021-07-30",
+   "description": "15- Vale Transporte -",
+   "amountCents": 2067309,
+   "client": "VALE TRANSPORTE SP",
+   "observacaoAPagar": "VALE TRANSPORTE SP"
+  },
+  {
+   "line": 609,
+   "date": "2021-07-14",
+   "dueDate": "2021-07-30",
+   "description": "27- Doméstica",
+   "amountCents": 75000,
+   "client": "EMPREGADA DOMESTICA",
+   "observacaoAPagar": "EMPREGADA DOMESTICA"
+  },
+  {
+   "line": 610,
+   "date": "2021-08-02",
+   "dueDate": "2021-07-30",
+   "description": "14- Vale Refeição -",
+   "amountCents": 17200,
+   "client": "Vr - funcionarios novos , 27 a 31/07",
+   "observacaoAPagar": "Vr - funcionarios novos , 27 a 31/07"
+  },
+  {
+   "line": 611,
+   "date": "2021-08-02",
+   "dueDate": "2021-07-30",
+   "description": "15- Vale Transporte -",
+   "amountCents": 12756,
+   "client": "Vt novos funcionarios , 27 a 31/07",
+   "observacaoAPagar": "Vt novos funcionarios , 27 a 31/07"
+  },
+  {
+   "line": 612,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-30",
+   "description": "1-Outros",
+   "amountCents": 500000,
+   "client": "DN70 MARKTING MIDIA 01 PARC DE 5",
+   "observacaoAPagar": "DN70 MARKTING MIDIA 01 PARC DE 5"
+  },
+  {
+   "line": 613,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-30",
+   "description": "68- DARE",
+   "amountCents": 20712,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 614,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-30",
+   "description": "24- Manutenção",
+   "amountCents": 342379,
+   "client": "Pix Elielson , Transferencia Reembolso Obra",
+   "observacaoAPagar": "Pix Elielson , Transferencia Reembolso Obra"
+  },
+  {
+   "line": 615,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-30",
+   "description": "24- Manutenção",
+   "amountCents": 30000,
+   "client": "50% ESPELHO OBRA",
+   "observacaoAPagar": "50% ESPELHO OBRA"
+  },
+  {
+   "line": 616,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-30",
+   "description": "1-Outros",
+   "amountCents": 17385,
+   "client": "certidão cartório ,",
+   "observacaoAPagar": "certidão cartório ,"
+  },
+  {
+   "line": 617,
+   "date": "2021-08-03",
+   "dueDate": "2021-07-30",
+   "description": "1-Outros",
+   "amountCents": 34000,
+   "client": "manutenção cadeiras",
+   "observacaoAPagar": "manutenção cadeiras"
+  },
+  {
+   "line": 618,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "44- Impostos / Taxas",
+   "amountCents": 14630,
+   "client": "TAXA CERTIDAO CARTORIO - IPT",
+   "observacaoAPagar": "TAXA CERTIDAO CARTORIO - IPT"
+  },
+  {
+   "line": 619,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "CERTIFICADO Digital ADM DE BENS",
+   "observacaoAPagar": "CERTIFICADO Digital ADM DE BENS"
+  },
+  {
+   "line": 620,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "1-Outros",
+   "amountCents": 3300,
+   "client": "PILHAS",
+   "observacaoAPagar": "PILHAS"
+  },
+  {
+   "line": 621,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "69- Material de Escritorio",
+   "amountCents": 4490,
+   "client": "Kalunga nf 344975",
+   "observacaoAPagar": "Kalunga nf 344975"
+  },
+  {
+   "line": 622,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "70-Reembolso Despesas",
+   "amountCents": 6091,
+   "client": "vt boys",
+   "observacaoAPagar": "vt boys"
+  },
+  {
+   "line": 623,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "15- Vale Transporte -",
+   "amountCents": 53038,
+   "client": "Vt - Funcionarios novos",
+   "observacaoAPagar": "Vt - Funcionarios novos"
+  },
+  {
+   "line": 624,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "15- Vale Transporte -",
+   "amountCents": 37884,
+   "client": "Vt novos funcionarios , 27 a 31/07",
+   "observacaoAPagar": "Vt novos funcionarios , 27 a 31/07"
+  },
+  {
+   "line": 625,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "15- Vale Transporte -",
+   "amountCents": 21093,
+   "client": "VIA NOVA VT",
+   "observacaoAPagar": "VIA NOVA VT"
+  },
+  {
+   "line": 626,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-03",
+   "description": "70-Reembolso Despesas",
+   "amountCents": 10000,
+   "client": "70-Reembolso Despesas",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 627,
+   "date": "2021-08-03",
+   "dueDate": "2021-08-04",
+   "description": "26- Certificados Digitais",
+   "amountCents": 20900,
+   "client": "Certificado Digital Golden please",
+   "observacaoAPagar": "Certificado Digital Golden please"
+  },
+  {
+   "line": 628,
+   "date": "2021-07-06",
+   "dueDate": "2021-08-05",
+   "description": "51-Despesas Diversas",
+   "amountCents": 1306200,
+   "client": "CPD - MICROSOFT",
+   "observacaoAPagar": "CPD - MICROSOFT"
+  },
+  {
+   "line": 629,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-05",
+   "description": "35- Salários - SP",
+   "amountCents": 11689965,
+   "client": "SALARIOS FUNCIONARIOS",
+   "observacaoAPagar": "SALARIOS FUNCIONARIOS"
+  },
+  {
+   "line": 630,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-06",
+   "description": "13-FGTS",
+   "amountCents": 1188285,
+   "client": "FGTS SP",
+   "observacaoAPagar": "FGTS SP"
+  },
+  {
+   "line": 631,
+   "date": "2021-08-06",
+   "dueDate": "2021-08-06",
+   "description": "58-Doméstica -SALARIO",
+   "amountCents": 35000,
+   "client": "Magali Empregada Praia",
+   "observacaoAPagar": "Magali Empregada Praia"
+  },
+  {
+   "line": 632,
+   "date": "2021-08-09",
+   "dueDate": "2021-08-06",
+   "description": "48- Material Escritório /",
+   "amountCents": 92361,
+   "client": "Gimba Supricorp Suprimentos LTDA Nota Fiscal:",
+   "observacaoAPagar": "Gimba Supricorp Suprimentos LTDA Nota Fiscal:"
+  },
+  {
+   "line": 633,
+   "date": "2021-08-06",
+   "dueDate": "2021-08-06",
+   "description": "67-Vivo - Telef",
+   "amountCents": 3658,
+   "client": "FONE PRAIA 13 3477-8955",
+   "observacaoAPagar": "FONE PRAIA 13 3477-8955"
+  },
+  {
+   "line": 634,
+   "date": "2021-07-14",
+   "dueDate": "2021-08-08",
+   "description": "1-Retirada Paulo",
+   "amountCents": 109542,
+   "client": "COND. MORADA",
+   "observacaoAPagar": "COND. MORADA"
+  },
+  {
+   "line": 635,
+   "date": "2021-05-26",
+   "dueDate": "2021-08-08",
+   "description": "13-FGTS",
+   "amountCents": 1210356,
+   "client": "FGTS SP",
+   "observacaoAPagar": "FGTS SP"
+  },
+  {
+   "line": 636,
+   "date": "2021-07-14",
+   "dueDate": "2021-08-10",
+   "description": "1-Retirada Paulo",
+   "amountCents": 43360,
+   "client": "Net Itapeti",
+   "observacaoAPagar": "Net Itapeti"
+  },
+  {
+   "line": 637,
+   "date": "2021-08-10",
+   "dueDate": "2021-08-10",
+   "description": "58-Doméstica -SALARIO",
+   "amountCents": 35000,
+   "client": "MAGALI - PRAIA",
+   "observacaoAPagar": "MAGALI - PRAIA"
+  },
+  {
+   "line": 638,
+   "date": "2021-08-10",
+   "dueDate": "2021-08-10",
+   "description": "18- Condominio -",
+   "amountCents": 116677,
+   "client": "18- Condominio - Aptos.ITAPETI 82",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 639,
+   "date": "2021-08-10",
+   "dueDate": "2021-08-10",
+   "description": "1-Outros",
+   "amountCents": 72178,
+   "client": "1-Outros",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 640,
+   "date": "2021-08-12",
+   "dueDate": "2021-08-12",
+   "description": "58-Doméstica -SALARIO",
+   "amountCents": 35000,
+   "client": "MAGALI - PRAIA",
+   "observacaoAPagar": "MAGALI - PRAIA"
+  },
+  {
+   "line": 641,
+   "date": "2021-08-12",
+   "dueDate": "2021-08-12",
+   "description": "18- Condominio -",
+   "amountCents": 116677,
+   "client": "COND. ITAPETI",
+   "observacaoAPagar": "COND. ITAPETI"
+  },
+  {
+   "line": 642,
+   "date": "2021-08-12",
+   "dueDate": "2021-08-12",
+   "description": "51-Despesas Diversas",
+   "amountCents": 72178,
+   "client": "SEGURO DE VIDA",
+   "observacaoAPagar": "SEGURO DE VIDA"
+  },
+  {
+   "line": 643,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-13",
+   "description": "61-CPD/TI",
+   "amountCents": 288791,
+   "client": "CPD MICROSOFT",
+   "observacaoAPagar": "CPD MICROSOFT"
+  },
+  {
+   "line": 644,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-13",
+   "description": "4-Luz",
+   "amountCents": 193596,
+   "client": "LUZ ESCRITORIO",
+   "observacaoAPagar": "LUZ ESCRITORIO"
+  },
+  {
+   "line": 645,
+   "date": "2021-06-21",
+   "dueDate": "2021-08-15",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 38327,
+   "client": "FOLHAMATIC 4227915",
+   "observacaoAPagar": "FOLHAMATIC 4227915"
+  },
+  {
+   "line": 646,
+   "date": "2021-06-21",
+   "dueDate": "2021-08-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 120164,
+   "client": "PORTO SEGURO - PCP/JR",
+   "observacaoAPagar": "PORTO SEGURO - PCP/JR"
+  },
+  {
+   "line": 647,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 116677,
+   "client": "COND. APTO 82",
+   "observacaoAPagar": "COND. APTO 82"
+  },
+  {
+   "line": 648,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 72178,
+   "client": "SEGURO DE VIDA",
+   "observacaoAPagar": "SEGURO DE VIDA"
+  },
+  {
+   "line": 649,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-15",
+   "description": "30 -Provedor de Internet -",
+   "amountCents": 7695,
+   "client": "UOL",
+   "observacaoAPagar": "UOL"
+  },
+  {
+   "line": 650,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 8810,
+   "client": "FIBRA MORADA IMPERADOR",
+   "observacaoAPagar": "FIBRA MORADA IMPERADOR"
+  },
+  {
+   "line": 651,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-15",
+   "description": "1-Retirada Paulo",
+   "amountCents": 75000,
+   "client": "VALE TAIS",
+   "observacaoAPagar": "VALE TAIS"
+  },
+  {
+   "line": 652,
+   "date": "2021-06-21",
+   "dueDate": "2021-08-16",
+   "description": "54-TAGPLUS",
+   "amountCents": 19900,
+   "client": "SISTEMA TAGPLUS",
+   "observacaoAPagar": "SISTEMA TAGPLUS"
+  },
+  {
+   "line": 653,
+   "date": "2021-08-17",
+   "dueDate": "2021-08-17",
+   "description": "1-Outros",
+   "amountCents": 35000,
+   "client": "pagamento Magali",
+   "observacaoAPagar": "pagamento Magali"
+  },
+  {
+   "line": 654,
+   "date": "2021-08-17",
+   "dueDate": "2021-08-17",
+   "description": "9-Cartão - Paulo",
+   "amountCents": 2261755,
+   "client": "9-Cartão - Paulo",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 655,
+   "date": "2021-08-17",
+   "dueDate": "2021-08-17",
+   "description": "67-Vivo - Telef",
+   "amountCents": 3618,
+   "client": "67-Vivo - Telef",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 656,
+   "date": "2021-08-17",
+   "dueDate": "2021-08-17",
+   "description": "18- Condominio -",
+   "amountCents": 116677,
+   "client": "18- Condominio - Aptos.ITAPETI 82",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 657,
+   "date": "2021-06-21",
+   "dueDate": "2021-08-18",
+   "description": "53-GPS",
+   "amountCents": 865285,
+   "client": "IAPAS - GPS",
+   "observacaoAPagar": "IAPAS - GPS"
+  },
+  {
+   "line": 658,
+   "date": "2021-06-21",
+   "dueDate": "2021-08-18",
+   "description": "41- IRRF",
+   "amountCents": 136729,
+   "client": "IRRF",
+   "observacaoAPagar": "IRRF"
+  },
+  {
+   "line": 659,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-18",
+   "description": "1-Retirada Paulo",
+   "amountCents": 510188,
+   "client": "OUROCARD",
+   "observacaoAPagar": "OUROCARD"
+  },
+  {
+   "line": 660,
+   "date": "2021-08-19",
+   "dueDate": "2021-08-19",
+   "description": "52-Indenizações",
+   "amountCents": 777908,
+   "client": "RESCISÃO , MARIA DA CONCEIÇÃO FELIX",
+   "observacaoAPagar": "RESCISÃO , MARIA DA CONCEIÇÃO FELIX"
+  },
+  {
+   "line": 661,
+   "date": "2021-08-19",
+   "dueDate": "2021-08-19",
+   "description": "24- Manutenção",
+   "amountCents": 12000,
+   "client": "manutenção banheiros",
+   "observacaoAPagar": "manutenção banheiros"
+  },
+  {
+   "line": 662,
+   "date": "2021-05-18",
+   "dueDate": "2021-08-20",
+   "description": "41- IRRF",
+   "amountCents": 131803,
+   "client": "IRRF - SALARIOS",
+   "observacaoAPagar": "IRRF - SALARIOS"
+  },
+  {
+   "line": 663,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-20",
+   "description": "36- Adiantamentos - SP",
+   "amountCents": 6730420,
+   "client": "ADIANTAMENTO SALARIAL",
+   "observacaoAPagar": "ADIANTAMENTO SALARIAL"
+  },
+  {
+   "line": 664,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-20",
+   "description": "1-Retirada Paulo",
+   "amountCents": 25000,
+   "client": "GARAGEM FUSCA",
+   "observacaoAPagar": "GARAGEM FUSCA"
+  },
+  {
+   "line": 665,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-21",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 4999,
+   "client": "CELULAR LEGALIZA",
+   "observacaoAPagar": "CELULAR LEGALIZA"
+  },
+  {
+   "line": 666,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-21",
+   "description": "22- Vivo Móvel - Celular-",
+   "amountCents": 53799,
+   "client": "CELULAR PCP VIVO",
+   "observacaoAPagar": "CELULAR PCP VIVO"
+  },
+  {
+   "line": 667,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-22",
+   "description": "9-Cartão",
+   "amountCents": 5369500,
+   "client": "CARTÃO JUNIOR",
+   "observacaoAPagar": "CARTÃO JUNIOR"
+  },
+  {
+   "line": 668,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-22",
+   "description": "1-Retirada Paulo",
+   "amountCents": 309400,
+   "client": "APTO ITAPETI",
+   "observacaoAPagar": "APTO ITAPETI"
+  },
+  {
+   "line": 669,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 872500,
+   "client": "HOTEL",
+   "observacaoAPagar": "HOTEL"
+  },
+  {
+   "line": 670,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-23",
+   "description": "1-Retirada Paulo",
+   "amountCents": 9655,
+   "client": "LUZ ITAPETI",
+   "observacaoAPagar": "LUZ ITAPETI"
+  },
+  {
+   "line": 671,
+   "date": "2021-08-23",
+   "dueDate": "2021-08-23",
+   "description": "68- DARE",
+   "amountCents": 7185,
+   "client": "Dare",
+   "observacaoAPagar": "Dare"
+  },
+  {
+   "line": 672,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-24",
+   "description": "14- Vale Refeição -",
+   "amountCents": 2970350,
+   "client": "TICKET REFEIÇÃO",
+   "observacaoAPagar": "TICKET REFEIÇÃO"
+  },
+  {
+   "line": 673,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-24",
+   "description": "1-Retirada Paulo",
+   "amountCents": 919,
+   "client": "GAS RUA SALETE",
+   "observacaoAPagar": "GAS RUA SALETE"
+  },
+  {
+   "line": 674,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-25",
+   "description": "17 - Condominio - Escritório",
+   "amountCents": 52941,
+   "client": "COND. BARÃO ED. LA ROYALE",
+   "observacaoAPagar": "COND. BARÃO ED. LA ROYALE"
+  },
+  {
+   "line": 675,
+   "date": "2021-07-15",
+   "dueDate": "2021-08-26",
+   "description": "42- Sistema Folhamatic",
+   "amountCents": 103673,
+   "client": "FOLHAMATIC 4393884/4456303",
+   "observacaoAPagar": "FOLHAMATIC 4393884/4456303"
+  },
+  {
+   "line": 676,
+   "date": "2021-07-28",
+   "dueDate": "2021-08-27",
+   "description": "1-Retirada Paulo",
+   "amountCents": 173990,
+   "client": "BANCO ITAU VGBL",
+   "observacaoAPagar": "BANCO ITAU VGBL"
+  },
+  {
+   "line": 677,
+   "date": "2021-07-28",
+   "dueDate": "2021-08-27",
+   "description": "27- Doméstica - VT",
+   "amountCents": 33660,
+   "client": "27- Doméstica - VT",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 678,
+   "date": "2021-07-28",
+   "dueDate": "2021-08-27",
+   "description": "1-Retirada Paulo",
+   "amountCents": 2500000,
+   "client": "MKT",
+   "observacaoAPagar": "MKT"
+  },
+  {
+   "line": 679,
+   "date": "2021-07-28",
+   "dueDate": "2021-08-27",
+   "description": "57-Julio César Sanches-WH",
+   "amountCents": 31890,
+   "client": "WHATASAPP BUSINESS - SP",
+   "observacaoAPagar": "WHATASAPP BUSINESS - SP"
+  },
+  {
+   "line": 680,
+   "date": "2021-08-27",
+   "dueDate": "2021-08-27",
+   "description": "1-Outros",
+   "amountCents": 10000,
+   "client": "1-Outros",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 681,
+   "date": "2021-08-27",
+   "dueDate": "2021-08-27",
+   "description": "1-Outros",
+   "amountCents": 88888,
+   "client": "1-Outros",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 682,
+   "date": "2021-08-20",
+   "dueDate": "2021-08-28",
+   "description": "72- Ativo",
+   "amountCents": 379023,
+   "client": "Central Telefonica , Pagar a Fernando telefones",
+   "observacaoAPagar": "Central Telefonica , Pagar a Fernando telefones"
+  },
+  {
+   "line": 683,
+   "date": "2021-11-22",
+   "dueDate": "2021-11-22",
+   "description": "",
+   "amountCents": 40000,
+   "client": "Favorecido não informado",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 684,
+   "date": "2021-12-21",
+   "dueDate": "2021-12-21",
+   "description": "51-Despesas Diversas",
+   "amountCents": 42467,
+   "client": "Diferença de Certificado e 13° Salário Jefferson Dos",
+   "observacaoAPagar": "Diferença de Certificado e 13° Salário Jefferson Dos"
+  },
+  {
+   "line": 685,
+   "date": "2022-09-08",
+   "dueDate": "2022-01-24",
+   "description": "43- CRC ( Pessoa Física",
+   "amountCents": 45300,
+   "client": "Pagamento SP Assessoria Contábil",
+   "observacaoAPagar": "Pagamento SP Assessoria Contábil"
+  },
+  {
+   "line": 686,
+   "date": "2022-01-03",
+   "dueDate": "2022-02-18",
+   "description": "33 -DARF",
+   "amountCents": 4581,
+   "client": "IR de férias referente ao funcionário Alessandre",
+   "observacaoAPagar": "IR de férias referente ao funcionário Alessandre"
+  },
+  {
+   "line": 687,
+   "date": "2022-03-11",
+   "dueDate": "2022-03-03",
+   "description": "54-TAGPLUS",
+   "amountCents": 19900,
+   "client": "TAGPLUS",
+   "observacaoAPagar": "TAGPLUS"
+  },
+  {
+   "line": 688,
+   "date": "2021-12-22",
+   "dueDate": "2022-03-07",
+   "description": "9-Cartão - Paulo",
+   "amountCents": 1306473,
+   "client": "9-Cartão - Paulo",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 689,
+   "date": "2021-12-22",
+   "dueDate": "2022-03-18",
+   "description": "53-GPS",
+   "amountCents": 1432957,
+   "client": "Funcionarios SP",
+   "observacaoAPagar": "Funcionarios SP"
+  },
+  {
+   "line": 690,
+   "date": "2022-05-16",
+   "dueDate": "2022-06-13",
+   "description": "21- Multas",
+   "amountCents": 15619,
+   "client": "Multa de Trânsito EJP5225",
+   "observacaoAPagar": "Multa de Trânsito EJP5225"
+  },
+  {
+   "line": 691,
+   "date": "2022-07-01",
+   "dueDate": "2022-07-01",
+   "description": "48- Material Escritório /",
+   "amountCents": 3600,
+   "client": "lavanderia",
+   "observacaoAPagar": "lavanderia"
+  },
+  {
+   "line": 692,
+   "date": "2022-11-17",
+   "dueDate": "2022-11-17",
+   "description": "",
+   "amountCents": 1028690,
+   "client": "Favorecido não informado",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 693,
+   "date": "2023-01-13",
+   "dueDate": "2023-01-13",
+   "description": "",
+   "amountCents": 50000,
+   "client": "2- SP - Retirada",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 694,
+   "date": "2022-03-10",
+   "dueDate": "2023-01-15",
+   "description": "49- Investimentos (Fusão)",
+   "amountCents": 3748050,
+   "client": "Escritorio Sobel - Parcela 10 de 10",
+   "observacaoAPagar": "Escritorio Sobel - Parcela 10 de 10"
+  },
+  {
+   "line": 695,
+   "date": "2024-11-26",
+   "dueDate": "2024-01-02",
+   "description": "1-Outros",
+   "amountCents": 17841,
+   "client": "Claro Bruno Henrique",
+   "observacaoAPagar": "Claro Bruno Henrique"
+  },
+  {
+   "line": 696,
+   "date": "2024-10-16",
+   "dueDate": "2024-01-15",
+   "description": "6- Vivo Fibra 1GB - 11",
+   "amountCents": 105000,
+   "client": "6- Vivo Fibra 1GB - 11 3231-3731",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 697,
+   "date": "2024-12-13",
+   "dueDate": "2024-12-13",
+   "description": "",
+   "amountCents": 56480,
+   "client": "2- SP - Retirada",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 698,
+   "date": "2025-01-13",
+   "dueDate": "2025-01-13",
+   "description": "",
+   "amountCents": 721314,
+   "client": "1- Paulo- Retirada",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 699,
+   "date": "2025-03-13",
+   "dueDate": "2025-03-13",
+   "description": "",
+   "amountCents": 4420,
+   "client": "2- SP - Retirada",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 700,
+   "date": "2025-05-27",
+   "dueDate": "2025-11-29",
+   "description": "86- Itau VGBL",
+   "amountCents": 78390,
+   "client": "86- Itau VGBL",
+   "observacaoAPagar": ""
+  },
+  {
+   "line": 701,
+   "date": "2025-12-18",
+   "dueDate": "2025-12-18",
+   "description": "45- Taxas Cartorárias",
+   "amountCents": 20639,
+   "client": "DESPESAS CARTORIAIS 6º CARTORIO DE ATAS (",
+   "observacaoAPagar": "DESPESAS CARTORIAIS 6º CARTORIO DE ATAS ("
+  },
+  {
+   "line": 702,
+   "date": "2026-08-19",
+   "dueDate": "2026-09-25",
+   "description": "1-Outros",
+   "amountCents": 163366,
+   "client": "1-Outros",
+   "observacaoAPagar": "SEGURO ESCRITÓRIO - AUSTRAL"
+  }
+ ]
+}
